@@ -54,8 +54,31 @@ sodax.api.swaps.submitTx(body: SubmitTxRequestV2, config?): Promise<Result<Submi
 sodax.api.swaps.getSubmitTxStatus(query: SubmitTxStatusQueryV2, config?): Promise<Result<SubmitTxStatusResponseV2>>;
 ```
 
-The optional trailing `config?: RequestOverrideConfig` (`{ baseURL?, timeout?, headers? }`) on every method
+The optional trailing `config?: RequestOverrideConfig` (`{ baseURL?, timeout?, headers?, apiKey? }`) on every method
 applies per-call overrides that take precedence over the service config (see "Per-call overrides" below).
+
+## `approve` can return two transactions
+
+`ApproveResponseV2` is `{ tx, resetTx? }`. `resetTx` appears only when the source token rejects an
+allowance change from one non-zero value to another (the 2017 TetherToken lineage) **and** the wallet
+already holds a stale allowance — a wallet in that state cannot approve at all until it is zeroed.
+
+Broadcast `resetTx` first and wait for it to be mined, then broadcast `tx`. The two cannot be
+batched: the approval is only valid once the reset has landed on-chain.
+
+```ts
+const { tx, resetTx } = approveResponse;
+
+if (resetTx) {
+  const resetHash = await sendTransaction(resetTx);
+  await waitForTransactionReceipt(resetHash);
+}
+
+await sendTransaction(tx);
+```
+
+The field is optional and absent for every other token, so ignoring it keeps existing behaviour —
+it just cannot rescue a wallet stuck on a guarded token.
 
 ## Wire shapes — `bigint` vs decimal strings
 
@@ -66,15 +89,51 @@ client serializes them to decimal strings on the wire. Server-returned intents (
 back with those fields as decimal **`string`** (outbound JSON can't carry bigint). The `amount` /
 `inputAmount` fields on the quote / create-intent request bodies are already decimal **strings**.
 
+## `partnerFee`
+
+Optional on the type, but no default: the backend does not fill it in, and
+`new Sodax({ fee })` / `new Sodax({ swaps: { partnerFee } })` only reach the
+`sodax.swaps` orchestrator — not this wire path. Send the same value on quote and
+create-intent. `checkAllowance` / `approve` inherit the field but ignore it.
+Bridge API v2 is different: omitted `partnerFee` falls back to `bridgePartnerFee`.
+
+## API key
+
+The backend guards `POST /swaps/*` routes with an `x-api-key` header check (keys come from the partner
+portal). Unlike `partnerFee`, the config-level key DOES reach this wire path: there is ONE
+instance-wide key, `new Sodax({ apiKey })`, sent on every backend request — this client,
+`sodax.backendApi`, `sodax.api.bridge`, the solver API, and the backend submit-tx legs of `swap()` /
+`bridge()`. There is no per-feature or per-slice swaps key. Override per call via the trailing
+`RequestOverrideConfig`:
+
+```ts
+await sodax.api.swaps.createIntent(body, { apiKey: 'per-request-key' });
+```
+
+Precedence, highest first: per-call `headers['x-api-key']` (any casing) → per-call `apiKey` → a
+configured explicit `x-api-key` header (`api.headers` / `setHeaders`) → the configured `apiKey`. That
+full order is what the data, swaps, and bridge transports resolve; sponsoring's tier 3 is its own
+slice/runtime headers (shared `api.headers` / `backendApi.setHeaders` never reach it — rotate via
+`sodax.api.sponsoring.setHeaders`), and the solver API has no per-call override surface and no
+configured-header slot, so it carries the configured `apiKey` alone. An empty `apiKey` counts as unset
+and falls back. Read the configured value back on `sodax.config.apiKey`.
+Auth failures surface as `EXTERNAL_API_ERROR` with `context.status` `401` (missing/invalid key) or `403`
+(suspended org / missing scope) — terminal until the consumer fixes the key. The transient verification
+`503` is retried automatically by the wire client (all calls, mutations included — the guard rejects
+before the handler runs).
+
 ## Common call shapes
 
 ### Quote
 
 ```ts
+const partnerFee = { address: '0xSonicFeeReceiver', percentage: 10 }; // 10 = 0.1% (bps)
+
 const quote = await sodax.api.swaps.getQuote({
   tokenSrc, tokenSrcChainKey, tokenDst, tokenDstChainKey,
   amount: '1000000',          // smallest unit, decimal string
   quoteType: 'exact_input',
+  partnerFee,
 });
 if (!quote.ok) return;
 quote.value.quotedAmount;     // decimal string
@@ -91,10 +150,31 @@ const created = await sodax.api.swaps.createIntent({
   deadline: '0',              // "0" → no expiry (limit-order semantics)
   allowPartialFill: false,
   srcAddress, dstAddress,
+  partnerFee,
 });
 if (!created.ok) return;
 const { tx, intent, relayData } = created.value;
 ```
+
+**Delivery hooks are deployment-dependent here.** `hook?: HookRequestV2` (`{ kind: HookKind }`) lives on
+`SwapExtrasV2`, so it's structurally present on both `CreateIntentParamsV2` (`checkAllowance` /
+`approve` / `createIntent` / `createLimitOrderIntent`) and `QuoteRequestV2` (`getQuote`), but only
+`createIntent` / `createLimitOrderIntent` / `getQuote` with `includeTxData: true` actually consume it
+— those are the only calls that build a delivery target. `checkAllowance` / `approve` inherit the
+field but ignore it, same as `partnerFee` above: allowance-checking and approval are source-side only.
+Unlike the SDK path, the hook is resolved **server-side**, so it only works when the backend forwards
+the field *and* its pinned SDK has that kind registered for the request's destination chain —
+`dstChainKey` everywhere except `getQuote`, which names it `tokenDstChainKey`; an unregistered kind
+fails the request rather than falling back to a plain transfer. `dstAddress` still means the recipient the hook credits — the
+backend substitutes the hook's own address on-chain. Whether the `getQuote` path forwards `hook` at all
+is a backend question this SDK can't verify — confirm with the deployment before relying on it there.
+The `deliveryData` payload encoding and the `supportedTokens` metadata-vs-enforcement distinction are
+the full canonical contract on `SwapExtrasV2.hook`'s own doc comment in `@sodax/types`
+(`backendApiV2.ts`) — read that before implementing server-side hook resolution.
+
+When you need hook support independent of the deployment, build with `sodax.swaps` instead: it resolves
+the hook client-side into `dstAddress`/`data`, and under the default `useBackendSubmitTx` still hands the
+broadcast tx to this API's `submitTx`. See [`swap.md`](swap.md) § "Delivery hooks".
 
 ### Submit tx + poll status
 
@@ -125,23 +205,27 @@ if (status.ok && status.value.data.status === 'solved') { /* settled */ }
 ## Per-call overrides
 
 Every method accepts a trailing `RequestOverrideConfig` to redirect a single call to a different host or
-attach request-specific headers (auth, tracing), overriding the service config:
+attach request-specific headers (auth, tracing) or a per-call `apiKey`, overriding the service config:
 
 ```ts
-await sodax.api.swaps.getTokens({ baseURL: 'https://staging.example/v1/be', headers: { 'X-Trace': 'abc' } });
+// `baseURL` is the gateway ROOT — the SDK appends `/swaps/*` itself. Never include a service segment.
+await sodax.api.swaps.getTokens({ baseURL: 'https://staging.example/v1', headers: { 'X-Trace': 'abc' } });
 ```
 
 ## Custom endpoint for the swaps API
 
-By default the swaps endpoints are `/swaps/*` sub-paths under the same base URL as `sodax.backendApi`.
+`baseURL` is the gateway root, shared by every service; the swaps client appends `/swaps/*` below it just
+as `sodax.backendApi` appends its own `/be` mount. Never put a service segment in `baseURL` — a value
+ending in `/be` resolves swaps to `/v1/be/swaps/submit-tx`, which the gateway does not route (the SDK
+trims that suffix, but do not rely on it).
 To point the swaps API at its own host (separate from the base backend API), construct `Sodax` with the
 **`CustomApiConfig`** variant of `ApiConfig` (`{ baseApiConfig?, swapsApiConfig? }`) instead of the flat
-`BaseApiConfig`:
+`BackendApiConfig`:
 
 ```ts
 const sodax = new Sodax({
   api: {
-    baseApiConfig: { baseURL: 'https://api.example/v1/be' },
+    baseApiConfig: { baseURL: 'https://api.example/v1' },
     swapsApiConfig: { baseURL: 'https://swaps.example/v1' },
   },
 });

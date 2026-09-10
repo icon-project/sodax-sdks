@@ -111,6 +111,13 @@ if (result.ok && result.value) {
 
 Submits an ERC-20 approval (or Stellar trustline operation) required before depositing.
 
+**Some tokens take two transactions.** A few ERC-20s of the 2017 TetherToken lineage — Ethereum USDT
+is the only one in the SODAX token list today — reject an allowance change from one non-zero value to
+another, so `approve` sends `approve(0)` first and waits for it to be mined before the real approval.
+The user signs twice; the returned value is still a single transaction hash, the **last** one's.
+Detection simulates the approval rather than consulting a token list, so a token listed later behaves
+the same way.
+
 Supported chain types: Stellar, EVM spoke chains, hub chain (Sonic). Returns an error for other chain types where no approval is needed or supported.
 
 **Returns:** `Promise<Result<TxReturnType<K, Raw>>>`

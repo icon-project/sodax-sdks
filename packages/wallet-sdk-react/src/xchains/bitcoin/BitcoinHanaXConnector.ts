@@ -1,5 +1,10 @@
 import type { XAccount } from '@/types/index.js';
-import { detectBitcoinAddressType, type IBitcoinWalletProvider, type BtcAddressType, type BtcWalletAddressType } from '@sodax/types';
+import {
+  detectBitcoinAddressType,
+  type IBitcoinWalletProvider,
+  type BtcAddressType,
+  type BtcWalletAddressType,
+} from '@sodax/types';
 import type { BitcoinWalletDefaults } from '@sodax/wallet-sdk-core';
 import { AddressPurpose, MessageSigningProtocols } from 'sats-connect';
 import { WALLET_METADATA } from '@/constants.js';
@@ -251,7 +256,11 @@ export class BitcoinHanaXConnector extends BitcoinXConnector {
 
     if (!paymentAccount) return undefined;
 
-    this.walletProvider = new BitcoinHanaWalletProvider(paymentAccount.address, paymentAccount.publicKey, this.defaults);
+    this.walletProvider = new BitcoinHanaWalletProvider(
+      paymentAccount.address,
+      paymentAccount.publicKey,
+      this.defaults,
+    );
 
     return {
       address: paymentAccount.address,

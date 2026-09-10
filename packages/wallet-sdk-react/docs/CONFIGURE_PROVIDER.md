@@ -20,7 +20,7 @@ The canonical TypeScript shape is [`SodaxWalletConfig`](https://github.com/icon-
 
 ## Quick start — minimal config
 
-Mount `<SodaxWalletProvider>` inside `<QueryClientProvider>` with the chain-type slots your dApp needs. Omit any slot you don't need — its native adapter (wagmi, `@solana/wallet-adapter`, `@mysten/dapp-kit`) won't be mounted.
+Mount `<SodaxWalletProvider>` inside `<QueryClientProvider>` with the chain-type slots your dApp needs. Omit any slot you don't need — its native adapter (wagmi, `@solana/wallet-adapter`, `@mysten/dapp-kit-react`) won't be mounted.
 
 ```tsx
 import { SodaxWalletProvider, type SodaxWalletConfig } from '@sodax/wallet-sdk-react';
@@ -52,7 +52,7 @@ export function App({ children }: { children: React.ReactNode }) {
 }
 ```
 
-`SodaxWalletProvider` mounts the EVM (wagmi), Solana (`@solana/wallet-adapter-react`), and Sui (`@mysten/dapp-kit`) React providers conditionally based on which slots are present, then registers chain services for non-provider chains (Bitcoin, ICON, Injective, Stellar, NEAR, Stacks).
+`SodaxWalletProvider` mounts the EVM (wagmi), Solana (`@solana/wallet-adapter-react`), and Sui (`@mysten/dapp-kit-react`) React providers conditionally based on which slots are present, then registers chain services for non-provider chains (Bitcoin, ICON, Injective, Stellar, NEAR, Stacks).
 
 ---
 
@@ -64,7 +64,7 @@ Top-level keys are `ChainType` strings — one slot per chain family. **Every sl
 |-----|--------|----------------|-------------------|
 | `EVM` | wagmi (13 EVM chains) | `ssr`, `reconnectOnMount`, `initialState`, `persistKey`, `walletConnect` | `{ rpcUrl?, defaults? }` per `EvmChainKey` |
 | `SOLANA` | `@solana/wallet-adapter-react` | `autoConnect` | `{ rpcUrl?, defaults? }` per `SolanaChainKey` |
-| `SUI` | `@mysten/dapp-kit` | `autoConnect`, `network` | `{ rpcUrl?, defaults? }` per `SuiChainKey` |
+| `SUI` | `@mysten/dapp-kit-react` | `autoConnect`, `network` | `{ grpcUrl?, defaults? }` per `SuiChainKey` (`rpcUrl` is a deprecated alias) |
 | `ICON` | (no React adapter) | — | `{ rpcUrl?, defaults? }` per `IconChainKey` |
 | `NEAR` | (no React adapter) | — | `{ rpcUrl?, defaults? }` per `NearChainKey` |
 | `STELLAR` | (no React adapter) | — | `StellarRpcConfig & { defaults? }` per `StellarChainKey` |
@@ -94,7 +94,7 @@ const walletConfig: SodaxWalletConfig = {
   SUI: {
     network: 'mainnet',
     autoConnect: true,
-    chains: { [ChainKeys.SUI_MAINNET]: { rpcUrl: 'https://fullnode.mainnet.sui.io' } },
+    chains: { [ChainKeys.SUI_MAINNET]: { grpcUrl: 'https://fullnode.mainnet.sui.io' } },
   },
 
   // Empty object — opt in with SDK defaults

@@ -16,12 +16,27 @@ import { HookService } from './HookService.js';
 import type { CreateIntentParams } from '../shared/types/intent-types.js';
 
 const HC_RECIPIENT = '0x00000000000000000000000000000000000000Ad' as const;
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
 
 describe('HookService.encodeDeliveryData', () => {
   it('encodes the HyperCore payload as abi.encode(address) (32 bytes)', () => {
     const encoded = HookService.encodeDeliveryData({ kind: HookKind.HYPERCORE_DEPOSIT }, HC_RECIPIENT);
     expect(encoded).toBe(encodeAbiParameters([{ name: 'recipient', type: 'address' }], [HC_RECIPIENT]));
     expect((encoded.length - 2) / 2).toBe(32);
+  });
+
+  it('encodes the Flint payload as abi.encode(address) (32 bytes)', () => {
+    const encoded = HookService.encodeDeliveryData({ kind: HookKind.FLINT_DEPOSIT }, HC_RECIPIENT);
+    expect(encoded).toBe(encodeAbiParameters([{ name: 'recipient', type: 'address' }], [HC_RECIPIENT]));
+    expect((encoded.length - 2) / 2).toBe(32);
+  });
+
+  // A zero recipient makes the destination receiver revert, which wedges the cross-chain message
+  // unrecoverably — so it must fail here, before an intent exists.
+  it.each([HookKind.HYPERCORE_DEPOSIT, HookKind.FLINT_DEPOSIT])('rejects a zero-address recipient (%s)', kind => {
+    expect(() =>
+      HookService.encodeDeliveryData({ kind } as Parameters<typeof HookService.encodeDeliveryData>[0], ZERO_ADDRESS),
+    ).toThrow(/zero address/);
   });
 
   it('throws on an unknown hook kind', () => {
@@ -52,6 +67,20 @@ describe('HookService.resolveDeliveryHook', () => {
       HookService.resolveDeliveryHook(ChainKeys.ETHEREUM_MAINNET, { kind: HookKind.HYPERCORE_DEPOSIT }, HC_RECIPIENT),
     ).toThrow();
   });
+
+  it('resolves the Flint hook on Ethereum to the deployed FlintDepositHook', () => {
+    const hook = getSpokeHook(ChainKeys.ETHEREUM_MAINNET, HookKind.FLINT_DEPOSIT);
+    expect(hook?.address).toBe('0xDf376dE34e9f1474A025Dfe411b7EB5541793C5d');
+
+    const { dstAddress, deliveryData } = HookService.resolveDeliveryHook(
+      ChainKeys.ETHEREUM_MAINNET,
+      { kind: HookKind.FLINT_DEPOSIT },
+      HC_RECIPIENT,
+    );
+
+    expect(dstAddress).toBe(hook?.address);
+    expect(deliveryData).toBe(HookService.encodeDeliveryData({ kind: HookKind.FLINT_DEPOSIT }, HC_RECIPIENT));
+  });
 });
 
 describe('HookService.resolveDelivery', () => {
@@ -81,6 +110,23 @@ describe('HookService.resolveDelivery', () => {
     expect(HookService.resolveDelivery(params)).toEqual({
       dstAddress: hook?.address,
       deliveryData: HookService.encodeDeliveryData({ kind: HookKind.HYPERCORE_DEPOSIT }, HC_RECIPIENT),
+    });
+  });
+
+  // This is the function EvmSolverService/SonicSpokeService actually call to apply a hook — a
+  // FLINT_DEPOSIT case here exercises the same code path production intent construction uses,
+  // not just the lower-level resolveDeliveryHook lookup above.
+  it('overrides dstAddress with the Flint hook and derives deliveryData when hook: FLINT_DEPOSIT is set', () => {
+    const hook = getSpokeHook(ChainKeys.ETHEREUM_MAINNET, HookKind.FLINT_DEPOSIT);
+    const params = {
+      ...base(),
+      dstChainKey: ChainKeys.ETHEREUM_MAINNET,
+      hook: { kind: HookKind.FLINT_DEPOSIT } as const,
+    };
+
+    expect(HookService.resolveDelivery(params)).toEqual({
+      dstAddress: hook?.address,
+      deliveryData: HookService.encodeDeliveryData({ kind: HookKind.FLINT_DEPOSIT }, HC_RECIPIENT),
     });
   });
 });

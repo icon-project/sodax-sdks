@@ -18,7 +18,9 @@ export const SolanaActions = () => {
   const registerChainActions = useXWalletStore(state => state.registerChainActions);
 
   const walletRef = useRef(solanaWallet);
-  useEffect(() => { walletRef.current = solanaWallet; }, [solanaWallet]);
+  useEffect(() => {
+    walletRef.current = solanaWallet;
+  }, [solanaWallet]);
 
   useEffect(() => {
     registerChainActions('SOLANA', {
@@ -47,8 +49,14 @@ export const SolanaActions = () => {
             reject(new Error('Wallet connection timeout'));
           }, SOLANA_METAMASK_CONNECT_TIMEOUT_MS);
 
-          const onConnect = () => { cleanup(); resolve(); };
-          const onError = (err: Error) => { cleanup(); reject(err); };
+          const onConnect = () => {
+            cleanup();
+            resolve();
+          };
+          const onError = (err: Error) => {
+            cleanup();
+            reject(err);
+          };
           const cleanup = () => {
             clearTimeout(timeout);
             wallet.adapter.off('connect', onConnect);
@@ -63,7 +71,10 @@ export const SolanaActions = () => {
           // event listeners above will catch the result either way.
           setTimeout(() => {
             if (!wallet.adapter.connected && !wallet.adapter.connecting) {
-              walletRef.current.connect().catch(err => { cleanup(); reject(err); });
+              walletRef.current.connect().catch(err => {
+                cleanup();
+                reject(err);
+              });
             }
           }, 0);
         });

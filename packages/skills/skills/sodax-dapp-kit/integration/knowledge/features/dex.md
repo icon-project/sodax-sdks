@@ -35,6 +35,11 @@ useCreateSupplyLiquidityParams({ poolData, poolKey, minPrice, maxPrice, liquidit
 useCreateDecreaseLiquidityParams({ /* see source for fields */ });
 ```
 
+`use*Approve` is unchanged and still resolves to one transaction hash, but the SDK may send **two**
+transactions on a token that rejects a non-zero to non-zero allowance change (Ethereum USDT today) —
+the user signs twice and the hash is the **last** one's. An `isPending`-driven "Approving…" should say
+so. See "Approve hooks can prompt the wallet twice" in [`architecture.md`](../architecture.md).
+
 ## SDK param types (passed via `mutate({ params, walletProvider })`)
 
 Each dex mutation hook's TVars is `{ params: <SDKParamsType>, walletProvider, timeout? }`. The SDK param types below are what goes INSIDE `params` — they are not the TVars themselves.

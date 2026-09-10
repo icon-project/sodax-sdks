@@ -35,6 +35,7 @@ export const ChainKeys = {
   KAIA_MAINNET: '0x2019.kaia',
   STACKS_MAINNET: 'stacks',
   HEDERA_MAINNET: 'hedera',
+  ROBINHOOD_MAINNET: 'robinhood',
 } as const;
 
 export type ChainKey = (typeof ChainKeys)[keyof typeof ChainKeys];

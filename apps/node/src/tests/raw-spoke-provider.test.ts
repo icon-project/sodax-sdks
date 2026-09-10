@@ -50,7 +50,7 @@
 // });
 
 // const suiWalletProvider = new SuiWalletProvider({
-//   rpcUrl: 'https://fullnode.testnet.sui.io',
+//   rpcUrl: 'https://sui-testnet-rpc.publicnode.com',
 //   mnemonics: suiWalletMnemonics,
 // });
 

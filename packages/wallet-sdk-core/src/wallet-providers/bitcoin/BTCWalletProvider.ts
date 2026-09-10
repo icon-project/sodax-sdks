@@ -68,10 +68,7 @@ export class BitcoinWalletProvider extends BaseWalletProvider<BitcoinWalletDefau
 
   async getWalletAddress(): Promise<string> {
     if (isPkWallet(this.wallet)) {
-      const payment = this.getPayment(
-        this.wallet.keyPair,
-        this.wallet.addressType,
-      );
+      const payment = this.getPayment(this.wallet.keyPair, this.wallet.addressType);
 
       if (!payment.address) {
         throw new BitcoinWalletError('Failed to derive address');

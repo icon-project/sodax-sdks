@@ -7,6 +7,12 @@ import { type Intent, getChainKeyFromRelayChainId, relayTxAndWaitPacket, Sodax }
  * re-posting an already-posted intent returns `{ answer: 'OK', intent_hash }`. So falling back after a
  * backend submit-tx non-success cannot double-fill. Runs under `test:e2e` (the hardcoded inputs below
  * must be real already-relayed/posted data) — not part of the normal `pnpm test` gate.
+ *
+ * The same guarantee covers `BridgeService.bridge()`'s backend submit-tx fallback: it re-relays via the
+ * identical generic `relayTxAndWaitPacket` exercised by "test relay response for existing relayed intent
+ * data" below (bridge has no intent/post-execution, so only the relay leg applies). A dedicated
+ * bridge-deposit assertion can be added here once a real already-relayed bridge tx + its `relayData`
+ * `{ address, payload }` are available to hardcode.
  */
 describe('e2e relay/submit/post solver execution tests', () => {
   const sodax = new Sodax();

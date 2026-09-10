@@ -16,7 +16,11 @@ export type UseUnstakeVars<K extends SpokeChainKey = SpokeChainKey> = Omit<Unsta
  */
 export function useUnstake<K extends SpokeChainKey = SpokeChainKey>({
   mutationOptions,
-}: MutationHookParams<TxHashPair, UseUnstakeVars<K>> = {}): SafeUseMutationResult<TxHashPair, Error, UseUnstakeVars<K>> {
+}: MutationHookParams<TxHashPair, UseUnstakeVars<K>> = {}): SafeUseMutationResult<
+  TxHashPair,
+  Error,
+  UseUnstakeVars<K>
+> {
   const { sodax } = useSodaxContext();
   const queryClient = useQueryClient();
 

@@ -1,6 +1,6 @@
 # Money Market — `MoneyMarketService`
 
-Cross-chain lending and borrowing. Supply, borrow, withdraw, repay across 21 spoke chains. Position state lives on the hub.
+Cross-chain lending and borrowing. Supply, borrow, withdraw, repay across the supported spoke chains (`moneyMarketSupportedTokens` in `@sodax/types` is the source of truth). Position state lives on the hub.
 
 Access: `sodax.moneyMarket`. Service class: `MoneyMarketService`. Feature tag for errors: `'moneyMarket'`.
 
@@ -163,6 +163,12 @@ The `action` field routes to the right token under the hood — relevant for rep
 | `buildSupplyData` / `buildBorrowData` / `buildWithdrawData` / `buildRepayData` | `Hex` (calldata for hub-side calls) |
 
 > Every cross-chain mutation across the SDK (bridge, staking, dex, migration, MM) returns `TxHashPair = { srcChainTxHash, dstChainTxHash }` — there is no array-form variant in v2.
+
+`approve` can send **two** transactions on a token that rejects a non-zero to non-zero allowance
+change (Ethereum USDT is the only listed one today): `approve(0)` is mined first, then the real
+approval, so the user signs twice. The returned value is unchanged — one hash, the **last**
+transaction's. Detection simulates the approval, so never gate on a token list. Full note: "ERC-20
+approval can take two transactions" in [`architecture.md`](../architecture.md).
 
 ## Error codes
 

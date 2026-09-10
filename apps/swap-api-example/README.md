@@ -27,6 +27,10 @@ cp .env.example .env   # adjust VITE_SWAPS_API_BASE_URL if needed (defaults to c
 pnpm --filter swap-api-example dev
 ```
 
+Optional: set `VITE_SODAX_API_KEY` to send a partner API key as `x-api-key` on every
+swaps API call (`new SwapsApi({ baseUrl, apiKey })`). Browser-bundled keys are public;
+unset is fine until the backend enforces the key.
+
 Open http://localhost:3001, connect an EVM wallet, pick a source/destination
 token, enter an amount, and Swap. Quotes work for any chain; on-chain execution
 in this example is EVM-only.

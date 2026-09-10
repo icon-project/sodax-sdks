@@ -24,7 +24,7 @@ Prerequisite: read [`ARCHITECTURE.md`](https://github.com/icon-project/sodax-sdk
 
 Set `providerManaged: true` if **any** of these is true:
 
-- The chain ships a React adapter library (wagmi, `@solana/wallet-adapter-react`, `@mysten/dapp-kit`, etc.) that you want to use.
+- The chain ships a React adapter library (wagmi, `@solana/wallet-adapter-react`, `@mysten/dapp-kit-react`, etc.) that you want to use.
 - The wallet-side SDK requires a long-lived React context to register handlers and survive component re-renders.
 - Wallet discovery is reactive (EIP-6963 announcements, dynamic adapter registration) and you want components to re-render automatically.
 

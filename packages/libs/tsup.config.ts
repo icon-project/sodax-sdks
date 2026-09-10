@@ -47,7 +47,7 @@ const stubUnusedPackages: EsbuildPlugin = {
         namespace: 'stub',
       }));
     }
-    build.onLoad({ filter: /.*/, namespace: 'stub' }, (args) => {
+    build.onLoad({ filter: /.*/, namespace: 'stub' }, args => {
       // @stacks/connect-ui: @stacks/connect imports named exports from this package.
       // SODAX doesn't use connect-ui — we pass provider directly via request({ provider }, ...).
       // These noop stubs satisfy the imports without pulling in the UI dependency.
@@ -105,7 +105,7 @@ export default defineConfig(options => ({
     // their `node:`-prefixed forms so any future builtin pulled in by an
     // upgrade is externalized automatically.
     ...builtinModules,
-    ...builtinModules.map((m) => `node:${m}`),
+    ...builtinModules.map(m => `node:${m}`),
     'node-fetch',
     // @injectivelabs/wallet-strategy → @injectivelabs/sdk-ts → cosmjs → libsodium.
     // libsodium-wrappers-sumo has broken ESM resolution ('./libsodium-sumo.mjs' 404);
@@ -114,12 +114,7 @@ export default defineConfig(options => ({
   ],
   // TODO(#1070): Bundle problem packages to work around Turbopack issues.
   // Revert each entry when its upstream cycle / UMD / dynamic-import pattern is fixed.
-  noExternal: [
-    '@stacks/transactions',
-    '@stacks/network',
-    '@stacks/connect',
-    '@injectivelabs/wallet-strategy',
-  ],
+  noExternal: ['@stacks/transactions', '@stacks/network', '@stacks/connect', '@injectivelabs/wallet-strategy'],
   esbuildPlugins: [stubUnusedPackages],
   esbuildOptions(options) {
     // Use browser resolution so packages with a "browser" field (axios, etc.)

@@ -29,7 +29,7 @@ Granular skill for `IconWalletProvider` — the low-level ICON wallet for backen
 
 - **Omitting `rpcUrl`.** Required in both modes — there is no provider-level public-RPC fallback.
 - **Assuming millisecond timestamps.** `timestampProvider` returns **microseconds** (default `Date.now() * 1000`).
-- **Firing many parallel browser-extension calls.** Hana's ICONEX `CustomEvent` relay messages use a request-ID — collisions occur; tune `defaults.jsonRpcId` if you control the consumer.
+- **Firing many parallel browser-extension calls.** The ICONEX `CustomEvent` relay is one shared window channel; the SDK serializes requests so at most one is in flight and concurrent calls no longer cross-resolve. They run one at a time (a pending signing prompt blocks the next), and each call times out after ~5 min if the wallet never answers.
 - **Treating a contract (`cx…`) as the signer.** The wallet level is EOA-only (`IconEoaAddress`, `hx…`); contracts appear in tx params, not as the signer.
 - **Mixing PK + browser-extension fields.** Discriminated union — don't `as`.
 

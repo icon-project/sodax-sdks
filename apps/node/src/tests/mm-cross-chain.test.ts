@@ -49,7 +49,7 @@
 // });
 
 // const suiWalletProvider = new SuiWalletProvider({
-//   rpcUrl: 'https://fullnode.testnet.sui.io',
+//   rpcUrl: 'https://sui-testnet-rpc.publicnode.com',
 //   mnemonics: suiWalletMnemonics,
 // });
 
@@ -416,7 +416,7 @@
 //   const srcSpokeProvider = new SuiSpokeProvider(
 //     spokeChainConfig[src],
 //     new SuiWalletProvider({
-//       rpcUrl: 'https://fullnode.mainnet.sui.io',
+//       rpcUrl: 'https://sui-rpc.publicnode.com',
 //       mnemonics: suiWalletMnemonics,
 //     }),
 //   );

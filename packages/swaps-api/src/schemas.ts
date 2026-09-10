@@ -93,7 +93,7 @@ export const DeadlineResponseSchema = v.object({ deadline: v.string() });
 export const AllowanceCheckResponseSchema = v.object({ valid: v.boolean() });
 
 export const makeApproveResponseSchema = (txSchema: v.GenericSchema<unknown, RawTxReturnType>) =>
-  v.object({ tx: txSchema });
+  v.object({ tx: txSchema, resetTx: v.optional(txSchema) });
 
 export const SubmitIntentResponseSchema = v.object({ result: v.unknown() });
 
@@ -172,20 +172,26 @@ const PacketDataSchema = v.object({
   payload: v.string(),
 });
 
+// Mirrors `SubmitTxOperationV2`; the backend's `SubmitTxOperationValues` is the source of truth.
+const SubmitTxOperationSchema = v.picklist(['swap', 'leverage_deposit', 'leverage_withdraw']);
+
 const SubmitTxStatusResultSchema = v.object({
   dstIntentTxHash: v.string(),
   packetData: v.optional(PacketDataSchema),
   intent_hash: v.optional(v.string()),
+  fillTxHash: v.optional(v.string()),
 });
 
 const SubmitTxStatusDataSchema = v.object({
   txHash: v.string(),
   srcChainKey: v.string(),
   status: SubmitSwapTxStatusSchema,
+  operation: v.optional(SubmitTxOperationSchema),
   failedAtStep: v.optional(SubmitSwapTxStatusSchema),
   failureReason: v.optional(v.string()),
   processingAttempts: v.number(),
   abandonedAt: v.optional(v.string()),
+  relayedForRefundAt: v.optional(v.string()),
   result: v.optional(SubmitTxStatusResultSchema),
   userMessage: v.optional(v.string()),
   intentCancelled: v.optional(v.boolean()),

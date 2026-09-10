@@ -19,6 +19,7 @@ Leveraged-yield ERC-4626 vaults on Sonic. Deposit any token → `lsoda*` shares,
 
 | Hook | Purpose |
 |------|---------|
+| `useLeverageYieldQuote` | Quote a deposit/withdraw with the leverage-yield fee (returns the SDK `Result` as `data`) |
 | `useSwapAllowance` | Check spoke `inputToken` approval (deposit only — swap-domain hook) |
 | `useLeverageYieldEffectiveApr` | AAVE + LSD effective net APR |
 | `useLeverageYieldPosition` | Live position (collateral, debt, LTV, health factor, idle) |
@@ -107,7 +108,7 @@ function DepositForm({ vault, srcAddress, inputToken }: { vault: Address; srcAdd
     const built = await buildDeposit({
       vault, srcChainKey: chainKey, srcAddress, inputToken,
       inputAmount: parseUnits(amount, 18),
-      minOutputAmount: 0n,             // quote via sodax.swaps.getQuote (token_dst = vault), then subtract slippage
+      minOutputAmount: 0n,             // size via useLeverageYieldQuote (token_dst = vault), then subtract slippage
       partnerFee: DEPOSIT_PARTNER_FEE, // per-intent fee — must match the quote's post-fee amount
     });
     if (!built.ok) return;
@@ -149,7 +150,7 @@ function WithdrawButton({ vault, srcAddress, outputToken, shares }: { vault: Add
       vault, srcChainKey: chainKey, srcAddress,
       dstChainKey: chainKey, outputToken,
       inputAmount: shares,         // lsoda* shares to burn
-      minOutputAmount: 0n,         // quote via sodax.swaps.getQuote (token_src = vault), then subtract slippage
+      minOutputAmount: 0n,         // size via useLeverageYieldQuote (token_src = vault), then subtract slippage
     });
     if (!built.ok) return;
     await vaultSwap({ ...built.value, walletProvider }); // built.value.hubWalletSwap === true
@@ -162,7 +163,8 @@ function WithdrawButton({ vault, srcAddress, outputToken, shares }: { vault: Add
 ## Notes
 
 - **Two roles:** `deposit` / `withdraw` *build* a `LeverageYieldSwapPayload`; `useLeverageYieldVaultSwap` *executes* it. Always spread the built payload into the executor with a `walletProvider`.
-- **Quotes:** size `minOutputAmount` with `sodax.swaps.getQuote` — vault address as `token_dst` (deposit) or `token_src` (withdraw), since `lsoda*` shares are solver-tradeable. Subtract your slippage tolerance.
-- **Deposit fee:** a per-intent `partnerFee` is deducted from `inputAmount` before the swap; quote on the post-fee amount or the intent won't fill.
+- **Quotes:** size `minOutputAmount` with `useLeverageYieldQuote` — vault address as `token_dst` (deposit) or `token_src` (withdraw). Not `useQuote`: that one deducts the effective *swap* fee, while the vault intent charges the effective *leverage-yield* fee, so the quote and the intent disagree whenever the two feature fees differ. It returns the SDK `Result` as `data` (branch on `data?.ok`), unlike the other leverage-yield read hooks. Subtract your slippage tolerance.
+- **Fees apply BOTH ways.** Deposits *and* withdrawals are charged the effective leverage-yield fee (`leverageYield.partnerFee ?? fee`); both builders accept an optional `partnerFee` to override it per intent. The fee comes out of `inputAmount` before the swap, so pass the same `partnerFee` to `useLeverageYieldQuote` or the quote is sized on the wrong net input and the intent won't fill. On a withdraw the input token is the vault, so the fee is taken in **`lsoda*` shares** — the receiver accrues vault shares, not the output token.
+- **Configured fee:** vault flows are monetized via `leverageYield.partnerFee` (else the global `fee`). `swaps.partnerFee` does not apply to them.
 - **Withdraw:** no spoke approval — the hub wallet authorises the share spend via `Connection.sendMessage`. Output lands at `recipient` (defaults to `srcAddress`) on `dstChainKey`.
 - **Reads** (`useLeverageYieldEffectiveApr`, `Position`, `TotalAssets`, `PreviewRedeem`) are already unwrapped — read `data` directly. `useLeverageYieldShareBalances` returns an array; aggregate the `shares` yourself.

@@ -75,13 +75,15 @@ if (!result.ok) {
 
 ### Point tests at a sandbox backend
 
-There is no constructor slot to inject a custom `IConfigApiV1` — the only backend knob is `api` (`ApiConfig = BaseApiConfig | CustomApiConfig`: pass a flat `{ baseURL, timeout?, headers? }`, or a `CustomApiConfig` with separate `baseApiConfig` / `swapsApiConfig` endpoints). To run tests against a sandbox or local mock server, set `api.baseURL` and let `initialize()` fetch config from it:
+There is no constructor slot to inject a custom `IConfigApiV1` — the only backend knob is `api` (`ApiConfig = BackendApiConfig | CustomApiConfig`: pass a flat `{ baseURL, basePath?, timeout?, headers? }`, or a `CustomApiConfig` with separate `baseApiConfig` / `swapsApiConfig` endpoints). To run tests against a sandbox or local mock server, set `api.baseURL` and let `initialize()` fetch config from it:
 
 ```ts
 import { Sodax } from '@sodax/sdk';
 
 const sodax = new Sodax({
-  api: { baseURL: 'https://sandbox-api.example.com' },
+  // `baseURL` is the gateway root; the data API's `/be` mount is appended below it. A mock that
+  // serves `/config/*` at its origin needs `basePath: ''`.
+  api: { baseApiConfig: { baseURL: 'https://sandbox-api.example.com', basePath: '' } },
 });
 await sodax.config.initialize();
 ```

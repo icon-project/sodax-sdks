@@ -18,7 +18,9 @@ function listWorkspaceDirs(base) {
     .filter(path => statSync(join(root, path)).isDirectory());
 }
 
-const agentFiles = ['AGENTS.md'];
+// docs/ is the published site, so its guidance is gated like a workspace guide even though
+// it is neither a package nor an app.
+const agentFiles = ['AGENTS.md', 'docs/AGENTS.md'];
 const claudeFiles = ['CLAUDE.md'];
 
 for (const dir of [...listWorkspaceDirs('packages'), ...listWorkspaceDirs('apps')]) {
@@ -99,7 +101,7 @@ for (const path of routedGuides) {
 }
 
 // Dev skills are the ones our AGENTS.md files point at (.claude/skills/<name>/);
-// vendored skills (cloudflare/resend/…) and tool-native command skills (release-sdk) aren't referenced, so they're out of this gate.
+// vendored skills (cloudflare/resend/…) and any skill no AGENTS.md points at aren't referenced, so they're out of this gate.
 const sodaxDevSkills = [
   ...new Set(
     agentFiles
@@ -127,7 +129,8 @@ for (const skill of sodaxDevSkills) {
     const name = nameMatch ? nameMatch[1].replace(/^['"]|['"]$/g, '').trim() : '';
     if (!name) fail(`${skillPath} frontmatter is missing 'name'`);
     if (!/^description:\s*\S/m.test(block)) fail(`${skillPath} frontmatter is missing 'description'`);
-    else if (!/^description:\s*['"]/m.test(block)) fail(`${skillPath} frontmatter 'description' must be quoted (it usually contains a colon)`);
+    else if (!/^description:\s*['"]/m.test(block))
+      fail(`${skillPath} frontmatter 'description' must be quoted (it usually contains a colon)`);
     if (name && name !== skill) fail(`${skillPath} frontmatter name '${name}' must match its directory '${skill}'`);
     if (name && seenSkillNames.has(name)) fail(`Duplicate dev skill name '${name}'`);
     if (name) seenSkillNames.set(name, skillPath);

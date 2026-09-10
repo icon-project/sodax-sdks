@@ -26,6 +26,7 @@ import {
   kaiaSupportedTokens,
   stacksSupportedTokens,
   hederaSupportedTokens,
+  robinhoodSupportedTokens,
 } from './tokens.js';
 
 import { ChainKeys, CHAIN_KEYS, type ChainKey, type ChainType } from './chain-keys.js';
@@ -55,6 +56,7 @@ export const RelayChainIdMap = {
   [ChainKeys.KAIA_MAINNET]: 27489n,
   [ChainKeys.STACKS_MAINNET]: 60n,
   [ChainKeys.HEDERA_MAINNET]: 18501n,
+  [ChainKeys.ROBINHOOD_MAINNET]: 21071n,
 } as const satisfies Record<ChainKey, bigint>;
 
 export type IntentChainId = (typeof RelayChainIdMap)[keyof typeof RelayChainIdMap];
@@ -369,6 +371,20 @@ export const baseChainInfo = {
       contractUrl: 'https://hashscan.io/mainnet/contract/',
     },
   },
+  [ChainKeys.ROBINHOOD_MAINNET]: {
+    name: 'Robinhood Chain',
+    key: ChainKeys.ROBINHOOD_MAINNET,
+    type: 'EVM',
+    chainId: 4663,
+    mainnet: true,
+    logo: chainLogo(ChainKeys.ROBINHOOD_MAINNET),
+    explorer: {
+      baseUrl: 'https://robinhoodchain.blockscout.com/',
+      txUrl: 'https://robinhoodchain.blockscout.com/tx/',
+      addressUrl: 'https://robinhoodchain.blockscout.com/address/',
+      contractUrl: 'https://robinhoodchain.blockscout.com/address/',
+    },
+  },
 } as const satisfies Record<ChainKey, BaseChainInfo<ChainType>>;
 
 type ChainKeysByType<T extends ChainType> = {
@@ -563,7 +579,14 @@ export type SuiSpokeChainConfig = BaseSpokeChainConfig<'SUI'> & {
     xTokenManager: string;
     rateLimit: string;
   };
-  rpc_url: string;
+  /** gRPC-web endpoint. Mysten's public fullnodes stopped serving JSON-RPC in July 2026; `sui-node` drops it in October 2026. */
+  grpc_url: string;
+  /**
+   * @deprecated Renamed to `grpc_url`. Still honored so existing overrides keep working, and wins
+   * over `grpc_url` when set. A `sui-node` serves gRPC-web on the same origin as JSON-RPC, so a
+   * self-hosted or full-service endpoint needs no change; a JSON-RPC-only provider does.
+   */
+  rpc_url?: string;
 };
 
 export type NearSpokeChainConfig = BaseSpokeChainConfig<'NEAR'> & {
@@ -833,7 +856,9 @@ export const spokeChainConfig = {
     },
     chain: baseChainInfo[ChainKeys.BITCOIN_MAINNET] satisfies BaseChainInfo<'BITCOIN'>,
     bnUSD: 'no',
-    nativeToken: 'BTC' as const,
+    // Must equal bitcoinSupportedTokens.BTC.address: isNativeToken compares a token's `address`
+    // against this value, so a symbol here classifies native BTC as a contract token.
+    nativeToken: '0:0' as const,
     supportedTokens: bitcoinSupportedTokens,
     radfi: {
       walletMode: 'TRADING',
@@ -888,6 +913,132 @@ export const spokeChainConfig = {
         contractId: 'CCXTXZAFLVNTMORVWYB6BGL7YEW3U3ONDAL2FGBRGDUQH7AGANVQPRS6',
         assetIssuer: 'GDYUTHY75A7WUZJQDPOP66FB32BOYGZRXHWTWO4Q6LQTANT5X3V5HNFA',
       },
+      // v3.2.0 direct-wrapped spoke assets
+      {
+        assetCode: 'ETH',
+        contractId: 'CCC6TZWLAHZT2NRVEEOZRPVLUKWVJVKZ3TM347DCCO2QBWNAA5MHROSJ',
+        assetIssuer: 'GDYUTHY75A7WUZJQDPOP66FB32BOYGZRXHWTWO4Q6LQTANT5X3V5HNFA',
+      },
+      {
+        assetCode: 'BTC',
+        contractId: 'CBSKI7SY2AP6IIN7IBROZP2CJES67ARMHQYZWT7A7PKH67KGDK2DIRMA',
+        assetIssuer: 'GDYUTHY75A7WUZJQDPOP66FB32BOYGZRXHWTWO4Q6LQTANT5X3V5HNFA',
+      },
+      {
+        assetCode: 'BNB',
+        contractId: 'CC6C3QCSK3WYM2ZENQ5MHA3QPNAKYOZFAGWH5PPU3MVDE3C2YNS7CHMF',
+        assetIssuer: 'GDYUTHY75A7WUZJQDPOP66FB32BOYGZRXHWTWO4Q6LQTANT5X3V5HNFA',
+      },
+      {
+        assetCode: 'SOL',
+        contractId: 'CB5YRZTKA37DND672WZZXI3BQ66P4PQEJ6VQA3TDG2YLUAGADBP2VCUR',
+        assetIssuer: 'GDYUTHY75A7WUZJQDPOP66FB32BOYGZRXHWTWO4Q6LQTANT5X3V5HNFA',
+      },
+      {
+        assetCode: 'SUI',
+        contractId: 'CBAIKWGVYLCCXGW3CSIXE7JCNNVLBAA6UWMOHMEI5FO4UEXB3BZBMT2W',
+        assetIssuer: 'GDYUTHY75A7WUZJQDPOP66FB32BOYGZRXHWTWO4Q6LQTANT5X3V5HNFA',
+      },
+      {
+        assetCode: 'AVAX',
+        contractId: 'CC246EHXEDAC7ASKQ7SIFAJCBVDTV35EH4I75KM4ZELVRH5YJFRABWIW',
+        assetIssuer: 'GDYUTHY75A7WUZJQDPOP66FB32BOYGZRXHWTWO4Q6LQTANT5X3V5HNFA',
+      },
+      {
+        assetCode: 'INJ',
+        contractId: 'CATSVDWZE26QQLX552CMFJHO2MXDEXM7NSW32WP5FU2FFURNAFEUQSAO',
+        assetIssuer: 'GDYUTHY75A7WUZJQDPOP66FB32BOYGZRXHWTWO4Q6LQTANT5X3V5HNFA',
+      },
+      {
+        assetCode: 'POL',
+        contractId: 'CBEFOLE2WVJDQ2O2S3HHV6VTUE5RU4DTLSMMRBSB4AWGJPXBWFKK2PKW',
+        assetIssuer: 'GDYUTHY75A7WUZJQDPOP66FB32BOYGZRXHWTWO4Q6LQTANT5X3V5HNFA',
+      },
+      {
+        assetCode: 'HYPE',
+        contractId: 'CDOQFNKW6B3PBPTLNRQSQVAYUA7HFWGGR7TB5BC5PMZ4HU2M2XGPMGTE',
+        assetIssuer: 'GDYUTHY75A7WUZJQDPOP66FB32BOYGZRXHWTWO4Q6LQTANT5X3V5HNFA',
+      },
+      {
+        assetCode: 'NEAR',
+        contractId: 'CCOJZW4X77T4DNJLV7F6DWKTHDWUS7MRFBZP6BZXT3ZYQFMYDVFVS4EK',
+        assetIssuer: 'GDYUTHY75A7WUZJQDPOP66FB32BOYGZRXHWTWO4Q6LQTANT5X3V5HNFA',
+      },
+      {
+        assetCode: 'HBAR',
+        contractId: 'CCFYC6XGCC6ONVVM7FIAD3Q5KAJUXUDEXLQCQUKP6LN2AKVOGKUQ3JOY',
+        assetIssuer: 'GDYUTHY75A7WUZJQDPOP66FB32BOYGZRXHWTWO4Q6LQTANT5X3V5HNFA',
+      },
+      {
+        assetCode: 'USDS',
+        contractId: 'CC552JLYIJROE24VZFSMO7GBKQOOIQ6R52E3VQSQYC7NMFYAVMC7GQHS',
+        assetIssuer: 'GDYUTHY75A7WUZJQDPOP66FB32BOYGZRXHWTWO4Q6LQTANT5X3V5HNFA',
+      },
+      {
+        assetCode: 'SPCX',
+        contractId: 'CAI4HHAYO57QICZOZ4JF7R66RLGJRD7BGTX7H6MILCITVEYYEFRYFISK',
+        assetIssuer: 'GDYUTHY75A7WUZJQDPOP66FB32BOYGZRXHWTWO4Q6LQTANT5X3V5HNFA',
+      },
+      {
+        assetCode: 'NVDA',
+        contractId: 'CCQFCT4FHJURUQ4RQA4NHYW5GQRHCBDXF33ADXZRTDTDVGKOJO3ZPEMY',
+        assetIssuer: 'GDYUTHY75A7WUZJQDPOP66FB32BOYGZRXHWTWO4Q6LQTANT5X3V5HNFA',
+      },
+      {
+        assetCode: 'GME',
+        contractId: 'CAPSLSLCTFOZM22SUIPQENMM54T24GTDRHZ5STYAO6EYMK5GGGYVKWBX',
+        assetIssuer: 'GDYUTHY75A7WUZJQDPOP66FB32BOYGZRXHWTWO4Q6LQTANT5X3V5HNFA',
+      },
+      {
+        assetCode: 'MSTR',
+        contractId: 'CAFQQXZSECLJNU76OS2OKLJQJBQHYJCVAYZJ4KGEN7VHXH5BTGNLVQND',
+        assetIssuer: 'GDYUTHY75A7WUZJQDPOP66FB32BOYGZRXHWTWO4Q6LQTANT5X3V5HNFA',
+      },
+      {
+        assetCode: 'AAPL',
+        contractId: 'CAZSFDNSSR2RKJ2LIIB2Y4G4WOSYYKC4646EUJ63PQLDDHOVQYZ4HDTK',
+        assetIssuer: 'GDYUTHY75A7WUZJQDPOP66FB32BOYGZRXHWTWO4Q6LQTANT5X3V5HNFA',
+      },
+      {
+        assetCode: 'TSLA',
+        contractId: 'CARLFQDI2S2FSYFB47AZLKGUFZVGBEUVNW77SCJHHHGL2KPGT3TN5PAB',
+        assetIssuer: 'GDYUTHY75A7WUZJQDPOP66FB32BOYGZRXHWTWO4Q6LQTANT5X3V5HNFA',
+      },
+      {
+        assetCode: 'MU',
+        contractId: 'CBPTKA32BTUEX4VFAER6AUFWQZCWJKQAMLV2PMFFN7EHLGLJN4JWIZ3F',
+        assetIssuer: 'GDYUTHY75A7WUZJQDPOP66FB32BOYGZRXHWTWO4Q6LQTANT5X3V5HNFA',
+      },
+      {
+        assetCode: 'SNDK',
+        contractId: 'CDXNTHFMGQM33UGQBSLZI3BV5UWW62QGZLCEKOXJKMFN2W3KQZKE3LTQ',
+        assetIssuer: 'GDYUTHY75A7WUZJQDPOP66FB32BOYGZRXHWTWO4Q6LQTANT5X3V5HNFA',
+      },
+      {
+        assetCode: 'SPY',
+        contractId: 'CD3ZMWOS4PZS2RQITEHBOTS27DTDP4QKOK7IEO5IB64GQKHRJYTVL3SW',
+        assetIssuer: 'GDYUTHY75A7WUZJQDPOP66FB32BOYGZRXHWTWO4Q6LQTANT5X3V5HNFA',
+      },
+      {
+        assetCode: 'QQQ',
+        contractId: 'CC7DQX43J2KBK5MJACQWTNHENIYB5GUVCFXGDKQWDLUWA4VKLOOU5PWB',
+        assetIssuer: 'GDYUTHY75A7WUZJQDPOP66FB32BOYGZRXHWTWO4Q6LQTANT5X3V5HNFA',
+      },
+      {
+        assetCode: 'SGOV',
+        contractId: 'CBQMRO2JTUJ6NXVBQ3XGJV34PDTXR34DD74TLLRCW5SV2CV2NN2VDMLH',
+        assetIssuer: 'GDYUTHY75A7WUZJQDPOP66FB32BOYGZRXHWTWO4Q6LQTANT5X3V5HNFA',
+      },
+      {
+        assetCode: 'USO',
+        contractId: 'CCFRCTIW5EK2OK626V6C4YRTJCKACIRDI2GHOKWM57ZXACK2ZTWWWLC7',
+        assetIssuer: 'GDYUTHY75A7WUZJQDPOP66FB32BOYGZRXHWTWO4Q6LQTANT5X3V5HNFA',
+      },
+      {
+        assetCode: 'SLV',
+        contractId: 'CBY3U32O5T2B555HNJLX6C6HW3O2FLRSJGH472UOOHT6H6ZMGMSSZTLW',
+        assetIssuer: 'GDYUTHY75A7WUZJQDPOP66FB32BOYGZRXHWTWO4Q6LQTANT5X3V5HNFA',
+      },
     ],
     supportedTokens: stellarSupportedTokens,
     nativeToken: 'CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA' as const,
@@ -915,7 +1066,7 @@ export const spokeChainConfig = {
     supportedTokens: suiSupportedTokens,
     nativeToken: '0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI' as const,
     bnUSD: '0xff4de2b2b57dd7611d2812d231a467d007b702a101fd5c7ad3b278257cddb507::bnusd::BNUSD',
-    rpc_url: 'https://fullnode.mainnet.sui.io:443',
+    grpc_url: 'https://fullnode.mainnet.sui.io',
     chain: baseChainInfo[ChainKeys.SUI_MAINNET] satisfies BaseChainInfo<'SUI'>,
     pollingConfig: {
       pollingIntervalMs: 500,
@@ -942,7 +1093,7 @@ export const spokeChainConfig = {
     },
   } as const satisfies IconSpokeChainConfig,
   [ChainKeys.NEAR_MAINNET]: {
-    rpcUrl: 'https://1rpc.io/near',
+    rpcUrl: 'https://free.rpc.fastnear.com',
     chain: baseChainInfo[ChainKeys.NEAR_MAINNET] as BaseChainInfo<'NEAR'>,
     nativeToken: 'NEAR',
     addresses: {
@@ -1018,6 +1169,21 @@ export const spokeChainConfig = {
     supportedTokens: hederaSupportedTokens,
     pollingConfig: {
       pollingIntervalMs: 2000,
+      maxTimeoutMs: 60_000,
+    },
+  } as const satisfies EvmSpokeChainConfig,
+  [ChainKeys.ROBINHOOD_MAINNET]: {
+    chain: baseChainInfo[ChainKeys.ROBINHOOD_MAINNET] satisfies BaseChainInfo<'EVM'>,
+    rpcUrl: 'https://rpc.mainnet.chain.robinhood.com',
+    addresses: {
+      assetManager: '0x0df73542cC68bDC01b361d231c60F726B0e0bC05',
+      connection: '0x4555aC13D7338D9E671584C1D118c06B2a3C88eD',
+    },
+    nativeToken: '0x0000000000000000000000000000000000000000' as const,
+    bnUSD: '0x3cd95C469be0EDFD12Bd4F3a4436B132B7908DF4',
+    supportedTokens: robinhoodSupportedTokens,
+    pollingConfig: {
+      pollingIntervalMs: 1000,
       maxTimeoutMs: 60_000,
     },
   } as const satisfies EvmSpokeChainConfig,

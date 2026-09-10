@@ -183,7 +183,7 @@ describe('RadfiProvider — empty-credential guard (resolveAuth)', () => {
     const result = await radfi.createWithdrawTransaction(withdrawParams, '');
     expect(result).toEqual({ base64Psbt: 'x', txId: 't' });
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
     expect((init.headers as Record<string, string>).Authorization).toBe('Bearer server-api-key');
   });
 });
@@ -199,5 +199,103 @@ describe('RadfiProvider — constructor seeds the session from config', () => {
     const radfi = new RadfiProvider(baseConfig);
     expect(radfi.accessToken).toBe('');
     expect(radfi.refreshToken).toBe('');
+  });
+});
+
+describe('RadfiProvider — signer hook (x-api-signature, gh-831)', () => {
+  it('merges the signer headers onto an authenticated POST and keeps the user Authorization', async () => {
+    const signer = vi.fn().mockReturnValue({ 'x-api-signature': 'sig_abc_1719396000000' });
+    fetchMock.mockResolvedValue(makeResponse(200, JSON.stringify({ data: { base64Psbt: 'cHNidP8=', txId: 'abc' } })));
+    const radfi = new RadfiProvider(baseConfig, { signer });
+
+    await radfi.createWithdrawTransaction(withdrawParams, 'user-access-token');
+
+    expect(signer).toHaveBeenCalledWith({ method: 'POST', path: '/sodax/transaction' });
+    const headers = (fetchMock.mock.calls[0]?.[1] as RequestInit).headers as Record<string, string>;
+    expect(headers['x-api-signature']).toBe('sig_abc_1719396000000');
+    // the per-user token and the backend signature ride as separate headers on the same request
+    expect(headers.Authorization).toBe('Bearer user-access-token');
+  });
+
+  it('also signs the unauthenticated GET /wallets/details', async () => {
+    const signer = vi.fn().mockReturnValue({ 'x-api-signature': 'sig_get' });
+    const wallet = { tradingAddress: 'bc1ptrade', userAddress: 'bc1puser', userPublicKey: '02ab' };
+    fetchMock.mockResolvedValue(makeResponse(200, JSON.stringify({ data: wallet })));
+    const radfi = new RadfiProvider(baseConfig, { signer });
+
+    await radfi.getTradingWallet('bc1puser');
+
+    expect(signer).toHaveBeenCalledWith({ method: 'GET', path: '/wallets/details/bc1puser' });
+    const headers = (fetchMock.mock.calls[0]?.[1] as RequestInit).headers as Record<string, string>;
+    expect(headers['x-api-signature']).toBe('sig_get');
+  });
+
+  it('awaits an async signer', async () => {
+    const signer = vi.fn().mockResolvedValue({ 'x-api-signature': 'sig_async' });
+    fetchMock.mockResolvedValue(makeResponse(200, JSON.stringify({ data: { base64Psbt: 'x', txId: 'y' } })));
+    const radfi = new RadfiProvider(baseConfig, { signer });
+
+    await radfi.createWithdrawTransaction(withdrawParams, 'tok');
+
+    const headers = (fetchMock.mock.calls[0]?.[1] as RequestInit).headers as Record<string, string>;
+    expect(headers['x-api-signature']).toBe('sig_async');
+  });
+
+  it('sends no x-api-signature when no signer is configured (browser path unchanged)', async () => {
+    fetchMock.mockResolvedValue(makeResponse(200, JSON.stringify({ data: { base64Psbt: 'x', txId: 'y' } })));
+    const radfi = new RadfiProvider(baseConfig); // no signer
+
+    await radfi.createWithdrawTransaction(withdrawParams, 'tok');
+
+    const headers = (fetchMock.mock.calls[0]?.[1] as RequestInit).headers as Record<string, string>;
+    expect(headers['x-api-signature']).toBeUndefined();
+  });
+
+  it('invokes the signer per request, never caching its result', async () => {
+    // Bound's signature embeds a timestamp valid for 60s. A provider outlives that window, so the
+    // hook must be re-invoked on every call — caching would start replaying an expired signature.
+    let call = 0;
+    const signer = vi.fn(() => ({ 'x-api-signature': `sig_${++call}` }));
+    fetchMock.mockResolvedValue(
+      makeResponse(200, JSON.stringify({ data: { tradingAddress: 'bc1ptrade', userAddress: 'bc1puser' } })),
+    );
+    const radfi = new RadfiProvider(baseConfig, { signer });
+
+    await radfi.getTradingWallet('bc1puser');
+    await radfi.getTradingWallet('bc1puser');
+
+    expect(signer).toHaveBeenCalledTimes(2);
+    const headerOf = (i: number) =>
+      ((fetchMock.mock.calls[i]?.[1] as RequestInit).headers as Record<string, string>)['x-api-signature'];
+    expect(headerOf(0)).toBe('sig_1');
+    expect(headerOf(1)).toBe('sig_2');
+  });
+
+  it('propagates a throwing signer instead of sending the request unsigned', async () => {
+    // A misconfigured backend credential must fail loudly here; silently dropping the header would
+    // surface as an opaque 403 from Bound's gateway with no local trace of the cause.
+    const signer = vi.fn(() => {
+      throw new Error('credential unavailable');
+    });
+    fetchMock.mockResolvedValue(makeResponse(200, JSON.stringify({ data: { base64Psbt: 'x', txId: 'y' } })));
+    const radfi = new RadfiProvider(baseConfig, { signer });
+
+    await expect(radfi.createWithdrawTransaction(withdrawParams, 'tok')).rejects.toThrow('credential unavailable');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('lets signer headers win over per-call headers — so a signer must not return Authorization', async () => {
+    // Pinning the documented precedence: `request()` spreads the signer LAST. That is what lets a
+    // signer set transport-level headers, but it also means a signer returning `Authorization` would
+    // silently replace the per-user bearer. Callers own that constraint; this test makes it visible.
+    const signer = vi.fn().mockReturnValue({ 'x-api-signature': 'sig', Authorization: 'Bearer signer-wins' });
+    fetchMock.mockResolvedValue(makeResponse(200, JSON.stringify({ data: { base64Psbt: 'x', txId: 'y' } })));
+    const radfi = new RadfiProvider(baseConfig, { signer });
+
+    await radfi.createWithdrawTransaction(withdrawParams, 'user-access-token');
+
+    const headers = (fetchMock.mock.calls[0]?.[1] as RequestInit).headers as Record<string, string>;
+    expect(headers.Authorization).toBe('Bearer signer-wins');
+    expect(headers['Content-Type']).toBe('application/json');
   });
 });

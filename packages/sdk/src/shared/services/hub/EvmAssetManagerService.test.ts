@@ -88,9 +88,7 @@ beforeEach(() => {
 describe('EvmAssetManagerService.getAssetInfo', () => {
   it('reads assetInfo(asset) and maps the [chainId, spokeAddress] tuple to AssetInfo', async () => {
     const chainId = 6n;
-    const spy = vi
-      .mocked(mockPublicClient.readContract)
-      .mockResolvedValueOnce([chainId, SPOKE_ADDRESS_BYTES] as never);
+    const spy = vi.mocked(mockPublicClient.readContract).mockResolvedValueOnce([chainId, SPOKE_ADDRESS_BYTES] as never);
 
     const result = await EvmAssetManagerService.getAssetInfo(TOKEN_ORIGINAL, ASSET_MANAGER, mockPublicClient);
 
@@ -107,9 +105,9 @@ describe('EvmAssetManagerService.getAssetInfo', () => {
     const rpcError = new Error('rpc unavailable');
     vi.mocked(mockPublicClient.readContract).mockRejectedValueOnce(rpcError);
 
-    await expect(
-      EvmAssetManagerService.getAssetInfo(TOKEN_ORIGINAL, ASSET_MANAGER, mockPublicClient),
-    ).rejects.toBe(rpcError);
+    await expect(EvmAssetManagerService.getAssetInfo(TOKEN_ORIGINAL, ASSET_MANAGER, mockPublicClient)).rejects.toBe(
+      rpcError,
+    );
   });
 });
 
@@ -173,9 +171,7 @@ describe('EvmAssetManagerService.depositToData', () => {
   });
 
   it('queries the config with the provided spoke chain id and original token address', () => {
-    const spy = vi
-      .mocked(mockConfigService.getSpokeTokenFromOriginalAssetAddress)
-      .mockReturnValueOnce(xToken18);
+    const spy = vi.mocked(mockConfigService.getSpokeTokenFromOriginalAssetAddress).mockReturnValueOnce(xToken18);
 
     EvmAssetManagerService.depositToData(
       { token: TOKEN_ORIGINAL, to: RECIPIENT_HEX, amount: 1_000n },
@@ -360,8 +356,8 @@ describe('EvmAssetManagerService#getAssetAddress', () => {
     const rpcError = new Error('rpc unavailable');
     vi.mocked(mockPublicClient.readContract).mockRejectedValueOnce(rpcError);
 
-    await expect(
-      service.getAssetAddress(6n, SPOKE_ADDRESS_BYTES, ASSET_MANAGER, mockPublicClient),
-    ).rejects.toBe(rpcError);
+    await expect(service.getAssetAddress(6n, SPOKE_ADDRESS_BYTES, ASSET_MANAGER, mockPublicClient)).rejects.toBe(
+      rpcError,
+    );
   });
 });

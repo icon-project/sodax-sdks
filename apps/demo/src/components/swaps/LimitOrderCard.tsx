@@ -22,18 +22,15 @@ import {
   useSwapAllowance,
   useSwapApprove,
   useCreateLimitOrder,
-  useStellarTrustlineCheck,
-  useRequestTrustline,
+  useStellarGate,
   useSodaxContext,
   type SpokeChainKey,
   type XToken,
   type ChainType,
-  type IStellarWalletProvider,
-  type StellarChainKey,
   ChainKeys,
 } from '@sodax/dapp-kit';
 import BigNumber from 'bignumber.js';
-import { ArrowDownUp, ArrowLeftRight } from 'lucide-react';
+import { ArrowDownUp, ArrowLeftRight, Loader2 } from 'lucide-react';
 import React, { useMemo, useState } from 'react';
 import {
   getXChainType,
@@ -73,24 +70,17 @@ export default function LimitOrderCard() {
   });
   const { mutateAsyncSafe: approve, isPending: isApproving } = useSwapApprove();
   const supportedSpokeChains = sodax.config.getSupportedSpokeChains();
-  const {
-    data: hasSufficientTrustline,
-    isPending: isTrustlineLoading,
-    error: trustlineError,
-  } = useStellarTrustlineCheck({
-    params: {
-      token: limitOrderPayload?.outputToken,
-      amount: BigInt(limitOrderPayload?.minOutputAmount ?? 0n),
-      chainId: limitOrderPayload?.dstChainKey,
-      walletAddress: destAccount.address,
-    },
+  // Keep amount undefined until the payload exists; 0n disables the trustline query.
+  const stellar = useStellarGate({
+    dstChainKey: destChain,
+    token: limitOrderPayload?.outputToken,
+    amount: limitOrderPayload ? BigInt(limitOrderPayload.minOutputAmount) : undefined,
+    address: destAccount.address,
+    walletProvider: destWalletProvider,
   });
-  if (trustlineError) {
-    console.error('trustlineError', trustlineError);
-  }
-  const { requestTrustline } = useRequestTrustline(destToken?.address);
   const [open, setOpen] = useState(false);
   const [approveError, setApproveError] = useState<string | null>(null);
+  const [stellarError, setStellarError] = useState<string | null>(null);
 
   const onChangeDirection = () => {
     setSourceChain(destChain);
@@ -214,24 +204,22 @@ export default function LimitOrderCard() {
     setApproveError(null);
   };
 
-  const handleRequestTrustline = async (limitOrderPayload: CreateLimitOrderParams | undefined) => {
-    // if destination token is a Stellar asset, request trustline
-    if (!limitOrderPayload) {
-      console.error('limitOrderPayload undefined');
+  const handleActivateStellarAccount = async () => {
+    const result = await stellar.activate();
+    if (result && !result.ok) {
+      setStellarError(formatMutationFailureMessage(result.error, 'Stellar account activation failed'));
       return;
     }
+    setStellarError(null);
+  };
 
-    if (destChain !== ChainKeys.STELLAR_MAINNET || !destWalletProvider) {
-      console.error('destChain is not Stellar or destWalletProvider undefined');
+  const handleRequestTrustline = async () => {
+    const result = await stellar.requestTrustline();
+    if (result && !result.ok) {
+      setStellarError(formatMutationFailureMessage(result.error, 'Trustline request failed'));
       return;
     }
-
-    await requestTrustline({
-      token: limitOrderPayload.outputToken,
-      amount: limitOrderPayload.minOutputAmount,
-      srcChainKey: destChain as StellarChainKey,
-      walletProvider: destWalletProvider as IStellarWalletProvider,
-    });
+    setStellarError(null);
   };
 
   return (
@@ -399,10 +387,29 @@ export default function LimitOrderCard() {
                   <div>
                     outputAmount: {formatUnits(limitOrderPayload?.minOutputAmount ?? 0n, destToken?.decimals ?? 0)}
                   </div>
-                  {destChain === ChainKeys.STELLAR_MAINNET && !isTrustlineLoading && !hasSufficientTrustline && (
+                  {stellar.needsActivation && (
+                    <div className="text-red-500">
+                      Destination Stellar account does not exist yet — activate it to proceed. SODAX sponsors the
+                      reserve, so this is free.
+                    </div>
+                  )}
+                  {stellar.needsFunding && (
+                    <div className="text-red-500">
+                      Destination Stellar account holds no XLM, so it cannot pay for a trustline. Send it some XLM first
+                      — receiving XLM needs no trustline.
+                    </div>
+                  )}
+                  {stellar.needsTrustline && (
                     <div className="text-red-500">Insufficient Stellar trustline (request trustline to proceed)</div>
                   )}
+                  {stellar.checkFailed && (
+                    <div className="text-red-500">
+                      Couldn't check the destination Stellar account, so the order is on hold
+                      {stellar.error ? `: ${stellar.error.message}` : ''}
+                    </div>
+                  )}
                   {approveError ? <div className="text-red-500 text-sm">{approveError}</div> : null}
+                  {stellarError ? <div className="text-red-500 text-sm">{stellarError}</div> : null}
                 </div>
               </div>
               <DialogFooter>
@@ -427,21 +434,33 @@ export default function LimitOrderCard() {
                     <Button
                       className="w-full"
                       onClick={() => handleCreateLimitOrder(limitOrderPayload)}
-                      disabled={!hasAllowed}
+                      disabled={!hasAllowed || stellar.blocksAction}
                     >
                       <ArrowLeftRight className="mr-2 h-4 w-4" /> Create Limit Order
                     </Button>
                   ) : (
                     <span>Limit Order Payload undefined</span>
                   ))}
-                {isTrustlineLoading && destChain === ChainKeys.STELLAR_MAINNET && <span>Checking trustline...</span>}
-                {destChain === ChainKeys.STELLAR_MAINNET && !isTrustlineLoading && !hasSufficientTrustline && (
-                  <Button
-                    className="w-full"
-                    onClick={() => handleRequestTrustline(limitOrderPayload)}
-                    disabled={isTrustlineLoading}
-                  >
-                    Request Trustline
+                {stellar.isStellar && stellar.isChecking && <span>Checking Stellar account...</span>}
+                {stellar.needsActivation && (
+                  <Button className="w-full" onClick={handleActivateStellarAccount} disabled={stellar.isActivating}>
+                    {stellar.isActivating ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Activating...
+                      </>
+                    ) : (
+                      'Activate Stellar Account'
+                    )}
+                  </Button>
+                )}
+                {stellar.needsTrustline && (
+                  <Button className="w-full" onClick={handleRequestTrustline} disabled={stellar.isRequestingTrustline}>
+                    {stellar.isRequestingTrustline ? 'Requesting...' : 'Request Trustline'}
+                  </Button>
+                )}
+                {stellar.checkFailed && (
+                  <Button className="w-full" onClick={stellar.retry} disabled={stellar.isChecking}>
+                    {stellar.isChecking ? 'Rechecking...' : 'Retry Stellar Check'}
                   </Button>
                 )}
               </DialogFooter>

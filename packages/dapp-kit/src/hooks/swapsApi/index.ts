@@ -17,6 +17,7 @@ export * from './useSwapsApiDeadline.js';
 // Allowance · approve · create intent
 export * from './useSwapsApiAllowance.js';
 export * from './useSwapsApiApprove.js';
+export * from './useSwapsApiApproveAndBroadcast.js';
 export * from './useSwapsApiCreateIntent.js';
 
 // Intent lifecycle: submit · status · cancel · hash · packet · extra-data · lookup

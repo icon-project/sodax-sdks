@@ -86,7 +86,10 @@ function normalizeFeatures(features: AnalyticsFeatures | undefined): Map<SodaxFe
   if (Array.isArray(features)) {
     for (const feature of features as readonly SodaxFeature[]) map.set(feature, true);
   } else {
-    for (const [feature, scope] of Object.entries(features) as [SodaxFeature, true | { actions: readonly string[] }][]) {
+    for (const [feature, scope] of Object.entries(features) as [
+      SodaxFeature,
+      true | { actions: readonly string[] },
+    ][]) {
       if (scope === true) map.set(feature, true);
       else if (scope) map.set(feature, new Set(scope.actions));
     }

@@ -4,7 +4,7 @@ import {
   useReservesUsdFormat,
   useBackendAllMoneyMarketAssets,
   useUserFormattedSummary,
-  useXBalances,
+  useBalances,
   useSodaxContext,
   ChainKeys,
   type SpokeChainKey,
@@ -12,7 +12,7 @@ import {
 } from '@sodax/dapp-kit';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { getXChainType, useXAccount, useXService } from '@sodax/wallet-sdk-react';
+import { useXAccount } from '@sodax/wallet-sdk-react';
 import { BorrowAssetsListItem } from './BorrowAssetsListItem';
 import { formatTokenAmount } from '@/lib/utils';
 import { useBtcTradingBalance } from '@/hooks/useBtcTradingBalance';
@@ -82,12 +82,10 @@ export function BorrowAssetsList({ initialChainId }: BorrowAssetsListProps): JSX
   const { isBitcoin, tradingBalanceSats } = useBtcTradingBalance({ chainId: selectedChainId });
 
   const tokensOnSelectedChain = sodax.moneyMarket.getSupportedTokensByChainId(selectedChainId);
-  const xService = useXService({ xChainType: getXChainType(selectedChainId) });
-  const { data: balances } = useXBalances({
+  const { data: balances } = useBalances({
     params: {
-      xService,
-      xChainId: selectedChainId,
-      xTokens: tokensOnSelectedChain,
+      chainKey: selectedChainId,
+      tokens: tokensOnSelectedChain,
       address,
     },
   });

@@ -1,9 +1,16 @@
 import type { Hex, XDR } from '@sodax/types';
 import type { Keypair } from '@stellar/stellar-sdk';
 
+/**
+ * Minimal duck-typed slice of `@creit.tech/stellar-wallets-kit` this provider depends on.
+ * `address` selects the signer; `signerAddress` is reported only by some wallets.
+ */
 export interface StellarWalletsKit {
   getAddress(): Promise<{ address: string }>;
-  signTransaction(tx: XDR, options: { networkPassphrase: string }): Promise<{ signedTxXdr: XDR }>;
+  signTransaction(
+    tx: XDR,
+    options: { networkPassphrase: string; address?: string },
+  ): Promise<{ signedTxXdr: XDR; signerAddress?: string }>;
 }
 
 export type StellarNetwork = 'TESTNET' | 'PUBLIC';

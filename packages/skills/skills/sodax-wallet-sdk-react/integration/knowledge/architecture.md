@@ -8,7 +8,7 @@ If you are looking for "how do I do X", go to [`recipes/`](./recipes/). This fil
 
 ## The shape of the package
 
-`@sodax/wallet-sdk-react` is a **uniform React layer over heterogeneous chain wallet libraries**. Each chain family ships a different React adapter (wagmi, `@solana/wallet-adapter-react`, `@mysten/dapp-kit`) or no React adapter at all (Bitcoin, Stellar, ICON, Injective, NEAR, Stacks). The package wraps all nine families behind one set of hooks so consumer code does not branch on chain family.
+`@sodax/wallet-sdk-react` is a **uniform React layer over heterogeneous chain wallet libraries**. Each chain family ships a different React adapter (wagmi, `@solana/wallet-adapter-react`, `@mysten/dapp-kit-react`) or no React adapter at all (Bitcoin, Stellar, ICON, Injective, NEAR, Stacks). The package wraps all nine families behind one set of hooks so consumer code does not branch on chain family.
 
 Two abstractions make this work:
 

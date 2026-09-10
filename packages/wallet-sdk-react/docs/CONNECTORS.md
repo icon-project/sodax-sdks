@@ -117,7 +117,7 @@ The `package.json` `exports` field maps `./xchains/*` to `dist/xchains/*/index.{
 |-------|---------------------|-----------|------------|
 | EVM | `EvmXConnector` | EIP-6963 + wagmi connectors | `wagmi` + `viem` |
 | Solana | `SolanaXConnector` | `@solana/wallet-adapter-react` | `@solana/web3.js` |
-| Sui | `SuiXConnector` | `@mysten/dapp-kit` | `@mysten/sui` |
+| Sui | `SuiXConnector` | `@mysten/dapp-kit-react` | `@mysten/sui` |
 | Stellar | `StellarWalletsKitXConnector` | async — `walletsKit.getSupportedWallets()` | `@creit.tech/stellar-wallets-kit` |
 | Injective | `InjectiveXConnector` × 3 (MetaMask, Keplr, Leap) | wallet-base wallet types | `@injectivelabs/sdk-ts` |
 | ICON | `IconHanaXConnector` | `window.hanaWallet` probe | `icon-sdk-js` |

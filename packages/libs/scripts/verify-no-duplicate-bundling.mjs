@@ -34,10 +34,7 @@ const FORBIDDEN_INLINE_MARKERS = {
     'function broadcastTransaction(',
     'function fetchCallReadOnlyFunction(',
   ],
-  '@stacks/network': [
-    'function createNetwork(',
-    'function networkFrom(',
-  ],
+  '@stacks/network': ['function createNetwork(', 'function networkFrom('],
   '@stacks/connect': [
     // Internal identifiers from @stacks/connect source — not referenced by
     // SODAX code. Note: RPC method names like "stx_callContract" are NOT safe
@@ -55,11 +52,7 @@ const FORBIDDEN_INLINE_MARKERS = {
 };
 
 // Walk each consumer's whole dist so code-split entries (xchains/*) aren't missed.
-const CONSUMER_DIST_ROOTS = [
-  'packages/sdk/dist',
-  'packages/wallet-sdk-core/dist',
-  'packages/wallet-sdk-react/dist',
-];
+const CONSUMER_DIST_ROOTS = ['packages/sdk/dist', 'packages/wallet-sdk-core/dist', 'packages/wallet-sdk-react/dist'];
 
 function walkJs(dir) {
   const out = [];
@@ -73,7 +66,7 @@ function walkJs(dir) {
 }
 
 let failed = false;
-const fail = (msg) => {
+const fail = msg => {
   console.error(`FAIL: ${msg}`);
   failed = true;
 };
@@ -92,7 +85,7 @@ for (const distRoot of CONSUMER_DIST_ROOTS) {
     const relPath = relative(repoRoot, absPath);
 
     for (const [pkg, markers] of Object.entries(FORBIDDEN_INLINE_MARKERS)) {
-      const leaked = markers.filter((m) => src.includes(m));
+      const leaked = markers.filter(m => src.includes(m));
       if (leaked.length > 0) {
         fail(`${relPath}: ${pkg} appears to be bundled inline (found: ${leaked.join(', ')})`);
       }
@@ -106,9 +99,7 @@ if (checked === 0) {
 }
 
 if (failed) {
-  console.error(
-    '\nverify-no-duplicate-bundling: FAILED — a problem dep leaked back into a consumer dist.',
-  );
+  console.error('\nverify-no-duplicate-bundling: FAILED — a problem dep leaked back into a consumer dist.');
   console.error(
     'Check that no consumer tsup.config.ts has the dep in `noExternal`. It should only be bundled in @sodax/libs.',
   );

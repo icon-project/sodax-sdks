@@ -32,6 +32,7 @@ validates the response. Errors carry `feature: 'backend'`, `context.api: 'swaps'
 
 ### Swaps-API-specific anti-patterns
 
+- **Omitting `partnerFee` on `getQuote` / `createIntent`.** Optional on the type only — no backend/SDK default. Ask for a real fee receiver; never invent one or use the zero address.
 - **`try/catch` for failures.** Every method returns `Result<T>` — branch on `result.ok`. `catch` won't fire for HTTP/timeout/validation failures.
 - **Passing the `RelayExtraData` object** to `submitTx`'s `relayData`. The field is a `string` — pass `relayData.payload`.
 - **Stringifying `intent` numerics yourself.** `IntentRequestV2` fields are `bigint`; the client serializes them to decimal strings — pass the bigint intent through as-is.
@@ -52,7 +53,8 @@ builds on are covered in the existing swap + backend-api migration docs:
 1. `pnpm tsc --noEmit` clean.
 2. Every `await sodax.api.swaps.<method>(...)` call site has `if (!result.ok)`.
 3. `submitTx.relayData` is `relayData.payload` (string); `getSubmitTxStatus` passes both `txHash` and `srcChainKey`.
-4. Intent-bearing bodies pass the `bigint` `IntentRequestV2` through unmodified (no manual `.toString()`).
+4. Every `getQuote` / `createIntent` body carries the same `partnerFee` (real receiver), or the user said they are not monetizing.
+5. Intent-bearing bodies pass the `bigint` `IntentRequestV2` through unmodified (no manual `.toString()`).
 
 ## Related granular skills (same family)
 

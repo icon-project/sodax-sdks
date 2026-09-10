@@ -7,6 +7,7 @@ import type {
   SpokeChainKey,
   SwapTokenV2,
 } from '@sodax/types';
+import { spokeChainConfig } from '@sodax/types';
 import { SwapsApiError } from '@sodax/swaps-api';
 import { getXChainType, useWalletProvider, useXAccount } from '@sodax/wallet-sdk-react';
 import { ArrowDown } from 'lucide-react';
@@ -33,6 +34,30 @@ function toIntentRequest(r: IntentResponseV2): IntentRequestV2 {
     srcChain: BigInt(r.srcChain),
     dstChain: BigInt(r.dstChain),
   };
+}
+
+/**
+ * Broadcast, wait, and refuse to continue on a revert. Mined is not the same as succeeded: a paused
+ * or blacklisted token mines the allowance reset and reverts it, and the approve that follows would
+ * then be paid for and revert too. `EvmRawTransactionReceipt.status` documents the JSON-RPC hex flag
+ * while the wallet SDK forwards viem's word, so accept either spelling.
+ */
+async function sendAndConfirm(
+  provider: IEvmWalletProvider,
+  tx: EvmRawTransaction,
+  step: string,
+  expectedChainId: number,
+  onBroadcast?: () => void,
+): Promise<string> {
+  const hash = await provider.sendTransaction(tx, { expectedChainId });
+  onBroadcast?.();
+  const receipt = await provider.waitForTransactionReceipt(
+    hash as Parameters<IEvmWalletProvider['waitForTransactionReceipt']>[0],
+  );
+  if (receipt.status === 'reverted' || receipt.status === '0x0') {
+    throw new Error(`The ${step} transaction ${hash} reverted on chain.`);
+  }
+  return hash;
 }
 
 function errorText(e: unknown): string {
@@ -137,6 +162,14 @@ export function SwapCard() {
       setSwapLog('Enter an amount and wait for the quote before swapping.');
       return;
     }
+    // The wallet broadcasts on ITS active chain, not the one the calldata targets, so every send
+    // below is bound to the selected source chain. `chainKey` comes off the API response untyped,
+    // and only EVM chains carry a numeric id, so one guard covers an unknown key and a non-EVM one.
+    const expectedChainId = spokeChainConfig[src.chainKey as SpokeChainKey]?.chain.chainId;
+    if (typeof expectedChainId !== 'number') {
+      setSwapLog(`${src.chainKey} cannot be signed here.`);
+      return;
+    }
     setBusy(true);
     setSwapLog('');
     try {
@@ -155,15 +188,30 @@ export function SwapCard() {
 
       const allowance = await swapsApi.checkAllowance(params);
       if (!allowance.valid) {
-        setSwapLog('Approve the source token in your wallet…');
         const approve = await swapsApi.approve(params);
-        const approveHash = await (walletProvider as IEvmWalletProvider).sendTransaction(
-          approve.tx as EvmRawTransaction,
-        );
+
+        // A TetherToken-lineage source token rejects a non-zero -> non-zero allowance change, so the
+        // API returns a reset transaction to send first. It has to succeed before the approve is
+        // even a valid state transition, so a reverted reset stops the flow here.
+        if (approve.resetTx) {
+          setSwapLog('Clear the stale allowance in your wallet…');
+          await sendAndConfirm(
+            walletProvider as IEvmWalletProvider,
+            approve.resetTx as EvmRawTransaction,
+            'allowance reset',
+            expectedChainId,
+            () => setSwapLog('Waiting for the allowance reset to confirm…'),
+          );
+        }
+
+        setSwapLog('Approve the source token in your wallet…');
         // Wait until the approval is mined — otherwise createIntent's tx can revert on a stale allowance.
-        setSwapLog('Waiting for approval to confirm…');
-        await (walletProvider as IEvmWalletProvider).waitForTransactionReceipt(
-          approveHash as Parameters<IEvmWalletProvider['waitForTransactionReceipt']>[0],
+        await sendAndConfirm(
+          walletProvider as IEvmWalletProvider,
+          approve.tx as EvmRawTransaction,
+          'approve',
+          expectedChainId,
+          () => setSwapLog('Waiting for approval to confirm…'),
         );
       }
 
@@ -171,7 +219,9 @@ export function SwapCard() {
       const created = await swapsApi.createIntent(params);
 
       setSwapLog('Confirm the swap in your wallet…');
-      const txHash = await (walletProvider as IEvmWalletProvider).sendTransaction(created.tx as EvmRawTransaction);
+      const txHash = await (walletProvider as IEvmWalletProvider).sendTransaction(created.tx as EvmRawTransaction, {
+        expectedChainId,
+      });
 
       setSwapLog('Submitting to the relay…');
       await swapsApi.submitTx({

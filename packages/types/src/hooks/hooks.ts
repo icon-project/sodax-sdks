@@ -17,6 +17,12 @@ import { ChainKeys, spokeChainConfig } from '../chains/chains.js';
 export const HookKind = {
   /** Deposits delivered USDC into the recipient's HyperCore perps account (HyperEVM). */
   HYPERCORE_DEPOSIT: 'hyperCoreDeposit',
+  /**
+   * Requests an ERC-7540 deposit of delivered USDC into the Flint RWA vault (Ethereum), with the
+   * recipient as the request's controller. Asynchronous: the request mints no shares — Flint's
+   * curator settles a NAV and then claims the shares on the controller's behalf.
+   */
+  FLINT_DEPOSIT: 'flintDeposit',
 } as const;
 export type HookKind = (typeof HookKind)[keyof typeof HookKind];
 
@@ -42,6 +48,15 @@ export const spokeHooks = {
       kind: HookKind.HYPERCORE_DEPOSIT,
       address: '0xc79224a4DEE653C9a26572B941149d95a88432c4',
       supportedTokens: [spokeChainConfig[ChainKeys.HYPEREVM_MAINNET].supportedTokens.USDC.address], // USDC on HyperEVM
+    },
+  ],
+  [ChainKeys.ETHEREUM_MAINNET]: [
+    {
+      kind: HookKind.FLINT_DEPOSIT,
+      // FlintDepositHook, deployed 2026-08-10 (icon-project/sodax-contracts#693). USDC only: any
+      // other delivered token is handed to the recipient as a plain transfer by the hook itself.
+      address: '0xDf376dE34e9f1474A025Dfe411b7EB5541793C5d',
+      supportedTokens: [spokeChainConfig[ChainKeys.ETHEREUM_MAINNET].supportedTokens.USDC.address], // USDC on Ethereum
     },
   ],
 } as const satisfies Partial<Record<SpokeChainKey, readonly SpokeHookConfig[]>>;

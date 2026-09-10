@@ -1,5 +1,6 @@
 import { SelectChain } from '@/components/swaps-api/SelectChain';
-import { SelectToken } from '@/components/swaps-api/SelectToken';
+import { PartnerFeeFields, usePartnerFeeDraft } from '@/components/shared/PartnerFeeFields';
+import { SelectToken } from '@/components/shared/SelectToken';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -21,10 +22,8 @@ import type {
   CreateIntentParamsV2,
   Hex,
   IBitcoinWalletProvider,
-  IStellarWalletProvider,
   QuoteRequestV2,
   SpokeChainKey,
-  StellarChainKey,
   SubmitTxRequestV2,
   SwapTokenV2,
 } from '@sodax/dapp-kit';
@@ -35,22 +34,21 @@ import {
   loadRadfiSession,
   useSodaxContext,
   useNearStorageGate,
-  useRequestTrustline,
-  useStellarTrustlineCheck,
+  useStellarGate,
   useBitcoinTradingSetup,
-  useXBalances,
+  useBalances,
   ChainKeys,
   isBitcoinChainKey,
   isStacksChainKey,
 } from '@sodax/dapp-kit';
 import { useQuery } from '@tanstack/react-query';
+import { HOOK_LABELS, resolveAvailableHookKind } from '@/lib/deliveryHooks';
 import {
   getXChainType,
   useEvmSwitchChain,
   useWalletProvider,
   useXAccount,
   useXDisconnect,
-  useXService,
 } from '@sodax/wallet-sdk-react';
 import { buildOrderSummary, type Order } from '@/components/swaps/OrderStatus';
 import { appendOrder } from '@/lib/orderHistory';
@@ -80,6 +78,15 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   const srcChainKey = src.chain as SpokeChainKey;
   const dstChainKey = dst.chain as SpokeChainKey;
 
+  // The delivery hook — if any — the registry accepts for this destination chain + output token.
+  // Registry-driven, so a newly registered hook surfaces here without touching this component.
+  // NOTE: the API forwards `hook` to the SDK server-side, so resolution happens on the backend and
+  // needs a backend whose pinned SDK has this hook registered — see the checkbox hint below.
+  const availableHookKind = useMemo(
+    () => resolveAvailableHookKind(dstChainKey, dst.token?.address),
+    [dstChainKey, dst.token],
+  );
+
   const sourceAccount = useXAccount({ xChainId: srcChainKey });
   const sourceWalletProvider = useWalletProvider({ xChainId: srcChainKey });
   const destAccount = useXAccount({ xChainId: dstChainKey });
@@ -90,14 +97,26 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   const [sourceAmount, setSourceAmount] = useState<string>('');
   const [slippage, setSlippage] = useState<string>('0.5');
   const [intentParams, setIntentParams] = useState<CreateIntentParamsV2 | undefined>(undefined);
+  const feeDraft = usePartnerFeeDraft();
   const [open, setOpen] = useState(false);
   const [approveError, setApproveError] = useState<string | null>(null);
   const [swapError, setSwapError] = useState<string | null>(null);
   const [nearStorageError, setNearStorageError] = useState<string | null>(null);
+  const [stellarError, setStellarError] = useState<string | null>(null);
   const [isApproving, setIsApproving] = useState(false);
   const [isSwapping, setIsSwapping] = useState(false);
+  const [deliveryHookEnabled, setDeliveryHookEnabled] = useState(false);
   const [isSourceBitcoinReady, setIsSourceBitcoinReady] = useState(false);
   const [isDestBitcoinReady, setIsDestBitcoinReady] = useState(false);
+
+  // Reset the toggle whenever the resolved hook kind changes (including to/from `undefined`) — the
+  // checkbox must never carry an opt-in for a hook the user didn't see. Without this, checking the box
+  // for one destination and then switching to a different destination that resolves a different hook
+  // kind would silently submit that other hook instead.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: availableHookKind is the intentional reset trigger, not a value read in the effect
+  useEffect(() => {
+    setDeliveryHookEnabled(false);
+  }, [availableHookKind]);
 
   // Supported chains + tokens straight from the Swaps API.
   const { data: tokensByChain } = useQuery({
@@ -142,23 +161,19 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   };
 
   // Balance fetching is wallet-layer (not covered by the Swaps API).
-  const sourceXService = useXService({ xChainType: getXChainType(srcChainKey) });
-  const { data: sourceBalances } = useXBalances({
+  const { data: sourceBalances } = useBalances({
     params: {
-      xService: sourceXService,
-      xChainId: srcChainKey,
-      xTokens: src.token ? [toXToken(src.token)] : [],
+      chainKey: srcChainKey,
+      tokens: src.token ? [toXToken(src.token)] : [],
       address: sourceAccount.address,
     },
   });
   const sourceTokenBalance = sourceBalances?.[src.token?.address ?? ''] ?? 0n;
 
-  const destXService = useXService({ xChainType: getXChainType(dstChainKey) });
-  const { data: destBalances } = useXBalances({
+  const { data: destBalances } = useBalances({
     params: {
-      xService: destXService,
-      xChainId: dstChainKey,
-      xTokens: dst.token ? [toXToken(dst.token)] : [],
+      chainKey: dstChainKey,
+      tokens: dst.token ? [toXToken(dst.token)] : [],
       address: destAccount.address,
     },
   });
@@ -196,11 +211,14 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
         tokenDstChainKey: dst.chain,
         amount: parseUnits(debouncedAmount, src.token.decimals).toString(),
         quoteType: 'exact_input',
+        // `/swaps/*` has no configured default — omitting this charges nothing, so the quote must
+        // carry the same fee the intent will, or the quoted output overstates what lands.
+        ...(feeDraft.partnerFee ? { partnerFee: feeDraft.partnerFee } : {}),
       };
     } catch {
       return undefined;
     }
-  }, [src.token, dst.token, src.chain, dst.chain, debouncedAmount]);
+  }, [src.token, dst.token, src.chain, dst.chain, debouncedAmount, feeDraft.partnerFee]);
 
   // The whole request body is the cache key so every quote input is a cache dimension
   // (QuoteRequestV2 is bigint-free, so React Query's default key hashing handles it).
@@ -286,6 +304,10 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
       dstAddress,
       srcPublicKey,
       bound,
+      ...(feeDraft.partnerFee ? { partnerFee: feeDraft.partnerFee } : {}),
+      // Wire field: the backend forwards it to the SDK, which overrides the on-chain dstAddress with
+      // the hook's address and encodes the payload. `dstAddress` above stays the recipient.
+      ...(deliveryHookEnabled && availableHookKind ? { hook: { kind: availableHookKind } } : {}),
     });
   };
 
@@ -317,24 +339,13 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
 
   const { isWrongChain, handleSwitchChain } = useEvmSwitchChain({ xChainId: srcChainKey });
 
-  // Client-side prerequisites the Swaps API doesn't cover: Stellar trustline and NEAR
-  // storage registration on the destination chain.
-  const {
-    data: hasSufficientTrustline,
-    isPending: isTrustlineLoading,
-    error: trustlineError,
-  } = useStellarTrustlineCheck({
-    params: {
-      token: intentParams?.outputToken,
-      amount: intentParams ? BigInt(intentParams.minOutputAmount) : undefined,
-      chainId: intentParams?.dstChainKey as SpokeChainKey | undefined,
-      walletAddress: dst.chain === ChainKeys.STELLAR_MAINNET ? destAccount.address : undefined,
-    },
+  const stellar = useStellarGate({
+    dstChainKey,
+    token: intentParams?.outputToken,
+    amount: intentParams ? BigInt(intentParams.minOutputAmount) : undefined,
+    address: destAccount.address,
+    walletProvider: destWalletProvider,
   });
-  if (trustlineError) {
-    console.error('trustlineError', trustlineError);
-  }
-  const { requestTrustline } = useRequestTrustline(dst.token?.address);
   const nearStorage = useNearStorageGate({
     dstChainKey,
     token: intentParams?.outputToken,
@@ -351,15 +362,26 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
     setApproveError(null);
     setIsApproving(true);
     try {
-      // The API only builds the unsigned approval tx — signing and broadcasting happen here.
-      const { tx } = await swapsApi.approve(intentParams);
+      // The API only builds the unsigned transactions — signing and broadcasting happen here.
+      const { tx, resetTx } = await swapsApi.approve(intentParams);
 
-      const txHash = await signAndBroadcastSwapsApiTx({
-        chainKey: srcChainKey,
-        tx,
-        walletProvider: sourceWalletProvider,
-      });
-      await waitForTxFinality(srcChainKey, sourceWalletProvider, txHash);
+      const broadcast = async (raw: typeof tx): Promise<void> => {
+        const txHash = await signAndBroadcastSwapsApiTx({
+          chainKey: srcChainKey,
+          tx: raw,
+          walletProvider: sourceWalletProvider,
+        });
+        await waitForTxFinality(srcChainKey, sourceWalletProvider, txHash);
+      };
+
+      // A guarded source token (2017 TetherToken lineage) rejects an allowance change from one
+      // non-zero value to another, so the API hands back a reset that must be mined BEFORE the
+      // approve is a valid state transition. Out of order, the approve is certain to revert.
+      if (resetTx) {
+        await broadcast(resetTx);
+      }
+      await broadcast(tx);
+
       // Confirmation happened client-side, so the allowance query can't know — refetch manually.
       await refetchAllowance();
     } catch (error) {
@@ -448,23 +470,22 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
     disconnect({ xChainType: getXChainType(dstChainKey) as ChainType });
   };
 
+  const handleActivateStellarAccount = async () => {
+    const result = await stellar.activate();
+    if (result && !result.ok) {
+      setStellarError(formatMutationFailureMessage(result.error, 'Stellar account activation failed'));
+      return;
+    }
+    setStellarError(null);
+  };
+
   const handleRequestTrustline = async () => {
-    if (!intentParams) {
-      console.error('intentParams undefined');
+    const result = await stellar.requestTrustline();
+    if (result && !result.ok) {
+      setStellarError(formatMutationFailureMessage(result.error, 'Trustline request failed'));
       return;
     }
-
-    if (dst.chain !== ChainKeys.STELLAR_MAINNET || !destWalletProvider) {
-      console.error('destChain is not Stellar or destWalletProvider undefined');
-      return;
-    }
-
-    await requestTrustline({
-      token: intentParams.outputToken,
-      amount: BigInt(intentParams.minOutputAmount),
-      srcChainKey: dst.chain as StellarChainKey,
-      walletProvider: destWalletProvider as IStellarWalletProvider,
-    });
+    setStellarError(null);
   };
 
   const handleRegisterNearStorage = async () => {
@@ -620,6 +641,8 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
             isDestination
           />
         )}
+
+        <PartnerFeeFields draft={feeDraft} unsetBehavior="charge no fee" />
       </CardContent>
       <CardFooter className="flex flex-col space-y-4">
         <div className="w-full text-sm text-muted-foreground">
@@ -646,6 +669,21 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
           </div>
         </div>
 
+        {availableHookKind && (
+          <div className="flex items-center gap-2 w-full">
+            <label htmlFor="swaps-api-delivery-hook-toggle" className="text-sm font-medium cursor-pointer">
+              {HOOK_LABELS[availableHookKind]}
+            </label>
+            <input
+              id="swaps-api-delivery-hook-toggle"
+              type="checkbox"
+              checked={deliveryHookEnabled}
+              onChange={e => setDeliveryHookEnabled(e.target.checked)}
+              className="h-4 w-4 cursor-pointer"
+            />
+          </div>
+        )}
+
         <div className="">
           {quoteQuery.error && (
             <div className="text-red-500">{formatSwapsApiError(quoteQuery.error, 'Quote failed')}</div>
@@ -663,7 +701,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
           }}
         >
           <DialogTrigger asChild>
-            <Button variant="outline" onClick={() => buildIntentParams()}>
+            <Button variant="outline" onClick={() => buildIntentParams()} disabled={!!feeDraft.error}>
               Swap
             </Button>
           </DialogTrigger>
@@ -695,8 +733,26 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
                     Source-chain signing for {src.chain} is not yet supported by the wallet-provider interfaces.
                   </div>
                 )}
-                {dst.chain === ChainKeys.STELLAR_MAINNET && !isTrustlineLoading && !hasSufficientTrustline && (
+                {stellar.needsActivation && (
+                  <div className="text-red-500">
+                    Destination Stellar account does not exist yet — activate it to proceed. SODAX sponsors the reserve,
+                    so this is free.
+                  </div>
+                )}
+                {stellar.needsFunding && (
+                  <div className="text-red-500">
+                    Destination Stellar account holds no XLM, so it cannot pay for a trustline. Send it some XLM first —
+                    receiving XLM needs no trustline.
+                  </div>
+                )}
+                {stellar.needsTrustline && (
                   <div className="text-red-500">Insufficient Stellar trustline (request trustline to proceed)</div>
+                )}
+                {stellar.checkFailed && (
+                  <div className="text-red-500">
+                    Couldn't check the destination Stellar account, so the swap is on hold
+                    {stellar.error ? `: ${stellar.error.message}` : ''}
+                  </div>
                 )}
                 {nearStorage.needsRegistration && (
                   <div className="text-red-500">
@@ -706,6 +762,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
                 {approveError ? <div className="text-red-500 text-sm">{approveError}</div> : null}
                 {swapError ? <div className="text-red-500 text-sm">{swapError}</div> : null}
                 {nearStorageError ? <div className="text-red-500 text-sm">{nearStorageError}</div> : null}
+                {stellarError ? <div className="text-red-500 text-sm">{stellarError}</div> : null}
               </div>
             </div>
             <DialogFooter>
@@ -714,7 +771,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
                 type="button"
                 variant="default"
                 onClick={handleApprove}
-                disabled={!isSourceSignable || isAllowanceLoading || hasAllowed || isApproving}
+                disabled={!isSourceSignable || isWrongChain || isAllowanceLoading || hasAllowed || isApproving}
               >
                 {isApproving ? 'Approving...' : hasAllowed ? 'Approved' : 'Approve'}
               </Button>
@@ -734,8 +791,10 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
                       !isSourceSignable ||
                       !hasAllowed ||
                       isSwapping ||
+                      !!feeDraft.error ||
                       (src.chain === ChainKeys.BITCOIN_MAINNET && !isSourceBitcoinReady) ||
                       (dst.chain === ChainKeys.BITCOIN_MAINNET && !isDestBitcoinReady) ||
+                      stellar.blocksAction ||
                       nearStorage.blocksAction
                     }
                   >
@@ -744,10 +803,26 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
                 ) : (
                   <span>Intent Order undefined</span>
                 ))}
-              {isTrustlineLoading && dst.chain === ChainKeys.STELLAR_MAINNET && <span>Checking trustline...</span>}
-              {dst.chain === ChainKeys.STELLAR_MAINNET && !isTrustlineLoading && !hasSufficientTrustline && (
-                <Button className="w-full" onClick={handleRequestTrustline} disabled={isTrustlineLoading}>
-                  Request Trustline
+              {stellar.isStellar && stellar.isChecking && <span>Checking Stellar account...</span>}
+              {stellar.needsActivation && (
+                <Button className="w-full" onClick={handleActivateStellarAccount} disabled={stellar.isActivating}>
+                  {stellar.isActivating ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Activating...
+                    </>
+                  ) : (
+                    'Activate Stellar Account'
+                  )}
+                </Button>
+              )}
+              {stellar.needsTrustline && (
+                <Button className="w-full" onClick={handleRequestTrustline} disabled={stellar.isRequestingTrustline}>
+                  {stellar.isRequestingTrustline ? 'Requesting...' : 'Request Trustline'}
+                </Button>
+              )}
+              {stellar.checkFailed && (
+                <Button className="w-full" onClick={stellar.retry} disabled={stellar.isChecking}>
+                  {stellar.isChecking ? 'Rechecking...' : 'Retry Stellar Check'}
                 </Button>
               )}
               {nearStorage.isNear && (nearStorage.isChecking || nearStorage.needsRegistration) && (

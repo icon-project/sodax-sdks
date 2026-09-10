@@ -68,7 +68,7 @@ const COSMWASM_MSG_EXECUTE_CONTRACT_TYPE_URL = '/cosmwasm.wasm.v1.MsgExecuteCont
  */
 function decodeInjectiveExecuteMsgs(bodyBytes: Uint8Array): MsgExecuteContractCompat[] {
   const { messages } = TxBody.decode(bodyBytes);
-  return messages.map((message) => {
+  return messages.map(message => {
     if (message.typeUrl !== COSMWASM_MSG_EXECUTE_CONTRACT_TYPE_URL) {
       throw new Error(`Injective: cannot rebuild message type ${message.typeUrl} for browser signing.`);
     }
@@ -77,7 +77,7 @@ function decodeInjectiveExecuteMsgs(bodyBytes: Uint8Array): MsgExecuteContractCo
       contractAddress: contract,
       sender,
       msg: JSON.parse(Buffer.from(msg).toString('utf8')),
-      funds: funds.map((coin) => ({ denom: coin.denom, amount: coin.amount })),
+      funds: funds.map(coin => ({ denom: coin.denom, amount: coin.amount })),
     });
   });
 }

@@ -1059,15 +1059,7 @@ describe('ClService.getPositionInfo', () => {
 
   it('forwards the failure when getPoolData fails', async () => {
     const client = createMockClient({
-      positions: () => [
-        '0xencoded' as never,
-        -1000,
-        1000,
-        1_000n,
-        0n,
-        0n,
-        ZERO_ADDRESS,
-      ],
+      positions: () => ['0xencoded' as never, -1000, 1000, 1_000n, 0n, 0n, ZERO_ADDRESS],
       // getSlot0 reverts → getPoolData returns ok:false → getPositionInfo forwards as-is.
       getSlot0: () => {
         throw new Error('REVERT');
@@ -1122,7 +1114,13 @@ describe('ClService.calculateLiquidityFromAmounts', () => {
   });
 
   it('returns positive liquidity when both amounts are non-zero', () => {
-    const liquidity = ClService.calculateLiquidityFromAmounts(1_000_000n, 1_000_000n, tickLower, tickUpper, currentTick);
+    const liquidity = ClService.calculateLiquidityFromAmounts(
+      1_000_000n,
+      1_000_000n,
+      tickLower,
+      tickUpper,
+      currentTick,
+    );
     expect(liquidity).toBeGreaterThan(0n);
   });
 });

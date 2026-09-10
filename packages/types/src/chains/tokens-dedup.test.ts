@@ -39,10 +39,7 @@ function describeTable(table: TokenList, label: string) {
 
       it(`${chainKey}: unique by symbol`, () => {
         const dups = findDuplicates(tokens, t => t.symbol);
-        expect(
-          dups,
-          `duplicate symbol(s) on ${chainKey}: ${[...dups.keys()].join(', ')}`,
-        ).toEqual(new Map());
+        expect(dups, `duplicate symbol(s) on ${chainKey}: ${[...dups.keys()].join(', ')}`).toEqual(new Map());
       });
     }
   });

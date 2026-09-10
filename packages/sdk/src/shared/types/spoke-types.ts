@@ -1,6 +1,7 @@
 import type {
   Address,
   GetTokenAddressType,
+  XToken,
   Hex,
   HubAddress,
   HubChainKey,
@@ -54,6 +55,52 @@ export type GetDepositParams<ChainKey extends SpokeChainKey = SpokeChainKey> = {
   token: GetTokenAddressType<ChainKey>;
 };
 
+/**
+ * Parameters for reading a user's own wallet balance of a single token on a spoke chain.
+ *
+ * Unlike {@link GetDepositParams} (which reads the protocol asset-manager holding and keys
+ * the token by raw address), this reads the balance held by `srcAddress` itself. `token` is
+ * the full {@link XToken} so the reader can detect the native coin and resolve chain-specific
+ * token identifiers (EVM erc20 address, Solana mint, Sui coinType, Soroban contract, …).
+ *
+ * The reader picks its RPC provider from `srcChainKey` and the on-chain identifier from
+ * `token.address`; it never consults `token.chainKey`. Passing a token that does not live on
+ * `srcChainKey` therefore reads the wrong chain and — on an EVM target — resolves to `0n` rather
+ * than an error, so keep the chain key and the token list in step. This is NOT enforced: a few
+ * config entries carry a `chainKey` that disagrees with where the address actually lives, so the
+ * field is not reliable enough to validate against.
+ *
+ * Failure contract: this single-token read REJECTS on a network, RPC, or contract-read failure, and
+ * the router turns that into an unsuccessful `Result`. The batch variant is deliberately more
+ * forgiving — see {@link GetBalancesParams}.
+ */
+export type GetBalanceParams<ChainKey extends SpokeChainKey = SpokeChainKey> = {
+  srcChainKey: ChainKey; // The chain key of the spoke (origin) chain
+  srcAddress: GetAddressType<ChainKey>; // The address of the user whose balance is read
+  token: XToken; // The token to read the balance of
+};
+
+/**
+ * Parameters for reading a user's own wallet balances of multiple tokens on a spoke chain.
+ * Per-chain implementations batch the reads where the chain supports it (EVM multicall3, ICON
+ * `tryAggregate`, Injective portfolio).
+ *
+ * Returns `Record<tokenAddress, bigint>` in smallest units. A token that could not be read is logged
+ * through the SDK logger and reported as `0n`, so one flaky token never discards the balances that
+ * did resolve. Callers therefore cannot tell a failed read from an empty wallet; the direction is
+ * deliberately conservative — under-reporting blocks a spend, it never permits one.
+ *
+ * The `Result` fails when the whole batch is unusable: an invalid chain key, a shared round-trip
+ * every token depends on (ICON `tryAggregate`, Injective's portfolio fetch), or a batch in which NO
+ * token could be read — a dead or rate-limited RPC would otherwise render as "this wallet is empty
+ * on every asset".
+ */
+export type GetBalancesParams<ChainKey extends SpokeChainKey = SpokeChainKey> = {
+  srcChainKey: ChainKey; // The chain key of the spoke (origin) chain
+  srcAddress: GetAddressType<ChainKey>; // The address of the user whose balances are read
+  tokens: readonly XToken[]; // The tokens to read the balances of
+};
+
 export type DepositSimulationParams = {
   spokeChainID: SpokeChainKey;
   token: Hex;
@@ -80,27 +127,31 @@ export type WalletSimulationParams = {
   payload: Hex;
 };
 
-export type VerifySimulationParams<ChainKey extends SpokeChainKey, Raw extends boolean> = SendMessageParams<ChainKey, Raw>;
+export type VerifySimulationParams<ChainKey extends SpokeChainKey, Raw extends boolean> = SendMessageParams<
+  ChainKey,
+  Raw
+>;
 
-export type GetTxReceiptType<C extends SpokeChainKey | ChainType> = GetChainType<C> extends 'EVM'
-  ? EvmRawTransactionReceipt
-  : GetChainType<C> extends 'SOLANA'
-    ? SolanaRawTransactionReceipt
-    : GetChainType<C> extends 'STELLAR'
-      ? StellarSorobanTransactionReceipt
-      : GetChainType<C> extends 'ICON'
-        ? IconTransactionResult
-        : GetChainType<C> extends 'SUI'
-          ? SuiRawTransactionReceipt
-          : GetChainType<C> extends 'INJECTIVE'
-            ? InjectiveRawTransactionReceipt
-            : GetChainType<C> extends 'NEAR'
-              ? NearRawTransactionReceipt
-              : GetChainType<C> extends 'STACKS'
-                ? StacksRawTransactionReceipt
-                : GetChainType<C> extends 'BITCOIN'
-                  ? BitcoinRawTransactionReceipt
-                  : unknown;
+export type GetTxReceiptType<C extends SpokeChainKey | ChainType> =
+  GetChainType<C> extends 'EVM'
+    ? EvmRawTransactionReceipt
+    : GetChainType<C> extends 'SOLANA'
+      ? SolanaRawTransactionReceipt
+      : GetChainType<C> extends 'STELLAR'
+        ? StellarSorobanTransactionReceipt
+        : GetChainType<C> extends 'ICON'
+          ? IconTransactionResult
+          : GetChainType<C> extends 'SUI'
+            ? SuiRawTransactionReceipt
+            : GetChainType<C> extends 'INJECTIVE'
+              ? InjectiveRawTransactionReceipt
+              : GetChainType<C> extends 'NEAR'
+                ? NearRawTransactionReceipt
+                : GetChainType<C> extends 'STACKS'
+                  ? StacksRawTransactionReceipt
+                  : GetChainType<C> extends 'BITCOIN'
+                    ? BitcoinRawTransactionReceipt
+                    : unknown;
 
 export type TxStatus = 'success' | 'failure' | 'timeout';
 export type WaitForTxReceiptParams<C extends SpokeChainKey> = {
@@ -188,14 +239,35 @@ export type SpokeApproveParamsHub<K extends HubChainKey, Raw extends boolean> = 
   spender: Address;
 };
 
-export type SpokeApproveParamsEvmSpoke<K extends EvmSpokeOnlyChainKey, Raw extends boolean> =
-  SpokeApproveParamsCommon<K, Raw> & {
-    srcChainKey: K;
-    spender: Address;
-  };
-
-export type SpokeApproveParamsStellar<K extends StellarChainKey, Raw extends boolean> = SpokeApproveParamsCommon<K, Raw> & {
+export type SpokeApproveParamsEvmSpoke<K extends EvmSpokeOnlyChainKey, Raw extends boolean> = SpokeApproveParamsCommon<
+  K,
+  Raw
+> & {
   srcChainKey: K;
+  spender: Address;
+};
+
+export type SpokeApproveParamsStellar<K extends StellarChainKey, Raw extends boolean> = SpokeApproveParamsCommon<
+  K,
+  Raw
+> & {
+  srcChainKey: K;
+};
+
+/**
+ * The unsigned transactions an approval needs, named rather than ordered.
+ *
+ * `resetTx` is present only for a token that rejects an allowance change from one non-zero value to
+ * another while a stale allowance exists. When it is, **broadcast it first and wait for it to be
+ * mined** — `approveTx` is not valid until the reset has landed.
+ *
+ * Deliberately not an array: the only consumers map these onto named fields anyway
+ * (`ApproveResponseV2.tx` / `resetTx`), and a positional contract crossing a package boundary
+ * invites a reader to guess which end is which.
+ */
+export type ApprovalTxs<K extends SpokeChainKey> = {
+  readonly resetTx?: TxReturnType<K, true>;
+  readonly approveTx: TxReturnType<K, true>;
 };
 
 /**

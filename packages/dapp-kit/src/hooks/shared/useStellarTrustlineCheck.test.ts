@@ -43,8 +43,8 @@ describe('getStellarTrustlineCheckQueryOptions — query key', () => {
     );
   });
 
-  it('shares the useRequestTrustline invalidation prefix (chain, token, account) across every amount', () => {
-    // useRequestTrustline invalidates ['shared','stellarTrustlineCheck', srcChainKey, token, srcAddress];
+  it('shares the useEstablishTrustline invalidation prefix (chain, token, account) across every amount', () => {
+    // useEstablishTrustline invalidates ['shared','stellarTrustlineCheck', srcChainKey, token, srcAddress];
     // amount sits after that prefix, so the invalidation covers the account's checks at any amount.
     const invalidationKey = ['shared', 'stellarTrustlineCheck', STELLAR, TOKEN, WALLET_A];
     for (const amount of [100n, 10_000n]) {

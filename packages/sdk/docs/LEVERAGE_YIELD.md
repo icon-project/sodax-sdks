@@ -67,7 +67,7 @@ Each vault is a deployed contract on the **Sonic hub** that follows the **ERC-46
 - **The share token address *is* the vault proxy address.** `vault` and the `lsoda*` token are the same address.
 - Standard ERC-4626 views (`previewDeposit`, `previewWithdraw`, `previewRedeem`, `maxWithdraw`, `totalAssets`) work, plus a non-standard `getPositionDetails()` that returns the live leveraged-position snapshot.
 
-The lending pool is a **Sodax fork of AAVE**; the vault reads its reserve rates to compute APR and manages collateral/debt through it.
+The lending pool is a **SODAX fork of AAVE**; the vault reads its reserve rates to compute APR and manages collateral/debt through it.
 
 ### A vault's descriptor
 
@@ -77,7 +77,7 @@ Each registered vault carries four static fields:
 |---|---|---|
 | `name` | Lookup key — the `lsoda*` share-token symbol | `'lsodaWEETH'` |
 | `vault` | Deployed vault proxy on Sonic — **also the `lsoda*` token address** | `0xD09d…701D` |
-| `asset` | Underlying collateral (a Sodax vault token) | `sodaWEETH` |
+| `asset` | Underlying collateral (a SODAX vault token) | `sodaWEETH` |
 | `borrowToken` | Token borrowed against `asset` | `sodaETH` |
 
 The registry lives in `@sodax/types` (`leverageYieldConfig`) and derives every address from the canonical `LsodaTokens` / `SodaTokens` registries, so a deployment-address change lives in exactly one place. Look vaults up with `listVaults()`, `getVault(name)`, or `getVaultByAddress(address)`.
@@ -95,16 +95,20 @@ The service does **not** expose bespoke "deposit into vault" / "redeem from vaul
 
 ### Partner fee
 
-Because entering and exiting a position are ordinary intent-based swaps, `vaultSwap()` inherits the **global partner fee** configured on the Sodax instance by default. Set `config.swaps.partnerFee` and every leverage-vault **deposit** (and withdraw) deducts it from the input amount, exactly like any other swap:
+Entering and exiting a position are intent-based swaps, but they are priced off the **leverage-yield** partner fee — **not** `swaps.partnerFee`, which never applies to vault flows. Precedence is:
+
+**per-intent `partnerFee` → `leverageYield.partnerFee` → global `fee` → no fee.**
+
+Set it per feature, or globally:
 
 ```typescript
 const sodax = new Sodax({
-  swaps: { partnerFee: { address: '0xYourFeeReceiver...', percentage: 100 } }, // 100 bps = 1%
+  leverageYield: { partnerFee: { address: '0xYourFeeReceiver...', percentage: 100 } }, // 100 bps = 1%
   // ...rest of config
 });
 ```
 
-To charge a fee **only on leverage-vault deposits** (or a different fee than the global one), pass `partnerFee` to `deposit()`. It rides on the returned payload as the per-intent fee override (`VaultSwapActionParams.partnerFee`) and takes precedence over `config.swaps.partnerFee` for that intent only:
+**Both directions are charged.** To override the configured fee for a single intent, pass `partnerFee` to `deposit()` or `withdraw()` — it rides on the returned payload as `VaultSwapActionParams.partnerFee` — or pass it directly to `vaultSwap()` / `createVaultIntent()`:
 
 ```typescript
 const intentResult = await sodax.leverageYield.deposit({
@@ -114,13 +118,35 @@ const intentResult = await sodax.leverageYield.deposit({
 // intentResult.value = { params, partnerFee } — spread into vaultSwap() as usual.
 ```
 
-The fee is taken inside `createVaultIntent()` (which `vaultSwap()` delegates to): the effective fee (per-intent override, falling back to the global config) is deducted from `inputAmount` and encoded into the intent's `data` as the `IntentDataType.FEE` envelope, so the intents contract routes it to the partner address on the hub. `LeverageYieldService.deposit()` builds the `CreateIntentParams` with `data: '0x'`; the fee `data` is then constructed at intent-creation time, so the deposit needs no fee plumbing of its own. When neither fee is set, no fee is taken (the historical "fee not charged" case).
+The fee is taken inside `createVaultIntent()` (which `vaultSwap()` delegates to): the effective fee is deducted from `inputAmount` and encoded into the intent's `data` as the `IntentDataType.FEE` envelope, so the intents contract routes it to the partner address on the hub. `deposit()` / `withdraw()` build the `CreateIntentParams` with `data: '0x'`; the fee `data` is constructed at intent-creation time, so the builders need no fee plumbing of their own. When no fee is set at any level, none is taken.
+
+Because the fee comes out of `inputAmount`, its **denomination differs by direction**: a deposit's input is the token being paid in, while a withdraw's input is the vault itself — so a withdraw fee is taken in `lsoda*` shares and the receiver accrues vault shares rather than the output token. Both are hub-side ERC20s and both surface in `sodax.partners.feeClaim`.
+
+### Quoting
+
+Size `minOutputAmount` with `sodax.leverageYield.getQuote()`, which deducts the same effective leverage-yield fee the intent will charge:
+
+```typescript
+const quote = await sodax.leverageYield.getQuote({
+  token_src: '0x...',                                  // spoke token in (deposit) — or the vault (withdraw)
+  token_src_blockchain_id: ChainKeys.ARBITRUM_MAINNET,
+  token_dst: vault.vault,                              // the vault (deposit) — or the spoke token out (withdraw)
+  token_dst_blockchain_id: ChainKeys.SONIC_MAINNET,
+  amount: 1_000_000n,
+  quote_type: 'exact_input',
+  // partnerFee — pass the same value you pass to deposit()/withdraw()/vaultSwap(), or omit on both
+});
+```
+
+Do **not** use `sodax.swaps.getQuote()` for vault flows: it deducts the effective *swap* fee, so once the two feature fees differ the quote and the intent disagree — and when the leverage-yield fee is the larger one, the `minOutputAmount` derived from that quote exceeds what the intent can deliver and it never fills.
+
+Whichever quote method you use, keep the fee consistent across both calls: pass the same `partnerFee` to the quote and to the builder, or omit it on both.
 
 ## Flows
 
 ### Deposit (any token → `lsoda*`)
 
-`deposit()` builds the `LeverageYieldSwapPayload` — `{ params: CreateIntentParams }` — for swapping any solver-supported `inputToken` on a spoke chain into the vault's `lsoda*` share token. The output is delivered to the user's **hub wallet** on Sonic (not back to the spoke) so a later `withdraw()` can spend it from there. The `deadline` defaults to the hub (Sonic) block timestamp + 5 minutes — anchored to on-chain time rather than the client clock; `solver` defaults to `0x0` (any solver). To size `minOutputAmount`, quote via `sodax.swaps.getQuote` with the vault address as the destination token (`token_dst`) — `lsoda*` shares are solver-tradeable — then subtract your slippage tolerance.
+`deposit()` builds the `LeverageYieldSwapPayload` — `{ params: CreateIntentParams }` — for swapping any solver-supported `inputToken` on a spoke chain into the vault's `lsoda*` share token. The output is delivered to the user's **hub wallet** on Sonic (not back to the spoke) so a later `withdraw()` can spend it from there. The `deadline` defaults to the hub (Sonic) block timestamp + 5 minutes — anchored to on-chain time rather than the client clock; `solver` defaults to `0x0` (any solver). To size `minOutputAmount`, quote via `sodax.leverageYield.getQuote` with the vault address as the destination token (`token_dst`) — `lsoda*` shares are solver-tradeable — then subtract your slippage tolerance. An optional `partnerFee` overrides the configured leverage-yield fee for this intent; pass the same value to the quote.
 
 ```typescript
 import { ChainKeys } from '@sodax/sdk';
@@ -147,7 +173,7 @@ if (intentResult.ok) {
 
 ### Withdraw (`lsoda*` → any token)
 
-`withdraw()` builds the `LeverageYieldSwapPayload` for swapping the vault's `lsoda*` shares — which sit in the user's hub wallet — back into any solver-supported token on any chain. The payload carries **`hubWalletSwap: true`**: `vaultSwap()` then authorises the hub wallet to spend the shares via a `Connection.sendMessage` the user signs on `srcChainKey`, instead of a spoke-side asset-manager deposit. `withdraw()` is `async` (it reads the hub block timestamp for the default `deadline`) and returns a `Result` for a call shape uniform with `deposit()`. Size `minOutputAmount` the same way as a deposit — `sodax.swaps.getQuote` with the vault address as the **source** token (`token_src`) — then subtract slippage.
+`withdraw()` builds the `LeverageYieldSwapPayload` for swapping the vault's `lsoda*` shares — which sit in the user's hub wallet — back into any solver-supported token on any chain. The payload carries **`hubWalletSwap: true`**: `vaultSwap()` then authorises the hub wallet to spend the shares via a `Connection.sendMessage` the user signs on `srcChainKey`, instead of a spoke-side asset-manager deposit. `withdraw()` is `async` (it reads the hub block timestamp for the default `deadline`) and returns a `Result` for a call shape uniform with `deposit()`. Size `minOutputAmount` the same way as a deposit — `sodax.leverageYield.getQuote` with the vault address as the **source** token (`token_src`) — then subtract slippage. `withdraw()` also accepts an optional `partnerFee`; withdrawals are charged, and that fee is taken in `lsoda*` shares.
 
 ```typescript
 const intentResult = await sodax.leverageYield.withdraw({
@@ -171,6 +197,50 @@ if (intentResult.ok) {
 
 To size a full exit, read the withdrawable balance with `getMaxWithdrawForUser(vault, srcChainKey, srcAddress)` (already dust-buffered) or the raw share balance with `getShareBalanceForUser(...)`.
 
+### Completion paths and `timeout`
+
+`vaultSwap()` completes through one of two paths, each bounded by its **own** `timeout` budget:
+
+- **Client-side (the default):** verify the broadcast intent tx landed on-chain, relay it to the hub
+  (Sonic) — skipped when `srcChainKey` is the hub, where the spoke tx already *is* the hub tx — then call
+  `notifySolver` so the solver fills the intent.
+- **Backend 2-step (opt in with `leverageYield.useBackendSubmitTx: true`):** hand the broadcast tx to the
+  Leverage Yield API (`sodax.api.leverageYield.submitTx`, carrying `operation: 'deposit' | 'withdraw'`),
+  which relays and post-executes server-side, then poll `getSubmitTxStatus` until `solved`. On **any**
+  non-success — submission rejected, a 200 the backend did not accept, terminal `failed`/abandoned, a
+  rejected API key, or the poll running out — it falls back to the client-side path so the vault swap
+  still completes, returning the same `VaultSwapResponse` either way. That is safe because re-relaying /
+  re-posting an already-processed vault swap is idempotent (the relay dedups and the solver re-affirms
+  the intent — no double-fill), and it matters in practice: the backend keeps processing at its own pace
+  after the SDK gives up, so the two relays can race.
+
+This is the leverage-yield counterpart of `swaps.useBackendSubmitTx`, but it defaults **off** while the
+backend path beds in. Read the effective value on `sodax.config.leverageYieldUseBackendSubmitTx`.
+
+`timeout` is a **per-attempt** budget, not an end-to-end one: the backend attempt (the POST plus its
+status poll) gets it, and if that attempt does not complete the client-side relay wait gets a fresh one
+starting after verification — so neither a stalled backend nor a slow source-chain confirmation can
+shorten it, and raising `timeout` grows both. Verification runs on the client-side path only (the backend
+runs its own, so verifying first would delay every backend success). Worst-case wall-clock is
+`createVaultIntent + timeout + verification + max(timeout, RELAY_FALLBACK_FLOOR_MS) + notifySolver`, where
+verification is bounded by the source chain's `pollingConfig.maxTimeoutMs` and the first and last terms
+are not bounded by `timeout` at all — the same model
+[SWAPS.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SWAPS.md#how-timeout-bounds-each-attempt)
+documents for swaps.
+
+```typescript
+// Default — fully client-side relay + notify-solver.
+const sodax = new Sodax();
+
+// Opt into the backend 2-step path (client-side fallback still applies).
+const sodaxBackend = new Sodax({ leverageYield: { useBackendSubmitTx: true } });
+```
+
+When the backend attempt does not complete, its own error is logged and discarded — the fallback runs and
+its outcome is what you receive, so the code on the `Result` always describes the client-side attempt.
+Check the logs, not the `Result`, to tell why the backend path was abandoned. For the HTTP client itself
+see [LEVERAGE_YIELD_API.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/LEVERAGE_YIELD_API.md).
+
 ### Direct allowance management (hub-side)
 
 `approve()` and `isAllowanceValid()` manage the allowance of the vault's underlying `asset` to the vault on Sonic. These are for callers interacting with the vault **directly on the hub** — the swap-style `deposit()` flow handles its own approvals, so most integrations never need them.
@@ -193,13 +263,17 @@ if (ok.ok && !ok.value) {
 
 ## Methods
 
+### getQuote
+
+Solver quote for a vault deposit (`token_dst` = the vault) or withdraw (`token_src` = the vault), sized with the effective **leverage-yield** fee so the quote matches what the intent will charge. Prefer this over `sodax.swaps.getQuote` for vault flows. An optional `partnerFee` overrides the configured fee for this quote — pass the same value you pass to the builder. **Returns:** `Promise<Result<SolverIntentQuoteResponse, SolverErrorResponse | LeverageYieldLookupError>>` — on failure the error is either the solver's own `SolverErrorResponse` (`{ detail: { code, message } }`) or a `SodaxError` (`VALIDATION_FAILED` for a bad `amount` or a fee that leaves nothing to quote, `LOOKUP_FAILED`, `UNKNOWN`); discriminate with `isSodaxError(error)`.
+
 ### deposit
 
-Builds the `LeverageYieldSwapPayload` for a deposit (any token → `lsoda*`, delivered to the hub wallet). An optional `partnerFee` is forwarded on the payload as the swap layer's per-intent fee override. **Returns:** `Promise<Result<LeverageYieldSwapPayload, LeverageYieldCreateIntentError>>`. `context.action` is `'deposit'`.
+Builds the `LeverageYieldSwapPayload` for a deposit (any token → `lsoda*`, delivered to the hub wallet). An optional `partnerFee` is forwarded on the payload as the per-intent override of the effective leverage-yield fee. **Returns:** `Promise<Result<LeverageYieldSwapPayload, LeverageYieldCreateIntentError>>`. `context.action` is `'deposit'`.
 
 ### withdraw
 
-Builds the `LeverageYieldSwapPayload` for a withdraw (`lsoda*` → any token), with `hubWalletSwap: true` set on the payload. Synchronous. **Returns:** `Result<LeverageYieldSwapPayload, LeverageYieldCreateIntentError>`. `context.action` is `'withdraw'`.
+Builds the `LeverageYieldSwapPayload` for a withdraw (`lsoda*` → any token), with `hubWalletSwap: true` set on the payload. `async` — it reads the hub block timestamp for the default `deadline`. An optional `partnerFee` is forwarded on the payload as the per-intent override; withdrawals are charged, and the fee is taken in `lsoda*` shares. **Returns:** `Promise<Result<LeverageYieldSwapPayload, LeverageYieldCreateIntentError | LeverageYieldLookupError>>`. `context.action` is `'withdraw'`.
 
 ### createVaultIntent
 
@@ -207,7 +281,7 @@ Creates the vault swap intent on the user's source spoke chain without submittin
 
 ### vaultSwap
 
-Executes the full end-to-end vault swap: `createVaultIntent` → verify the spoke tx → relay to the hub (skipped when the source is Sonic) → notify the solver. Spread a `LeverageYieldSwapPayload` into it alongside the wallet provider: `vaultSwap({ ...payload, walletProvider })`. **Returns:** `Promise<Result<VaultSwapResponse, LeverageYieldSwapError>>` — `solverExecutionResponse`, `intent`, and `intentDeliveryInfo`. `context.action` is `'vaultSwap'`.
+Executes the full end-to-end vault swap. `createVaultIntent` broadcasts the intent on the source spoke chain; completion then runs via one of the two paths in [Completion paths and `timeout`](#completion-paths-and-timeout) — by default the client-side one: verify the spoke tx → relay to the hub (skipped when the source is Sonic) → notify the solver. Spread a `LeverageYieldSwapPayload` into it alongside the wallet provider: `vaultSwap({ ...payload, walletProvider })`. **Returns:** `Promise<Result<VaultSwapResponse, LeverageYieldSwapError>>` — `solverExecutionResponse`, `intent`, and `intentDeliveryInfo`. `context.action` is `'vaultSwap'`.
 
 ### notifySolver
 
@@ -215,7 +289,14 @@ Notifies the solver that a vault intent has landed on the hub, triggering it to 
 
 ### approve
 
-Approves the vault's underlying `asset` to the vault on Sonic. Resolves `asset()` on-chain, then delegates to `Erc20Service.approve`. With `raw: true` returns unsigned tx data and does not broadcast. **Returns:** `Promise<Result<TxReturnType<HubChainKey, R> | EvmReturnType<true>, LeverageYieldApproveError>>`. `context.action` is `'approve'`.
+Approves the vault's underlying `asset` to the vault on Sonic. Resolves `asset()` on-chain, then delegates to `SpokeService.approve` when signing, or to `Erc20Service.approve` with `raw: true`, which returns unsigned tx data and does not broadcast. **Returns:** `Promise<Result<TxReturnType<HubChainKey, R> | EvmReturnType<true>, LeverageYieldApproveError>>`. `context.action` is `'approve'`.
+
+**Some tokens take two transactions.** A few ERC-20s of the 2017 TetherToken lineage — Ethereum USDT
+is the only one in the SODAX token list today — reject an allowance change from one non-zero value to
+another, so a signed `approve` sends `approve(0)` first and waits for it to be mined before the real
+approval. The user signs twice; the returned value is still a single transaction hash, the **last**
+one's. Detection simulates the approval rather than consulting a token list, so a token listed later
+behaves the same way.
 
 ### isAllowanceValid
 
@@ -292,7 +373,7 @@ type LeverageYieldPosition = {
 
 All async public methods return `Promise<Result<T, SodaxError<NarrowCode>>>`. Discriminate on `result.error.code` (a string literal) — never on `result.error.message`. Same canonical shape used by swap, bridge, and money market.
 
-The service owns the full vault-swap lifecycle: `deposit` / `withdraw` build swap payloads, `createVaultIntent` submits the intent on the source spoke chain, `vaultSwap` orchestrates create → verify → relay → notify-solver, `approve` / `isAllowanceValid` manage the Sonic allowance, and the read methods query on-chain state. Relay/tx-verification codes appear **only** on `vaultSwap`. `deposit` / `withdraw` can additionally emit `LOOKUP_FAILED` (`method: 'resolveDeadline'`) when the default-`deadline` hub-block read fails — an RPC outage, not an intent-build failure. Every other method stays within the create-intent, approve, allowance-check, and lookup subsets.
+The service owns the full vault-swap lifecycle: `deposit` / `withdraw` build swap payloads, `createVaultIntent` submits the intent on the source spoke chain, `vaultSwap` orchestrates create → verify → relay → notify-solver, `approve` / `isAllowanceValid` manage the Sonic allowance, and the read methods query on-chain state. Relay/tx-verification codes appear **only** on `vaultSwap`, and only on its client-side path (the default, or the backend path's fallback) — so `TX_VERIFICATION_FAILED`, `TX_SUBMIT_FAILED`, `RELAY_TIMEOUT` and `RELAY_FAILED` never surface on a vault swap the backend completes. `deposit` / `withdraw` can additionally emit `LOOKUP_FAILED` (`method: 'resolveDeadline'`) when the default-`deadline` hub-block read fails — an RPC outage, not an intent-build failure. Every other method stays within the create-intent, approve, allowance-check, and lookup subsets.
 
 ### Per-method error code unions
 

@@ -29,4 +29,18 @@ scripts/find_malicious_npm_packages.sh
 .pnpm-store/
 skills-lock.json
 
+# Local tarballs from `pnpm pack:local`
+pack-local-out/
+
+# Generated GitHub Release body
+release-notes.md
+
+# Working files the AI files drift check writes into the workspace
+drift-scope.json
+drift-comment.md
+
+# Temp git fixtures from scripts/check-docs-drift.test.mjs
+.tmp-docs-drift-*/
+
+# Local SDK audit scratch — the shared Audits/ reports are tracked; the sdk/ subdir stays local.
 Audits/sdk

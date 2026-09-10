@@ -64,6 +64,15 @@ Swap tokens live in [`src/swap/swap.ts`](src/swap/swap.ts) as two per-chain `Rec
 
 The two lists are **disjoint per chain** (a token lives in exactly one). The staging solver supports the union — every production token plus the staging-only set. Accessors: `getSupportedSolverTokens` returns the production list only; `getStagingSolverTokens` returns the full staging set (production + staging-only). `isSwapSupportedToken(chainId, token)` validates against the union and does **not** gate on environment — the caller targets the correct one. Invariants (intra-list dedup, disjointness, staging-superset accessor, union validation) are enforced by [`src/chains/tokens-dedup.test.ts`](src/chains/tokens-dedup.test.ts) and [`src/swap/swap.test.ts`](src/swap/swap.test.ts). Add or move entries via the `add-token` skill (see Rules) and always confirm the target environment first.
 
+## Hub vault feature membership (`SodaTokens`)
+
+`SodaTokens` ([`src/chains/tokens.ts`](src/chains/tokens.ts)) is the canonical registry of Sonic hub vaults, and it grants **neither swap nor money-market support** — each of those keeps its own explicit list, so registry membership is never evidence of either. It is not inert: `sonicSupportedTokens` spreads `...SodaTokens`, so bridge / partner-fee / recovery iterate a new vault automatically like any other `supportedTokens` entry.
+
+- **Swap** — `swapSupportedTokens[SONIC_MAINNET]` ([`src/swap/swap.ts`](src/swap/swap.ts)) names each vault as a `SodaTokens.<symbol>` reference. A vault can also be staging-only, or in no swap list at all; the inline comment there says which and why.
+- **Money market** — the module-private `moneyMarketHubVaults` list ([`src/moneyMarket/moneyMarket.ts`](src/moneyMarket/moneyMarket.ts)) feeds both `moneyMarketSupportedTokens[SONIC_MAINNET]` and `moneyMarketReserveAssets`. A vault missing from it has no reserve data and cannot be lent against.
+
+The Robinhood tokenized equities are the worked example of a swap-only vault set — deliberately in no money-market list. [`src/chains/equity-vault-tokens.test.ts`](src/chains/equity-vault-tokens.test.ts) holds the symbols and the chains they are registered on, and is the source of truth for that matrix; [`src/chains/legacy-registry-compat.test.ts`](src/chains/legacy-registry-compat.test.ts) pins every legacy registry, trustline and swap sequence as an unchanged prefix so vault additions stay additive for consumers that index these lists.
+
 ## Chain logos
 
 Each `baseChainInfo` entry carries a `logo` URL (default chain logo). The binary
@@ -73,8 +82,10 @@ from [`src/chains/chains.ts`](src/chains/chains.ts)) is the directory base, and
 each logo URL is `${CHAIN_LOGO_BASE_URL}/<chainKey>.png` — so the filename in
 `packages/assets/chain/` must equal the `ChainKeys` value. Adding a chain logo:
 drop `<chainKey>.png` in `packages/assets/chain/` and set the new entry's `logo`
-to `chainLogo(ChainKeys.<NAME>)`. Invariants are covered by
-[`src/chains/chains-logo.test.ts`](src/chains/chains-logo.test.ts). Consumers
+to `chainLogo(ChainKeys.<NAME>)`. URL-shape invariants are covered by
+[`src/chains/chains-logo.test.ts`](src/chains/chains-logo.test.ts); that the file
+actually exists is covered by
+[`src/chains/logo-assets.test.ts`](src/chains/logo-assets.test.ts). Consumers
 (demo, web app) must read `baseChainInfo[key].logo`, not hardcode icon paths.
 
 ## Token logos
@@ -89,23 +100,41 @@ are served via `raw.githubusercontent.com`. `TOKEN_LOGO_BASE_URL` (exported from
 Adding a token logo: drop `<tokenLogoSlug(symbol)>.png` in `packages/assets/token/`
 — no per-token config edit is needed. Invariants (URL shape, slug safety, no
 slug collisions across symbols) are covered by
-[`src/chains/tokens-logo.test.ts`](src/chains/tokens-logo.test.ts). Consumers
-must resolve icons with `tokenLogo(token.symbol)`, not hardcode icon paths.
+[`src/chains/tokens-logo.test.ts`](src/chains/tokens-logo.test.ts).
+
+Those cover only how the URL is *built*. [`src/chains/logo-assets.test.ts`](src/chains/logo-assets.test.ts)
+is the CI gate that the URL *resolves*: every token in `spokeChainConfig[*].supportedTokens`
+(not just the swap / money-market ones — `BridgeService` offers destinations straight from
+that map) and every `CHAIN_KEYS` entry must have a non-empty PNG under the matching name in
+`packages/assets`, and no PNG may lack a claimant, which is what catches a misspelled
+filename. Because `packages/assets` is not a dependency of this package, the `test` task in
+[`turbo.json`](turbo.json) lists those directories in `inputs` — without that, deleting a logo
+would replay a cached green run. Consumers must resolve icons with `tokenLogo(token.symbol)`,
+not hardcode icon paths.
 
 ## Build
 
 Built with `tsc` (other workspace packages bundle with tsup — this one doesn't bundle). ESM only (`"type": "module"`). Output: `dist/` with `.js` + `.d.ts` files.
 
+`build` is `rm -rf dist && tsc`, and the `rm -rf` is load-bearing: plain `tsc` never deletes an output whose source has been removed or renamed, so a stale `.d.ts` survives every later build and gets packed into `pnpm pack:local` tarballs — where a consumer reading `node_modules` cannot distinguish a stale emit from a real export. The tsup-built packages get this from `clean: true` in their `tsup.config.ts`; this one has no bundler to do it. Published releases were never affected (CI publishes from a fresh checkout with no turbo remote cache), but local builds and local packs were.
+
 Relative imports inside source must use `.js` extensions (see [`src/index.ts`](src/index.ts) for the pattern).
+
+`checkTs` also typechecks test files — with a twist this package alone needs: the build tsconfig
+keeps excluding `**/*.test.ts` because its `tsc` run EMITS `dist/` (tests must never land in the
+published output), so a second config, `tsconfig.check.json`, extends it with tests included and
+`noEmit`, and `checkTs` runs both plus the shared `scripts/check-tests-typechecked.mjs` guard
+(test-in-program assert + `as unknown as` why-comment ratchet).
 
 ## Rules
 
 - **Zero runtime dependencies.** `package.json` has no `dependencies` block — only devDependencies. Never add a runtime dependency; all types must be self-contained.
 - **No re-exporting external types.** Do not import or re-export types from third-party packages (e.g. `viem`, `ethers`, `@solana/web3.js`). Define equivalent types locally so consumers don't pick up transitive type deps.
+- **EVM addresses must survive `isAddress`.** A mixed-case EVM address has to carry a valid EIP-55 checksum; all-lowercase is also valid and is what hub-side fields (`hubAsset`, `vault`) use. viem rejects a bad checksum while encoding calldata, so inside a `multicall` one typo fails the whole batch and every balance in it reads zero. Enforced by [`src/chains/config-address-checksum.test.ts`](src/chains/config-address-checksum.test.ts), which walks the barrel — viem is a devDependency there, so the zero-runtime-dependency rule is unaffected. **Never re-case a non-EVM identifier** (Solana base58, Sui, Stacks, Icon, Stellar) to satisfy anything; that changes the address.
 - **Prefer `import type`** wherever possible — this package should produce minimal runtime JavaScript (effectively just re-exports plus a small number of intentional runtime values, e.g. `CONFIG_VERSION`, chain key constants, Stacks enums).
 - **Add new types in their subdirectory**, then re-export through that subdirectory's `index.ts`. The root `src/index.ts` already re-exports each subdirectory's barrel, so nothing more is needed for the type to be importable from `@sodax/types`.
-- **Adding a token?** Use the `add-token` skill (`.claude/skills/add-token/`) — it has the verified end-to-end procedure (which chain map and feature lists to touch, the payload→`XToken` field mapping, and what is auto-handled). Do not wire token config ad hoc.
+- **Adding a token?** Use the `add-token` skill (`.claude/skills/add-token/`) — it has the verified end-to-end procedure (which chain map and feature lists to touch, the payload→`XToken` field mapping, and what is auto-handled). Do not wire token config ad hoc. Docs Drift requires a mapped `packages/sdk/docs/` feature page (`SWAPS.md` / `MONEY_MARKET.md`) alongside `src/` changes; `packages/types/README.md` passes the gate but does not publish.
 - **Adding a chain?** Use the `add-chain` skill (`.claude/skills/add-chain/`) — it orchestrates the cross-package footprint that starts here (chain key, config, types, wallet interface) and continues into the sdk spoke and the wallet packages.
-- **`CONFIG_VERSION` bump convention** ([`src/index.ts`](src/index.ts)): bump this on any types change inside a `release/sdk` branch. Consumers (notably `@sodax/sdk`'s `ConfigService`) rely on it to detect config-schema drift between SDK releases.
+- **`CONFIG_VERSION` bump convention** ([`src/index.ts`](src/index.ts)): never edit it by hand — `scripts/bump-versions.sh` increments it once per release, on the `release` branch. Consumers (notably `@sodax/sdk`'s `ConfigService`) rely on it to detect config-schema drift between SDK releases.
 - **All wallet provider interfaces extend `WalletAddressProvider`** from `common/`.
 - **No `any`.** Use `unknown` where the type cannot be known statically.

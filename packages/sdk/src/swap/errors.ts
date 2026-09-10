@@ -20,6 +20,9 @@ export type SwapCreateIntentErrorCode = CreateIntentErrorCode;
  */
 export type PostExecutionErrorCode = Extract<SodaxErrorCode, 'EXECUTION_FAILED' | 'EXTERNAL_API_ERROR' | 'UNKNOWN'>;
 
+/** The only code `getDetailedStatus` returns: no status source could produce a usable answer. */
+export type DetailedStatusErrorCode = Extract<SodaxErrorCode, 'LOOKUP_FAILED'>;
+
 export type SwapErrorCode = Extract<
   SodaxErrorCode,
   | 'USER_REJECTED'
@@ -37,6 +40,7 @@ export type SwapErrorCode = Extract<
 export type SwapCreateIntentError = SodaxError<SwapCreateIntentErrorCode>;
 export type PostExecutionError = SodaxError<PostExecutionErrorCode>;
 export type SwapError = SodaxError<SwapErrorCode>;
+export type DetailedStatusError = SodaxError<DetailedStatusErrorCode>;
 
 const POST_EXECUTION_ERROR_CODES: ReadonlySet<PostExecutionErrorCode> = new Set([
   'EXECUTION_FAILED',
