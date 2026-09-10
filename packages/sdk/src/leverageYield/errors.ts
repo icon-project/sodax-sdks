@@ -30,7 +30,15 @@ import type { SodaxError } from '../errors/SodaxError.js';
 
 export const leverageYieldInvariant: FeatureInvariant = createInvariant('leverageYield');
 
-export type LeverageYieldAction = 'deposit' | 'withdraw' | 'approve' | 'allowanceCheck' | 'vaultSwap';
+export type LeverageYieldAction =
+  | 'deposit'
+  | 'withdraw'
+  | 'approve'
+  | 'allowanceCheck'
+  | 'vaultSwap'
+  | 'openPosition'
+  | 'openPositionFromDebtToken'
+  | 'operatePosition';
 
 export type LeverageYieldCreateIntentErrorCode = CreateIntentErrorCode;
 export type LeverageYieldApproveErrorCode = ApproveErrorCode;

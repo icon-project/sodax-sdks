@@ -153,6 +153,14 @@ export default function Providers({ children }: { children: ReactNode }) {
       },
       swaps: { useBackendSubmitTx: s.swapUseBackendSubmitTx ?? defaultUseBackendSubmitTx(solverApiEndpoint) },
       bridge: { useBackendSubmitTx: s.bridgeUseBackendSubmitTx ?? true },
+
+      // No `leverageYield.positionFactory` override: the deployed factory now ships in
+      // `leverageYieldConfig`, and pinning the same address here would be a second source of truth
+      // that silently outlives a rotation of the packaged one. Worth knowing when it does rotate:
+      // clones bake in their implementation, so positions opened against an earlier factory keep
+      // working but stop appearing under the new one, and each of its hooks has to be whitelisted
+      // with the solver before an intent posted against it can be filled.
+
       // Global partner fee. Per-call / per-feature fees still win, and the Swaps/Bridge API pages
       // carry their own per-request fee — `SodaxOptions.fee` never reaches those routes.
       ...(s.partnerFeeAddress && s.partnerFeeBps !== null

@@ -93,6 +93,7 @@ export const ROUTES = {
   RECOVERY: '/recovery',
   LEVERAGE_YIELD: '/leverage-yield',
   LEVERAGE_YIELD_API: '/leverage-yield-api',
+  LEVERAGE_POSITIONS: '/leverage-positions',
   ORACLE: '/oracle',
 } as const;
 
