@@ -94,7 +94,9 @@ export function PendingOperationControl({
     try {
       const tx = sodax.leverageYield.buildSettlePosition({ from: owner, position });
       const { dstChainTxHash } = await route([tx]);
-      setStatus(`Cleared (${dstChainTxHash.slice(0, 10)}…). Anything the position held loose is back with the owner.`);
+      setStatus(
+        `Cleared (${dstChainTxHash.slice(0, 10)}…). Anything the position held loose went to your hub wallet, not the address you signed with.`,
+      );
       await queryClient.invalidateQueries({ queryKey: ['leverageYield'] });
     } catch (e) {
       setError(getReadableTxError(e));
@@ -180,7 +182,9 @@ export function PendingOperationControl({
       {stage === 'recoverable' && (
         <>
           <Notice tone="warn" icon={CircleAlert}>
-            The fill resolved, but funds are still in the position. Settle to return them.
+            The fill resolved, but funds are still in the position. Settle returns them to your hub wallet{' '}
+            <span className="font-mono">{owner ? `${owner.slice(0, 6)}…${owner.slice(-4)}` : ''}</span> — `settle()`
+            takes no destination, so it can only pay the position's owner.
           </Notice>
           <Button className="w-full" size="sm" disabled={busy || !owner} onClick={onSettle}>
             {busy ? 'Working…' : 'Settle and recover funds'}

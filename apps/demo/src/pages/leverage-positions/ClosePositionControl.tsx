@@ -29,7 +29,7 @@
  */
 
 import React, { useCallback, useMemo, useState } from 'react';
-import { AlertTriangle, DoorOpen } from 'lucide-react';
+import { AlertTriangle, DoorOpen, Info } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import {
@@ -90,10 +90,16 @@ export function ClosePositionControl({
 }) {
   const { sodax } = useSodaxContext();
   const queryClient = useQueryClient();
-  const { route } = useHubWalletRoute(chain);
+  const { route, signer } = useHubWalletRoute(chain);
   const submitIntent = useSubmitPositionIntent(chain);
   // Not the signer: off the hub, the signer's address is not one the hub could pay out to.
   const payoutAddress = usePositionPayoutAddress(chain, owner);
+  /**
+   * Which of the user's two addresses the payout lands at. `withdraw` takes a destination, so on the
+   * hub it can be their own; anywhere else it has to be the hub wallet, and those are not the same
+   * address. Saying "your address" when it is the other one is how a withdrawal looks lost.
+   */
+  const payoutIsSigner = !!payoutAddress && !!signer && payoutAddress.toLowerCase() === signer.toLowerCase();
   const { data: reserves } = useReservesUsdFormat();
   // The exact aToken balance, which is the only thing that can size "sell everything" — the account
   // snapshot's base-currency collateral divided by a price lands near the balance, not on it, and
@@ -284,14 +290,16 @@ export function ClosePositionControl({
         to: payoutAddress,
       });
       const { dstChainTxHash } = await route([tx]);
-      setStatus(`Withdrawn to ${payoutAddress} (${dstChainTxHash.slice(0, 10)}…)`);
+      setStatus(
+        `Withdrawn as ${collateralReserve?.symbol ?? 'the reserve token'} to ${payoutAddress} (${dstChainTxHash.slice(0, 10)}…)`,
+      );
       await queryClient.invalidateQueries({ queryKey: ['leverageYield'] });
     } catch (e) {
       setError(getReadableTxError(e));
     } finally {
       setBusy(false);
     }
-  }, [owner, payoutAddress, sodax, position, route, queryClient, withdrawAmount]);
+  }, [owner, payoutAddress, sodax, position, route, queryClient, withdrawAmount, collateralReserve?.symbol]);
 
   if (phase === 'closed') {
     return <div className="text-xs text-muted-foreground">Position is empty.</div>;
@@ -422,6 +430,17 @@ export function ClosePositionControl({
               Debt is repaid. Withdraw the remaining {collateral.toFixed(2)} of collateral.
             </div>
           )}
+          {/* Two things a withdrawal does not do on its own, and both were left to be discovered:
+              it pays out the RESERVE token rather than the underlying, and on a spoke it pays the
+              hub wallet rather than the address you signed with. */}
+          <Notice icon={Info}>
+            Arrives as {collateralReserve?.symbol ?? 'the reserve token'} — an ERC-20 your wallet will not list until
+            you add it — at {payoutIsSigner ? 'your own address' : 'your hub wallet'}{' '}
+            <span className="font-mono">
+              {payoutAddress ? `${payoutAddress.slice(0, 6)}…${payoutAddress.slice(-4)}` : '—'}
+            </span>
+            . Unwrapping it back to the underlying is a separate step.
+          </Notice>
           <Button
             className="w-full"
             size="sm"
