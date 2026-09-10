@@ -58,7 +58,7 @@ export type SuiChainEntry = { defaults?: SuiWalletDefaults } & (
 export type IconChainEntry = SimpleChainEntry<IconWalletDefaults>;
 export type NearChainEntry = SimpleChainEntry<NearWalletDefaults>;
 
-// Chains with multi-field RPC config (horizon+soroban, rpc+radfi, indexer+grpc)
+// Chains with multi-field RPC config (horizon+soroban, indexer+grpc)
 // extend the existing `*RpcConfig` from @sodax/types instead.
 export type StellarChainEntry = StellarRpcConfig & { defaults?: StellarWalletDefaults };
 export type BitcoinChainEntry = BitcoinRpcConfig & { defaults?: BitcoinWalletDefaults };

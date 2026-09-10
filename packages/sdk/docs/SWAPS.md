@@ -26,8 +26,7 @@ import type { SpokeChainKey, XToken } from '@sodax/sdk';
 
 const sodax = new Sodax();
 
-// If you want dynamic (backend API-based) configuration, initialize the instance before use.
-// By default the configuration bundled in the SDK version you are using is applied.
+// The current SDK keeps packaged defaults merged with constructor overrides.
 await sodax.initialize();
 
 // All supported spoke chain keys
@@ -39,6 +38,41 @@ const supportedTokens: readonly XToken[] = sodax.swaps.getSupportedSwapTokensByC
 // All supported swap tokens across every spoke chain
 const allTokens: Record<SpokeChainKey, readonly XToken[]> = sodax.swaps.getSupportedSwapTokens();
 ```
+
+### RWA classification and token logos
+
+`XToken.isRwa === true` marks a registered tokenized stock, ETF or commodity,
+including registered cross-chain representations. An omitted flag means no RWA
+classification is declared; it is not a general-purpose crypto/stablecoin taxonomy.
+Chain membership and symbol spelling do not determine RWA status.
+
+Use `isRealWorldAsset({ chainKey, address })` to resolve metadata from the packaged
+SDK registry when your token data comes from an API without the flag. It returns
+false for unknown chains or addresses, ignores symbols, and compares EVM addresses
+case-insensitively while preserving non-EVM identifier casing. It does not read
+custom constructor config or validate swap/money-market support. New registry
+metadata requires an SDK update; it does not automatically update backend payloads.
+
+```typescript
+import { ChainKeys, getSupportedSolverTokens, isRealWorldAsset, tokenLogo } from '@sodax/sdk';
+
+const tokens = getSupportedSolverTokens(ChainKeys.ROBINHOOD_MAINNET);
+const rwaTokens = tokens.filter(isRealWorldAsset);
+const rows = tokens.map(token => ({
+  symbol: token.symbol,
+  isRwa: isRealWorldAsset(token),
+  logo: tokenLogo(token.symbol),
+}));
+```
+
+For API responses using `xChainId`, pass it as `chainKey` alongside the token's
+on-chain `address`. Resolve each chain/address before grouping directory rows;
+keep feature support and UI visibility filters separate from classification.
+
+`tokenLogo(symbol)` serves shared PNGs from the SDK repository's `main` branch.
+Robinhood equity/ETF entries use the Robinhood mark; xStocks retain their own
+artwork. Image replacements become available after merge, subject to caching,
+without an SDK release. Consumers must use these URLs to receive the replacements.
 
 ## Available Methods
 
@@ -97,13 +131,15 @@ Only the two `timeout` terms are yours to tune. Opting out with `useBackendSubmi
 
 - `getIntent(txHash)` — Retrieve an `Intent` from a hub-chain transaction hash
 - `getFilledIntent(txHash)` — Retrieve the fill state of an intent from the solver's fill tx hash
-- `getIntentSubmitTxExtraData(params)` — Get the relay extra data (`address` + `payload`) needed to submit a Solana/Bitcoin intent
+- `getIntentSubmitTxExtraData(params)` — Rebuild the relay extra data (`address` + `payload`) for a Solana/Bitcoin intent from a hub-chain tx hash or an `Intent`; byte-identical to the `relayData` that `createIntent` returned
+- `reconstructRelayData(intent)` — The same relay extra data, derived offline from a fully-populated `Intent` (no RPC call)
 - `getSolvedIntentPacket(params)` — Poll the relayer until a solved intent's fill packet arrives on the destination chain
 - `getIntentHash(intent)` — Compute the keccak256 hash of an intent (its on-chain ID)
 - `getStatus(request)` — Poll the solver API for current intent execution status
 - `getDetailedStatus(params)` — Read a swap's status from its **source-chain** tx hash; routes to the backend record or the solver, whichever can answer
 - `cancelIntent(params)` — Cancel an active intent and wait for hub confirmation
 - `createCancelIntent(params)` — Build (and optionally broadcast) only the cancel tx; supports raw and signed modes
+- `getCancelIntentRelayData(intent)` — Relay extra data (`address` + `payload`) for manually relaying a Solana cancel tx
 - `cancelLimitOrder(params)` — Alias for `cancelIntent` with domain-specific naming
 
 ### Token Approval
@@ -484,7 +520,7 @@ console.log(estimatedSeconds); // e.g. 15
 
 ## Token Approval Flow
 
-Before creating an intent, check whether the relevant spender contract already has permission to spend the user's input tokens.
+`swap()` and `createIntent()` do not approve the input token for you. Before executing, call `isAllowanceValid()` and `approve()` when it returns `false`. On EVM chains this is an ERC-20 allowance; on Stellar it is a trustline; on other chains it returns `true` and no approval is needed. Native gas tokens on EVM need no approval.
 
 - **Hub (Sonic)**: checks allowance against the intents contract
 - **EVM spoke chains**: checks allowance against the spoke's asset manager
@@ -794,6 +830,10 @@ if (cancelResult.ok) {
 }
 ```
 
+`cancelIntent` relays the cancel the same way `swap()` relays the intent: on Solana it submits the cancel payload alongside the spoke tx (the tx itself carries only the payload hash), and on Bitcoin it relays the signed on-demand payload — no extra input is needed from the caller. On Bitcoin no spoke transaction is broadcast, so `srcChainTxHash` is the relay's derived `od:<hash>` identifier rather than a chain tx hash.
+
+The cancel message is sent from the intent's `srcAddress` by default. A Bitcoin intent created in TRADING mode stores the trading address, while the cancel must be signed from the personal wallet — signed cancels read that address from `walletProvider`, so nothing changes for `cancelIntent`. Pass `params.srcAddress` only to override it (required for a raw Bitcoin cancel, see below).
+
 > **Error-type note:** `cancelIntent` and `cancelLimitOrder` return `Result<TxHashPair, Error | unknown>` — they were **not** migrated to the `SodaxError<C>` family. Don't `switch` on `error.code` here; treat the error as an opaque `Error` and use `instanceof Error` / `error.message` for diagnostics. The rest of this module (swap, createIntent, postExecution, createLimitOrder, createLimitOrderIntent) uses `SodaxError<SwapErrorCode>` — see [Error Handling](#error-handling).
 
 ### Build Cancel Intent (raw or signed — no relay wait)
@@ -807,10 +847,29 @@ const rawCancelResult = await sodax.swaps.createCancelIntent({
   raw: true,
 });
 
+// Raw Bitcoin cancel in TRADING mode: there is no wallet provider to read the personal address
+// from, and the intent stores the trading address, so the personal wallet address is required.
+const rawBtcCancelResult = await sodax.swaps.createCancelIntent({
+  params: { srcChainKey: ChainKeys.BITCOIN_MAINNET, intent: btcIntent, srcAddress: personalBtcAddress },
+  raw: true,
+});
+
 if (rawCancelResult.ok) {
   // rawTx is the chain-specific raw transaction (EvmRawTransaction for EVM chains,
   // SolanaRawTransaction for Solana, etc.) — TypeScript narrows it from `srcChainKey`.
   const rawTx = rawCancelResult.value;
+}
+```
+
+Relaying a cancel tx yourself follows [Submit Intent to Relay API](#submit-intent-to-relay-api), with one difference per chain family. On Solana the spoke tx carries only the payload hash, so pass `data` from `getCancelIntentRelayData(intent)` — the create-intent helpers (`getIntentSubmitTxExtraData`, `reconstructRelayData`) encode a different payload and do not match a cancel tx. On Bitcoin `createCancelIntent` returns the signed on-demand payload JSON rather than a tx hash; submit it under the literal `withdraw` tx hash with the parsed payload as `data`, and poll the derived `od:<hash>` id — `BitcoinSpokeService.getOnDemandRelayIdentity` (`sodax.spoke.bitcoin`) returns all three.
+
+```typescript
+const cancelRelayData = sodax.swaps.getCancelIntentRelayData(intent);
+if (cancelRelayData.ok) {
+  await sodax.swaps.submitIntent({
+    action: 'submit',
+    params: { chain_id: intent.srcChain.toString(), tx_hash: solanaCancelTxHash, data: cancelRelayData.value },
+  });
 }
 ```
 
@@ -847,7 +906,11 @@ if (submitResult.ok) {
 
 ## Get Intent Submit Tx Extra Data
 
-Required only when the source chain is **Solana** or **Bitcoin**. Pass the returned `RelayExtraData` as `data` in `submitIntent`.
+Required only when the source chain is **Solana** or **Bitcoin**. Pass the returned `RelayExtraData` as `data` in `submitIntent` (or `relayTxAndWaitPacket`).
+
+Those deposits commit only a hash of the relay payload on-chain, so the relayer can correlate a submission only with the exact original bytes. For an intent created by `createIntent` (or `swap` / `createLimitOrderIntent`) the payload returned here is byte-identical to the `relayData` that call returned — raw `createIntent` calldata for a Sonic-hub source, the `[approve, createIntent]` multicall for any spoke source — which makes this the recovery path when that runtime `relayData` is no longer available.
+
+One intent shape cannot be reconstructed this way: a leverage-yield `vaultSwap` / `createVaultIntent` intent with `hubWalletSwap`. Its `srcChain` is the hub while the relayed payload is the spoke multicall sent through `sendMessage`, so passing that `intent` to `getIntentSubmitTxExtraData({ intent })` or `reconstructRelayData` yields raw `createIntent` calldata that will not match. Keep the `relayData` the leverage-yield call returned, or use `sodax.api.leverageYield.getIntentSubmitTxExtraData`.
 
 ```typescript
 import type { RelayExtraData } from '@sodax/sdk';
@@ -868,6 +931,9 @@ if (intentResult.ok) {
     const extraData: RelayExtraData = extraDataResult2.value;
     // Use extraData.address and extraData.payload in the relay submit request
   }
+
+  // Option 3: fully offline — same payload, no RPC call, from a fully-populated Intent
+  const offlineResult = sodax.swaps.reconstructRelayData(intentResult.value);
 }
 ```
 
