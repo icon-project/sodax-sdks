@@ -292,10 +292,10 @@ export function CreatePositionCard({ chain, owner }: { chain: SpokeChainKey; own
     };
   }, [eModes, eModeCategory, collateralReserve]);
 
-  // Leverage is collateral / equity, and the deposit *is* the equity on a fresh position, so the
-  // borrow needed is simply deposit x (leverage - 1), converted into borrow-token units.
+  // `undefined` is NOT a ceiling of 1.00x: reserves take ~1.7s to load, and falling back to 1 meant
+  // the form advertised `max 1.00x` and clamped the thumb onto the one value it rejects.
   const maxLeverage = useMemo(
-    () => (riskParams.ltv > 0 && riskParams.ltv < 1 ? (1 / (1 - riskParams.ltv)) * 0.98 : 1),
+    () => (riskParams.ltv > 0 && riskParams.ltv < 1 ? (1 / (1 - riskParams.ltv)) * 0.98 : undefined),
     [riskParams],
   );
 
@@ -411,19 +411,16 @@ export function CreatePositionCard({ chain, owner }: { chain: SpokeChainKey; own
   const pricedMax = priced?.key === priceKey ? priced.max : undefined;
 
   const sliderMax = useMemo(() => {
+    if (maxLeverage === undefined) return undefined;
     if (pricedMax === undefined || !Number.isFinite(pricedMax)) return maxLeverage;
     return Math.max(Math.min(maxLeverage, pricedMax), 1.01);
   }, [maxLeverage, pricedMax]);
 
-  /**
-   * Clamping is downward only, so a ceiling that recovers does not yank the thumb up under the user.
-   * The seed is the other half of that: before reserves load the ceiling IS 1.00x, which pins the
-   * default to the one value the form rejects — the card then opened on "Set a leverage above 1.00x"
-   * every time. Seeding once the real ceiling lands fixes that without overriding a deliberate 1.00x,
-   * which `touched` is what distinguishes.
-   */
+  // Downward only, so a recovering ceiling does not yank the thumb up under the user; an unknown one
+  // clamps to nothing. The seed covers a priced ceiling that really does land at or below 1.
   const [leverageTouched, setLeverageTouched] = useState(false);
   useEffect(() => {
+    if (sliderMax === undefined) return;
     setLeverage(prev => {
       if (prev > sliderMax) return Number(sliderMax.toFixed(2));
       if (!leverageTouched && prev <= 1 && sliderMax > 1) return Math.min(2, sliderMax);
@@ -642,7 +639,8 @@ export function CreatePositionCard({ chain, owner }: { chain: SpokeChainKey; own
     eModeCategory === '0'
       ? 'no eMode'
       : (eModes?.find(c => String(c.id) === eModeCategory)?.eMode.label ?? `category ${eModeCategory}`);
-  const cappedByPrice = pricedMax !== undefined && Number.isFinite(pricedMax) && pricedMax < maxLeverage;
+  const cappedByPrice =
+    maxLeverage !== undefined && pricedMax !== undefined && Number.isFinite(pricedMax) && pricedMax < maxLeverage;
 
   return (
     <Card className="w-full max-w-xl mx-auto">
@@ -731,11 +729,12 @@ export function CreatePositionCard({ chain, owner }: { chain: SpokeChainKey; own
           </div>
           <input
             type="range"
-            className="w-full"
+            className="w-full disabled:opacity-50"
             min={1}
-            max={Math.max(sliderMax, 1.01)}
+            max={sliderMax === undefined ? 2 : Math.max(sliderMax, 1.01)}
             step={0.01}
             value={leverage}
+            disabled={sliderMax === undefined}
             onChange={e => {
               setLeverageTouched(true);
               setLeverage(Number(e.target.value));
@@ -744,8 +743,8 @@ export function CreatePositionCard({ chain, owner }: { chain: SpokeChainKey; own
           <div className="flex justify-between text-[10px] text-muted-foreground">
             <span>1.00x</span>
             <span className="flex items-center gap-1">
-              max {fmtLeverageCap(sliderMax)}
-              {cappedByPrice && (
+              {sliderMax === undefined ? 'reading pool limits…' : `max ${fmtLeverageCap(sliderMax)}`}
+              {cappedByPrice && maxLeverage !== undefined && (
                 <InfoHint>
                   Capped by the current solver quote. The oracle LTV alone would allow {maxLeverage.toFixed(2)}x, but
                   that may fail at fill time.
@@ -918,7 +917,11 @@ export function CreatePositionCard({ chain, owner }: { chain: SpokeChainKey; own
                   <DetailRow
                     label="Max at quote"
                     value={fmtLeverageCap(projection.usableMax)}
-                    info={`LTV alone allows ${maxLeverage.toFixed(2)}x; the solver quote brings it down to this.`}
+                    info={
+                      maxLeverage === undefined
+                        ? 'The highest leverage the current solver quote supports.'
+                        : `LTV alone allows ${maxLeverage.toFixed(2)}x; the solver quote brings it down to this.`
+                    }
                   />
                 </>
               )}
