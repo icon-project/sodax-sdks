@@ -103,6 +103,7 @@ Only the two `timeout` terms are yours to tune. Opting out with `useBackendSubmi
 - `getDetailedStatus(params)` — Read a swap's status from its **source-chain** tx hash; routes to the backend record or the solver, whichever can answer
 - `cancelIntent(params)` — Cancel an active intent and wait for hub confirmation
 - `createCancelIntent(params)` — Build (and optionally broadcast) only the cancel tx; supports raw and signed modes
+- `getCancelIntentRelayData(intent)` — Relay extra data (`address` + `payload`) for manually relaying a Solana cancel tx
 - `cancelLimitOrder(params)` — Alias for `cancelIntent` with domain-specific naming
 
 ### Token Approval
@@ -793,6 +794,10 @@ if (cancelResult.ok) {
 }
 ```
 
+`cancelIntent` relays the cancel the same way `swap()` relays the intent: on Solana it submits the cancel payload alongside the spoke tx (the tx itself carries only the payload hash), and on Bitcoin it relays the signed on-demand payload — no extra input is needed from the caller. On Bitcoin no spoke transaction is broadcast, so `srcChainTxHash` is the relay's derived `od:<hash>` identifier rather than a chain tx hash.
+
+The cancel message is sent from the intent's `srcAddress` by default. A Bitcoin intent created in TRADING mode stores the trading address, while the cancel must be signed from the personal wallet — signed cancels read that address from `walletProvider`, so nothing changes for `cancelIntent`. Pass `params.srcAddress` only to override it (required for a raw Bitcoin cancel, see below).
+
 > **Error-type note:** `cancelIntent` and `cancelLimitOrder` return `Result<TxHashPair, Error | unknown>` — they were **not** migrated to the `SodaxError<C>` family. Don't `switch` on `error.code` here; treat the error as an opaque `Error` and use `instanceof Error` / `error.message` for diagnostics. The rest of this module (swap, createIntent, postExecution, createLimitOrder, createLimitOrderIntent) uses `SodaxError<SwapErrorCode>` — see [Error Handling](#error-handling).
 
 ### Build Cancel Intent (raw or signed — no relay wait)
@@ -806,10 +811,29 @@ const rawCancelResult = await sodax.swaps.createCancelIntent({
   raw: true,
 });
 
+// Raw Bitcoin cancel in TRADING mode: there is no wallet provider to read the personal address
+// from, and the intent stores the trading address, so the personal wallet address is required.
+const rawBtcCancelResult = await sodax.swaps.createCancelIntent({
+  params: { srcChainKey: ChainKeys.BITCOIN_MAINNET, intent: btcIntent, srcAddress: personalBtcAddress },
+  raw: true,
+});
+
 if (rawCancelResult.ok) {
   // rawTx is the chain-specific raw transaction (EvmRawTransaction for EVM chains,
   // SolanaRawTransaction for Solana, etc.) — TypeScript narrows it from `srcChainKey`.
   const rawTx = rawCancelResult.value;
+}
+```
+
+Relaying a cancel tx yourself follows [Submit Intent to Relay API](#submit-intent-to-relay-api), with one difference per chain family. On Solana the spoke tx carries only the payload hash, so pass `data` from `getCancelIntentRelayData(intent)` — the create-intent helpers (`getIntentSubmitTxExtraData`, `reconstructRelayData`) encode a different payload and do not match a cancel tx. On Bitcoin `createCancelIntent` returns the signed on-demand payload JSON rather than a tx hash; submit it under the literal `withdraw` tx hash with the parsed payload as `data`, and poll the derived `od:<hash>` id — `BitcoinSpokeService.getOnDemandRelayIdentity` (`sodax.spoke.bitcoin`) returns all three.
+
+```typescript
+const cancelRelayData = sodax.swaps.getCancelIntentRelayData(intent);
+if (cancelRelayData.ok) {
+  await sodax.swaps.submitIntent({
+    action: 'submit',
+    params: { chain_id: intent.srcChain.toString(), tx_hash: solanaCancelTxHash, data: cancelRelayData.value },
+  });
 }
 ```
 
