@@ -24,12 +24,12 @@ SODAX does not run a paid bug bounty for this repository. There is no reward poo
 
 ## Scope
 
-This policy covers the code in this repository: the published `@sodax/*` packages under `packages/`, the tooling that builds, tests and releases them (`.github/workflows/`, `scripts/`), and the documentation under `docs/` that builds docs.sodax.com — a page that leads an integrator into an unsafe pattern is in scope here, not just library code.
+This policy covers the code in this repository: the published `@sodax/*` packages under `packages/`, the reference and example apps under `apps/` that integrators copy from, the tooling that builds, tests and releases them (`.github/workflows/`, `scripts/`), and the documentation under `docs/` that builds docs.sodax.com — an example or a page that leads an integrator into an unsafe pattern is in scope here, not just library code.
 
 Out of scope for this repo, and routed elsewhere:
 
 - **Smart contracts** — the deployed SODAX contracts and their audits.
-- **Backend services, APIs and infrastructure.**
+- **Backend services, APIs and infrastructure** — including where a demo is hosted, as distinct from its source under `apps/`.
 
 For either, email `tech-alerts@sodax.com` and a maintainer will route the report: both live in private repositories, so neither can take an advisory or a public issue from outside the organisation.
 
