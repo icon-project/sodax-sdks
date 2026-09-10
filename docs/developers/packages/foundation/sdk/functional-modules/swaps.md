@@ -135,7 +135,8 @@ Only the two `timeout` terms are yours to tune. Opting out with `useBackendSubmi
 
 - `getIntent(txHash)` — Retrieve an `Intent` from a hub-chain transaction hash
 - `getFilledIntent(txHash)` — Retrieve the fill state of an intent from the solver's fill tx hash
-- `getIntentSubmitTxExtraData(params)` — Get the relay extra data (`address` + `payload`) needed to submit a Solana/Bitcoin intent
+- `getIntentSubmitTxExtraData(params)` — Rebuild the relay extra data (`address` + `payload`) for a Solana/Bitcoin intent from a hub-chain tx hash or an `Intent`; byte-identical to the `relayData` that `createIntent` returned
+- `reconstructRelayData(intent)` — The same relay extra data, derived offline from a fully-populated `Intent` (no RPC call)
 - `getSolvedIntentPacket(params)` — Poll the relayer until a solved intent's fill packet arrives on the destination chain
 - `getIntentHash(intent)` — Compute the keccak256 hash of an intent (its on-chain ID)
 - `getStatus(request)` — Poll the solver API for current intent execution status
@@ -885,7 +886,11 @@ if (submitResult.ok) {
 
 ## Get Intent Submit Tx Extra Data
 
-Required only when the source chain is **Solana** or **Bitcoin**. Pass the returned `RelayExtraData` as `data` in `submitIntent`.
+Required only when the source chain is **Solana** or **Bitcoin**. Pass the returned `RelayExtraData` as `data` in `submitIntent` (or `relayTxAndWaitPacket`).
+
+Those deposits commit only a hash of the relay payload on-chain, so the relayer can correlate a submission only with the exact original bytes. For an intent created by `createIntent` (or `swap` / `createLimitOrderIntent`) the payload returned here is byte-identical to the `relayData` that call returned — raw `createIntent` calldata for a Sonic-hub source, the `[approve, createIntent]` multicall for any spoke source — which makes this the recovery path when that runtime `relayData` is no longer available.
+
+One intent shape cannot be reconstructed this way: a leverage-yield `vaultSwap` / `createVaultIntent` intent with `hubWalletSwap`. Its `srcChain` is the hub while the relayed payload is the spoke multicall sent through `sendMessage`, so passing that `intent` to `getIntentSubmitTxExtraData({ intent })` or `reconstructRelayData` yields raw `createIntent` calldata that will not match. Keep the `relayData` the leverage-yield call returned, or use `sodax.api.leverageYield.getIntentSubmitTxExtraData`.
 
 ```typescript
 import type { RelayExtraData } from '@sodax/sdk';
@@ -906,6 +911,9 @@ if (intentResult.ok) {
     const extraData: RelayExtraData = extraDataResult2.value;
     // Use extraData.address and extraData.payload in the relay submit request
   }
+
+  // Option 3: fully offline — same payload, no RPC call, from a fully-populated Intent
+  const offlineResult = sodax.swaps.reconstructRelayData(intentResult.value);
 }
 ```
 
