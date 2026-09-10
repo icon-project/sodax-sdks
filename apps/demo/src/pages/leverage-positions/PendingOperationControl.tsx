@@ -23,8 +23,10 @@ import { useSodaxContext, type LeveragePositionPendingState, type SpokeChainKey 
 import { useQuery } from '@tanstack/react-query';
 import { erc20Abi } from 'viem';
 import type { Address } from 'viem';
+import { Check, CircleAlert, Loader2 } from 'lucide-react';
 import { getReadableTxError } from '@/lib/utils';
 import { useHubWalletRoute } from './useHubWalletRoute';
+import { Notice } from './PositionSummary';
 
 export function PendingOperationControl({
   chain,
@@ -46,10 +48,14 @@ export function PendingOperationControl({
   const { route } = useHubWalletRoute(chain);
 
   /**
-   * Whether settling would actually move anything. A close that delivered its surplus leaves the
-   * position empty, so the slot is stale but there is nothing to recover — and the next operation
-   * clears it anyway, because every one of them calls `_settlePending` first. Telling the user to settle
-   * in that state invents a step.
+   * Whether settling would move anything. A close that delivered its surplus leaves the position
+   * empty, so the slot is resolved with nothing to recover — a state worth telling apart from one
+   * holding a contribution, because only the second is urgent.
+   *
+   * `undefined` is a THIRD answer, not a zero: the query is disabled until both token addresses are
+   * known, so reading `idle ?? 0n` claimed "nothing left to recover" on a position nobody had looked
+   * at yet. It also only sees these two tokens, so it answers for the assets this position deals in,
+   * not for everything an address could hold.
    */
   const { data: idle } = useQuery({
     queryKey: ['leverageYield', 'positionIdle', position, collateralToken, borrowToken],
@@ -69,7 +75,6 @@ export function PendingOperationControl({
       return balances.reduce((a, b) => a + b, 0n);
     },
   });
-  const hasSomethingToRecover = (idle ?? 0n) > 0n;
 
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string>();
@@ -89,7 +94,7 @@ export function PendingOperationControl({
     try {
       const tx = sodax.leverageYield.buildSettlePosition({ from: owner, position });
       const { dstChainTxHash } = await route([tx]);
-      setStatus(`Settled (${dstChainTxHash.slice(0, 10)}…) — anything held loose is back with the owner`);
+      setStatus(`Cleared (${dstChainTxHash.slice(0, 10)}…). Anything the position held loose is back with the owner.`);
       await queryClient.invalidateQueries({ queryKey: ['leverageYield'] });
     } catch (e) {
       setError(getReadableTxError(e));
@@ -106,7 +111,7 @@ export function PendingOperationControl({
     try {
       const tx = sodax.leverageYield.buildCancelPositionOperation({ from: owner, position });
       const { dstChainTxHash } = await route([tx]);
-      setStatus(`Cancelled (${dstChainTxHash.slice(0, 10)}…) — anything the position held loose is back with you`);
+      setStatus(`Cancelled (${dstChainTxHash.slice(0, 10)}…)`);
       await queryClient.invalidateQueries({ queryKey: ['leverageYield'] });
     } catch (e) {
       setError(getReadableTxError(e));
@@ -115,41 +120,91 @@ export function PendingOperationControl({
     }
   }, [owner, sodax, position, route, queryClient]);
 
+  /**
+   * Where the slot is in its life. Each state admits exactly one action, so the UI offers exactly one
+   * button — the old two-button row needed a paragraph explaining which of them applied, which is a
+   * sign the paragraph was doing the work the layout should have.
+   */
+  const stage: 'filling' | 'checking' | 'recoverable' | 'settled' = slot.isLive
+    ? 'filling'
+    : idle === undefined
+      ? 'checking'
+      : idle > 0n
+        ? 'recoverable'
+        : 'settled';
+  const activeStep = stage === 'filling' ? 1 : 2;
+  const steps = ['Posted', 'Filling', stage === 'recoverable' ? 'Settle' : 'Done'];
+
   return (
     <div className="space-y-2 border-t pt-2">
-      <div className="text-xs">
-        {!slot.needsSettle
-          ? 'An operation is in flight, so no other one is possible until it resolves. What the solver is doing with it is shown in the order list below.'
-          : hasSomethingToRecover
-            ? 'This operation has resolved but the position has not been told, so its grant is still open and it is still holding funds. Settle returns them to the owner.'
-            : 'This operation has resolved and the position is holding nothing — a close that delivered its proceeds leaves it empty. Nothing to recover: settling only tidies the slot, and your next operation does that for you.'}
+      {/* Three dots beat a sentence: the position is one of three places and this says which. */}
+      <div className="flex items-center gap-1.5">
+        {steps.map((label, i) => (
+          <React.Fragment key={label}>
+            {i > 0 && <div className={`h-px flex-1 ${i <= activeStep ? 'bg-cherry-soda' : 'bg-border'}`} />}
+            <span
+              className={`flex items-center gap-1 whitespace-nowrap text-[10px] ${
+                i <= activeStep ? '' : 'text-muted-foreground'
+              }`}
+            >
+              {i < activeStep ? (
+                <Check className="h-3 w-3 text-cherry-soda" />
+              ) : i === activeStep ? (
+                stage === 'filling' ? (
+                  <Loader2 className="h-3 w-3 animate-spin text-cherry-soda" />
+                ) : stage === 'recoverable' ? (
+                  <CircleAlert className="h-3 w-3 text-yellow-dark" />
+                ) : (
+                  <Check className="h-3 w-3 text-cherry-soda" />
+                )
+              ) : (
+                <span className="h-1.5 w-1.5 rounded-full bg-border" />
+              )}
+              {label}
+            </span>
+          </React.Fragment>
+        ))}
       </div>
-      <div className="flex gap-2">
-        <Button
-          className="flex-1"
-          size="sm"
-          variant="outline"
-          disabled={busy || !owner || !slot.isLive}
-          onClick={onCancel}
-        >
-          {busy ? 'Working…' : 'Cancel'}
-        </Button>
-        {/* Settling while the intent is still live reverts, so offering it is pure wallet friction. */}
-        <Button
-          className="flex-1"
-          size="sm"
-          variant="outline"
-          disabled={busy || !owner || !slot.needsSettle}
-          onClick={onSettle}
-        >
-          {busy ? 'Working…' : 'Settle'}
-        </Button>
-      </div>
-      <div className="text-[10px] text-muted-foreground">
-        Cancel ends an intent that is still live. Settle clears one that already resolved — worth doing when the solver
-        reports failed or not-found AND the position is still holding something, since that is a contribution waiting to
-        come back. Otherwise it is optional: every operation settles a stale slot before it starts.
-      </div>
+
+      {stage === 'filling' && (
+        <>
+          <div className="text-[10px] text-muted-foreground">
+            This position is locked while the solver fills. If it expires, cancel to recover funds.
+          </div>
+          <Button className="w-full" size="sm" variant="outline" disabled={busy || !owner} onClick={onCancel}>
+            {busy ? 'Working…' : 'Cancel and recover funds'}
+          </Button>
+        </>
+      )}
+
+      {stage === 'recoverable' && (
+        <>
+          <Notice tone="warn" icon={CircleAlert}>
+            The fill resolved, but funds are still in the position. Settle to return them.
+          </Notice>
+          <Button className="w-full" size="sm" disabled={busy || !owner} onClick={onSettle}>
+            {busy ? 'Working…' : 'Settle and recover funds'}
+          </Button>
+        </>
+      )}
+
+      {(stage === 'checking' || stage === 'settled') && (
+        <>
+          {/* "Tidy up" named the housekeeping, not the effect, so it could not answer the only
+              question it raised: what happens if I leave it. Both sentences now say that outright. */}
+          <Notice>
+            {stage === 'checking'
+              ? 'Finished. Still checking whether anything is left in the position.'
+              : 'Finished, and the position is holding none of its own tokens.'}{' '}
+            The operation stays on record until it is cleared, which keeps the position's grant open. Adjusting and
+            closing still work meanwhile.
+          </Notice>
+          <Button className="w-full" size="sm" variant="outline" disabled={busy || !owner} onClick={onSettle}>
+            {busy ? 'Working…' : 'Clear the finished operation'}
+          </Button>
+        </>
+      )}
+
       {status && <div className="text-xs text-cherry-soda break-all">{status}</div>}
       {error && <div className="text-xs text-negative break-all">{error}</div>}
     </div>

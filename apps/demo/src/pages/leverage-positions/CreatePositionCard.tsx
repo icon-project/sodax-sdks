@@ -17,7 +17,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { SelectToken } from '@/components/shared/SelectToken';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -38,10 +38,31 @@ import {
 } from '@sodax/dapp-kit';
 import { getXChainType, useEvmSwitchChain, useWalletProvider, useXAccount, useXService } from '@sodax/wallet-sdk-react';
 import { formatUnits, isAddress, parseUnits, type Address } from 'viem';
+import {
+  AlertTriangle,
+  Coins,
+  HandCoins,
+  Layers,
+  ListTree,
+  Receipt,
+  Settings2,
+  ShieldCheck,
+  TrendingUp,
+} from 'lucide-react';
 import { getReadableTxError } from '@/lib/utils';
 import { useOpenPosition } from './useHubWalletRoute';
 import { useLegQuote } from './useLegQuote';
 import { LeveragedApyPanel, apyPctFromReserve } from './LeveragedApyPanel';
+import {
+  DetailGrid,
+  DetailRow,
+  Disclosure,
+  InfoHint,
+  Notice,
+  SummaryTile,
+  SummaryTiles,
+  healthTone,
+} from './PositionSummary';
 
 /**
  * Reserves that must never be offered as the debt side, keyed by hub reserve address so one entry
@@ -65,6 +86,11 @@ import { LeveragedApyPanel, apyPctFromReserve } from './LeveragedApyPanel';
  */
 function fmtLeverageCap(max: number): string {
   return Number.isFinite(max) ? `${max.toFixed(2)}x` : 'unbounded at this price';
+}
+
+/** Position sizes on this page are routinely fractions of a cent, which `.toFixed(2)` renders as $0.00. */
+function fmtUsd(value: number): string {
+  return `$${value > 0 && value < 1 ? value.toFixed(4) : value.toFixed(2)}`;
 }
 
 const NEVER_BORROWABLE_RESERVES = new Set([
@@ -233,11 +259,6 @@ export function CreatePositionCard({ chain, owner }: { chain: SpokeChainKey; own
     [riskParams],
   );
 
-  // Switching to a lower-LTV category must not leave the slider above the new ceiling.
-  useEffect(() => {
-    setLeverage(prev => (prev > maxLeverage ? maxLeverage : prev));
-  }, [maxLeverage]);
-
   /**
    * The leg request, in the shape the SDK sizes from. How a position is sized now lives in
    * `@sodax/sdk`'s `positionSizing`, deliberately: getting it wrong is an AAVE 36 revert after the
@@ -330,6 +351,47 @@ export function CreatePositionCard({ chain, owner }: { chain: SpokeChainKey; own
   const minCollateralOut = projection?.minCollateralOut;
 
   /**
+   * How far the slider may travel. `maxLeverage` is the PARITY ceiling — what the LTV would allow if
+   * the two legs traded at their oracle ratio, which they do not. The solver's price is worse, so
+   * every point between `usableMaxLeverage` and the parity ceiling is a setting that posts an intent
+   * and then fails the pool's LTV check at fill time. Offering that travel was an affordance for an
+   * action that cannot succeed: the form read `max 19.60x` while the reachable ceiling was 7.51x.
+   *
+   * Kept in state rather than read straight off `projection` because the quote refetches while the
+   * amount is being typed, and a ceiling that fell back to the parity one on every keystroke would
+   * make the track jump under the thumb. The key it is stored under is what expires it: a priced
+   * ceiling belongs to one pair at one price, so a different pair reads as no ceiling rather than
+   * as the last pair's — including on the render the selection changes.
+   */
+  const priceKey = `${collateral}|${borrowToken}|${eModeCategory}|${startFrom}`;
+  const [priced, setPriced] = useState<{ key: string; max: number }>();
+  useEffect(() => {
+    if (projection?.usableMax !== undefined) setPriced({ key: priceKey, max: projection.usableMax });
+  }, [projection?.usableMax, priceKey]);
+  const pricedMax = priced?.key === priceKey ? priced.max : undefined;
+
+  const sliderMax = useMemo(() => {
+    if (pricedMax === undefined || !Number.isFinite(pricedMax)) return maxLeverage;
+    return Math.max(Math.min(maxLeverage, pricedMax), 1.01);
+  }, [maxLeverage, pricedMax]);
+
+  /**
+   * Clamping is downward only, so a ceiling that recovers does not yank the thumb up under the user.
+   * The seed is the other half of that: before reserves load the ceiling IS 1.00x, which pins the
+   * default to the one value the form rejects — the card then opened on "Set a leverage above 1.00x"
+   * every time. Seeding once the real ceiling lands fixes that without overriding a deliberate 1.00x,
+   * which `touched` is what distinguishes.
+   */
+  const [leverageTouched, setLeverageTouched] = useState(false);
+  useEffect(() => {
+    setLeverage(prev => {
+      if (prev > sliderMax) return Number(sliderMax.toFixed(2));
+      if (!leverageTouched && prev <= 1 && sliderMax > 1) return Math.min(2, sliderMax);
+      return prev;
+    });
+  }, [sliderMax, leverageTouched]);
+
+  /**
    * The vault's own view of the asset being wrapped. Read rather than assumed, because all three
    * fields can invalidate an open before it is signed: an unsupported asset, a per-asset deposit cap
    * (3e23 on sodaUSSD, 1e24 on sodaSUSDS today), and a deposit fee — a non-zero fee would mint fewer
@@ -341,39 +403,54 @@ export function CreatePositionCard({ chain, owner }: { chain: SpokeChainKey; own
     queryFn: () => EvmVaultTokenService.getTokenInfo(depositVault, depositHubAsset, sodax.hubProvider.publicClient),
   });
 
-  const invalid = useMemo(() => {
-    if (!owner) return 'Connect a Sonic wallet';
-    if (!isAddress(collateral)) return 'Collateral is not a valid address';
-    if (!isAddress(borrowToken)) return 'Borrow token is not a valid address';
-    if (collateral.toLowerCase() === borrowToken.toLowerCase()) return 'Collateral and borrow token must differ';
-    if (!/^\d+$/.test(eModeCategory)) return 'eMode category must be a whole number';
+  /**
+   * What is stopping the open, and WHERE to say it. The `field` tag is what lets each message render
+   * against the control that caused it: "Amount exceeds your USDC balance" printed below the button,
+   * three controls away from the amount it is about, was the most confusing thing on this form —
+   * the button simply looked broken.
+   */
+  const problem = useMemo((): { field?: 'amount' | 'leverage' | 'pair'; message: string } | undefined => {
+    if (!owner) return { message: 'Connect a wallet to open a position.' };
+    if (!isAddress(collateral)) return { field: 'pair', message: 'Collateral is not a valid address' };
+    if (!isAddress(borrowToken)) return { field: 'pair', message: 'Borrow token is not a valid address' };
+    if (collateral.toLowerCase() === borrowToken.toLowerCase())
+      return { field: 'pair', message: 'Collateral and borrow token must differ' };
+    if (!/^\d+$/.test(eModeCategory)) return { message: 'eMode category must be a whole number' };
     try {
       const parsed = parseUnits(amount, depositDecimals);
-      if (parsed <= 0n) return 'Amount must be greater than 0';
+      if (parsed <= 0n) return { field: 'amount', message: 'Enter an amount above 0' };
       if (depositBalance !== undefined && parsed > depositBalance)
-        return `Amount exceeds your ${depositSymbol} balance`;
+        return {
+          field: 'amount',
+          message: `You only have ${Number(formatUnits(depositBalance, depositDecimals)).toFixed(4)} ${depositSymbol}`,
+        };
       // Every open is leveraged. An unlevered one would be an AAVE supply wrapped in a clone, which
       // is worth nothing over supplying directly, so it is not offered.
-      if (leverage <= 1) return 'Set a leverage above 1.00x';
+      if (leverage <= 1) return { field: 'leverage', message: 'Set a leverage above 1.00x' };
       if (needsWrap && vaultTokenInfo) {
-        if (!vaultTokenInfo.isSupported) return `The ${depositSymbol} vault does not accept this asset`;
+        if (!vaultTokenInfo.isSupported)
+          return { field: 'pair', message: `The ${depositSymbol} vault does not accept this asset` };
         if (vaultTokenInfo.depositFee !== 0n)
-          return 'This vault charges a deposit fee, which this flow does not size for';
+          return { message: 'This vault charges a deposit fee, which this flow does not size for' };
         const wrapped = EvmVaultTokenService.translateIncomingDecimals(depositDecimals, parsed);
-        if (wrapped > vaultTokenInfo.maxDeposit) return `Above the ${depositSymbol} vault deposit cap`;
+        if (wrapped > vaultTokenInfo.maxDeposit)
+          return { field: 'amount', message: `Above the ${depositSymbol} vault deposit cap` };
       }
       // Only fillable if the solver quotes the leg. Blocking here is what stops an intent going out
       // with a floor the solver cannot meet, which fails instead of filling.
-      if (legQuote.isLoading) return 'Waiting for the solver quote';
-      if (legQuote.error) return `Solver will not quote this leg: ${legQuote.error.message}`;
-      if (!minCollateralOut) return 'No solver quote for this leg yet';
+      if (legQuote.isLoading) return { message: 'Waiting for the solver quote…' };
+      if (legQuote.error) return { message: `No solver quote for this pair: ${legQuote.error.message}` };
+      if (!minCollateralOut) return { message: 'No solver quote for this pair yet' };
       // The pool checks this at FILL time, after the solver's collateral is supplied. Catching it here
       // is the difference between a blocked button and an intent that posts and then reverts on solve
       // with AAVE 36 — which costs the fill and tells the user nothing.
       if (projection?.exceedsMaxLtv)
-        return `At ${leverage.toFixed(2)}x the solver's price leaves LTV at ${(projection.ltv * 100).toFixed(2)}%, above the ${(riskParams.ltv * 100).toFixed(2)}% max — the borrow would revert. Max at this price is about ${fmtLeverageCap(projection.usableMax)}.`;
+        return {
+          field: 'leverage',
+          message: `Too high for this quote. It would land at ${(projection.ltv * 100).toFixed(1)}% LTV against a ${(riskParams.ltv * 100).toFixed(0)}% max. Try ${fmtLeverageCap(projection.usableMax)} or lower.`,
+        };
     } catch {
-      return 'Amount is not a valid number';
+      return { field: 'amount', message: 'Not a valid number' };
     }
     return undefined;
   }, [
@@ -448,7 +525,7 @@ export function CreatePositionCard({ chain, owner }: { chain: SpokeChainKey; own
   }, [signer, sodax, chain, depositTokenAddress, amount, depositDecimals, depositSymbol, walletProvider, queryClient]);
 
   const onOpen = useCallback(async () => {
-    if (!owner || !signer || invalid) return;
+    if (!owner || !signer || problem) return;
     setBusy('create');
     setError(undefined);
     setStatus(undefined);
@@ -483,17 +560,11 @@ export function CreatePositionCard({ chain, owner }: { chain: SpokeChainKey; own
             if (!r.ok) throw r.error;
             return r.value;
           }),
-        from: { amount, symbol: depositSymbol },
-        to: {
-          symbol: legQuote.data?.outputSymbol ?? '',
-          decimals: legQuote.data?.outputDecimals ?? 18,
-          quoted: legQuote.data?.outputAmount,
-        },
       });
       setStatus(
         result.notified
-          ? `Opened at ${leverage.toFixed(2)}x and reported to the solver — progress is below.`
-          : `Opened at ${leverage.toFixed(2)}x, but the solver would not accept the intent: ${result.error}. It will expire and the deposit returns to you.`,
+          ? `Opened at ${leverage.toFixed(2)}x. It appears below once a solver fills it.`
+          : `Opened at ${leverage.toFixed(2)}x, but the solver rejected the notification: ${result.error}. It will expire and refund the deposit.`,
       );
       await queryClient.invalidateQueries({ queryKey: ['leverageYield'] });
     } catch (e) {
@@ -504,13 +575,12 @@ export function CreatePositionCard({ chain, owner }: { chain: SpokeChainKey; own
   }, [
     owner,
     signer,
-    invalid,
+    problem,
     sodax,
     chain,
     amount,
     depositDecimals,
     depositTokenAddress,
-    depositSymbol,
     collateral,
     borrowToken,
     eModeCategory,
@@ -520,103 +590,221 @@ export function CreatePositionCard({ chain, owner }: { chain: SpokeChainKey; own
     leverage,
     openPosition,
     queryClient,
-    legQuote.data?.outputDecimals,
-    legQuote.data?.outputSymbol,
-    legQuote.data?.outputAmount,
   ]);
+
+  /** Solver-priced when the quote is in, oracle-parity until then; the tiles read the same either way. */
+  const outcome = projection ?? quote;
+  const costPct =
+    projection && projection.equityUsd > 0 ? (projection.costUsd / projection.equityUsd) * 100 : undefined;
+  const health = outcome ? healthTone(outcome.hf) : undefined;
+  const eModeLabel =
+    eModeCategory === '0'
+      ? 'no eMode'
+      : (eModes?.find(c => String(c.id) === eModeCategory)?.eMode.label ?? `category ${eModeCategory}`);
+  const cappedByPrice = pricedMax !== undefined && Number.isFinite(pricedMax) && pricedMax < maxLeverage;
 
   return (
     <Card className="w-full max-w-xl mx-auto">
       <CardHeader>
-        <CardTitle className="text-lg font-bold">Create a position</CardTitle>
+        <CardTitle className="text-lg font-bold">Open position</CardTitle>
+        <CardDescription>Choose the pair, deposit, and leverage. Review risk before opening.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
-        {owner && (
-          <div className="rounded-md border p-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-            <span className="text-muted-foreground">your {collateralToken?.symbol ?? 'collateral'}</span>
-            <span className="text-right font-mono text-xs">
-              {collateralBalance === undefined
-                ? '…'
-                : Number(formatUnits(collateralBalance, collateralToken?.decimals ?? 18)).toFixed(4)}
-            </span>
-            <span className="text-muted-foreground">your {borrowTokenSel?.symbol ?? 'debt token'}</span>
-            <span className="text-right font-mono text-xs">
-              {borrowBalance === undefined
-                ? '…'
-                : Number(formatUnits(borrowBalance, borrowTokenSel?.decimals ?? 18)).toFixed(4)}
-            </span>
-          </div>
-        )}
-
-        <div className="space-y-1">
-          <Label>Start from</Label>
-          <Tabs value={startFrom} onValueChange={v => setStartFrom(v as 'collateral' | 'debt')}>
-            <TabsList className="w-full">
-              <TabsTrigger className="flex-1" value="collateral">
-                Collateral
-              </TabsTrigger>
-              <TabsTrigger className="flex-1" value="debt">
-                Debt token
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-          <div className="text-[10px] text-muted-foreground">
-            {startingDebtSide
-              ? 'You deposit the debt token; the solver delivers the collateral and the hook borrows the rest. Needs leverage above 1.00x.'
-              : 'You deposit the collateral directly.'}
-          </div>
-        </div>
-
+        {/* ---- What the position is. Two tokens and a size; nothing derived. ---- */}
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
-            <Label>Collateral</Label>
+            <Label className="flex items-center gap-1">
+              <Coins className="h-3 w-3" />
+              Collateral
+              <InfoHint>Asset the position holds. It earns supply yield and sets the leverage limit.</InfoHint>
+            </Label>
             <SelectToken
               tokens={collateralTokens}
               value={collateralToken?.symbol}
               onSelect={setCollateralToken}
               className="w-full"
             />
-            {collateralReserve && (
-              <div className="text-[10px] text-muted-foreground">
-                via {collateralReserve.symbol} · LTV {(riskParams.ltv * 100).toFixed(0)}%
-              </div>
-            )}
           </div>
           <div className="space-y-1">
-            <Label>Borrow</Label>
+            <Label className="flex items-center gap-1">
+              <HandCoins className="h-3 w-3" />
+              Borrow
+              <InfoHint>Asset the position borrows. Its rate is the ongoing leverage cost.</InfoHint>
+            </Label>
             <SelectToken
               tokens={borrowTokens}
               value={borrowTokenSel?.symbol}
               onSelect={setBorrowTokenSel}
               className="w-full"
             />
-            {borrowReserve && <div className="text-[10px] text-muted-foreground">via {borrowReserve.symbol}</div>}
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <div className="flex items-center justify-between">
-              <Label>Deposit{depositSymbol ? ` (${depositSymbol})` : ''}</Label>
-              {depositBalance !== undefined && (
-                <button
-                  type="button"
-                  className="text-[10px] text-muted-foreground hover:underline"
-                  onClick={() => setAmount(formatUnits(depositBalance, depositDecimals))}
-                >
-                  balance {Number(formatUnits(depositBalance, depositDecimals)).toFixed(4)} — max
-                </button>
-              )}
-            </div>
-            <Input value={amount} onChange={e => setAmount(e.target.value)} spellCheck={false} />
+        {problem?.field === 'pair' && (
+          <Notice tone="danger" icon={AlertTriangle}>
+            {problem.message}
+          </Notice>
+        )}
+
+        {/* ---- Your money in. The balance doubles as the max button, as before. ---- */}
+        <div className="space-y-1">
+          <div className="flex items-center justify-between">
+            <Label>Deposit{depositSymbol ? ` (${depositSymbol})` : ''}</Label>
+            {depositBalance !== undefined && (
+              <button
+                type="button"
+                className="text-[10px] text-muted-foreground hover:underline"
+                onClick={() => setAmount(formatUnits(depositBalance, depositDecimals))}
+              >
+                Use max: {Number(formatUnits(depositBalance, depositDecimals)).toFixed(4)}
+              </button>
+            )}
           </div>
+          <Input value={amount} onChange={e => setAmount(e.target.value)} spellCheck={false} />
+          {startingDebtSide && (
+            <div className="text-[10px] text-muted-foreground">
+              You fund with the debt token. The solver supplies {collateralToken?.symbol ?? 'collateral'} on fill.
+            </div>
+          )}
+          {problem?.field === 'amount' && (
+            <Notice tone="danger" icon={AlertTriangle}>
+              {problem.message}
+            </Notice>
+          )}
+        </div>
+
+        {/* ---- Leverage. The track stops where the solver's price stops. ---- */}
+        <div className="space-y-1">
+          <div className="flex items-center justify-between">
+            <Label className="flex items-center gap-1">
+              <TrendingUp className="h-3 w-3" />
+              Leverage
+              <InfoHint>Position value divided by your deposit. At 2.00x, half the position is borrowed.</InfoHint>
+            </Label>
+            <span className="font-mono text-sm">{leverage.toFixed(2)}x</span>
+          </div>
+          <input
+            type="range"
+            className="w-full"
+            min={1}
+            max={Math.max(sliderMax, 1.01)}
+            step={0.01}
+            value={leverage}
+            onChange={e => {
+              setLeverageTouched(true);
+              setLeverage(Number(e.target.value));
+            }}
+          />
+          <div className="flex justify-between text-[10px] text-muted-foreground">
+            <span>1.00x</span>
+            <span className="flex items-center gap-1">
+              max {fmtLeverageCap(sliderMax)}
+              {cappedByPrice && (
+                <InfoHint>
+                  Capped by the current solver quote. The oracle LTV alone would allow {maxLeverage.toFixed(2)}x, but
+                  that may fail at fill time.
+                </InfoHint>
+              )}
+            </span>
+          </div>
+          {problem?.field === 'leverage' && (
+            <Notice tone="danger" icon={AlertTriangle}>
+              {problem.message}
+            </Notice>
+          )}
+        </div>
+
+        {/* ---- The three numbers the decision actually turns on. ---- */}
+        <SummaryTiles>
+          <SummaryTile
+            icon={Layers}
+            label="Position value"
+            value={outcome ? fmtUsd(outcome.collateralAfterUsd) : '—'}
+            hint={collateralReserve?.symbol ? `${collateralReserve.symbol} after fill` : undefined}
+            emphasis
+            info="Estimated collateral after the solver fills, net of the opening spread."
+          />
+          <SummaryTile
+            icon={ShieldCheck}
+            label="Health"
+            value={outcome ? outcome.hf.toFixed(2) : '—'}
+            hint={health?.label}
+            className={health?.className}
+            tone={health?.tone}
+            info="Liquidation happens below 1.00. Higher is safer; more leverage pushes it down."
+          />
+          <SummaryTile
+            icon={Receipt}
+            label="Open cost"
+            value={projection ? fmtUsd(projection.costUsd) : legQuote.isLoading ? '…' : '—'}
+            hint={costPct !== undefined ? `${costPct.toFixed(2)}% of deposit` : undefined}
+            info="Estimated solver spread on the opening leg. Closing pays a similar spread."
+          />
+        </SummaryTiles>
+
+        {/* ---- Anything blocking the button, said before the button. ---- */}
+        {problem && !problem.field && (
+          <Notice tone="danger" icon={AlertTriangle}>
+            {problem.message}
+          </Notice>
+        )}
+        {!isHubChain && (
+          <Notice tone="warn" icon={AlertTriangle}>
+            <span className="font-medium">Experimental from {chain}.</span> Opening is covered by tests, but returns to
+            this chain are not mainnet-proven yet. Sonic is the safest path.
+          </Notice>
+        )}
+
+        {isWrongChain ? (
+          <Button className="w-full" onClick={handleSwitchChain}>
+            Switch network
+          </Button>
+        ) : (
+          <Button className="w-full" disabled={!!problem || !!busy} onClick={needsApproval ? onApprove : onOpen}>
+            {busy === 'approve'
+              ? 'Approving…'
+              : busy === 'create'
+                ? 'Opening…'
+                : needsApproval
+                  ? `Approve ${depositSymbol}`
+                  : `Open at ${leverage.toFixed(2)}x`}
+          </Button>
+        )}
+
+        {status && <div className="text-xs text-cherry-soda break-all">{status}</div>}
+        {error && <div className="text-xs text-negative break-all">{error}</div>}
+
+        {/* ---- Everything below is folded. Each header keeps its values visible while collapsed. ---- */}
+        <Disclosure icon={Settings2} title="Advanced" summary={`${eModeLabel}, ${slippagePct.toFixed(1)}% slippage`}>
           <div className="space-y-1">
-            <Label>eMode category</Label>
+            <Label className="text-xs">Fund with</Label>
+            <Tabs value={startFrom} onValueChange={v => setStartFrom(v as 'collateral' | 'debt')}>
+              <TabsList className="w-full">
+                <TabsTrigger className="flex-1" value="collateral">
+                  {collateralToken?.symbol ?? 'Collateral'}
+                </TabsTrigger>
+                <TabsTrigger className="flex-1" value="debt">
+                  {borrowTokenSel?.symbol ?? 'Debt token'}
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+            <div className="text-[10px] text-muted-foreground">
+              {startingDebtSide
+                ? 'Deposit the debt token; the solver supplies collateral when the intent fills.'
+                : 'You deposit the collateral directly.'}
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <Label className="flex items-center gap-1 text-xs">
+              eMode category
+              <InfoHint>Raises the leverage limit for related assets. Fixed after the position opens.</InfoHint>
+            </Label>
             <Select value={eModeCategory} onValueChange={setEModeCategory}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="0">None — reserve params</SelectItem>
+                <SelectItem value="0">None (reserve defaults)</SelectItem>
                 {(eModes ?? []).map(c => (
                   <SelectItem key={c.id} value={String(c.id)}>
                     {c.eMode.label || `Category ${c.id}`} — LTV {(Number(c.eMode.ltv) / 100).toFixed(0)}%
@@ -625,75 +813,12 @@ export function CreatePositionCard({ chain, owner }: { chain: SpokeChainKey; own
               </SelectContent>
             </Select>
           </div>
-        </div>
-        <div className="space-y-2 border-t pt-2">
-          <div className="flex items-center justify-between">
-            <Label className="text-xs">Target leverage</Label>
-            <span className="font-mono text-xs">{leverage.toFixed(2)}x</span>
-          </div>
-          <input
-            type="range"
-            className="w-full"
-            min={1}
-            max={Math.max(maxLeverage, 1.01)}
-            step={0.01}
-            value={leverage}
-            onChange={e => setLeverage(Number(e.target.value))}
-          />
-          <div className="flex justify-between text-[10px] text-muted-foreground">
-            <span>1.00x (no leverage)</span>
-            <span>
-              max {maxLeverage.toFixed(2)}x — LTV {(riskParams.ltv * 100).toFixed(0)}% / LT{' '}
-              {(riskParams.liquidationThreshold * 100).toFixed(0)}% ({riskParams.source})
-            </span>
-          </div>
-
-          {quote && (
-            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-              <span className="text-muted-foreground">borrow</span>
-              <span className="text-right font-mono text-xs">
-                {quote.borrowTokens.toFixed(4)} {borrowReserve?.symbol}
-              </span>
-              <span className="text-muted-foreground">collateral after</span>
-              <span className="text-right font-mono text-xs">
-                ${(projection ?? quote).collateralAfterUsd.toFixed(2)}
-              </span>
-              <span className="text-muted-foreground">debt after</span>
-              <span className="text-right font-mono text-xs">${quote.debtAfterUsd.toFixed(2)}</span>
-              <span className="text-muted-foreground">ltv after</span>
-              <span className={`text-right font-mono text-xs ${projection?.exceedsMaxLtv ? 'text-negative' : ''}`}>
-                {((projection ?? quote).ltv * 100).toFixed(2)}%
-                {projection?.exceedsMaxLtv && ` > ${(riskParams.ltv * 100).toFixed(2)}% max`}
-              </span>
-              <span className="text-muted-foreground">solver pays</span>
-              <span className="text-right font-mono text-xs">
-                {legQuote.isLoading
-                  ? 'quoting…'
-                  : legQuote.data
-                    ? `${Number(formatUnits(legQuote.data.outputAmount, legQuote.data.outputDecimals)).toFixed(6)} ${legQuote.data.outputSymbol}`
-                    : '—'}
-              </span>
-              <span className="text-muted-foreground">health factor after</span>
-              <span
-                className={`text-right font-mono text-xs ${(projection ?? quote).hf < 1 ? 'text-negative' : 'text-cherry-soda'}`}
-              >
-                {(projection ?? quote).hf.toFixed(3)}
-              </span>
-              {/* The solver's cut is why the numbers above are worse than deposit x leverage, and why the
-                  usable ceiling is below the parity one. Shown rather than left to be inferred. */}
-              {projection && (
-                <>
-                  <span className="text-muted-foreground">solver keeps (fee + slippage)</span>
-                  <span className="text-right font-mono text-xs">{(projection.haircut * 100).toFixed(2)}%</span>
-                  <span className="text-muted-foreground">max leverage at this price</span>
-                  <span className="text-right font-mono text-xs">{fmtLeverageCap(projection.usableMax)}</span>
-                </>
-              )}
-            </div>
-          )}
 
           <div className="flex items-center gap-2">
-            <Label className="text-xs whitespace-nowrap">slippage %</Label>
+            <Label className="flex items-center gap-1 whitespace-nowrap text-xs">
+              Max slippage
+              <InfoHint>Sets the minimum fill amount. Tighter is safer; looser is easier to fill.</InfoHint>
+            </Label>
             <input
               type="range"
               className="flex-1"
@@ -703,70 +828,90 @@ export function CreatePositionCard({ chain, owner }: { chain: SpokeChainKey; own
               value={slippagePct}
               onChange={e => setSlippagePct(Number(e.target.value))}
             />
-            <span className="font-mono text-xs w-8 text-right">{slippagePct.toFixed(1)}</span>
+            <span className="w-8 text-right font-mono text-xs">{slippagePct.toFixed(1)}</span>
           </div>
-        </div>
+        </Disclosure>
+
+        {quote && (
+          <Disclosure
+            icon={ListTree}
+            title="Quote details"
+            summary={`${quote.borrowTokens.toFixed(4)} ${borrowReserve?.symbol ?? ''} borrowed`}
+          >
+            <DetailGrid>
+              <DetailRow
+                label="Borrow amount"
+                value={`${quote.borrowTokens.toFixed(4)} ${borrowReserve?.symbol ?? ''}`}
+              />
+              <DetailRow label="Debt after" value={fmtUsd(quote.debtAfterUsd)} />
+              <DetailRow
+                label="LTV after"
+                value={`${((projection ?? quote).ltv * 100).toFixed(2)}% of ${(riskParams.ltv * 100).toFixed(0)}%`}
+                className={projection?.exceedsMaxLtv ? 'text-negative' : ''}
+                info={`Debt over collateral. The ceiling comes from ${riskParams.source}.`}
+              />
+              <DetailRow
+                label="Solver pays"
+                value={
+                  legQuote.isLoading
+                    ? 'quoting…'
+                    : legQuote.data
+                      ? `${Number(formatUnits(legQuote.data.outputAmount, legQuote.data.outputDecimals)).toFixed(6)} ${legQuote.data.outputSymbol}`
+                      : '—'
+                }
+                info="Current quote for the borrowed leg. The intent floor is sized from this, not the oracle."
+              />
+              {projection && (
+                <>
+                  <DetailRow
+                    label="Solver keeps"
+                    value={`${(projection.haircut * 100).toFixed(2)}%`}
+                    info="Fee plus slippage, as a share of the borrowed leg."
+                  />
+                  <DetailRow
+                    label="Max at quote"
+                    value={fmtLeverageCap(projection.usableMax)}
+                    info={`LTV alone allows ${maxLeverage.toFixed(2)}x; the solver quote brings it down to this.`}
+                  />
+                </>
+              )}
+              <DetailRow
+                label="Collateral reserve"
+                value={collateralReserve?.symbol ?? '—'}
+                info="The hub money-market reserve the position holds."
+              />
+              <DetailRow label="Debt reserve" value={borrowReserve?.symbol ?? '—'} />
+            </DetailGrid>
+            {needsWrap && (
+              <Notice>
+                {depositSymbol} is wrapped into its money-market reserve in the same batch. No separate wrap step.
+              </Notice>
+            )}
+          </Disclosure>
+        )}
 
         {collateralReserve && borrowReserve && (
-          <LeveragedApyPanel
-            supplyApyPct={apyPctFromReserve(collateralReserve.supplyAPY)}
-            borrowApyPct={apyPctFromReserve(borrowReserve.variableBorrowAPY)}
-            leverage={leverage}
-            collateralSymbol={collateralReserve.symbol}
-            borrowSymbol={borrowReserve.symbol}
-            // From 1x: the alternative to opening levered is holding the deposit unlevered, so that
-            // is what the entry cost has to beat.
-            breakeven={projection && { costUsd: projection.costUsd, equityUsd: projection.equityUsd, fromLeverage: 1 }}
-          />
+          <Disclosure icon={TrendingUp} title="Yield model" summary="rates and break-even">
+            <LeveragedApyPanel
+              embedded
+              supplyApyPct={apyPctFromReserve(collateralReserve.supplyAPY)}
+              borrowApyPct={apyPctFromReserve(borrowReserve.variableBorrowAPY)}
+              leverage={leverage}
+              collateralSymbol={collateralReserve.symbol}
+              borrowSymbol={borrowReserve.symbol}
+              // From 1x: the alternative to opening levered is holding the deposit unlevered, so that
+              // is what the entry cost has to beat.
+              breakeven={
+                projection && { costUsd: projection.costUsd, equityUsd: projection.equityUsd, fromLeverage: 1 }
+              }
+            />
+          </Disclosure>
         )}
 
-        {isWrongChain ? (
-          <Button className="w-full" onClick={handleSwitchChain}>
-            Switch network
-          </Button>
-        ) : (
-          <Button className="w-full" disabled={!!invalid || !!busy} onClick={needsApproval ? onApprove : onOpen}>
-            {busy === 'approve'
-              ? 'Approving…'
-              : busy === 'create'
-                ? 'Opening…'
-                : needsApproval
-                  ? `Approve ${depositSymbol}`
-                  : leverage > 1
-                    ? `Open at ${leverage.toFixed(2)}x`
-                    : 'Open position'}
-          </Button>
-        )}
-
-        {invalid && <div className="text-xs text-muted-foreground">{invalid}</div>}
-        {needsWrap && (
-          <div className="text-[10px] text-muted-foreground">
-            {depositSymbol} is wrapped into its money-market reserve inside the same batch — the deposit is pulled,
-            deposited to the vault, and the resulting share opens the position. No separate wrap step, and no extra
-            approval beyond the one above.
-          </div>
-        )}
-        {!isHubChain && (
-          <div className="space-y-1">
-            <div className="text-[10px] font-medium text-negative">
-              Experimental from {chain}. The relayed open is verified against a real message in tests, but the return
-              legs — an exit or a cancellation delivering back to {chain} — have never run on mainnet. Sonic is the
-              proven path.
-            </div>
-            <div className="text-[10px] text-muted-foreground">
-              Opening from {chain} is relayed: you sign once there, and the deposit and the position are created
-              together on the hub. That takes as long as the relay does, so the button stays busy until the hub side
-              lands.
-            </div>
-          </div>
-        )}
-
-        {status && <div className="text-xs text-cherry-soda break-all">{status}</div>}
-        {error && <div className="text-xs text-negative break-all">{error}</div>}
-        <div className="text-xs text-muted-foreground">
-          eMode is fixed at creation. Category 3 (&quot;RWAStable Loop&quot;) accepts only sUSDS collateral against
-          sodaUSSD, which has no borrowable liquidity yet — use 0 unless you have both.
-        </div>
+        <Notice>
+          eMode is fixed after opening. Category 3 only works for sUSDS collateral against sodaUSSD; use None for other
+          pairs.
+        </Notice>
       </CardContent>
     </Card>
   );

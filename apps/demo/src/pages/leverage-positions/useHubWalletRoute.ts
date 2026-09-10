@@ -26,7 +26,6 @@ import {
 } from '@sodax/dapp-kit';
 import { useWalletProvider, useXAccount } from '@sodax/wallet-sdk-react';
 import { useLeverageYieldNotifySolver } from '@sodax/dapp-kit';
-import { useRecordPositionOrder } from './PositionOrders';
 
 export function useHubWalletRoute(chain: SpokeChainKey): {
   /** The address the user signs with on `chain`. */
@@ -57,48 +56,38 @@ export function useHubWalletRoute(chain: SpokeChainKey): {
 }
 
 /**
- * The tail both submit paths share: tell the solver about the hub transaction, record the order, and
- * report whether the notify landed.
+ * The tail both submit paths share: tell the solver about the hub transaction and report whether that
+ * landed.
  *
  * Shared because the notify step is the one that must not be skipped — an intent the solver was never
  * told about simply expires — and two copies of it is two places for that to be dropped.
  */
 function useReportPositionIntent(): (params: {
   dstChainTxHash: Hex;
-  from: { amount: string; symbol: string };
-  to: { symbol: string; decimals: number; quoted?: bigint };
 }) => Promise<{ hash: Hex; notified: boolean; error?: string }> {
   const notifySolver = useLeverageYieldNotifySolver();
-  const record = useRecordPositionOrder();
 
   return useCallback(
-    async ({ dstChainTxHash, from, to }) => {
-      /**
-       * The order is recorded whether or not the notify lands, which is why this catches rather than
-       * letting the mutation's `unwrapResult` throw out of here: an intent that exists on the hub but
-       * was never reported is exactly the case the user needs to SEE in `OrderStatusPanel` so they can
-       * retry it. Throwing would leave them funded with no record of what happened.
-       */
-      let intentHash: string | undefined;
+    async ({ dstChainTxHash }) => {
+      // Caught rather than thrown: the intent exists on the hub either way, and the caller needs to
+      // say so — throwing would leave the user funded with no idea the solver was never told.
       let error: string | undefined;
       try {
-        intentHash = (await notifySolver.mutateAsync({ intent_tx_hash: dstChainTxHash })).intent_hash;
+        await notifySolver.mutateAsync({ intent_tx_hash: dstChainTxHash });
       } catch (caught) {
         error = caught instanceof Error ? caught.message : String(caught);
       }
-      record({ txHash: dstChainTxHash, intentHash, from, to });
       return { hash: dstChainTxHash, notified: error === undefined, error };
     },
-    [notifySolver, record],
+    [notifySolver],
   );
 }
 
 /**
- * Posts a position intent: runs the calls as the hub wallet, tells the solver, and records the order
- * so `OrderStatusPanel` reports what becomes of it.
+ * Posts a position intent: runs the calls as the hub wallet, then tells the solver.
  *
- * All three steps belong together. An intent created on the hub is invisible to the solver until its
- * hub transaction hash is reported, and an unreported one simply expires — so a caller that routes
+ * Both steps belong together. An intent created on the hub is invisible to the solver until its hub
+ * transaction hash is reported, and an unreported one simply expires — so a caller that routes
  * without notifying has silently thrown the operation away. Having one path for it is what stops the
  * call sites drifting, which is how the create flow ended up sizing its floor differently from the
  * others.
@@ -108,20 +97,16 @@ function useReportPositionIntent(): (params: {
  */
 export function useSubmitPositionIntent(
   chain: SpokeChainKey,
-): (params: {
-  calls: readonly EvmRawTransaction[];
-  from: { amount: string; symbol: string };
-  to: { symbol: string; decimals: number; quoted?: bigint };
-}) => Promise<{ hash: Hex; notified: boolean; error?: string }> {
+): (params: { calls: readonly EvmRawTransaction[] }) => Promise<{ hash: Hex; notified: boolean; error?: string }> {
   const { route } = useHubWalletRoute(chain);
   const report = useReportPositionIntent();
 
   return useCallback(
-    async ({ calls, from, to }) => {
+    async ({ calls }) => {
       // The hub hash is where the intent lives; `TxHashPair` types both as plain strings, so the
       // cast is the boundary between the SDK's chain-agnostic shape and viem's hex type.
       const dstChainTxHash = (await route(calls)).dstChainTxHash as Hex;
-      return report({ dstChainTxHash, from, to });
+      return report({ dstChainTxHash });
     },
     [route, report],
   );
@@ -134,20 +119,20 @@ export function useSubmitPositionIntent(
  * `openPosition` rather than a bare message. Same reason both live here — the notify step is not
  * optional, and an open that skips it leaves the user funded with leverage that never arrives.
  */
-export function useOpenPosition(
-  chain: SpokeChainKey,
-): (params: {
+export function useOpenPosition(chain: SpokeChainKey): (params: {
   open: (walletProvider: unknown) => Promise<TxHashPair>;
-  from: { amount: string; symbol: string };
-  to: { symbol: string; decimals: number; quoted?: bigint };
-}) => Promise<{ hash: Hex; notified: boolean; error?: string }> {
+}) => Promise<{
+  hash: Hex;
+  notified: boolean;
+  error?: string;
+}> {
   const walletProvider = useWalletProvider({ xChainId: chain });
   const report = useReportPositionIntent();
 
   return useCallback(
-    async ({ open, from, to }) => {
+    async ({ open }) => {
       const { dstChainTxHash } = await open(walletProvider);
-      return report({ dstChainTxHash: dstChainTxHash as Hex, from, to });
+      return report({ dstChainTxHash: dstChainTxHash as Hex });
     },
     [walletProvider, report],
   );

@@ -49,6 +49,8 @@ export function LeveragedApyPanel({
    * the solver to reduce yield, so there is no payback period to report.
    */
   breakeven,
+  /** Set when the caller already supplies a heading and a rule, so this does not repeat either. */
+  embedded = false,
 }: {
   supplyApyPct: number;
   borrowApyPct: number;
@@ -57,6 +59,7 @@ export function LeveragedApyPanel({
   borrowSymbol: string;
   currentLeverage?: number;
   breakeven?: BreakevenInput;
+  embedded?: boolean;
 }) {
   // Seeded from chain, overridable. Empty string means "follow the chain value" rather than zero, so
   // clearing the box returns to the real rate instead of silently modelling 0%.
@@ -92,12 +95,12 @@ export function LeveragedApyPanel({
   const breakevenYears = breakeven && timeToBreakevenYears(supply, borrow, leverage, breakeven);
 
   return (
-    <div className="space-y-2 border-t pt-2">
-      <div className="text-xs font-medium">Leveraged APY</div>
+    <div className={embedded ? 'space-y-2' : 'space-y-2 border-t pt-2'}>
+      {!embedded && <div className="text-xs font-medium">Leveraged APY</div>}
 
       <div className="grid grid-cols-2 gap-2">
         <div className="space-y-1">
-          <Label className="text-[10px]">{collateralSymbol || 'collateral'} supply APY %</Label>
+          <Label className="text-[10px]">{collateralSymbol || 'Collateral'} APY %</Label>
           <Input
             value={supplyOverride}
             placeholder={supplyApyPct.toFixed(4)}
@@ -106,7 +109,7 @@ export function LeveragedApyPanel({
           />
         </div>
         <div className="space-y-1">
-          <Label className="text-[10px]">{borrowSymbol || 'debt'} borrow APY %</Label>
+          <Label className="text-[10px]">{borrowSymbol || 'Debt'} borrow APY %</Label>
           <Input
             value={borrowOverride}
             placeholder={borrowApyPct.toFixed(4)}
@@ -117,23 +120,23 @@ export function LeveragedApyPanel({
       </div>
 
       <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-        <span className="text-muted-foreground">supply x {leverage.toFixed(2)}</span>
+        <span className="text-muted-foreground">Supply return</span>
         <span className="text-right font-mono text-xs">{(supply * leverage).toFixed(3)}%</span>
-        <span className="text-muted-foreground">borrow cost x {(leverage - 1).toFixed(2)}</span>
+        <span className="text-muted-foreground">Borrow cost</span>
         <span className="text-right font-mono text-xs">−{(borrow * Math.max(leverage - 1, 0)).toFixed(3)}%</span>
         {netNow !== undefined && (
           <>
-            <span className="text-muted-foreground">net APY now ({currentLeverage?.toFixed(2)}x)</span>
+            <span className="text-muted-foreground">Current net APY ({currentLeverage?.toFixed(2)}x)</span>
             <span className="text-right font-mono text-xs">{netNow.toFixed(3)}%</span>
           </>
         )}
         <span className="text-muted-foreground font-medium">
-          net APY {netNow !== undefined ? 'after' : 'at'} {leverage.toFixed(2)}x
+          Net APY {netNow !== undefined ? 'after' : 'at'} {leverage.toFixed(2)}x
         </span>
-        <span className={`text-right font-mono text-xs font-medium ${net < 0 ? 'text-negative' : 'text-cherry-soda'}`}>
+        <span className={`text-right font-mono text-xs font-medium ${net < 0 ? 'text-negative' : ''}`}>
           {net.toFixed(3)}%
         </span>
-        <span className="text-muted-foreground">net turns negative</span>
+        <span className="text-muted-foreground">Negative above</span>
         <span className="text-right font-mono text-xs">
           {zeroCrossing === 'never'
             ? 'never — collateral out-earns the debt'
@@ -143,7 +146,7 @@ export function LeveragedApyPanel({
         </span>
         {breakeven !== undefined && (
           <>
-            <span className="text-muted-foreground">swap cost (one-time)</span>
+            <span className="text-muted-foreground">Opening spread</span>
             <span className="text-right font-mono text-xs">
               ${breakeven.costUsd.toFixed(4)}
               <span className="text-muted-foreground">
@@ -151,7 +154,7 @@ export function LeveragedApyPanel({
                 ({((breakeven.costUsd / breakeven.equityUsd) * 100).toFixed(2)}% of equity)
               </span>
             </span>
-            <span className="text-muted-foreground font-medium">time to break even</span>
+            <span className="text-muted-foreground font-medium">Break-even time</span>
             <span className="text-right font-mono text-xs font-medium">
               {breakevenYears === undefined
                 ? '—'
@@ -166,15 +169,10 @@ export function LeveragedApyPanel({
       </div>
 
       <div className="text-[10px] text-muted-foreground">
-        Seeded from the money market's current rates, which float with utilisation. They do NOT include the collateral
-        appreciating against the debt token — the actual return on a loop like sUSDS against USSD — so a profitable
-        position can show a negative net here. Type the real collateral yield above to model it.
+        Starts from current money-market APYs. Edit the collateral APY if the asset earns yield outside the pool, such
+        as sUSDS against USSD.
         {breakeven !== undefined && (
-          <>
-            {' '}
-            Breakeven counts the cost of getting in; closing pays the solver a similar spread again, so a round trip
-            needs roughly twice as long.
-          </>
+          <> Break-even includes the opening spread; closing usually pays a similar spread again.</>
         )}
       </div>
     </div>

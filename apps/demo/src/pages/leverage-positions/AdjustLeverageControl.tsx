@@ -234,28 +234,12 @@ export function AdjustLeverageControl({
               minDebtOut: floor,
             });
 
-      // Routed as the hub wallet, reported to the solver, and recorded — one path, see
-      // useSubmitPositionIntent. Progress from here is the order panel's job, not a status string.
-      const inSymbol = (quote.direction === 'increase' ? borrowReserve : collateralReserve)?.symbol ?? '';
-      const result = await submitIntent({
-        calls: [tx],
-        from: {
-          amount: formatUnits(
-            inputAmount,
-            (quote.direction === 'increase' ? borrowReserve : collateralReserve)?.decimals ?? 18,
-          ),
-          symbol: inSymbol,
-        },
-        to: {
-          symbol: legQuote.data.outputSymbol,
-          decimals: legQuote.data.outputDecimals,
-          quoted: legQuote.data.outputAmount,
-        },
-      });
+      // Routed as the hub wallet and reported to the solver — one path, see useSubmitPositionIntent.
+      const result = await submitIntent({ calls: [tx] });
       setStatus(
         result.notified
-          ? 'Intent posted and reported to the solver — progress is below.'
-          : `Intent posted, but the solver would not accept it: ${result.error}. It will expire and can then be cancelled.`,
+          ? 'Posted. The position updates once a solver fills it.'
+          : `Posted, but the solver rejected the notification: ${result.error}. It will expire and can then be cancelled.`,
       );
       await queryClient.invalidateQueries({ queryKey: ['leverageYield'] });
     } catch (e) {
@@ -263,28 +247,17 @@ export function AdjustLeverageControl({
     } finally {
       setBusy(false);
     }
-  }, [
-    owner,
-    quote,
-    inputAmount,
-    legQuote.data,
-    minOut,
-    sodax,
-    position,
-    submitIntent,
-    borrowReserve,
-    collateralReserve,
-    queryClient,
-  ]);
+  }, [owner, quote, inputAmount, legQuote.data, minOut, sodax, position, submitIntent, queryClient]);
 
   if (equity <= 0) {
-    return <div className="text-xs text-muted-foreground">No equity in this position — nothing to adjust.</div>;
+    return <div className="text-xs text-muted-foreground">No equity left to adjust.</div>;
   }
 
   const deltaReserve = quote?.direction === 'increase' ? borrowReserve : collateralReserve;
 
   return (
-    <div className="space-y-2 border-t pt-2">
+    // No rule of its own: this always renders inside a section that already draws one.
+    <div className="space-y-2">
       <div className="flex items-center justify-between">
         <Label className="text-xs">Target leverage</Label>
         <span className="font-mono text-xs">{targetLeverage.toFixed(2)}x</span>
@@ -300,31 +273,33 @@ export function AdjustLeverageControl({
         onChange={e => setTarget(Number(e.target.value))}
       />
       <div className="flex justify-between text-[10px] text-muted-foreground">
-        <span>1.00x (no debt)</span>
+        <span>1.00x (repay all)</span>
         <span>now {currentLeverage.toFixed(2)}x</span>
         <span>max {maxLeverage.toFixed(2)}x</span>
       </div>
 
       {quote && (
         <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
-          <span className="text-muted-foreground">{quote.direction === 'increase' ? 'borrow' : 'sell collateral'}</span>
+          <span className="text-muted-foreground">
+            {quote.direction === 'increase' ? 'Borrow amount' : 'Collateral to sell'}
+          </span>
           <span className="text-right font-mono text-xs">
             {quote.deltaBase.toFixed(2)} {deltaReserve ? `(${deltaReserve.symbol})` : ''}
           </span>
-          <span className="text-muted-foreground">collateral after</span>
+          <span className="text-muted-foreground">Collateral after</span>
           <span className="text-right font-mono text-xs">
             {(projected?.collateralAfter ?? quote.projectedCollateral).toFixed(2)}
           </span>
-          <span className="text-muted-foreground">debt after</span>
+          <span className="text-muted-foreground">Debt after</span>
           <span className="text-right font-mono text-xs">
             {(projected?.debtAfter ?? quote.projectedDebt).toFixed(2)}
           </span>
-          <span className="text-muted-foreground">ltv after</span>
+          <span className="text-muted-foreground">LTV after</span>
           <span className={`text-right font-mono text-xs ${projected?.exceedsMaxLtv ? 'text-negative' : ''}`}>
             {((projected?.ltv ?? quote.projectedLtv) * 100).toFixed(2)}%
             {projected?.exceedsMaxLtv && ` > ${(maxLtv * 100).toFixed(2)}% max`}
           </span>
-          <span className="text-muted-foreground">solver quote</span>
+          <span className="text-muted-foreground">Solver quote</span>
           <span className="text-right font-mono text-xs">
             {legQuote.isLoading
               ? 'quoting…'
@@ -335,7 +310,7 @@ export function AdjustLeverageControl({
                   )} ${legQuote.data.outputSymbol}`
                 : '—'}
           </span>
-          <span className="text-muted-foreground">health factor after</span>
+          <span className="text-muted-foreground">Health after</span>
           <span
             className={`text-right font-mono text-xs ${(projected?.hfWad ?? quote.projectedHfWad) < WAD ? 'text-negative' : 'text-cherry-soda'}`}
           >
@@ -343,7 +318,7 @@ export function AdjustLeverageControl({
           </span>
           {projected && (
             <>
-              <span className="text-muted-foreground">solver keeps (fee + slippage)</span>
+              <span className="text-muted-foreground">Solver keeps</span>
               <span className="text-right font-mono text-xs">{(projected.haircut * 100).toFixed(2)}%</span>
             </>
           )}
@@ -351,7 +326,7 @@ export function AdjustLeverageControl({
       )}
 
       <div className="flex items-center gap-2">
-        <Label className="text-xs whitespace-nowrap">slippage %</Label>
+        <Label className="text-xs whitespace-nowrap">Max slippage</Label>
         <input
           type="range"
           className="flex-1"
@@ -366,16 +341,12 @@ export function AdjustLeverageControl({
 
       {projected?.exceedsMaxLtv && (
         <div className="text-xs text-negative">
-          At this leverage the solver's price leaves LTV at {(projected.ltv * 100).toFixed(2)}%, above the{' '}
-          {(maxLtv * 100).toFixed(2)}% the pool allows — the borrow would revert on fill (AAVE 36) and the intent would
-          be wasted. Lower the target, or tighten slippage so the floor is closer to the quote.
+          This target would land at {(projected.ltv * 100).toFixed(2)}% LTV, above the pool max of{' '}
+          {(maxLtv * 100).toFixed(2)}%. Lower leverage or tighten slippage.
         </div>
       )}
       {legQuote.error && (
-        <div className="text-xs text-negative break-all">
-          The solver will not quote this pair: {legQuote.error.message}. Without a quote the intent would post and then
-          expire, so this is blocked rather than attempted.
-        </div>
+        <div className="text-xs text-negative break-all">No solver quote for this pair: {legQuote.error.message}.</div>
       )}
 
       {collateralReserve && borrowReserve && (
@@ -406,13 +377,13 @@ export function AdjustLeverageControl({
               ? 'Quoting…'
               : quote?.direction === 'decrease'
                 ? 'Decrease leverage'
-                : 'Add leverage'}
+                : 'Increase leverage'}
       </Button>
 
       {status && <div className="text-xs text-cherry-soda break-all">{status}</div>}
       {error && <div className="text-xs text-negative break-all">{error}</div>}
       <div className="text-[10px] text-muted-foreground">
-        Posts an intent for a solver to fill; the position stays unchanged until it does.
+        Posts a solver intent. The position updates after the fill.
       </div>
     </div>
   );
