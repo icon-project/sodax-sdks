@@ -6,8 +6,14 @@ import { Input } from '@/components/ui/input';
 import { useRadixSearchInput } from '@/hooks/useRadixSearchInput';
 import { TokenIcon } from '@/components/shared/TokenIcon';
 
-/** Searchable token dropdown; works for any token shape carrying symbol + address (XToken, SwapTokenV2). */
-export function SelectToken<T extends { symbol: string; address: string }>({
+const MAX_NAME_CHARS = 24;
+
+/** Long names (Robinhood equities run past 80 chars) are cut with two trailing dots so they cannot widen the menu. */
+const shortName = (name: string): string =>
+  name.length > MAX_NAME_CHARS ? `${name.slice(0, MAX_NAME_CHARS).trimEnd()}..` : name;
+
+/** Searchable token dropdown; works for any token shape carrying name + symbol + address (XToken, SwapTokenV2). */
+export function SelectToken<T extends { name: string; symbol: string; address: string }>({
   tokens,
   value,
   onSelect,
@@ -21,7 +27,9 @@ export function SelectToken<T extends { symbol: string; address: string }>({
 }) {
   const { search, inputProps, handleOpenChange } = useRadixSearchInput();
   const q = search.trim().toLowerCase();
-  const filtered = q ? tokens.filter(t => t.symbol.toLowerCase().includes(q)) : tokens;
+  const filtered = q
+    ? tokens.filter(t => t.symbol.toLowerCase().includes(q) || t.name.toLowerCase().includes(q))
+    : tokens;
 
   return (
     <Select
@@ -35,7 +43,8 @@ export function SelectToken<T extends { symbol: string; address: string }>({
       <SelectTrigger className={className}>
         <SelectValue placeholder="Token" />
       </SelectTrigger>
-      <SelectContent>
+      {/* Fixed width so the long Robinhood equity names ellipsize instead of widening the menu. */}
+      <SelectContent className="w-[240px]">
         <div className="sticky top-0 z-10 bg-white p-1">
           <Input autoFocus placeholder="Search token..." className="h-8" {...inputProps} />
         </div>
@@ -43,7 +52,11 @@ export function SelectToken<T extends { symbol: string; address: string }>({
           <div className="px-2 py-3 text-center text-sm text-muted-foreground">No token found</div>
         ) : (
           filtered.map(token => (
-            <SelectItem key={`${token.address}-${token.symbol}`} value={token.symbol}>
+            <SelectItem
+              key={`${token.address}-${token.symbol}`}
+              value={token.symbol}
+              description={<span className="block whitespace-nowrap pl-7">{shortName(token.name)}</span>}
+            >
               <span className="flex items-center gap-2">
                 <TokenIcon symbol={token.symbol} />
                 {token.symbol}

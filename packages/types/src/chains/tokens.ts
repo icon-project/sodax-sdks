@@ -110,8 +110,8 @@ export type HubVaultSymbol = (typeof HubVaultSymbols)[number];
 
 export const SodaTokens = {
   sodaBNB: {
-    symbol: 'sodaBNB',
-    name: 'Soda BNB',
+    symbol: 'BNB',
+    name: 'BNB',
     decimals: 18,
     address: '0x40Cd41b35DB9e5109ae7E54b44De8625dB320E6b',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -119,8 +119,8 @@ export const SodaTokens = {
     vault: '0x40Cd41b35DB9e5109ae7E54b44De8625dB320E6b',
   },
   sodaAVAX: {
-    symbol: 'sodaAVAX',
-    name: 'Soda AVAX',
+    symbol: 'AVAX',
+    name: 'Avalanche',
     decimals: 18,
     address: '0x14238D267557E9d799016ad635B53CD15935d290',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -129,7 +129,7 @@ export const SodaTokens = {
   },
   sodaETH: {
     symbol: 'sodaETH',
-    name: 'Soda ETH',
+    name: 'SODA ETH',
     decimals: 18,
     address: '0x4effB5813271699683C25c734F4daBc45B363709',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -137,8 +137,8 @@ export const SodaTokens = {
     vault: '0x4effB5813271699683C25c734F4daBc45B363709',
   },
   sodaBTC: {
-    symbol: 'sodaBTC',
-    name: 'Soda BTC',
+    symbol: 'BTC',
+    name: 'Bitcoin',
     decimals: 18,
     address: '0x7A1A5555842Ad2D0eD274d09b5c4406a95799D5d',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -147,7 +147,7 @@ export const SodaTokens = {
   },
   sodaWBTC: {
     symbol: 'sodaWBTC',
-    name: 'Soda Wrapped BTC',
+    name: 'SODA WBTC',
     decimals: 18,
     address: '0x811C3fCc13f9c2a23AE2Ae2DCadacFAC6eb5f0eB',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -155,8 +155,8 @@ export const SodaTokens = {
     vault: '0x811C3fCc13f9c2a23AE2Ae2DCadacFAC6eb5f0eB',
   },
   sodaSOL: {
-    symbol: 'sodaSOL',
-    name: 'Soda SOL',
+    symbol: 'SOL',
+    name: 'Solana',
     decimals: 18,
     address: '0xdEa692287E2cE8Cb08FA52917Be0F16b1DACDC87',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -164,8 +164,8 @@ export const SodaTokens = {
     vault: '0xdEa692287E2cE8Cb08FA52917Be0F16b1DACDC87',
   },
   sodaXLM: {
-    symbol: 'sodaXLM',
-    name: 'Soda XLM',
+    symbol: 'XLM',
+    name: 'Stellar Lumens',
     decimals: 18,
     address: '0x6BC8C37cba91F76E68C9e6d689A9C21E4d32079B',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -173,8 +173,8 @@ export const SodaTokens = {
     vault: '0x6BC8C37cba91F76E68C9e6d689A9C21E4d32079B',
   },
   sodaINJ: {
-    symbol: 'sodaINJ',
-    name: 'Soda INJ',
+    symbol: 'INJ',
+    name: 'Injective',
     decimals: 18,
     address: '0x1f22279C89B213944b7Ea41daCB0a868DdCDFd13',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -182,8 +182,8 @@ export const SodaTokens = {
     vault: '0x1f22279C89B213944b7Ea41daCB0a868DdCDFd13',
   },
   sodaSUI: {
-    symbol: 'sodaSUI',
-    name: 'Soda SUI',
+    symbol: 'SUI',
+    name: 'Sui',
     decimals: 18,
     address: '0xdc5B4b00F98347E95b9F94911213DAB4C687e1e3',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -201,7 +201,7 @@ export const SodaTokens = {
   },
   sodaUSDC: {
     symbol: 'sodaUSDC',
-    name: 'Soda USDC',
+    name: 'SODA USDC',
     decimals: 18,
     address: '0xAbbb91c0617090F0028BDC27597Cd0D038F3A833',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -210,7 +210,7 @@ export const SodaTokens = {
   },
   sodaUSDT: {
     symbol: 'sodaUSDT',
-    name: 'Soda USDT',
+    name: 'SODA USDT',
     decimals: 18,
     address: '0xbDf1F453FCB61424011BBDDCB96cFDB30f3Fe876',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -228,7 +228,7 @@ export const SodaTokens = {
   },
   sodaS: {
     symbol: 'sodaS',
-    name: 'Soda S',
+    name: 'SODA S',
     decimals: 18,
     address: '0x62ecc3Eeb80a162c57624B3fF80313FE69f5203e',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -236,8 +236,8 @@ export const SodaTokens = {
     vault: '0x62ecc3Eeb80a162c57624B3fF80313FE69f5203e',
   },
   sodaPOL: {
-    symbol: 'sodaPOL',
-    name: 'Soda POL',
+    symbol: 'POL',
+    name: 'Polygon Ecosystem Token',
     decimals: 18,
     address: '0x208ED38f4783328aA9eBFeC360D32e7520A9B779',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -246,7 +246,7 @@ export const SodaTokens = {
   },
   sodaSODA: {
     symbol: 'sodaSODA',
-    name: 'Soda SODA',
+    name: 'SODA SODA',
     decimals: 18,
     address: '0x21685E341DE7844135329914Be6Bd8D16982d834',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -254,8 +254,8 @@ export const SodaTokens = {
     vault: '0x21685E341DE7844135329914Be6Bd8D16982d834',
   },
   sodaHYPE: {
-    symbol: 'sodaHYPE',
-    name: 'Soda HYPE',
+    symbol: 'HYPE',
+    name: 'Hyperliquid',
     decimals: 18,
     address: '0x6E81124fC5d2Bf666B16a0A5d90066eBf35c7411',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -263,8 +263,8 @@ export const SodaTokens = {
     vault: '0x6E81124fC5d2Bf666B16a0A5d90066eBf35c7411',
   },
   sodaRBNT: {
-    symbol: 'sodaRBNT',
-    name: 'Soda RBNT',
+    symbol: 'RBNT',
+    name: 'Redbelly Network Token',
     decimals: 18,
     address: '0x4B207114F9118dEAC56436e1aE3c45648783c7Ac',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -272,8 +272,8 @@ export const SodaTokens = {
     vault: '0x4B207114F9118dEAC56436e1aE3c45648783c7Ac',
   },
   sodaLL: {
-    symbol: 'sodaLL',
-    name: 'Soda LL',
+    symbol: 'LL',
+    name: 'LightLink',
     decimals: 18,
     address: '0x14C5eB2D25dFb834852dFc85744875d1eCb09748',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -281,8 +281,8 @@ export const SodaTokens = {
     vault: '0x14C5eB2D25dFb834852dFc85744875d1eCb09748',
   },
   sodaWEETH: {
-    symbol: 'sodaWEETH',
-    name: 'SODA WEETH',
+    symbol: 'weETH',
+    name: 'Wrapped eETH',
     decimals: 18,
     address: '0xCb6B152D3a943f25157381aFcA7fEFCD2ef5a357',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -290,8 +290,8 @@ export const SodaTokens = {
     vault: '0xCb6B152D3a943f25157381aFcA7fEFCD2ef5a357',
   },
   sodaWSTETH: {
-    symbol: 'sodaWSTETH',
-    name: 'SODA WSTETH',
+    symbol: 'wstETH',
+    name: 'Wrapped liquid staked Ether',
     decimals: 18,
     address: '0x58b0538D7EEaeE69EF32f9F1dE5cbF32A10a977B',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -299,8 +299,8 @@ export const SodaTokens = {
     vault: '0x58b0538D7EEaeE69EF32f9F1dE5cbF32A10a977B',
   },
   sodaNEAR: {
-    symbol: 'sodaNEAR',
-    name: 'SODA NEAR',
+    symbol: 'NEAR',
+    name: 'NEAR Protocol',
     decimals: 18,
     address: '0xf4ba497c9b805e4bd88a8a9e6a7b8f74984c3e39',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -308,8 +308,8 @@ export const SodaTokens = {
     vault: '0xf4ba497c9b805e4bd88a8a9e6a7b8f74984c3e39',
   },
   sodaKAIA: {
-    symbol: 'sodaKAIA',
-    name: 'Soda KAIA',
+    symbol: 'KAIA',
+    name: 'Kaia',
     decimals: 18,
     address: '0xD7d41b5f803b6A40F8A6eAa34E459A4564e39891',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -317,8 +317,8 @@ export const SodaTokens = {
     vault: '0xD7d41b5f803b6A40F8A6eAa34E459A4564e39891',
   },
   sodaSTX: {
-    symbol: 'sodaSTX',
-    name: 'Soda STX',
+    symbol: 'STX',
+    name: 'Stacks',
     decimals: 18,
     address: '0x1Fbe5229e9d189F26bEE77E5bFa24309FdA90483',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -326,8 +326,8 @@ export const SodaTokens = {
     vault: '0x1Fbe5229e9d189F26bEE77E5bFa24309FdA90483',
   },
   sodaSUSDS: {
-    symbol: 'sodaSUSDS',
-    name: 'SODA sUSDS',
+    symbol: 'sUSDS',
+    name: 'Savings USDS',
     decimals: 18,
     address: '0x243b0c26c8b38793908d7C64e8510f21B19B4613',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -335,8 +335,8 @@ export const SodaTokens = {
     vault: '0x243b0c26c8b38793908d7C64e8510f21B19B4613',
   },
   sodaHBAR: {
-    symbol: 'sodaHBAR',
-    name: 'Soda HBAR',
+    symbol: 'HBAR',
+    name: 'Hedera',
     decimals: 18,
     address: '0x3BB956cc8922E1Ba4148dc10eD1b4Fa19aa599c4',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -344,8 +344,8 @@ export const SodaTokens = {
     vault: '0x3BB956cc8922E1Ba4148dc10eD1b4Fa19aa599c4',
   },
   sodaJITOSOL: {
-    symbol: 'sodaJITOSOL',
-    name: 'Soda JITOSOL',
+    symbol: 'JitoSOL',
+    name: 'Jito Staked SOL',
     decimals: 18,
     address: '0xe1bad4400d947Bc4fa66f9c0A143D800002083a0',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -353,8 +353,8 @@ export const SodaTokens = {
     vault: '0xe1bad4400d947Bc4fa66f9c0A143D800002083a0',
   },
   sodaUSDS: {
-    symbol: 'sodaUSDS',
-    name: 'Soda USDS',
+    symbol: 'USDS',
+    name: 'USDS',
     decimals: 18,
     address: '0xA3AeFa2BAfEAB479c4Aca6024A16906bbC75566e',
     chainKey: ChainKeys.SONIC_MAINNET,

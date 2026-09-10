@@ -8,7 +8,7 @@ Access: `sodax.leverageYield`. Service class: `LeverageYieldService`. Feature ta
 
 ## How it works
 
-- A vault holds `asset` (a Sodax vault token like sodaWEETH) as collateral, borrows `borrowToken` (e.g. sodaETH) from the Sodax-forked AAVE pool, swaps it back into the asset, and re-supplies — to a `targetLTV`.
+- A vault holds `asset` (a Sodax vault token like the weETH vault, `SodaTokens.sodaWEETH`) as collateral, borrows `borrowToken` (e.g. sodaETH) from the Sodax-forked AAVE pool, swaps it back into the asset, and re-supplies — to a `targetLTV`.
 - The ERC-4626 **share token is the vault proxy address itself** (`lsoda*`). Holding shares = holding the leveraged position.
 - **Deposit** = swap any spoke token → `lsoda*`, delivered to the user's **hub wallet** on Sonic. **Withdraw** = swap `lsoda*` (held in the hub wallet) → any token on any chain.
 - **Steady-state APR**: `netAprRay = supplyAprRay + leverageMultiplier × (supplyAprRay − borrowAprRay)`, where `leverageMultiplier = targetLTV / (1 − targetLTV)`. Rates are RAY (`1e27`); the multiplier is WAD (`1e18`). `netAprRay` goes **negative** when the borrow rate exceeds supply — for LSD-backed vaults the LSD's native staking yield (folded in by `getEffectiveApr`) is the real alpha.
