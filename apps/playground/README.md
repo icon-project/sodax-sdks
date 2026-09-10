@@ -1,166 +1,114 @@
 # SODAX Swap Widget
 
-An embeddable cross-network swap: live mainnet quotes across every network SODAX reaches, EVM and
-non-EVM, **with no wallet connection**. It ships as a page, so anyone can drop it into a site with
-one `<iframe>`; the demo page beside it shows the embed snippet and the `@sodax/dapp-kit` code
-behind the form.
+A hosted cross-network swap widget with a visual integration playground. Visitors can get live
+quotes before connecting a wallet. For executable routes they connect, review the receiving address
+and minimum output, approve when needed, and sign inside the widget.
 
-It quotes; it never signs. Nothing here can move a visitor's funds.
-
-## Run it
+## Run
 
 ```bash
-pnpm install                              # from the repo root
-pnpm build:packages                       # required: Vite resolves @sodax/sdk from dist/
+pnpm install
+pnpm build:packages
 pnpm --filter @sodax/playground dev
-# → http://localhost:3005
 ```
 
-Optional configuration lives in [`example.env`](example.env) — copy it to `.env` (gitignored).
-Both values are optional; the widget runs against the public SODAX swaps API with no setup.
+The dev server uses port 3005. Copy `example.env` to `.env` for deployment settings.
 
-| Variable | Effect |
+## Execution coverage
+
+The widget currently implements EVM, Solana and Sui source and destination wallet connections.
+Both sides of a route must be executable to use the in-widget signing flow. The destination is the
+connected account for its chain family; same-family swaps use that family's connected account.
+
+The swaps API supplies the wider network/token list. Other routes remain available for quotes, with
+an explicit **Continue on SODAX** handoff. That handoff opens the exchange; it does not prefill the
+trade. Bitcoin's Bound trading-wallet setup and Stellar/NEAR destination account preparation are not
+implemented here. Do not advertise the quote network count as executable coverage.
+
+The hosted iframe has its own wallet session. Its React export wraps that iframe; it does not accept
+the host application's wallet provider. Wallet detection in iframes varies by browser/extension.
+Use **Open in a new tab** if a wallet is unavailable in the embedded context.
+
+## Playground
+
+- Live preview with desktop and mobile width controls.
+- Style: light/dark/auto, colors, font, radius and density, with contrast-aware derived styles.
+- Behavior: allowed source/destination networks, derived from the live API list.
+- Default pair and amount: set them directly in the preview.
+- Copy embed: exports the current appearance, restrictions and starting trade.
+- View code: collapsed by default, with HTML, React iframe wrapper and a quote-hook example.
+
+Partner fees are configured by the deployment operator and displayed to users; visitors cannot edit
+the recipient or rate. There are no fee fields that silently disappear when an embed is copied.
+
+## Deployment configuration
+
+| Variable | Purpose |
 | --- | --- |
-| `VITE_EMBED_ORIGIN` | The origin the embed snippet points at. Without it the snippet quotes whatever origin serves the page — right for a local preview, wrong for a copied `<iframe>`. |
-| `VITE_SWAPS_API_KEY` | Per-deployment quota on the swaps API, sent as `x-api-key`. The public endpoint needs none. Anything in a Vite bundle is public. |
-| `VITE_GTM_ID` | GTM container the events go to, the same one sodax.com loads. Unset, nothing loads and nothing is pushed. |
-| `VITE_GTM_IN_EMBED` | `1` also loads the container inside a partner's `<iframe>`. Off by default. |
+| `VITE_EMBED_ORIGIN` | Stable origin for the hosted widget. Set this before distributing copied embeds. |
+| `VITE_SWAPS_API_KEY` | Optional public browser API key, sent through the SDK. Never use a privileged key. |
+| `VITE_WALLETCONNECT_PROJECT_ID` | Enables the EVM WalletConnect connector; configure allowed origins in its dashboard. |
+| `VITE_PARTNER_FEE_RECIPIENT` | Partner's Sonic fee address. Configure with the basis-point rate below. |
+| `VITE_PARTNER_FEE_BPS` | Integer basis points, within `FEE_BPS_MAX` in `src/lib/fee.ts`. Invalid fee configuration blocks execution. |
+| `VITE_GTM_ID` | Optional analytics container. Unset means no analytics container loads. |
+| `VITE_GTM_IN_EMBED` | Set to `1` only when analytics should also load inside partner frames. |
 
-## What it measures
+All Vite variables are public browser configuration. The wallet providers use their SDK defaults for
+RPCs; production deployments should validate those endpoints against their expected traffic.
 
-Events go to the GTM dataLayer under GA4 naming, exactly as on sodax.com, and reuse the
-frontend's parameter names (`source_chain`, `input_token_symbol`, …) so the dimensions already
-registered for `swap_completed` read these too. No wallet means no address and no transaction
-hash is ever sent; the partner fee is reported in basis points, never with its recipient.
+## Embed parameters
 
-| Event | Fires when |
+`?embed=1` removes the builder and page header. Use **Copy embed** for the full integration, including
+an automatic height listener that checks both the widget origin and `event.source`.
+
+| Parameters | Values |
 | --- | --- |
-| `widget_viewed` | The container loads. Carries `is_embedded`, as every event below does. |
-| `quote_received` | A configured pair returns a quote — once per pair, not once per 3s refetch. |
-| `quote_failed` | That pair has no route. |
-| `exchange_handoff_clicked` | The visitor clicks through to `sodax.com/exchange/swap`. The conversion step. |
-| `embed_snippet_copied` | A code-panel tab is copied, with `snippet_id`. |
-| `partner_fee_set` | A valid fee is entered, with `fee_bps`. |
+| `srcChain`, `dstChain` | SDK chain keys, resolved against the live token list |
+| `srcToken`, `dstToken` | Token symbols resolved within the chosen chain |
+| `amount`, `slippage` | Decimal amount and percentage tolerance |
+| `allowedSrc`, `allowedDst` | Comma-separated SDK chain keys; absent/empty means all API-listed networks |
+| `theme` | `light`, `dark`, `auto` |
+| `accent`, `cta`, `surface`, `text` | Six-digit hex colors without `#` |
+| `radius`, `font`, `density` | Supported values from `src/lib/brand.ts` |
 
-A team browser flagged on sodax.com with `?internal=1` shares the `.sodax.com` cookie, so its
-events carry `traffic_type: internal` here too and GA4's internal filter drops them.
+Unknown chain names are discarded. Restrictions control this UI, not access to the public API.
+A configured restriction with no currently listed assets cannot execute a swap. Fee settings are
+never taken from URL parameters.
 
-## Embedding it
+The iframe sends only `{ type: 'sodax:resize', height }` to its host. It does not expose wallet addresses
+or transaction details through this message. The generated listener limits frame height and verifies
+sender identity. The deployment allows framing with `frame-ancestors *`.
 
-```html
-<iframe
-  src="https://<origin>/?embed=1&srcChain=0x2105.base&srcToken=ETH&dstChain=solana&dstToken=TSLAx&amount=0.1"
-  title="SODAX swap"
-  width="480"
-  height="620"
-  loading="lazy"
-  referrerpolicy="no-referrer"
-  style="border: 0; border-radius: 24px; max-width: 100%"
-></iframe>
-```
+## Transaction lifecycle and recovery
 
-`?embed=1` drops the page chrome and renders the widget alone. Every other field of the form is a
-query parameter, so the host page decides what it opens on:
+1. Show live quotes (debounced input, refreshed every ten seconds).
+2. Connect source and destination wallets; display source balance and MAX for non-native tokens.
+3. Review the recipient, minimum received and partner fee. Network fees are confirmed in the wallet.
+4. Recheck the quote and allowance; confirm any allowance reset/approval through dapp-kit.
+5. Recheck the price after approval, get a fresh deadline, build the intent and request a signature.
+6. Persist the broadcast hash, intent and relay payload before submitting to the backend.
+7. Track settlement until solved, failed or abandoned, with explorer links and support access.
 
-| Parameter | Example |
-| --- | --- |
-| `srcChain` · `dstChain` | `0x2105.base`, `solana`, `near`, `sui`, `bitcoin` |
-| `srcToken` · `dstToken` | `ETH`, `TSLAx`, `USDC` — by symbol |
-| `amount` | `0.1` |
-| `slippage` | `0.5` (percent) |
+**Retry tracking** resubmits the saved transaction hash and payload; it never signs a new deposit.
+The latest activity is restored after refresh when local storage is available. If storage is blocked,
+the widget warns the user to retain the transaction hash. Failed/abandoned swaps show a support path;
+an integrated on-chain refund workflow is not implemented in this widget.
 
-Every value is resolved against the live token list, so an unknown one falls back to a default
-rather than reaching the API. **The partner fee is deliberately not a parameter** — it is the one
-field that redirects money.
+The review is a real-mainnet confirmation, not a simulated trade. No automatic reconnect or automatic
+transaction signing is requested by the widget. Native-token MAX is intentionally unavailable until
+there is a reliable chain-specific gas reserve calculation.
 
-How it *looks* is query parameters too — see [Theming](#theming).
-
-`vercel.json` sets `frame-ancestors *`, because "anyone can integrate it" is the point and the page
-holds nothing to steal: no wallet, no signing path, no per-visitor state.
-
-## Where the assets come from
-
-Tokens and quotes both come from the Swaps API v2 (`sodax.api.swaps`, via the `useSwapsApi*` hooks)
-— the same source `sodax.com/exchange/swap` runs on. That is what reaches Solana, NEAR, Sui,
-Bitcoin, Stellar, Stacks, Injective and ICON alongside the EVM chains, and it stays current without
-an SDK release.
-
-A quote is an HTTP call. It needs no signer, which is why the widget needs no wallet.
-
-Vault-share tokens (`soda*`, `lsoda*`) are filtered out on every chain, and a chain the running SDK
-cannot name or badge is dropped rather than rendered as a raw key.
-
-## The flow it demonstrates
-
-Every SODAX call the widget makes lives in [`src/hooks/useSwapFlow.ts`](src/hooks/useSwapFlow.ts).
-The components only render what it returns.
-
-1. **Token list** — `useSwapsApiTokens`, once, grouped by chain.
-2. **Quote** — `useSwapsApiQuote`, refreshed every 3s.
-3. **Minimum received** — the quote minus slippage, in integer basis-point `bigint` math. Never
-   float math on token amounts.
-4. **Settlement estimate** — `sodax.swaps.getSwapSpeedTier()` classifies the pair offline, so it
-   renders before the first quote returns.
-
-The signing path — approve, create intent, submit, poll — is shown in the `swap.tsx` tab as the
-four calls `sodax.com/exchange/swap` makes, for a partner to implement in their own app with their
-own wallet.
-
-## Adding a partner fee
-
-"Charge a partner fee" takes a recipient and a rate in basis points, and rides on the quote request
-itself (`partnerFee` on `QuoteRequestV2`). The API applies it once, before quoting, so the number on
-screen is what the user receives — **never subtract it yourself**, or it is charged twice.
-
-`percentage` is basis points (100 = 1%). Integration is free and SODAX takes no cut of that fee.
-Nothing validates the recipient — a wrong address sends the fee somewhere you cannot claim it.
-
-## Theming
-
-Out of the box: light and dark, both drawn from the SODAX B2B brand palette, with the light theme
-matching `sodax.com/exchange/swap` — cherry ground, rounded app stage, yellow lockup.
-
-**A framed widget takes your brand instead.** CSS cannot reach into an iframe, so the styling is
-query parameters on the same `src`, and they compose with the form parameters above:
-
-```html
-<iframe
-  src="https://<origin>/?embed=1&theme=light&accent=7c3aed&surface=ffffff&radius=sharp&font=system"
-  …
-></iframe>
-```
-
-| Parameter | Values |
-| --- | --- |
-| `theme` | `light`, `dark`, or `auto` to follow the visitor's OS. Set it: without it the widget follows the *visitor's* preference, not your page's. |
-| `accent` | 6-digit hex, no `#` — `accent=7c3aed`. Emphasis, and the primary button unless `cta` is set. |
-| `cta` | The primary button's fill, when it differs from your accent. |
-| `surface` | The widget's ground. Borders, insets, halos and the text ramp are all derived from it. |
-| `text` | Heading colour. Body, muted and faint tones are derived from it. |
-| `radius` | `square`, `sharp`, `soft` (default), `round`. Cards, panels and insets — pills and discs stay round. |
-| `font` | `inter` (default), `system`, `helvetica`, `serif`, `mono`. |
-| `density` | `comfortable` (default) or `compact` — tighter spacing and a shorter iframe. |
-
-Set `accent` and `surface` and the rest follows. **Two guarantees you do not have to think about:**
-the button's label colour is computed from its fill, so a pale brand colour can never produce an
-unreadable control; and a colour used as text is moved toward a readable tone if it fails 4.5:1 on
-the surface behind it, rather than shipping as given.
-
-Only colours matching `#rrggbb` and the listed keywords are accepted — anything else is ignored,
-never passed through. Fonts are limited to faces the page already loads or your visitor's system
-resolves; no webfont is fetched on a parameter's say-so. **Need your own face?** It has to be added
-to the allowlist in `src/lib/brand.ts` — open an issue and say which.
-
-The demo page's **Theme & brand** panel drives all of it live and the `embed.html` snippet updates
-as you go, so the fastest route to a themed embed is to style it there and copy the result.
-
-## Scripts
+## Verification and release
 
 ```bash
-pnpm dev          # vite dev server on :3005
-pnpm build        # vite build
-pnpm preview      # serve the built bundle
-pnpm checkTs      # tsc --noEmit
-pnpm test         # vitest run — the pure logic under src/lib
-pnpm lint / pretty
+pnpm --filter @sodax/playground test
+pnpm --filter @sodax/playground checkTs
+pnpm exec biome check apps/playground
+pnpm --filter @sodax/playground build
 ```
+
+Tests exercise execution order, changing quotes, failed approvals, rejected signatures, interrupted
+relay submission, activity restoration, URL restrictions and the existing asset/theme utilities.
+Before a public production release, a wallet owner must verify funded mainnet swaps for every
+advertised family, plus WalletConnect/mobile and third-party iframe behavior on the deployment's
+actual origin. Mocked tests and quote-only browser checks cannot establish settlement reliability.

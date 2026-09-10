@@ -399,6 +399,255 @@ code,
   min-width: 0;
 }
 
+.studio-heading {
+  grid-column: 1 / -1;
+}
+.studio-heading h2 {
+  margin: 8px 0;
+  font-family: var(--font-display);
+  font-size: clamp(30px, 4vw, 48px);
+  color: var(--text-heading);
+}
+.studio-heading h2 em {
+  color: var(--accent);
+}
+.eyebrow {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.preview-column {
+  min-width: 0;
+}
+.preview-toolbar,
+.wallet-row,
+.integration-actions,
+.activity-links {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.preview-toolbar {
+  margin-bottom: 18px;
+}
+.widget-preview {
+  max-width: 520px;
+  width: 100%;
+  margin: 0 auto;
+  transition: max-width 180ms;
+}
+.preview-mobile {
+  max-width: 375px;
+}
+.segmented {
+  display: flex;
+  gap: 4px;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.segmented .btn[aria-pressed="true"] {
+  background: var(--cta-bg);
+  color: var(--cta-fg);
+  border-color: var(--cta-bg);
+}
+.builder-tabs {
+  padding: 0 4px;
+}
+.studio-code {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+.brand-card .brand-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.build-column {
+  gap: 16px;
+}
+.integration-card h3,
+.behavior-card h3,
+.activity-card h3 {
+  color: var(--text-heading);
+  margin: 10px 0;
+}
+.integration-actions .btn-primary {
+  width: auto;
+  flex: 1;
+}
+.network-settings {
+  border: 0;
+  padding: 12px 0;
+  margin: 0;
+  min-width: 0;
+}
+.network-settings legend {
+  font-weight: 600;
+}
+.network-checks {
+  max-height: 160px;
+  overflow-y: auto;
+  margin-top: 8px;
+}
+.network-checks label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 0;
+  font-size: 13px;
+}
+.network-checks label span:last-child {
+  margin-left: auto;
+}
+.swap-fields {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.swap-fields:disabled {
+  opacity: 0.65;
+}
+.asset-caption {
+  font-size: 12px;
+  margin: 8px 8px 10px;
+  color: var(--text-muted);
+}
+.max-button {
+  padding: 2px 6px;
+  margin-left: 6px;
+  font-size: 11px;
+}
+.wallet-row .btn {
+  font-size: 12px;
+}
+.swap-details {
+  margin: 16px 0;
+}
+.widget-modal {
+  background: var(--surface-card);
+  color: var(--text-body);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-large);
+  padding: 24px;
+  width: min(440px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+.widget-modal::backdrop {
+  background: var(--border-strong);
+  backdrop-filter: blur(6px);
+}
+.widget-modal h2 {
+  font-size: 20px;
+  margin: 0;
+  color: var(--text-heading);
+}
+.modal-body,
+.wallet-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-top: 16px;
+}
+.modal-body p {
+  margin: 0;
+}
+.wallet-option {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 12px;
+}
+.address-text {
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.review-amount {
+  font-size: 24px;
+  color: var(--text-heading);
+}
+.review-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  font-size: 13px;
+  margin: 0;
+}
+.review-details dd {
+  text-align: right;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.recipient-box {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-inset);
+  padding: 12px;
+}
+.activity-card {
+  margin-top: 12px;
+}
+.activity-links {
+  justify-content: flex-start;
+  margin: 16px 0 0;
+  font-size: 13px;
+}
+.hero-note a {
+  color: var(--text-on-hero);
+}
+.app-embed {
+  justify-content: flex-start;
+  min-height: 0;
+}
+
+.standalone-link {
+  display: block;
+  text-align: center;
+  margin-top: 12px;
+  font-size: 12px;
+}
+.studio-heading p {
+  margin: 8px 0;
+}
+.app-main {
+  row-gap: 24px;
+}
+.studio-heading h2 {
+  font-size: clamp(28px, 3.5vw, 40px);
+}
+@media (max-width: 640px) {
+  .app {
+    padding: 8px 8px 0;
+  }
+  .app-embed {
+    padding: 16px;
+  }
+  .stage {
+    padding: 20px 12px;
+    border-width: 4px;
+  }
+  .app-main {
+    gap: 24px;
+  }
+  .studio-heading h2 {
+    font-size: 32px;
+  }
+  .widget-modal {
+    padding: 18px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .widget-preview {
+    transition: none;
+  }
+}
+
 @media (max-width: 1180px) {
   .app-main {
     grid-template-columns: 1fr;
@@ -442,9 +691,7 @@ code,
   margin-top: auto;
 }
 
-/* Held open whether or not there is a message: the quote refetches every 3s, and a slot that
-   collapsed would walk the button up and down under the visitor's cursor. One line of caption is
-   the reserve; a long solver string grows into the column's slack instead. */
+/* Reserve message space so quote refreshes do not move the action. */
 .action-message {
   min-height: calc(1.5 * var(--text-caption) + 2 * var(--space-8) + 2px);
   margin-top: var(--space-8);
@@ -454,8 +701,6 @@ code,
   margin: 0;
 }
 
-/* Says what the CTA does not do. The widget mounts no wallet, and a form this familiar otherwise
-   reads as one that is about to ask for a signature. */
 .action-note {
   margin: 0;
   text-align: center;
@@ -1776,4 +2021,8 @@ code,
   border-radius: var(--radius-small);
   padding: var(--space-8) var(--space-8) var(--space-8) 24px;
   text-wrap: pretty;
+}
+
+body:has(.app-embed) {
+  background: var(--surface-embed);
 }

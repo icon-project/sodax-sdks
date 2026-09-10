@@ -1,3 +1,4 @@
+import { networkAllowed, type WidgetSettings } from '../lib/widgetSettings';
 import {
   type ChainKey,
   type QuoteRequestV2,
@@ -8,7 +9,8 @@ import {
 } from '@sodax/dapp-kit';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatUnits } from 'viem';
-import { DEFAULT_AMOUNT, DEFAULT_PAIR, DEFAULT_SLIPPAGE_PERCENT } from '../config';
+import { DEFAULT_AMOUNT, DEFAULT_PAIR, DEFAULT_SLIPPAGE_PERCENT, deploymentFeeInput, deploymentFee } from '../config';
+import { useExecution } from './useExecution';
 import {
   type PairDimensions,
   quoteEventKey,
@@ -19,7 +21,7 @@ import {
 } from '../lib/analytics';
 import { pickChain, pickToken, readSwapAssets, tokensOn } from '../lib/assets';
 import type { Brand } from '../lib/brand';
-import { NO_PARTNER_FEE, type PartnerFeeInput, feeAmountOf, readPartnerFee } from '../lib/fee';
+import { feeAmountOf } from '../lib/fee';
 import { parseAmount } from '../lib/format';
 import { initialUrl } from '../lib/initialUrl';
 import { assetGroups } from '../lib/pickerOptions';
@@ -32,22 +34,12 @@ const seed = seedFor('swap', initialUrl);
 /** Written back with the form, so a styled widget keeps its styling across the rewrite. */
 export type SwapFlowOptions = { brand: Brand };
 
-/**
- * The whole SODAX surface this widget uses: the swaps API's token list, and a quote off it that
- * refreshes every three seconds. There is no wallet here — no allowance, no approval, no intent —
- * so nothing this hook can do moves a visitor's funds. Components below only render what it
- * returns.
- *
- * Tokens and quotes both come from the Swaps API v2 (`sodax.api.swaps`), which is what
- * `sodax.com/exchange/swap` runs: it reaches every chain the backend lists — EVM and non-EVM
- * alike — and stays current without an SDK release. The packaged `getSupportedSolverTokens` list
- * would be deterministic but EVM-shaped and frozen at the release we build against.
- */
+/** Owns live assets, quote state, and the wallet-backed execution flow. */
 export function useSwapFlow({ brand }: SwapFlowOptions) {
   const { sodax } = useSodaxContext();
+  const [widget, setWidget] = useState<WidgetSettings>(seed.widget ?? { sourceNetworks: [], destinationNetworks: [] });
 
-  // A "no path" answer is a business result, not a transient failure, so retrying just delays the
-  // headline. The 3s interval is the live-quote promise the receive leg makes.
+  // Retry is explicit so a token-list outage exposes a usable recovery action.
   const tokensQuery = useSwapsApiTokens({ queryOptions: { retry: false } });
   const assets = useMemo(() => readSwapAssets(tokensQuery.data), [tokensQuery.data]);
 
@@ -57,7 +49,7 @@ export function useSwapFlow({ brand }: SwapFlowOptions) {
   const [dstToken, setDstToken] = useState<XToken>();
   const [amount, setAmount] = useState(seed.amount ?? DEFAULT_AMOUNT);
   const [slippagePercent, setSlippagePercent] = useState(seed.slippage ?? DEFAULT_SLIPPAGE_PERCENT);
-  const [partnerFeeInput, setPartnerFeeInput] = useState<PartnerFeeInput>(NO_PARTNER_FEE);
+  const partnerFeeInput = deploymentFeeInput;
 
   // Seeded once, when the token list first arrives: a chain key or a symbol in the URL is a string
   // until there is a live list to resolve it against, and the list is what the app trusts.
@@ -105,21 +97,50 @@ export function useSwapFlow({ brand }: SwapFlowOptions) {
       slippage: slippagePercent,
       embed: initialUrl.embed,
       brand,
+      widget,
     });
     // A sandboxed embed has an opaque origin and throws here; the form must still work in one.
     try {
       window.history.replaceState(null, '', `${window.location.pathname}?${search}`);
     } catch {}
-  }, [srcChain, dstChain, srcToken, dstToken, amount, slippagePercent, brand]);
+  }, [srcChain, dstChain, srcToken, dstToken, amount, slippagePercent, brand, widget]);
 
   const groups = useMemo(() => assetGroups(assets.choices), [assets]);
+  const sourceNetworks = useMemo(
+    () => assets.chains.filter(chain => networkAllowed(chain, widget.sourceNetworks)),
+    [assets, widget],
+  );
+  const destinationNetworks = useMemo(
+    () => assets.chains.filter(chain => networkAllowed(chain, widget.destinationNetworks)),
+    [assets, widget],
+  );
+  const sourceGroups = useMemo(
+    () => assetGroups(assets.choices.filter(choice => networkAllowed(choice.chain, widget.sourceNetworks))),
+    [assets, widget],
+  );
+  const destinationGroups = useMemo(
+    () => assetGroups(assets.choices.filter(choice => networkAllowed(choice.chain, widget.destinationNetworks))),
+    [assets, widget],
+  );
+  useEffect(() => {
+    if (!srcChain || !sourceNetworks.includes(srcChain)) {
+      setSrcChain(
+        sourceNetworks.find(chain => chain === (seed.srcChain ?? DEFAULT_PAIR.srcChain)) ?? sourceNetworks[0],
+      );
+    }
+    if (!dstChain || !destinationNetworks.includes(dstChain)) {
+      setDstChain(
+        destinationNetworks.find(chain => chain === (seed.dstChain ?? DEFAULT_PAIR.dstChain)) ?? destinationNetworks[0],
+      );
+    }
+  }, [srcChain, dstChain, sourceNetworks, destinationNetworks]);
 
   const inputAmount = useMemo(
     () => (srcToken ? parseAmount(amount, srcToken.decimals) : undefined),
     [amount, srcToken],
   );
 
-  const feeState = useMemo(() => readPartnerFee(partnerFeeInput), [partnerFeeInput]);
+  const feeState = deploymentFee;
   const partnerFee = feeState.kind === 'set' ? feeState.fee : undefined;
 
   // Display only. The API applies the fee itself, once, before quoting — subtracting it from
@@ -129,6 +150,13 @@ export function useSwapFlow({ brand }: SwapFlowOptions) {
     [inputAmount, partnerFee],
   );
 
+  const [quotedInput, setQuotedInput] = useState(inputAmount);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setQuotedInput(inputAmount), 350);
+    return () => window.clearTimeout(timer);
+  }, [inputAmount]);
+  const isAmountSettled = inputAmount === quotedInput;
+
   const quoteBody = useMemo<QuoteRequestV2 | undefined>(() => {
     if (!srcChain || !dstChain || !srcToken || !dstToken || inputAmount === undefined) return undefined;
     return {
@@ -136,17 +164,17 @@ export function useSwapFlow({ brand }: SwapFlowOptions) {
       tokenSrcChainKey: srcChain,
       tokenDst: dstToken.address,
       tokenDstChainKey: dstChain,
-      amount: inputAmount.toString(),
+      amount: quotedInput?.toString() ?? inputAmount.toString(),
       quoteType: 'exact_input',
       ...(partnerFee ? { partnerFee } : {}),
     };
-  }, [srcChain, dstChain, srcToken, dstToken, inputAmount, partnerFee]);
+  }, [srcChain, dstChain, srcToken, dstToken, inputAmount, quotedInput, partnerFee]);
 
   const quoteQuery = useSwapsApiQuote({
-    params: { body: quoteBody },
-    queryOptions: { retry: false, refetchInterval: 3000 },
+    params: { body: isAmountSettled && feeState.kind !== 'invalid' ? quoteBody : undefined },
+    queryOptions: { retry: false, refetchInterval: 10000 },
   });
-  const quotedAmount = quoteQuery.data?.quotedAmount;
+  const quotedAmount = isAmountSettled ? quoteQuery.data?.quotedAmount : undefined;
 
   // Offline and rule-based — no network call, so it renders beside the form before any quote.
   const speedTier = useMemo(
@@ -209,7 +237,37 @@ export function useSwapFlow({ brand }: SwapFlowOptions) {
     setDstToken(srcToken);
   }, [srcChain, dstChain, srcToken, dstToken]);
 
+  const execution = useExecution({
+    srcChain,
+    dstChain,
+    srcToken,
+    dstToken,
+    amount,
+    inputAmount,
+    minOutputAmount,
+    partnerFee,
+    ready:
+      !!srcChain &&
+      sourceNetworks.includes(srcChain) &&
+      !!dstChain &&
+      destinationNetworks.includes(dstChain) &&
+      quotedAmount !== undefined &&
+      !quoteQuery.isError &&
+      isAmountSettled &&
+      feeState.kind !== 'invalid',
+  });
+
   return {
+    execution,
+    widget,
+    setWidget,
+    sourceNetworks,
+    destinationNetworks,
+    sourceGroups,
+    destinationGroups,
+    retryAssets: () => tokensQuery.refetch(),
+    refreshQuote: () => quoteQuery.refetch(),
+    quoteUpdatedAt: quoteQuery.dataUpdatedAt,
     srcChain,
     dstChain,
     setSrcChain,
@@ -224,22 +282,29 @@ export function useSwapFlow({ brand }: SwapFlowOptions) {
     slippagePercent,
     setSlippagePercent,
     partnerFeeInput,
-    setPartnerFeeInput,
     partnerFee,
     partnerFeeError: feeState.kind === 'invalid' ? feeState.message : undefined,
     partnerFeeAmount: feeAmount !== undefined && srcToken ? formatUnits(feeAmount, srcToken.decimals) : '',
     chains: assets.chains,
     groups,
-    assetCount: assets.assetCount,
-    networkCount: assets.chains.length,
+    assetCount: new Set(
+      assets.choices
+        .filter(
+          choice =>
+            networkAllowed(choice.chain, widget.sourceNetworks) ||
+            networkAllowed(choice.chain, widget.destinationNetworks),
+        )
+        .map(choice => choice.token.symbol),
+    ).size,
+    networkCount: new Set([...sourceNetworks, ...destinationNetworks]).size,
     isLoadingAssets: assets.chains.length === 0 && tokensQuery.isLoading,
     assetsError: tokensQuery.isError ? 'Could not load the token list. Retry in a moment.' : undefined,
     speedTier,
     quotedOutput: quotedAmount !== undefined && dstToken ? formatUnits(BigInt(quotedAmount), dstToken.decimals) : '',
     minReceived: minOutputAmount !== undefined && dstToken ? formatUnits(minOutputAmount, dstToken.decimals) : '',
     hasQuote: quotedAmount !== undefined,
-    isQuoting: quoteQuery.isFetching,
-    quoteError: quoteQuery.isError ? 'No route for this pair right now.' : undefined,
+    isQuoting: quoteQuery.isFetching || !isAmountSettled,
+    quoteError: quoteQuery.isError ? 'Could not get a quote. Retry or choose another pair.' : undefined,
     isSlippageValid: slippageBps !== undefined,
     isAmountValid: inputAmount !== undefined,
     trackHandoff,

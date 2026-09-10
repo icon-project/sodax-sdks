@@ -1,7 +1,8 @@
 import { EXCHANGE_URL } from '../config';
 import type { SwapFlow } from '../hooks/useSwapFlow';
 import type { TokenChoice } from '../lib/chains';
-import { FEE_BPS_MAX } from '../lib/fee';
+import { WalletControls } from './WalletControls';
+import { SwapReview } from './SwapReview';
 import { formatTokenAmount } from '../lib/format';
 import { AssetPicker } from './AssetPicker';
 import { AssetPanel, FlipButton } from './AssetPanel';
@@ -16,67 +17,59 @@ function Amount({ value, symbol }: { value: string; symbol: string | undefined }
   );
 }
 
-function PartnerFeeFields({ flow }: { flow: SwapFlow }) {
-  const { address, bps } = flow.partnerFeeInput;
-
-  return (
-    <details className="disclosure">
-      <summary>Charge a partner fee</summary>
-      <p className="muted small">
-        Integration is free, and this fee is yours in full — SODAX takes no share of it. The quote above stays net of
-        it.
-      </p>
-      <div className="row">
-        <input
-          className="input"
-          aria-label="Partner fee recipient on Sonic"
-          placeholder="Recipient on Sonic (0x…)"
-          value={address}
-          onChange={event => flow.setPartnerFeeInput({ address: event.target.value, bps })}
-        />
-        <input
-          className="input fee-bps"
-          aria-label="Partner fee in basis points"
-          inputMode="numeric"
-          placeholder="bps"
-          value={bps}
-          onChange={event => flow.setPartnerFeeInput({ address, bps: event.target.value })}
-        />
-      </div>
-      <p className="muted small">
-        Up to {FEE_BPS_MAX} bps ({FEE_BPS_MAX / 100}%). The recipient is not validated — a wrong address is unclaimable.
-      </p>
-    </details>
-  );
-}
-
-/**
- * The widget cannot sign — no wallet layer is mounted — so a quotable pair hands off to the
- * exchange instead of gating behind a connect button. Every other state is the form telling the
- * visitor why there is no quote yet.
- */
 function PrimaryAction({ flow }: { flow: SwapFlow }) {
+  const e = flow.execution;
   const disabled = (text: string) => (
     <button type="button" className="btn btn-primary" disabled>
       {text}
     </button>
   );
-
-  if (!flow.srcToken || !flow.dstToken) return disabled('No assets on this network');
+  if (e.activity) return disabled(e.terminal ? 'See your latest swap below' : 'Swap in progress');
+  if (!flow.srcToken || !flow.dstToken) return disabled('Choose assets');
   if (!flow.isAmountValid) return disabled('Enter an amount');
-  if (!flow.isSlippageValid) return disabled('Slippage must be between 0 and 100');
-  if (flow.partnerFeeError) return disabled('Fix the partner fee');
-  if (flow.quoteError) return disabled('No route available');
-  if (!flow.hasQuote) return disabled(flow.isQuoting ? 'Fetching quote…' : 'Enter an amount');
-
+  if (!flow.isSlippageValid) return disabled('Check slippage');
+  if (flow.partnerFeeError) return disabled('Configuration needs attention');
+  if (!e.signable)
+    return (
+      <a className="btn btn-primary" href={EXCHANGE_URL} target="_blank" rel="noreferrer" onClick={flow.trackHandoff}>
+        Continue on SODAX ↗
+      </a>
+    );
+  if (!e.source?.address)
+    return (
+      <button type="button" className="btn btn-primary" onClick={() => e.openConnect(e.sourceType)}>
+        Connect wallet
+      </button>
+    );
+  if (!e.destination?.address)
+    return (
+      <button type="button" className="btn btn-primary" onClick={() => e.openConnect(e.destinationType)}>
+        Connect receiving wallet
+      </button>
+    );
+  if (e.isWrongChain)
+    return (
+      <button type="button" className="btn btn-primary" onClick={e.handleSwitchChain}>
+        Switch network in wallet
+      </button>
+    );
+  if (e.insufficientBalance) return disabled('Insufficient balance');
+  if (flow.quoteError)
+    return (
+      <button type="button" className="btn btn-primary" onClick={flow.refreshQuote}>
+        Retry quote
+      </button>
+    );
+  if (flow.hasQuote && Number(flow.minReceived) <= 0) return disabled('Amount too small');
+  if (!flow.hasQuote) return disabled(flow.isQuoting ? 'Finding a quote…' : 'Enter an amount');
   return (
-    <a className="btn btn-primary" href={EXCHANGE_URL} target="_blank" rel="noreferrer" onClick={flow.trackHandoff}>
-      Swap {flow.srcToken.symbol} → {flow.dstToken.symbol} ↗
-    </a>
+    <button type="button" className="btn btn-primary" onClick={e.openReview}>
+      Review swap
+    </button>
   );
 }
 
-function LoadingForm({ message }: { message: string }) {
+function LoadingForm({ message, retry }: { message: string; retry?: () => void }) {
   return (
     <section className="card swap-card">
       <div className="asset-panel asset-panel-skeleton" aria-hidden="true" />
@@ -85,6 +78,11 @@ function LoadingForm({ message }: { message: string }) {
       <p className="muted small" role="status">
         {message}
       </p>
+      {retry && (
+        <button type="button" className="btn" onClick={retry}>
+          Retry loading assets
+        </button>
+      )}
     </section>
   );
 }
@@ -105,102 +103,134 @@ export function SwapPanel({ flow }: { flow: SwapFlow }) {
   // Read out before the guard: inside the picker callbacks TS cannot keep a property narrowed.
   const { srcChain, dstChain } = flow;
 
-  if (flow.assetsError) return <LoadingForm message={flow.assetsError} />;
-  if (!srcChain || !dstChain) return <LoadingForm message="Loading assets…" />;
+  if (flow.assetsError) return <LoadingForm message={flow.assetsError} retry={flow.retryAssets} />;
+  if (!srcChain || !dstChain)
+    return (
+      <LoadingForm
+        message={flow.isLoadingAssets ? 'Loading assets…' : 'No assets available for the configured networks.'}
+        retry={flow.retryAssets}
+      />
+    );
 
   // One slot, so a fee error and a quote error cannot stack and resize the card between them.
   // The tail stays short enough to hold one line: "this pair" already says to try another.
-  const message = flow.partnerFeeError ?? (flow.quoteError && `${flow.quoteError} Try a smaller amount.`);
+  const message = flow.partnerFeeError ?? flow.quoteError;
 
   return (
-    <section className="card swap-card">
-      <AssetPanel
-        symbol={flow.srcToken?.symbol}
-        chain={srcChain}
-        emptyLabel="No assets"
-        pickerLabel="Asset to send"
-        picker={state => (
-          <AssetPicker
-            {...state}
-            groups={flow.groups}
-            networks={flow.chains}
-            selected={flow.srcToken && { chain: srcChain, symbol: flow.srcToken.symbol }}
-            onSelect={selectSrc}
-          />
-        )}
-        amount={flow.amount}
-        amountLabel="Amount to send"
-        onAmountChange={flow.setAmount}
-        note={flow.partnerFee ? `less ${formatTokenAmount(flow.partnerFeeAmount)} fee` : undefined}
-      />
-
-      <FlipButton onClick={flow.flipDirection} />
-
-      <AssetPanel
-        symbol={flow.dstToken?.symbol}
-        chain={dstChain}
-        emptyLabel="No assets"
-        pickerLabel="Asset to receive"
-        picker={state => (
-          <AssetPicker
-            {...state}
-            groups={flow.groups}
-            networks={flow.chains}
-            selected={flow.dstToken && { chain: dstChain, symbol: flow.dstToken.symbol }}
-            onSelect={selectDst}
-          />
-        )}
-        amount={flow.quotedOutput}
-        amountLabel="Amount to receive"
-        note={flow.hasQuote ? (flow.isQuoting ? 'refreshing…' : 'live quote, every 3s') : undefined}
-      />
-
-      <div className="summary">
-        <div className="row-between">
-          <span className="muted">Slippage</span>
-          <span className="slippage">
-            <input
-              className="input slip"
-              aria-label="Slippage tolerance, percent"
-              inputMode="decimal"
-              value={flow.slippagePercent}
-              onChange={event => flow.setSlippagePercent(event.target.value)}
-            />
-            %
-          </span>
-        </div>
-        {flow.partnerFee && (
-          <div className="row-between">
-            <span className="muted">Your fee ({flow.partnerFee.percentage / 100}%)</span>
-            <Amount value={flow.partnerFeeAmount} symbol={flow.srcToken?.symbol} />
+    <>
+      <WalletControls execution={flow.execution} />
+      <section className="card swap-card">
+        <fieldset className="swap-fields" disabled={!!flow.execution.phase || !!flow.execution.activity}>
+          <div className="row-between asset-caption">
+            <span>You pay</span>
+            {flow.execution.balanceText !== undefined && (
+              <span>
+                Balance: {formatTokenAmount(flow.execution.balanceText)}
+                {flow.execution.canMax && (
+                  <button
+                    className="btn max-button"
+                    type="button"
+                    onClick={() => flow.setAmount(flow.execution.balanceText ?? '')}
+                  >
+                    MAX
+                  </button>
+                )}
+              </span>
+            )}
           </div>
-        )}
-        <div className="row-between">
-          <span className="muted">Minimum received</span>
-          <Amount value={flow.minReceived} symbol={flow.dstToken?.symbol} />
-        </div>
-        {flow.speedTier && (
-          <div className="row-between">
-            <span className="muted">Settles in</span>
-            <span>~{flow.speedTier.estimatedSeconds}s</span>
+          <AssetPanel
+            symbol={flow.srcToken?.symbol}
+            chain={srcChain}
+            emptyLabel="No assets"
+            pickerLabel="Asset to send"
+            picker={state => (
+              <AssetPicker
+                {...state}
+                groups={flow.sourceGroups}
+                networks={flow.sourceNetworks}
+                selected={flow.srcToken && { chain: srcChain, symbol: flow.srcToken.symbol }}
+                onSelect={selectSrc}
+              />
+            )}
+            amount={flow.amount}
+            amountLabel="Amount to send"
+            onAmountChange={flow.setAmount}
+            note={flow.partnerFee ? `less ${formatTokenAmount(flow.partnerFeeAmount)} fee` : undefined}
+          />
+
+          <FlipButton onClick={flow.flipDirection} />
+
+          <AssetPanel
+            symbol={flow.dstToken?.symbol}
+            chain={dstChain}
+            emptyLabel="No assets"
+            pickerLabel="Asset to receive"
+            picker={state => (
+              <AssetPicker
+                {...state}
+                groups={flow.destinationGroups}
+                networks={flow.destinationNetworks}
+                selected={flow.dstToken && { chain: dstChain, symbol: flow.dstToken.symbol }}
+                onSelect={selectDst}
+              />
+            )}
+            amount={flow.quotedOutput}
+            amountLabel="Amount to receive"
+            note={flow.hasQuote ? (flow.isQuoting ? 'refreshing…' : 'Live quote') : undefined}
+          />
+        </fieldset>
+        <details className="disclosure swap-details">
+          <summary>Swap details &amp; settings</summary>
+          <div className="summary">
+            <div className="row-between">
+              <span className="muted">Slippage</span>
+              <span className="slippage">
+                <input
+                  className="input slip"
+                  aria-label="Slippage tolerance, percent"
+                  inputMode="decimal"
+                  value={flow.slippagePercent}
+                  onChange={event => flow.setSlippagePercent(event.target.value)}
+                />
+                %
+              </span>
+            </div>
+            {flow.partnerFee && (
+              <div className="row-between">
+                <span className="muted">Partner fee ({flow.partnerFee.percentage / 100}%)</span>
+                <Amount value={flow.partnerFeeAmount} symbol={flow.srcToken?.symbol} />
+              </div>
+            )}
+            <div className="row-between">
+              <span className="muted">Minimum received</span>
+              <Amount value={flow.minReceived} symbol={flow.dstToken?.symbol} />
+            </div>
+            {flow.speedTier && (
+              <div className="row-between">
+                <span className="muted">Estimated time</span>
+                <span>~{flow.speedTier.estimatedSeconds}s</span>
+              </div>
+            )}
           </div>
+        </details>
+        {flow.execution.balanceError && (
+          <p className="muted small">Balance unavailable. Check your balance and network fees in your wallet.</p>
         )}
-      </div>
 
-      <PartnerFeeFields flow={flow} />
-
-      <div className="action-dock">
-        <PrimaryAction flow={flow} />
-        {/* Reserved height, and below the action: the quote refetches every 3s, so a slot that
-            collapsed would move the button out from under the visitor's cursor. */}
-        <div className="action-message" role="status" aria-live="polite">
-          {message && <p className="alert">{message}</p>}
+        <div className="action-dock">
+          <PrimaryAction flow={flow} />
+          {/* Reserve space so quote errors do not move the action. */}
+          <div className="action-message" role="status" aria-live="polite">
+            {message && <p className="alert">{message}</p>}
+          </div>
+          <p className="muted small action-note">
+            {flow.execution.signable
+              ? 'Powered by SODAX · Your keys stay in your wallet.'
+              : 'Quote-only for this route. Continue on SODAX and select your trade there.'}
+          </p>
         </div>
-        <p className="muted small action-note">
-          Quotes are live off mainnet liquidity. The widget connects no wallet and cannot move funds — signing happens
-          on sodax.com.
-        </p>
-      </div>
-    </section>
+      </section>
+      <SwapReview flow={flow} />
+    </>
   );
 }

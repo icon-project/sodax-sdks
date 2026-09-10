@@ -20,26 +20,53 @@ function feeExpression(fee: PartnerFeePercentage): string {
 
 /** The takeaway: the widget on the visitor's own page, opened on the pair they just configured. */
 function embedSnippet(embedUrl: string): string {
-  return `<!-- Quotes only. The widget mounts no wallet, so nobody can sign inside your page. -->
+  return `<!-- Live mainnet swaps. Visitors connect and approve transactions in their wallet. -->
 <iframe
   src="${embedUrl}"
   title="SODAX swap"
   width="480"
-  height="620"
+  height="760"
   loading="lazy"
   referrerpolicy="no-referrer"
   style="border: 0; border-radius: 24px; max-width: 100%"
-></iframe>`;
+></iframe>
+<script>
+  (() => {
+    const frame = document.currentScript.previousElementSibling;
+    const origin = new URL(frame.src).origin;
+    window.addEventListener('message', event => {
+      if (event.source !== frame.contentWindow || event.origin !== origin) return;
+      if (event.data?.type === 'sodax:resize' && Number.isFinite(event.data.height)) {
+        frame.height = String(Math.max(360, Math.min(1600, event.data.height)));
+      }
+    });
+  })();
+</script>`;
 }
 
 function widgetSnippet(embedUrl: string): string {
   return `// The same embed as a component, for a React host. No SODAX package to install: the widget is
 // a page, so it carries its own React, its own SDK version and its own token list.
+import { useEffect, useRef } from 'react';
+
 type SodaxSwapWidgetProps = { src?: string; height?: number };
 
-export function SodaxSwapWidget({ src = '${embedUrl}', height = 620 }: SodaxSwapWidgetProps) {
+export function SodaxSwapWidget({ src = '${embedUrl}', height = 760 }: SodaxSwapWidgetProps) {
+  const frame = useRef<HTMLIFrameElement>(null);
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      const element = frame.current;
+      if (!element || event.source !== element.contentWindow || event.origin !== new URL(src).origin) return;
+      if (event.data?.type === 'sodax:resize' && Number.isFinite(event.data.height)) {
+        element.style.height = String(Math.max(360, Math.min(1600, event.data.height))) + 'px';
+      }
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [src]);
   return (
     <iframe
+      ref={frame}
       src={src}
       title="SODAX swap"
       loading="lazy"
@@ -88,7 +115,7 @@ function quoteSnippet(state: SnippetState): string {
 import { parseUnits } from 'viem';
 
 // ${srcToken?.symbol ?? 'TOKEN'} on ${chainKeyExpression(srcChain)} → ${dstToken?.symbol ?? 'TOKEN'} on ${chainKeyExpression(dstChain)}
-// No wallet, no signer: a quote is an HTTP call, which is why this widget needs neither.
+// Quotes are available before a wallet is connected.
 const { data: quote, isFetching } = useSwapsApiQuote({
   params: {
     body: {
@@ -101,7 +128,7 @@ const { data: quote, isFetching } = useSwapsApiQuote({
     },
   },
   // A "no path" answer is a business result, not a transient failure — retrying only delays it.
-  queryOptions: { retry: false, refetchInterval: 3000 },
+  queryOptions: { retry: false, refetchInterval: 10000 },
 });
 
 // ${slippagePercent || '0'}% slippage, as integer basis points — never float math on token amounts.
@@ -109,8 +136,7 @@ const minOutputAmount = quote && (BigInt(quote.quotedAmount) * ${bps}n) / 10_000
 }
 
 /**
- * The embed and the quote calls behind it — nothing that signs. A signing recipe here would teach
- * the one thing this widget deliberately cannot do, so it lives in the docs instead.
+ * The hosted embed owns execution; the quote tab is an optional lower-level integration example.
  */
 export function buildSnippets(state: SnippetState, embedUrl: string): Snippet[] {
   return [

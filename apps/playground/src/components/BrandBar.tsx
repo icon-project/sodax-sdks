@@ -55,15 +55,7 @@ const CHOICE_FIELDS = [
   hint: string;
 }[];
 
-/**
- * Demo-page control for the theme API. Every control writes the same brand state the query string
- * carries, so a visitor styles the widget here and the `embed.html` snippet is already the answer —
- * which is why it lives on the page rather than in a docs table.
- *
- * Always open, and sitting above the snippet it drives. It was a popover first: anything that drops
- * out of the header covers the code panel, and anything that expands in flow walks the whole stage
- * down the page on a click.
- */
+/** Edits the same validated brand state carried by the exported embed. */
 export function BrandBar({ controls }: { controls: BrandControls }) {
   const { brand, notes, isBranded, update, reset } = controls;
 
@@ -77,8 +69,7 @@ export function BrandBar({ controls }: { controls: BrandControls }) {
       </header>
 
       <p className="brand-lead small">
-        Query parameters on the <code>embed.html</code> snippet below. Set accent and surface — the button label and
-        text ramp are derived to stay readable.
+        Match the widget to your app. Changes appear instantly and carry into your embed.
       </p>
 
       <div className="brand-grid">

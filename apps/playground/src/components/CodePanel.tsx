@@ -7,12 +7,19 @@ const SNIPPET_HINT = 'Updates with the form. Addresses and decimals come from th
 /** Renders whichever flow's snippets it is handed — the view decides what those are. */
 export function CodePanel({ snippets, initialId }: { snippets: Snippet[]; initialId: string }) {
   const [activeId, setActiveId] = useState(initialId);
+  const [copyError, setCopyError] = useState('');
   const [copied, setCopied] = useState(false);
 
   const active = snippets.find(snippet => snippet.id === activeId) ?? snippets[0];
 
   const copy = async () => {
-    await navigator.clipboard.writeText(active.code);
+    try {
+      await navigator.clipboard.writeText(active.code);
+      setCopyError('');
+    } catch {
+      setCopyError('Clipboard unavailable. Select and copy the code below.');
+      return;
+    }
     trackSnippetCopied(active.id);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1500);
@@ -68,15 +75,14 @@ export function CodePanel({ snippets, initialId }: { snippets: Snippet[]; initia
           </a>
         </div>
       </header>
+      {copyError && (
+        <p role="status" className="muted small">
+          {copyError}
+        </p>
+      )}
       <pre className="code">
         <code>{active.code}</code>
       </pre>
-      <p className="code-note muted small">
-        Building with an AI agent? <code>npx skills@latest add icon-project/sodax-sdks/packages/skills</code>{' '}
-        <a className="link" href="https://docs.sodax.com/developers/ai-integration" target="_blank" rel="noreferrer">
-          AI integration guide ↗
-        </a>
-      </p>
     </section>
   );
 }

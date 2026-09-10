@@ -10,7 +10,7 @@ export function Lockup({ assetCount, networkCount }: { assetCount: number; netwo
         Swap <em>everywhere</em>
       </h2>
       <p className="lockup-subtitle">
-        {assetCount > 0 ? `Access ${assetCount} assets across ${networkCount} networks.` : 'Loading assets…'}
+        {assetCount > 0 ? `Live quotes for ${assetCount} assets across ${networkCount} networks.` : 'Loading assets…'}
       </p>
     </div>
   );

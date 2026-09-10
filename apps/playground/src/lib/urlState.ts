@@ -1,3 +1,4 @@
+import { readWidgetSettings, type WidgetSettings } from './widgetSettings';
 import type { ChainKey, XToken } from '@sodax/dapp-kit';
 import { type Brand, NO_BRAND, readBrand, writeBrand } from './brand';
 import { type Flow, flowParam } from './flows';
@@ -10,6 +11,7 @@ import { type Flow, flowParam } from './flows';
  * crafted link would set it on a page a reader may never scroll to the form of.
  */
 export type UrlState = {
+  widget?: WidgetSettings;
   flow: Flow | undefined;
   /** Syntax only. A key from a URL is a string until the caller resolves it against a live list. */
   srcChain: string | undefined;
@@ -25,6 +27,7 @@ export type UrlState = {
 };
 
 export type UrlStateSource = {
+  widget?: WidgetSettings;
   flow: Flow;
   srcChain: ChainKey;
   dstChain: ChainKey;
@@ -51,6 +54,7 @@ export function readUrlState(search: string): UrlState {
   const params = new URLSearchParams(search);
 
   return {
+    ...(params.has('allowedSrc') || params.has('allowedDst') ? { widget: readWidgetSettings(params) } : {}),
     flow: flowParam(params.get('flow')),
     srcChain: matching(CHAIN_KEY, params.get('srcChain')),
     dstChain: matching(CHAIN_KEY, params.get('dstChain')),
@@ -82,7 +86,9 @@ const BLANK: UrlState = {
  * Chrome and styling are about the frame rather than the form, so both cross a flow mismatch.
  */
 export function seedFor(flow: Flow, state: UrlState): UrlState {
-  return (state.flow ?? 'swap') === flow ? state : { ...BLANK, embed: state.embed, brand: state.brand };
+  return (state.flow ?? 'swap') === flow
+    ? state
+    : { ...BLANK, embed: state.embed, brand: state.brand, widget: state.widget };
 }
 
 export function toSearch(state: UrlStateSource): string {
@@ -96,6 +102,8 @@ export function toSearch(state: UrlStateSource): string {
   if (state.flow !== 'swap') params.set('flow', state.flow);
   if (state.embed) params.set('embed', '1');
   if (state.brand) writeBrand(params, state.brand);
+  if (state.widget?.sourceNetworks.length) params.set('allowedSrc', state.widget.sourceNetworks.join(','));
+  if (state.widget?.destinationNetworks.length) params.set('allowedDst', state.widget.destinationNetworks.join(','));
   return params.toString();
 }
 

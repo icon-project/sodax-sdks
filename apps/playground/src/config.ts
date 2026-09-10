@@ -1,4 +1,5 @@
 import { ChainKeys } from '@sodax/dapp-kit';
+import { readPartnerFee } from './lib/fee';
 
 const env = import.meta.env as Record<string, string | undefined>;
 
@@ -25,8 +26,7 @@ export const DEFAULT_SLIPPAGE_PERCENT = '0.5';
 export const DEFAULT_AMOUNT = '0.1';
 
 /**
- * ETH on Base → TSLAx on Solana: one EVM leg, one non-EVM leg, and a tokenized equity no competing
- * aggregator routes to. Both sides resolve against the loaded token list, so a delisted default
+ * ETH on Base → TSLAx on Solana: one EVM leg, one non-EVM leg, and a tokenized equity. Both sides resolve against the loaded token list, so a delisted default
  * falls back to that chain's first asset rather than breaking the form.
  */
 export const DEFAULT_PAIR = {
@@ -36,5 +36,12 @@ export const DEFAULT_PAIR = {
   dstSymbol: 'TSLAx',
 } as const;
 
-/** The widget quotes; signing happens on the exchange. Nothing here can move funds. */
+/** Fallback for routes without an in-widget execution path. */
 export const EXCHANGE_URL = 'https://www.sodax.com/exchange/swap';
+
+export const walletConnectProjectId = env.VITE_WALLETCONNECT_PROJECT_ID;
+export const deploymentFeeInput = {
+  address: env.VITE_PARTNER_FEE_RECIPIENT ?? '',
+  bps: env.VITE_PARTNER_FEE_BPS ?? '',
+};
+export const deploymentFee = readPartnerFee(deploymentFeeInput);

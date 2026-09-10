@@ -27,7 +27,7 @@ describe('buildSnippets', () => {
     expect(buildSnippets(base, EMBED_URL).map(snippet => snippet.id)).toEqual(['embed', 'widget', 'quote']);
   });
 
-  // The widget is decided as non-connectable, so the panel must not hand out a signing recipe.
+  // The hosted embed owns signing; its integration snippet should not duplicate that flow.
   it('ships no call that signs or broadcasts', () => {
     const all = buildSnippets(base, EMBED_URL)
       .map(snippet => snippet.code)
@@ -43,8 +43,9 @@ describe('buildSnippets', () => {
     expect(codeFor(base, 'widget')).toContain(EMBED_URL);
   });
 
-  it('says on the embed that a framed widget cannot sign', () => {
-    expect(codeFor(base, 'embed')).toContain('no wallet');
+  it('identifies the embed as a live mainnet flow requiring wallet approval', () => {
+    expect(codeFor(base, 'embed')).toContain('Live mainnet swaps');
+    expect(codeFor(base, 'embed')).toContain('approve transactions in their wallet');
   });
 
   // The whole point of the panel: a reader pastes chain keys that exist in the version they install.
