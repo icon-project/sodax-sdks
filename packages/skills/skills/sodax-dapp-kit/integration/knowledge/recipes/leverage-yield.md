@@ -195,7 +195,9 @@ const { data: account } = useLeveragePositionAccount({ params: { position: posit
 > **Experimental off the hub.** Position writes are proven end to end on Sonic only. From a spoke the
 > inbound half is verified by a fork replay, and the outbound half (exit or cancel delivering back to
 > the source chain) has not run on mainnet. Prefer `srcChainKey: 'sonic'` unless the integrator has
-> accepted that risk.
+> accepted that risk. **Bitcoin is refused outright** — the position paths do not resolve the Bound
+> trading wallet, so a Bitcoin `srcChainKey` returns `VALIDATION_FAILED` instead of funding the wrong
+> hub wallet.
 
 Writes go through `sodax.leverageYield.openPosition` / `openPositionFromDebtToken` (which carry the
 deposit) and `operatePosition` (which carries calls built by `buildAddLeverage` /

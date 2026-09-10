@@ -552,6 +552,11 @@ Three things worth knowing about what comes back:
 > relayed message, and the outbound half — an exit or cancellation delivering the underlying back to
 > the chain it came from — has never run on mainnet. A non-hub `srcChainKey` is experimental: expect
 > to verify it against your own deployment before putting user funds through it.
+>
+> **Bitcoin is refused outright.** In TRADING mode the deposit is pulled from the Bound trading
+> wallet, so the hub wallet has to be derived from that address rather than the personal one — which
+> these paths do not do. `openPosition`, `openPositionFromDebtToken` and `operatePosition` return
+> `VALIDATION_FAILED` (`field: 'srcChainKey'`) for a Bitcoin source rather than funding the wrong wallet.
 
 
 Positions live on the hub, but nothing requires the user to. These carry the work there and are the normal entry points:

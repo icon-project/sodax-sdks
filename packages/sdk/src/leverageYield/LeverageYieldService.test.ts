@@ -2080,6 +2080,28 @@ describe('LeverageYieldService — position partner fee', () => {
     if (!result.ok) return;
     expect(feeOf(result.value.data).bps).toBe(25);
   });
+
+  /**
+   * A position's fee is fixed at creation, so an out-of-range value is not one mispriced intent — it
+   * is every operation the position will ever run. `50_000` is the case that motivated this: 500%,
+   * but it fits a `uint16`, so nothing downstream rejected it and the batch encoded cleanly.
+   */
+  it('rejects a fee percentage that is fractional, negative, or above FEE_PERCENTAGE_SCALE', () => {
+    for (const percentage of [0.5, -100, 10_001, 50_000]) {
+      const result = build(sodax, { address: PARTNER, percentage });
+      expect(result.ok).toBe(false);
+      if (result.ok) continue;
+      expect(result.error.code).toBe('LOOKUP_FAILED');
+    }
+  });
+
+  /** The ceiling itself stays valid — this asserts the guard rejects, and does not move the bound. */
+  it('accepts the FEE_PERCENTAGE_SCALE boundary unchanged', () => {
+    const result = build(sodax, { address: PARTNER, percentage: 10_000 });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(feeOf(result.value.data).bps).toBe(10_000);
+  });
 });
 
 describe('LeverageYieldService.approvePositionFunding — waiting for the approve to land', () => {
@@ -2736,6 +2758,34 @@ describe('LeverageYieldService — opening a position from any chain', () => {
     expect(result.error.code).toBe('VALIDATION_FAILED');
     expect(deposit).not.toHaveBeenCalled();
   });
+
+  /**
+   * Bitcoin reaches this path through the public types like any other spoke, and everything upstream
+   * of the deposit succeeds — so without this guard the first sign of trouble is a broadcast deposit
+   * funding a hub wallet the batch never names.
+   */
+  it('refuses a Bitcoin source before any funds move', async () => {
+    const configured = sodaxWithFactory();
+    const deposit = vi.spyOn(configured.spoke, 'deposit');
+
+    const result = await configured.leverageYield.openPosition({
+      params: {
+        srcChainKey: 'bitcoin',
+        srcAddress: 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4',
+        token: '0:0',
+        amount: 10n ** 6n,
+        borrowToken: POS_BORROW_TOKEN,
+        borrowAmount: 1n,
+        minCollateralOut: 1n,
+      },
+    } as never);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('VALIDATION_FAILED');
+    expect(result.error.context?.field).toBe('srcChainKey');
+    expect(deposit).not.toHaveBeenCalled();
+  });
 });
 
 describe('LeverageYieldService.operatePosition', () => {
@@ -2777,6 +2827,25 @@ describe('LeverageYieldService.operatePosition', () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.code).toBe('VALIDATION_FAILED');
+  });
+
+  it('refuses a Bitcoin source before signing anything', async () => {
+    const configured = sodaxWithFactory();
+    const sendMessage = vi.spyOn(configured.spoke, 'sendMessage');
+
+    const result = await configured.leverageYield.operatePosition({
+      params: {
+        srcChainKey: 'bitcoin',
+        srcAddress: 'bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4',
+        calls: [{ from: HUB_WALLET, to: POSITION, value: 0n, data: '0x' }],
+      },
+    } as never);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('VALIDATION_FAILED');
+    expect(result.error.context?.field).toBe('srcChainKey');
+    expect(sendMessage).not.toHaveBeenCalled();
   });
 
   it('maps a relay timeout rather than reporting the operation as done', async () => {

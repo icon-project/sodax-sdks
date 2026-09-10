@@ -238,6 +238,15 @@ export type PositionOperationParams<K extends SpokeChainKey> = {
   calls: readonly EvmRawTransaction[];
 };
 
+/**
+ * Why positions refuse a Bitcoin source. Every other spoke resolves its own address, but Bitcoin in
+ * TRADING mode pulls from the Bound trading wallet, so the hub wallet must be derived from
+ * `getEffectiveWalletAddress` and gated on `ensureRadfiAccessToken` — as `createVaultIntent` does.
+ * The position paths do neither, so a deposit would fund a hub wallet the batch does not name.
+ */
+const BITCOIN_UNSUPPORTED_MESSAGE =
+  'Bitcoin is not a supported source chain for leverage positions; use a supported spoke or the hub';
+
 /** Sentinel `solver` address meaning "any solver may fill this intent". */
 const ANY_SOLVER_ADDRESS: Address = '0x0000000000000000000000000000000000000000';
 
@@ -2152,6 +2161,20 @@ export class LeverageYieldService {
         ),
       };
     }
+    // The bounds `getQuote` already asserts, repeated because a position's fee is fixed at creation:
+    // an out-of-range or fractional `uint16` is baked in permanently, not just mispriced once.
+    if (!Number.isInteger(fee.percentage) || fee.percentage < 0 || fee.percentage > Number(FEE_PERCENTAGE_SCALE)) {
+      return {
+        ok: false,
+        error: lookupFailed(
+          'leverageYield',
+          method,
+          new Error(
+            `a position partner fee must be a whole number of basis points between 0 and ${FEE_PERCENTAGE_SCALE} (got ${fee.percentage})`,
+          ),
+        ),
+      };
+    }
     return { ok: true, value: { feeReceiver: fee.address, feeBps: fee.percentage } };
   }
 
@@ -2768,7 +2791,8 @@ export class LeverageYieldService {
    *              end to end on Sonic, the hub. From a spoke the inbound half is proven only by a fork
    *              replay of a real relayed message, and the OUTBOUND half — an exit or a cancellation
    *              delivering the underlying back to the spoke it came from — has never run on mainnet.
-   *              Treat a non-hub `srcChainKey` as experimental until it has.
+   *              Treat a non-hub `srcChainKey` as experimental until it has. Bitcoin is refused
+   *              outright — see {@link BITCOIN_UNSUPPORTED_MESSAGE}.
    */
   public async openPosition<K extends SpokeChainKey>(
     _params: SpokeExecActionParams<K, false, OpenPositionParams<K>>,
@@ -2793,7 +2817,8 @@ export class LeverageYieldService {
    *              end to end on Sonic, the hub. From a spoke the inbound half is proven only by a fork
    *              replay of a real relayed message, and the OUTBOUND half — an exit or a cancellation
    *              delivering the underlying back to the spoke it came from — has never run on mainnet.
-   *              Treat a non-hub `srcChainKey` as experimental until it has.
+   *              Treat a non-hub `srcChainKey` as experimental until it has. Bitcoin is refused
+   *              outright — see {@link BITCOIN_UNSUPPORTED_MESSAGE}.
    */
   public async openPositionFromDebtToken<K extends SpokeChainKey>(
     _params: SpokeExecActionParams<K, false, OpenPositionFromDebtTokenParams<K>>,
@@ -2853,6 +2878,12 @@ export class LeverageYieldService {
     };
 
     try {
+      // Bitcoin is not supported: the position paths derive the hub wallet from the personal address,
+      // where TRADING mode requires the effective (trading) one — so fail before any funds move.
+      leverageYieldInvariant(!isBitcoinChainKeyType(params.srcChainKey), BITCOIN_UNSUPPORTED_MESSAGE, {
+        ...baseCtx,
+        field: 'srcChainKey',
+      });
       leverageYieldInvariant(params.amount > 0n, 'amount must be greater than 0', { ...baseCtx, field: 'amount' });
       leverageYieldInvariant(params.minCollateralOut > 0n, 'minCollateralOut must be greater than 0', {
         ...baseCtx,
@@ -2912,7 +2943,8 @@ export class LeverageYieldService {
    *              end to end on Sonic, the hub. From a spoke the inbound half is proven only by a fork
    *              replay of a real relayed message, and the OUTBOUND half — an exit or a cancellation
    *              delivering the underlying back to the spoke it came from — has never run on mainnet.
-   *              Treat a non-hub `srcChainKey` as experimental until it has.
+   *              Treat a non-hub `srcChainKey` as experimental until it has. Bitcoin is refused
+   *              outright — see {@link BITCOIN_UNSUPPORTED_MESSAGE}.
    */
   public async operatePosition<K extends SpokeChainKey>(
     _params: SpokeExecActionParams<K, false, PositionOperationParams<K>>,
@@ -2945,6 +2977,12 @@ export class LeverageYieldService {
     };
 
     try {
+      // Bitcoin is not supported: the position paths derive the hub wallet from the personal address,
+      // where TRADING mode requires the effective (trading) one — so fail before any funds move.
+      leverageYieldInvariant(!isBitcoinChainKeyType(params.srcChainKey), BITCOIN_UNSUPPORTED_MESSAGE, {
+        ...baseCtx,
+        field: 'srcChainKey',
+      });
       leverageYieldInvariant(params.calls.length > 0, 'at least one call is required', {
         ...baseCtx,
         field: 'calls',
