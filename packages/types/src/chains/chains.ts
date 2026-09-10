@@ -537,6 +537,27 @@ export type StellarSpokeChainConfig = BaseSpokeChainConfig<'STELLAR'> & {
   baseFee: string;
 };
 
+export const BOUND_API_HOST = 'https://svc.bound.exchange/api';
+
+/**
+ * Which auth/transactions hosts accompany a given Bound api host. Kept OUT of `spokeChainConfig`
+ * below: `deepMerge` merges `radfi` key by key, so inlining them would let an `apiUrl`-only
+ * override inherit them and straddle environments. A key absent here falls back to the api host.
+ */
+export const BOUND_COMPANION_HOSTS: Record<string, { auth?: string; transactions?: string }> = {
+  [BOUND_API_HOST]: {
+    auth: 'https://auth.bound.exchange/api',
+    transactions: 'https://api.radfi.co/api',
+  },
+};
+
+/**
+ * Hosts Bound has announced it will retire. `RadfiProvider` refuses to construct when one is
+ * configured. No replacement is stored: it depends on which family the retired host was
+ * configured for, not on the host.
+ */
+export const DEPRECATED_BOUND_HOSTS: readonly string[] = ['https://api.bound.exchange/api'];
+
 export type BitcoinSpokeChainConfig = BaseSpokeChainConfig<'BITCOIN'> & {
   addresses: {
     assetManager: string;
@@ -545,6 +566,10 @@ export type BitcoinSpokeChainConfig = BaseSpokeChainConfig<'BITCOIN'> & {
   network: string;
   radfi: {
     apiUrl: string;
+    /** `/auth/*` + `/wallets/*`. Unset resolves via {@link BOUND_COMPANION_HOSTS}[`apiUrl`], then `apiUrl`. */
+    authUrl?: string;
+    /** `/transactions/*`. Unset resolves via {@link BOUND_COMPANION_HOSTS}[`apiUrl`], then `apiUrl`. */
+    transactionsUrl?: string;
     umsUrl: string;
     apiKey: string;
     accessToken: string;
@@ -862,7 +887,8 @@ export const spokeChainConfig = {
     supportedTokens: bitcoinSupportedTokens,
     radfi: {
       walletMode: 'TRADING',
-      apiUrl: 'https://api.bound.exchange/api',
+      // authUrl / transactionsUrl are intentionally absent: see BOUND_COMPANION_HOSTS.
+      apiUrl: BOUND_API_HOST,
       apiKey: '',
       umsUrl: 'https://api.ums.bound.exchange/api',
       accessToken: '',

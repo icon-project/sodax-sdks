@@ -237,7 +237,7 @@ On any non-success (submission rejected, a 200 the backend did not accept, termi
 
 ### RadFi/Bound request signer (`radfi.signRequest`)
 
-`radfi` is a **client-side runtime option** on `SodaxOptions` (like `logger`) — never part of the backend-fetched `SodaxConfig`. The SDK calls `signRequest` once per outbound Bound Exchange (RadFi) `apiUrl` request and merges the returned headers onto it, so a server-to-server caller can attach Bound's `x-api-signature` HMAC header without the SDK ever holding the credential.
+`radfi` is a **client-side runtime option** on `SodaxOptions` (like `logger`) — never part of the backend-fetched `SodaxConfig`. The SDK calls `signRequest` once per outbound Bound Exchange (RadFi) request on **any** routed host — `svc.bound.exchange`, `auth.bound.exchange` or `api.radfi.co` — and merges the returned headers onto it, so a server-to-server caller can attach Bound's `x-api-signature` HMAC header without the SDK ever holding the credential. The context carries `baseUrl`, so a signer that must scope its credential per origin can branch on it. UMS calls (`/wallets/balance`, `/utxos`) bypass this and are never signed.
 
 ```typescript
 import { createHmac } from 'node:crypto';
@@ -255,7 +255,7 @@ const sodax = new Sodax({
 
 **Server-side only** — the closure holds a service credential, so never ship one in a browser bundle. Omit `radfi` and requests go out exactly as before.
 
-The signer receives `{ method, path }`, may be async, and is invoked per request (Bound's signature embeds a timestamp valid for 60 s, so a cached one would replay). Its headers are merged **last**, so it must not return `Authorization`: that carries the per-user Bound access token, which is separate and passed per call via `extras.bound.accessToken`.
+The signer receives `{ method, path, baseUrl }` — `baseUrl` is the resolved Bound host for that call, so a signer that must scope its credential per origin can branch on it. It may be async, and is invoked per request (Bound's signature embeds a timestamp valid for 60 s, so a cached one would replay). Its headers are merged **last**, so it must not return `Authorization`: that carries the per-user Bound access token, which is separate and passed per call via `extras.bound.accessToken`.
 
 ### Money market (`moneyMarket`)
 

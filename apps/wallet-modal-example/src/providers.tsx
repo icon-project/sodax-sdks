@@ -29,8 +29,6 @@ const walletConfig: SodaxWalletConfig = {
     chains: {
       [ChainKeys.BITCOIN_MAINNET]: {
         rpcUrl: 'https://mempool.space/api',
-        radfiApiUrl: 'https://api.bound.exchange/api',
-        radfiUmsUrl: 'https://api.ums.bound.exchange/api',
       },
     },
   },
