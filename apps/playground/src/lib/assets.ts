@@ -1,6 +1,7 @@
 import {
   type Address,
   type ChainKey,
+  ChainKeys,
   type GetSwapTokensResponseV2,
   LsodaTokens,
   SodaTokens,
@@ -13,13 +14,20 @@ import { type TokenChoice, chainName, isChainKey } from './chains';
  * Vault shares: `soda*` money-market shares and `lsoda*` leverage-yield shares. The API surfaces
  * them on spoke chains too (sodaBTC on Stellar), and neither is a swappable asset — same filter
  * `sodax.com/exchange/swap` applies to the same response.
+ *
+ * Matched by the `SodaTokens` / `LsodaTokens` *keys*, which the API still uses as symbols, and on
+ * the hub by address — `.symbol` follows on-chain metadata (`sodaBTC` reads `BTC`) and cannot be used.
  */
-const VAULT_SHARES = new Set<string>([
-  ...Object.values(SodaTokens)
-    .map(token => token.symbol)
-    .filter(symbol => symbol.toLowerCase().startsWith('soda')),
-  ...Object.values(LsodaTokens).map(token => token.symbol),
-]);
+const HUB_SHARES = [...Object.entries(SodaTokens), ...Object.entries(LsodaTokens)].filter(([key]) =>
+  /^l?soda/.test(key),
+);
+const VAULT_SHARE_SYMBOLS = new Set<string>(HUB_SHARES.map(([key]) => key));
+const HUB_SHARE_ADDRESSES = new Set<string>(HUB_SHARES.map(([, token]) => token.address.toLowerCase()));
+
+function isVaultShare(token: SwapTokenV2, chain: ChainKey): boolean {
+  if (VAULT_SHARE_SYMBOLS.has(token.symbol)) return true;
+  return chain === ChainKeys.SONIC_MAINNET && HUB_SHARE_ADDRESSES.has(token.address.toLowerCase());
+}
 
 export type SwapAssets = {
   /** Every chain the API quotes, widest token list first. */
@@ -62,7 +70,7 @@ export function readSwapAssets(response: GetSwapTokensResponseV2 | undefined): S
 
     const byAddress = new Map<string, XToken>();
     for (const token of tokens) {
-      if (VAULT_SHARES.has(token.symbol)) continue;
+      if (isVaultShare(token, key)) continue;
       byAddress.set(token.address.toLowerCase(), toXToken(token, key));
     }
 

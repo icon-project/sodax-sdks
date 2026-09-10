@@ -71,7 +71,7 @@ describe('readSwapAssets', () => {
   });
 
   it('drops a chain whose whole list is filtered away', () => {
-    const vaultShareOnly = { [ChainKeys.SONIC_MAINNET]: [apiToken(SodaTokens.sodaBNB.symbol, '0xshare')] };
+    const vaultShareOnly = { [ChainKeys.SONIC_MAINNET]: [apiToken('sodaBNB', '0xshare')] };
     expect(readSwapAssets(vaultShareOnly).chains).toHaveLength(0);
   });
 
@@ -86,6 +86,21 @@ describe('readSwapAssets', () => {
 
     expect(symbols).toContain('XLM');
     expect(symbols).not.toContain('sodaBTC');
+  });
+
+  // `SodaTokens.sodaBTC.symbol` is the on-chain `BTC`; a hub share listed under that symbol is
+  // still a share, while `BTC` on Bitcoin is the asset itself.
+  it('drops a hub share by address even when the API adopts its on-chain symbol', () => {
+    const onChainSymbols = {
+      ...RESPONSE,
+      [ChainKeys.SONIC_MAINNET]: [apiToken('BTC', SodaTokens.sodaBTC.address, 8), apiToken('TSLA', SodaTokens.TSLA.address)],
+    };
+    const choices = readSwapAssets(onChainSymbols).choices;
+
+    expect(choices.filter(({ token }) => token.symbol === 'BTC').map(({ chain }) => chain)).toEqual([
+      ChainKeys.BITCOIN_MAINNET,
+    ]);
+    expect(choices.some(({ token }) => token.symbol === 'TSLA')).toBe(true);
   });
 
   it('keeps SODA itself, which is not a vault share', () => {
