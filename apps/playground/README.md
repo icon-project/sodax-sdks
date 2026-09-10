@@ -75,9 +75,10 @@ Unknown chain names are discarded. Restrictions control this UI, not access to t
 A configured restriction with no currently listed assets cannot execute a swap. Fee settings are
 never taken from URL parameters.
 
-The iframe sends only `{ type: 'sodax:resize', height }` to its host. It does not expose wallet addresses
-or transaction details through this message. The generated listener limits frame height and verifies
-sender identity. The deployment allows framing with `frame-ancestors *`.
+The iframe sends only `{ type: 'sodax:resize', height }` to its host, targeted at the framing page's
+origin (from `ancestorOrigins` or the referrer) rather than `*`; without a resolvable host origin no
+message is sent. It does not expose wallet addresses or transaction details through this message. The
+generated listener limits frame height and verifies sender identity. The deployment allows framing with `frame-ancestors *`.
 
 ## Transaction lifecycle and recovery
 
