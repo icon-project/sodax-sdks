@@ -1627,39 +1627,41 @@ describe('SwapService.getFilledIntent', () => {
 });
 
 describe('SwapService.getIntentSubmitTxExtraData', () => {
-  it('when given an intent directly, encodes it and returns creator + payload', async () => {
+  it('when given a spoke-source intent directly, reconstructs the relayed multicall payload (isHubSource = false)', async () => {
     const intent = makeIntent(ChainKeys.BSC_MAINNET);
-    mocks.encodeCreateIntent.mockReturnValueOnce({ data: '0xencoded', address: intent.creator, value: 0n });
+    mocks.reconstructCreateIntentData.mockReturnValueOnce('0xspokepayload');
 
     const result = await sodax.swaps.getIntentSubmitTxExtraData({ intent });
 
-    expect(result).toEqual({ ok: true, value: { address: intent.creator, payload: '0xencoded' } });
-    expect(mocks.encodeCreateIntent).toHaveBeenCalledWith(intent, sodax.swaps.solver.intentsContract);
+    expect(result).toEqual({ ok: true, value: { address: intent.creator, payload: '0xspokepayload' } });
+    expect(mocks.reconstructCreateIntentData).toHaveBeenCalledWith(intent, intentsContract, false);
+    expect(mocks.encodeCreateIntent).not.toHaveBeenCalled();
   });
 
-  it('when given a txHash, fetches the intent first then encodes it', async () => {
+  it('when given a txHash, fetches the intent first then reconstructs from it', async () => {
     const intent = makeIntent(ChainKeys.BSC_MAINNET);
     mocks.getIntent.mockResolvedValueOnce(intent);
-    mocks.encodeCreateIntent.mockReturnValueOnce({ data: '0xencoded2', address: intent.creator, value: 0n });
+    mocks.reconstructCreateIntentData.mockReturnValueOnce('0xspokepayload2');
 
     const result = await sodax.swaps.getIntentSubmitTxExtraData({ txHash: '0xtxhash' });
 
-    expect(result).toEqual({ ok: true, value: { address: intent.creator, payload: '0xencoded2' } });
+    expect(result).toEqual({ ok: true, value: { address: intent.creator, payload: '0xspokepayload2' } });
+    expect(mocks.reconstructCreateIntentData).toHaveBeenCalledWith(intent, intentsContract, false);
   });
 
-  it('when the txHash lookup fails, returns the failure as-is and does NOT call encodeCreateIntent', async () => {
+  it('when the txHash lookup fails, returns the failure as-is and does NOT reconstruct', async () => {
     const lookupError = new Error('INTENT_NOT_FOUND');
     mocks.getIntent.mockRejectedValueOnce(lookupError);
 
     const result = await sodax.swaps.getIntentSubmitTxExtraData({ txHash: '0xmissing' });
 
     expect(result).toEqual({ ok: false, error: lookupError });
-    expect(mocks.encodeCreateIntent).not.toHaveBeenCalled();
+    expect(mocks.reconstructCreateIntentData).not.toHaveBeenCalled();
   });
 
-  it('returns ok:false when encodeCreateIntent throws', async () => {
+  it('propagates the ok:false Result that reconstructRelayData produces when encoding throws', async () => {
     const encodeError = new Error('ENCODE_FAILED');
-    mocks.encodeCreateIntent.mockImplementationOnce(() => {
+    mocks.reconstructCreateIntentData.mockImplementationOnce(() => {
       throw encodeError;
     });
 
