@@ -379,6 +379,7 @@ export function CreatePositionCard({ chain, owner }: { chain: SpokeChainKey; own
       debtAfterUsd: p.debtUsd,
       ltv: p.ltv,
       hf: p.healthFactor,
+      exposureLeverage: p.exposureLeverage,
       haircut: p.haircut,
       usableMax: p.usableMaxLeverage,
       exceedsMaxLtv: p.exceedsMaxLtv,
@@ -632,6 +633,10 @@ export function CreatePositionCard({ chain, owner }: { chain: SpokeChainKey; own
 
   /** Solver-priced when the quote is in, oracle-parity until then; the tiles read the same either way. */
   const outcome = projection ?? quote;
+
+  // At the floor like the rest of the projection, so it reads above the fill. Oracle parity has no
+  // spread, so the pre-quote fallback is the slider itself.
+  const landsAt = projection?.exposureLeverage ?? (quote ? leverage : undefined);
   const costPct =
     projection && projection.equityUsd > 0 ? (projection.costUsd / projection.equityUsd) * 100 : undefined;
   const health = outcome ? healthTone(outcome.hf) : undefined;
@@ -723,9 +728,17 @@ export function CreatePositionCard({ chain, owner }: { chain: SpokeChainKey; own
             <Label className="flex items-center gap-1">
               <TrendingUp className="h-3 w-3" />
               Leverage
-              <InfoHint>Position value divided by your deposit. At 2.00x, half the position is borrowed.</InfoHint>
+              <InfoHint>
+                Position value divided by your deposit. At 2.00x, half the position is borrowed. The second figure is
+                what the open position reports — the spread comes out of your equity, so it reads higher.
+              </InfoHint>
             </Label>
-            <span className="font-mono text-sm">{leverage.toFixed(2)}x</span>
+            <span className="font-mono text-sm">
+              {leverage.toFixed(2)}x
+              {landsAt !== undefined && Math.abs(landsAt - leverage) >= 0.005 && (
+                <span className="text-muted-foreground"> &rarr; {fmtLeverageCap(landsAt)} open</span>
+              )}
+            </span>
           </div>
           <input
             type="range"
@@ -912,7 +925,12 @@ export function CreatePositionCard({ chain, owner }: { chain: SpokeChainKey; own
                   <DetailRow
                     label="Solver keeps"
                     value={`${(projection.haircut * 100).toFixed(2)}%`}
-                    info="Fee plus slippage, as a share of the borrowed leg."
+                    info="Fee plus slippage, as a share of the borrowed leg, measured from the quote."
+                  />
+                  <DetailRow
+                    label="Reported once open"
+                    value={landsAt !== undefined ? fmtLeverageCap(landsAt) : '—'}
+                    info="Collateral over equity, as Your positions measures it, at the worst fill this intent allows."
                   />
                   <DetailRow
                     label="Max at quote"

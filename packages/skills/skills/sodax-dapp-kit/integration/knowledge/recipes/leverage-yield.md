@@ -267,11 +267,15 @@ const projected = projectLeverageLeg(
   slippagePct,
 );
 if (projected.exceedsMaxLtv) throw new Error(`max ~${projected.usableMaxLeverage.toFixed(2)}x at this quote`);
+// Show `projected.exposureLeverage`, not `leverage`: the position reports the former.
 // Open with `borrowAmount` and `minCollateralOut: projected.minCollateralOut`.
 ```
 
 `exceedsMaxLtv` is a hard gate, not a warning: post through it and the intent is accepted, then fails
-at fill. Read `ltv` / `liquidationThreshold` from `useEModes` whenever the position sets an
+at fill. `leverage` is a multiple of the DEPOSIT, so the open position reports MORE — the borrow is
+booked in full while the collateral arrives short by the haircut, leaving less equity than was deposited
+(2.00x in, 2.0488x out at 4.657%). Display `projected.exposureLeverage` — measured at the floor, so it
+reads above the fill by the slippage tolerance. Read `ltv` / `liquidationThreshold` from `useEModes` whenever the position sets an
 `eModeCategory`, since a category's LTV replaces the reserve's own. Why parity fails, and what
 `haircut` / `costUsd` are for, is in the SDK's `LEVERAGE_YIELD.md` § "Sizing the leg".
 

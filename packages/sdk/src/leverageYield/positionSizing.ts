@@ -50,7 +50,13 @@ export type LeverageLegRequest = {
   collateralPriceUsd: number;
   borrowPriceUsd: number;
   borrowDecimals: number;
-  /** Target leverage as a multiple of equity. 1 means unlevered and borrows nothing. */
+  /**
+   * Target leverage as a multiple of the DEPOSIT, not of equity. 1 borrows nothing.
+   *
+   * The pool books the borrow in full while the collateral arrives short by the haircut, so equity
+   * ends up under the deposit and the open position reports MORE than this — always more, never
+   * less. See {@link LeverageLegProjection.exposureLeverage}.
+   */
   leverage: number;
   /**
    * Partner fee in basis points, as configured on the position (`PositionConfig.feeBps`). Omit or 0
@@ -197,6 +203,12 @@ export type LeverageLegProjection = {
    */
   costUsd: number;
   /**
+   * Collateral over equity — what the open position reports, and what `request.leverage` is not.
+   * The two differ by the haircut, this one always larger: 2.00x requested at a 4.657% haircut
+   * reports 2.0488x. At the floor like the rest of phase 2, so it is an upper bound.
+   */
+  exposureLeverage: number;
+  /**
    * The most leverage this price actually supports, from `debt <= ltv x collateral` with `f` as the
    * USD of collateral the floor returns per USD handed to the solver:
    *
@@ -274,10 +286,13 @@ export function projectLeverageLeg(
           ? 1 / denominator
           : 1 + risk.ltv / denominator;
 
+  const equityUsd = collateralUsd - debtUsd;
+
   return {
     minCollateralOut,
     collateralUsd,
     debtUsd,
+    exposureLeverage: equityUsd > 0 ? collateralUsd / equityUsd : Number.POSITIVE_INFINITY,
     ltv,
     healthFactor: debtUsd > 0 ? (collateralUsd * risk.liquidationThreshold) / debtUsd : Number.POSITIVE_INFINITY,
     exceedsMaxLtv: ltv > risk.ltv,

@@ -541,11 +541,12 @@ if (p.exceedsMaxLtv) throw new Error(`too high at this price; max is ~${p.usable
 await sodax.leverageYield.openPosition({ params: { ..., borrowAmount, minCollateralOut: p.minCollateralOut } });
 ```
 
-Three things worth knowing about what comes back:
+Four things worth knowing about what comes back:
 
 - **`exceedsMaxLtv` is a hard gate, not a warning.** Post through it and the intent is accepted and then fails at fill.
 - **`usableMaxLeverage` is the real ceiling, and it is below `1 / (1 - ltv)`.** At `ltv` 91% with the solver returning 98.77% of parity it is 9.88x, so an 11.03x that looks fine against parity was never available.
 - **Everything is projected from the FLOOR, not the quote** — the floor is the worst fill the intent permits, so if the floor is safe every fill is. `haircut` and `costUsd` are the exception: they are the *expected* cost of the leg, measured from the quote, which is what a payback period should be measured against.
+- **`leverage` is a multiple of the DEPOSIT, and the open position reports more.** The borrow is booked in full while the collateral arrives short by the haircut, leaving `deposit x (1 - (L-1)h)` of equity — so `collateral / equity` reads higher. Always higher, never lower: 2.00x requested at a 4.657% haircut reports **2.0488x**. Display `p.exposureLeverage`, not the number the user chose — and note it is measured at the floor like everything else here, so it reads above the fill by the slippage tolerance.
 
 **On a debt-side open the deposit is not collateral.** It is handed to the solver as part of the input, so the only collateral the position ends up with is what the solver delivers. Counting it on both sides is the other half of that 84%-vs-92% miss; `side: 'debt'` handles it.
 
