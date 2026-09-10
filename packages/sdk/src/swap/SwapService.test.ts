@@ -38,9 +38,10 @@ import {
   type SpokeIsAllowanceValidParamsHub,
   type WalletProviderSlot,
 } from '../index.js';
+import { keccak256, stringToBytes } from 'viem';
 import { Sodax } from '../shared/entities/Sodax.js';
 import { isSodaxError, SodaxError } from '../errors/SodaxError.js';
-import { adjustAmountByFee } from '../shared/utils/shared-utils.js';
+import { adjustAmountByFee, encodeAddress } from '../shared/utils/shared-utils.js';
 import { HttpRelayError, RELAY_FALLBACK_FLOOR_MS } from '../shared/services/intentRelay/IntentRelayApiService.js';
 
 // SwapService imports SonicSpokeService, EvmSolverService, etc. via the SDK barrel
@@ -147,11 +148,16 @@ const mockSolanaProvider = {
   sendTransaction: vi.fn(),
   getWalletAddress: vi.fn(),
 } as unknown as ISolanaWalletProvider;
-const mockBitcoinProvider = {
+// Typed handle kept beside the interface cast so tests can drive the optional members (getPublicKey).
+const bitcoinProviderMocks = {
   chainType: 'BITCOIN',
   getWalletAddress: vi.fn(),
   signMessage: vi.fn(),
-} as unknown as IBitcoinWalletProvider;
+  signBip322Message: vi.fn(),
+  signEcdsaMessage: vi.fn(),
+  getPublicKey: vi.fn(),
+};
+const mockBitcoinProvider = bitcoinProviderMocks as unknown as IBitcoinWalletProvider;
 const mockStellarProvider = {
   chainType: 'STELLAR',
   getWalletAddress: vi.fn(),
@@ -3175,12 +3181,27 @@ describe('SwapService.createCancelIntent', () => {
 });
 
 describe('SwapService.cancelIntent — non-hub (relay) path', () => {
-  it('on an EVM spoke, submits the cancel to the relayer and waits for the dst tx hash', async () => {
+  // Solana addresses are 32 bytes; Bitcoin addresses are utf8-encoded. `makeIntent` carries a 20-byte
+  // EVM srcAddress, which `reverseEncodeAddress` rejects for both.
+  const solanaIntent = (): Intent => ({
+    ...makeIntent(ChainKeys.SOLANA_MAINNET),
+    srcAddress: `0x${'11'.repeat(32)}`,
+  });
+  // A TRADING-mode Bitcoin intent stores the trading address; the personal wallet (bc1q → P2WPKH) signs.
+  const BTC_PERSONAL = 'bc1q5q3xczsl9zlt0gjys5khjknfp40zfdmkme9ene';
+  const BTC_TRADING = 'bc1p5cyxnuxmeuwuvkwfem96lqzszd02n6xdcjrs20cac6yqjjwudpxqkedrcr';
+  const bitcoinIntent = (): Intent => ({
+    ...makeIntent(ChainKeys.BITCOIN_MAINNET),
+    srcAddress: encodeAddress(ChainKeys.BITCOIN_MAINNET, BTC_TRADING),
+  });
+
+  it('on an EVM spoke, relays the cancel tx by its hash and waits for the dst tx hash', async () => {
     const intent = makeIntent(ChainKeys.BSC_MAINNET);
     const verifyTxHashSpy = vi.spyOn(sodax.spoke, 'verifyTxHash').mockResolvedValueOnce({ ok: true, value: true });
-    vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xspokeCancelTx' });
-    mocks.submitTransaction.mockResolvedValueOnce({ ok: true, value: { success: true, message: 'ok' } });
-    mocks.waitUntilIntentExecuted.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xdstCancelTx' } });
+    const sendMessageSpy = vi
+      .spyOn(sodax.spoke, 'sendMessage')
+      .mockResolvedValueOnce({ ok: true, value: '0xspokeCancelTx' });
+    mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xdstCancelTx' } });
 
     const result = await sodax.swaps.cancelIntent({
       params: {
@@ -3188,60 +3209,152 @@ describe('SwapService.cancelIntent — non-hub (relay) path', () => {
         intent,
       },
       walletProvider: mockEvmProvider,
+      timeout: 45_000,
     });
 
     expect(result).toEqual({ ok: true, value: { srcChainTxHash: '0xspokeCancelTx', dstChainTxHash: '0xdstCancelTx' } });
+    // Non-Bitcoin cancels sign from the address stored on the intent.
+    expect(sendMessageSpy.mock.calls[0]?.[0]?.srcAddress).toBe(intent.srcAddress);
 
     expect(verifyTxHashSpy).toHaveBeenCalledWith({
       txHash: '0xspokeCancelTx',
       chainKey: ChainKeys.BSC_MAINNET,
     });
 
-    expect(mocks.submitTransaction).toHaveBeenCalledWith(
-      {
-        action: 'submit',
-        params: {
-          chain_id: intent.srcChain.toString(),
-          tx_hash: '0xspokeCancelTx',
-        },
-      },
-      sodax.swaps.relayerApiEndpoint,
-    );
-
-    expect(mocks.waitUntilIntentExecuted).toHaveBeenCalledWith({
-      intentRelayChainId: intent.srcChain.toString(),
+    expect(mocks.relayTxAndWaitPacket).toHaveBeenCalledTimes(1);
+    expect(mocks.relayTxAndWaitPacket.mock.calls[0]?.[0]).toMatchObject({
       srcTxHash: '0xspokeCancelTx',
-      apiUrl: sodax.swaps.relayerApiEndpoint,
+      pollTxHash: undefined,
+      chainKey: ChainKeys.BSC_MAINNET,
+      relayerApiEndpoint: sodax.swaps.relayerApiEndpoint,
+      timeout: 45_000,
     });
   });
 
-  it('returns submitIntent failure when the relayer rejects the submit', async () => {
-    const intent = makeIntent(ChainKeys.BSC_MAINNET);
-    vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xspokeCancelTx' });
-    mocks.submitTransaction.mockResolvedValueOnce({
-      ok: false,
-      error: new Error('SUBMIT_TX_FAILED', { cause: new Error('relay rejected') }),
-    });
+  it('on Solana, submits the cancel payload the spoke tx only hashes as relay extra data', async () => {
+    const intent = solanaIntent();
+    const sendMessageSpy = vi
+      .spyOn(sodax.spoke, 'sendMessage')
+      .mockResolvedValueOnce({ ok: true, value: 'SolanaCancelSignature' });
+    mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xdstCancelTx' } });
 
     const result = await sodax.swaps.cancelIntent({
       params: {
-        srcChainKey: ChainKeys.BSC_MAINNET,
+        srcChainKey: ChainKeys.SOLANA_MAINNET,
         intent,
       },
-      walletProvider: mockEvmProvider,
+      walletProvider: mockSolanaProvider,
     });
 
+    expect(result).toEqual({
+      ok: true,
+      value: { srcChainTxHash: 'SolanaCancelSignature', dstChainTxHash: '0xdstCancelTx' },
+    });
+
+    // The relayer must receive the exact hub wallet + payload the spoke tx committed to.
+    const sendCall = sendMessageSpy.mock.calls[0]?.[0];
+    expect(sendCall?.dstAddress).toBe(intent.creator);
+    expect(sendCall?.payload).toMatch(/^0x[0-9a-f]+$/);
+    expect(mocks.relayTxAndWaitPacket).toHaveBeenCalledTimes(1);
+    expect(mocks.relayTxAndWaitPacket.mock.calls[0]?.[0]).toMatchObject({
+      srcTxHash: 'SolanaCancelSignature',
+      pollTxHash: undefined,
+      chainKey: ChainKeys.SOLANA_MAINNET,
+      data: { address: intent.creator, payload: sendCall?.payload },
+    });
+    // Manual-relay callers rebuild the same extra data from the intent alone.
+    expect(sodax.swaps.getCancelIntentRelayData(intent)).toEqual({
+      ok: true,
+      value: { address: intent.creator, payload: sendCall?.payload },
+    });
+  });
+
+  it('getCancelIntentRelayData rejects an intent whose srcChain is not a relay chain id', () => {
+    vi.spyOn(sodax.config, 'isValidIntentRelayChainId').mockReturnValueOnce(false);
+    const result = sodax.swaps.getCancelIntentRelayData(makeIntent(ChainKeys.BSC_MAINNET));
     expect(result.ok).toBe(false);
-    if (!result.ok) expect((result.error as Error).message).toBe('SUBMIT_TX_FAILED');
-    expect(mocks.waitUntilIntentExecuted).not.toHaveBeenCalled();
+    if (!result.ok) expect((result.error as Error).message).toMatch(/Invalid intent\.srcChain/);
   });
 
-  it('returns the failure Result from waitUntilIntentExecuted on relay timeout', async () => {
+  it('on Bitcoin (TRADING), signs the on-demand cancel from the personal wallet and relays it under "withdraw"', async () => {
+    // Runs the real SpokeService.sendMessage → BitcoinSpokeService.encodeWithdrawalData path; only the
+    // Bound lookup and the wallet's signing calls are stubbed.
+    const intent = bitcoinIntent();
+    expect(sodax.spoke.bitcoin.walletMode).toBe('TRADING');
+    const getTradingWalletSpy = vi
+      .spyOn(sodax.spoke.bitcoin.radfi, 'getTradingWallet')
+      .mockResolvedValue({ tradingAddress: BTC_TRADING } as never);
+    bitcoinProviderMocks.getWalletAddress.mockResolvedValueOnce(BTC_PERSONAL);
+    bitcoinProviderMocks.signBip322Message.mockResolvedValueOnce('EjQ=');
+    bitcoinProviderMocks.getPublicKey.mockResolvedValueOnce('02abcdef');
+    mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xdstCancelTx' } });
+
+    const result = await sodax.swaps.cancelIntent({
+      params: {
+        srcChainKey: ChainKeys.BITCOIN_MAINNET,
+        intent,
+        skipSimulation: true,
+      },
+      walletProvider: mockBitcoinProvider,
+    });
+
+    // The trading wallet is derived from the personal address, never from the intent's trading address.
+    expect(getTradingWalletSpy).toHaveBeenCalled();
+    for (const call of getTradingWalletSpy.mock.calls) expect(call[0]).toBe(BTC_PERSONAL);
+    // P2WPKH personal wallet → BIP322; the trading address would have picked the wrong scheme.
+    expect(bitcoinProviderMocks.signBip322Message).toHaveBeenCalledTimes(1);
+    expect(bitcoinProviderMocks.signEcdsaMessage).not.toHaveBeenCalled();
+
+    expect(mocks.relayTxAndWaitPacket).toHaveBeenCalledTimes(1);
+    const relayArg = mocks.relayTxAndWaitPacket.mock.calls[0]?.[0];
+    expect(relayArg).toMatchObject({ srcTxHash: 'withdraw', chainKey: ChainKeys.BITCOIN_MAINNET });
+    const signed = relayArg?.data as { payload_hex: string; signature?: string; public_key?: string };
+    expect(signed.signature).toBe('EjQ=');
+    expect(signed.public_key).toBe('02abcdef');
+    const btcPayload = JSON.parse(Buffer.from(signed.payload_hex, 'hex').toString('utf8'));
+    expect(btcPayload).toMatchObject({
+      src_address: BTC_TRADING,
+      address_type: 'P2WPKH',
+      wallet_used: 'TRADING',
+      dst_chain_id: Number(getIntentRelayChainId(ChainKeys.SONIC_MAINNET)),
+    });
+    expect(btcPayload.data).toMatch(/^0x[0-9a-f]+$/);
+
+    const pollId = `od:${keccak256(stringToBytes(signed.payload_hex)).slice(2)}`;
+    expect(relayArg?.pollTxHash).toBe(pollId);
+    expect(result).toEqual({ ok: true, value: { srcChainTxHash: pollId, dstChainTxHash: '0xdstCancelTx' } });
+  });
+
+  it('on Bitcoin (TRADING), a raw cancel needs params.srcAddress and sends from it', async () => {
+    const intent = bitcoinIntent();
+    const sendMessageSpy = vi.spyOn(sodax.spoke, 'sendMessage');
+
+    const missing = await sodax.swaps.createCancelIntent({
+      params: { srcChainKey: ChainKeys.BITCOIN_MAINNET, intent, skipSimulation: true },
+      raw: true,
+    });
+    expect(missing.ok).toBe(false);
+    if (!missing.ok) expect(String((missing.error as { cause?: unknown }).cause ?? missing.error)).toMatch(/srcAddress/);
+    expect(sendMessageSpy).not.toHaveBeenCalled();
+
+    sendMessageSpy.mockResolvedValueOnce({ ok: true, value: JSON.stringify({ payload_hex: '00' }) });
+    const provided = await sodax.swaps.createCancelIntent({
+      params: { srcChainKey: ChainKeys.BITCOIN_MAINNET, intent, srcAddress: BTC_PERSONAL, skipSimulation: true },
+      raw: true,
+    });
+    expect(provided.ok).toBe(true);
+    expect(sendMessageSpy.mock.calls[0]?.[0]).toMatchObject({
+      srcAddress: BTC_PERSONAL,
+      dstAddress: intent.creator,
+      raw: true,
+    });
+  });
+
+  it('returns the relay failure Result (submit reject or timeout) unchanged', async () => {
     const intent = makeIntent(ChainKeys.BSC_MAINNET);
-    const timeoutError = new Error('RELAY_TIMEOUT');
+    const relayError = new Error('SUBMIT_TX_FAILED', { cause: new Error('relay rejected') });
     vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xspokeCancelTx' });
-    mocks.submitTransaction.mockResolvedValueOnce({ ok: true, value: { success: true, message: 'ok' } });
-    mocks.waitUntilIntentExecuted.mockResolvedValueOnce({ ok: false, error: timeoutError });
+    mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: false, error: relayError });
 
     const result = await sodax.swaps.cancelIntent({
       params: {
@@ -3251,7 +3364,7 @@ describe('SwapService.cancelIntent — non-hub (relay) path', () => {
       walletProvider: mockEvmProvider,
     });
 
-    expect(result).toEqual({ ok: false, error: timeoutError });
+    expect(result).toEqual({ ok: false, error: relayError });
   });
 
   it('returns the failure from verifyTxHash after a successful spoke cancel', async () => {
@@ -3269,6 +3382,7 @@ describe('SwapService.cancelIntent — non-hub (relay) path', () => {
     });
 
     expect(result).toEqual({ ok: false, error: verifyError });
+    expect(mocks.relayTxAndWaitPacket).not.toHaveBeenCalled();
   });
 });
 

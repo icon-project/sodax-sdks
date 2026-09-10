@@ -171,6 +171,12 @@ export type LimitOrderActionParams<K extends SpokeChainKey, Raw extends boolean 
 export type CancelIntentParams<K extends SpokeChainKey> = {
   srcChainKey: K;
   intent: Intent;
+  /**
+   * Source-chain wallet the cancel message is sent from. Defaults to the intent's `srcAddress`.
+   * Bitcoin TRADING mode stores the trading address on the intent while the cancel must originate
+   * from the personal wallet: signed cancels read it from `walletProvider`, raw cancels must pass it.
+   */
+  srcAddress?: GetAddressType<K>;
   skipSimulation?: boolean;
   timeout?: number;
 };
@@ -1468,14 +1474,14 @@ export class SwapService {
         `srcChainKey (${params.srcChainKey}) does not match intent.srcChain (${params.intent.srcChain}). Expected relay chain id ${getIntentRelayChainId(params.srcChainKey)}.`,
       );
 
-      const intentsContract = this.solver.intentsContract;
+      const relayData = this.buildCancelRelayData(params.intent);
 
       const coreParams = {
         srcChainKey: params.srcChainKey,
-        srcAddress: reverseEncodeAddress(params.srcChainKey, params.intent.srcAddress) as GetAddressType<K>,
+        srcAddress: await this.resolveCancelSrcAddress(_params),
         dstChainKey: HUB_CHAIN_KEY,
-        dstAddress: params.intent.creator,
-        payload: encodeContractCalls([EvmSolverService.encodeCancelIntent(params.intent, intentsContract)]),
+        dstAddress: relayData.address,
+        payload: relayData.payload,
         skipSimulation: params.skipSimulation,
       } as const;
 
@@ -1511,12 +1517,15 @@ export class SwapService {
    * 1. Calls `createCancelIntent` to broadcast the cancel transaction on the spoke chain.
    * 2. Verifies the spoke transaction.
    * 3. For non-hub source chains: submits to the relayer and polls until the cancel packet
-   *    is delivered to the hub. For hub source chains, the spoke tx hash is reused directly.
+   *    is delivered to the hub. Solana submits the cancel payload alongside the tx (the spoke tx
+   *    only carries its hash) and Bitcoin relays its signed on-demand payload — see
+   *    {@link buildCancelRelayIdentity}. For hub source chains, the spoke tx hash is reused directly.
    *
    * @param _params - Cancel params including `srcChainKey`, the `intent`, wallet provider, and
    *   an optional `timeout` in milliseconds.
    * @returns A `Result` containing `TxHashPair`:
-   *   - `srcChainTxHash` — cancel tx hash on the source spoke chain.
+   *   - `srcChainTxHash` — cancel tx hash on the source spoke chain (Bitcoin: the relay's derived
+   *     `od:<hash>` id, since an on-demand cancel broadcasts no spoke tx).
    *   - `dstChainTxHash` — hub-chain (Sonic) tx hash confirming the cancellation.
    */
   public async cancelIntent<K extends SpokeChainKey>(
@@ -1535,38 +1544,103 @@ export class SwapService {
       });
       if (!verifyTxHashResult.ok) return verifyTxHashResult;
 
-      let dstIntentTxHash: string;
-
-      if (!isHubChainKey(params.srcChainKey)) {
-        const intentRelayChainId = params.intent.srcChain.toString();
-        const submitPayload: IntentRelayRequest<'submit'> = {
-          action: 'submit',
-          params: {
-            chain_id: intentRelayChainId,
-            tx_hash: cancelTxHash,
-          },
-        };
-
-        const submitResult = await this.submitIntent(submitPayload);
-        if (!submitResult.ok) return submitResult;
-
-        const packet = await waitUntilIntentExecuted({
-          intentRelayChainId,
-          srcTxHash: cancelTxHash,
-          timeout: _params.timeout,
-          apiUrl: this.relayerApiEndpoint,
-        });
-        if (!packet.ok) return packet;
-        dstIntentTxHash = packet.value.dst_tx_hash;
-      } else {
-        dstIntentTxHash = cancelTxHash;
+      if (isHubChainKey(params.srcChainKey)) {
+        return { ok: true, value: { srcChainTxHash: cancelTxHash, dstChainTxHash: cancelTxHash } };
       }
 
-      return { ok: true, value: { srcChainTxHash: cancelTxHash, dstChainTxHash: dstIntentTxHash } };
+      const relayIdentity = this.buildCancelRelayIdentity(params.srcChainKey, cancelTxHash, params.intent);
+      const packet = await relayTxAndWaitPacket({
+        ...relayIdentity,
+        chainKey: params.srcChainKey,
+        relayerApiEndpoint: this.relayerApiEndpoint,
+        timeout: _params.timeout,
+      });
+      if (!packet.ok) return packet;
+
+      return {
+        ok: true,
+        value: {
+          srcChainTxHash: relayIdentity.pollTxHash ?? cancelTxHash,
+          dstChainTxHash: packet.value.dst_tx_hash,
+        },
+      };
     } catch (error) {
       if (isSwapError(error)) return { ok: false, error };
       return { ok: false, error: executionFailed('swap', error, { action: 'cancelIntent' }) };
     }
+  }
+
+  /**
+   * Source address the cancel `sendMessage` originates from.
+   *
+   * Every chain but Bitcoin signs from the address stored on the intent. A Bitcoin TRADING-mode intent
+   * stores the trading address, yet the spoke layer expects the personal wallet: it re-derives the
+   * trading wallet from it and picks the message-signing scheme from its address type. So Bitcoin
+   * TRADING takes `params.srcAddress`, else the wallet provider's address (raw has no provider).
+   */
+  private async resolveCancelSrcAddress<K extends SpokeChainKey, Raw extends boolean>(
+    _params: CancelIntentActionParams<K, Raw>,
+  ): Promise<GetAddressType<K>> {
+    const { params } = _params;
+    if (params.srcAddress !== undefined) return params.srcAddress;
+
+    if (isBitcoinChainKeyType(params.srcChainKey) && this.spoke.bitcoin.walletMode === 'TRADING') {
+      const walletProvider = _params.walletProvider;
+      invariant(
+        walletProvider !== undefined && isBitcoinWalletProviderType(walletProvider),
+        'Bitcoin TRADING-mode cancel needs the personal wallet address: pass params.srcAddress for raw: true',
+      );
+      return (await walletProvider.getWalletAddress()) as GetAddressType<K>;
+    }
+
+    return reverseEncodeAddress(params.srcChainKey, params.intent.srcAddress) as GetAddressType<K>;
+  }
+
+  /**
+   * Relay extra data (`{ address, payload }`) for cancelling `intent`, for callers that relay a
+   * `createCancelIntent` transaction themselves (`raw` mode or manual relay control).
+   *
+   * Solana commits only the hash of the cancel payload on-chain, so the relayer needs this alongside
+   * the spoke tx; other chains ignore it. It is the cancel counterpart of {@link reconstructRelayData}:
+   * the create-intent extra data does not match a cancel tx. Bitcoin cancels are on-demand instead —
+   * relay the signed payload `createCancelIntent` returns via `BitcoinSpokeService.getOnDemandRelayIdentity`.
+   *
+   * @param intent - The intent being cancelled (e.g. from `getIntent(txHash)`).
+   * @returns A `Result` containing `RelayExtraData`: `{ address: Hex; payload: Hex }`.
+   */
+  public getCancelIntentRelayData(intent: Intent): Result<RelayExtraData> {
+    try {
+      invariant(this.config.isValidIntentRelayChainId(intent.srcChain), `Invalid intent.srcChain: ${intent.srcChain}`);
+      return { ok: true, value: this.buildCancelRelayData(intent) };
+    } catch (error) {
+      return { ok: false, error };
+    }
+  }
+
+  /**
+   * Relay extra data for a cancel: the hub wallet that owns the intent and the `cancelIntent` call it
+   * executes. This is exactly what `createCancelIntent` sends on-chain, so split-tx chains (Solana),
+   * whose spoke tx carries only the payload hash, can hand the relayer the full payload.
+   */
+  private buildCancelRelayData(intent: Intent): RelayExtraData {
+    return {
+      address: intent.creator,
+      payload: encodeContractCalls([EvmSolverService.encodeCancelIntent(intent, this.solver.intentsContract)]),
+    };
+  }
+
+  /**
+   * Relay submit/poll identity for a cancel, mirroring the money market's on-demand handling.
+   *
+   * A Bitcoin cancel broadcasts no spoke tx: `sendMessage` returns a signed payload JSON that the relay
+   * accepts under the literal `withdraw` tx_hash and tracks under a derived `od:<hash>` id (see
+   * {@link BitcoinSpokeService.getOnDemandRelayIdentity}). Every other chain relays and polls by its
+   * spoke tx hash and passes the cancel relay data, which the relayer needs on Solana and ignores elsewhere.
+   */
+  private buildCancelRelayIdentity(srcChainKey: SpokeChainKey, tx: string, intent: Intent) {
+    return isBitcoinChainKeyType(srcChainKey)
+      ? this.spoke.bitcoin.getOnDemandRelayIdentity(tx)
+      : { srcTxHash: tx, data: this.buildCancelRelayData(intent), pollTxHash: undefined };
   }
 
   /**
