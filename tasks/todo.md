@@ -96,3 +96,27 @@ Plan:
 - Direct client has no `timeout` (SDK path applies `DEFAULT_BACKEND_API_TIMEOUT`).
 - `formatSwapsApiError` casts `error.context.body` without narrowing `message` to a string.
 - `swaps-api/OrderStatus.tsx` still has no consumers.
+
+## Follow-up: the two earlier-review items the user approved
+
+### Timeout — fixed
+`SwapsApiConfig.timeout` is documented "Omit for no timeout", so the client had no deadline at all
+while the SDK path applies `DEFAULT_BACKEND_API_TIMEOUT` (30s) on every call. `useSwapsApiClient`
+now passes that same constant, imported from `@sodax/dapp-kit` rather than restated as a literal.
+Semantics match the SDK path: a whole-call ceiling including retries, failing as `TIMEOUT_ERROR`.
+
+### Error-body narrowing — fixed
+`context.body` is `unknown` by contract (parsed JSON if possible, else response text), so the
+`as { message?: string }` cast was an unsafe escape hatch. A new `backendMessage` helper returns
+`message` only when it is a non-blank string; every other shape falls through to
+`formatMutationFailureMessage`, which also appends `cause`. Verified against 10 body shapes
+(object/array/numeric/blank `message`, missing key, plain-text body, array, null, undefined) —
+all fall through as intended.
+
+### Verification
+- [x] `pnpm checkTs` 13/13 · `pnpm lint` 13/13 · `pnpm test` 18/18 · `check:ai-dev-files` passed
+- [x] `apps/demo` production build succeeds
+- [x] `'message' in body` narrows without a cast, so no `any`/assertion was needed
+
+### Left open by the user's call
+- `swaps-api/OrderStatus.tsx` still has no consumers.
