@@ -3340,8 +3340,7 @@ export function isRealWorldAsset(token: { chainKey: string; address: string }): 
   const chainTokens = registry[token.chainKey];
   if (!chainTokens) return false;
   const tokens = Object.values(chainTokens);
-  const normalize = (address: string): string =>
-    /^0x[0-9a-fA-F]{40}$/.test(address) ? address.toLowerCase() : address;
+  const normalize = (address: string): string => (/^0x[0-9a-f]{40}$/i.test(address) ? address.toLowerCase() : address);
   const address = normalize(token.address);
   return tokens.some(candidate => normalize(candidate.address) === address && candidate.isRwa === true);
 }

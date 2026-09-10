@@ -56,6 +56,7 @@ describe('RWA metadata', () => {
     const token = ethereumSupportedTokens.PAXG;
     const lowerCaseToken = { ...token, address: token.address.toLowerCase(), symbol: 'paxg' };
     expect(isRealWorldAsset(lowerCaseToken)).toBe(true);
+    expect(isRealWorldAsset({ ...token, address: token.address.toUpperCase() })).toBe(true);
     expect(isRealWorldAsset({ ...token, address: `0x${token.address.slice(2).toUpperCase()}` })).toBe(true);
     const upperCaseTicker = { ...solanaSupportedTokens.TSLAx, symbol: 'TSLAX' };
     expect(isRealWorldAsset(upperCaseTicker)).toBe(true);
