@@ -73,6 +73,15 @@ The two lists are **disjoint per chain** (a token lives in exactly one). The sta
 
 The Robinhood tokenized equities are the worked example of a swap-only vault set — deliberately in no money-market list. [`src/chains/equity-vault-tokens.test.ts`](src/chains/equity-vault-tokens.test.ts) holds the symbols and the chains they are registered on, and is the source of truth for that matrix; [`src/chains/legacy-registry-compat.test.ts`](src/chains/legacy-registry-compat.test.ts) pins every legacy registry, trustline and swap sequence as an unchanged prefix so vault additions stay additive for consumers that index these lists.
 
+## RWA classification
+
+`XToken.isRwa` declares tokenized stock, ETF and commodity classification in the chain
+registry. Set it on each registered representation of an RWA; chain membership or
+symbol patterns alone are not evidence. `isRealWorldAsset({ chainKey, address })`
+resolves the packaged registry by token identity, ignoring caller-supplied labels
+and flags. It does not read constructor overrides or imply feature support.
+Coverage and address/casing invariants live in `src/chains/tokens-rwa.test.ts`.
+
 ## Chain logos
 
 Each `baseChainInfo` entry carries a `logo` URL (default chain logo). The binary

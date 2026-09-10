@@ -39,6 +39,41 @@ const supportedTokens: readonly XToken[] = sodax.swaps.getSupportedSwapTokensByC
 const allTokens: Record<SpokeChainKey, readonly XToken[]> = sodax.swaps.getSupportedSwapTokens();
 ```
 
+### RWA classification and token logos
+
+`XToken.isRwa === true` marks a registered tokenized stock, ETF or commodity,
+including registered cross-chain representations. An omitted flag means no RWA
+classification is declared; it is not a general-purpose crypto/stablecoin taxonomy.
+Chain membership and symbol spelling do not determine RWA status.
+
+Use `isRealWorldAsset({ chainKey, address })` to resolve metadata from the packaged
+SDK registry when your token data comes from an API without the flag. It returns
+false for unknown chains or addresses, ignores symbols, and compares EVM addresses
+case-insensitively while preserving non-EVM identifier casing. It does not read
+custom constructor config or validate swap/money-market support. New registry
+metadata requires an SDK update; it does not automatically update backend payloads.
+
+```typescript
+import { ChainKeys, getSupportedSolverTokens, isRealWorldAsset, tokenLogo } from '@sodax/sdk';
+
+const tokens = getSupportedSolverTokens(ChainKeys.ROBINHOOD_MAINNET);
+const rwaTokens = tokens.filter(isRealWorldAsset);
+const rows = tokens.map(token => ({
+  symbol: token.symbol,
+  isRwa: isRealWorldAsset(token),
+  logo: tokenLogo(token.symbol),
+}));
+```
+
+For API responses using `xChainId`, pass it as `chainKey` alongside the token's
+on-chain `address`. Resolve each chain/address before grouping directory rows;
+keep feature support and UI visibility filters separate from classification.
+
+`tokenLogo(symbol)` serves shared PNGs from the SDK repository's `main` branch.
+Robinhood equity/ETF entries use the Robinhood mark; xStocks retain their own
+artwork. Image replacements become available after merge, subject to caching,
+without an SDK release. Consumers must use these URLs to receive the replacements.
+
 ## Available Methods
 
 All swap methods are accessible through `sodax.swaps`:
