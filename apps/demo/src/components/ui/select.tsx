@@ -105,8 +105,11 @@ SelectLabel.displayName = 'SelectLabel';
 
 const SelectItem = React.forwardRef<
   React.ComponentRef<typeof SelectPrimitive.Item>,
-  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Item>
->(({ className, children, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Item> & {
+    /** Secondary line shown under the item in the list only — Radix mirrors just `children` into the trigger. */
+    description?: React.ReactNode;
+  }
+>(({ className, children, description, ...props }, ref) => (
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
@@ -124,7 +127,10 @@ const SelectItem = React.forwardRef<
         <Check className="h-4 w-4 text-cherry-soda" />
       </SelectPrimitive.ItemIndicator>
     </span>
-    <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
+    <span className="flex min-w-0 flex-col">
+      <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
+      {description !== undefined && <span className="text-xs text-gray-500">{description}</span>}
+    </span>
   </SelectPrimitive.Item>
 ));
 SelectItem.displayName = 'SelectItem';

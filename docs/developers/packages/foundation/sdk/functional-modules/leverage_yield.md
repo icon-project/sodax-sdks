@@ -19,7 +19,7 @@ A leverage-yield vault automates a **leveraged-lending loop** to turn a small yi
             │                                               │
             ▼                                               │
    deposit asset ──▶ supply as collateral ──▶ borrow borrowToken
-   (e.g. sodaWEETH)   (earns supply APR)       (pays borrow APR)
+   (e.g. weETH vault) (earns supply APR)       (pays borrow APR)
                                                      │
                                                      ▼
                           re-supply ◀── swap back into asset
@@ -81,7 +81,7 @@ Each registered vault carries four static fields:
 |---|---|---|
 | `name` | Lookup key — the `lsoda*` share-token symbol | `'lsodaWEETH'` |
 | `vault` | Deployed vault proxy on Sonic — **also the `lsoda*` token address** | `0xD09d…701D` |
-| `asset` | Underlying collateral (a SODAX vault token) | `sodaWEETH` |
+| `asset` | Underlying collateral (a SODAX vault token) | `SodaTokens.sodaWEETH` (symbol `weETH`) |
 | `borrowToken` | Token borrowed against `asset` | `sodaETH` |
 
 The registry lives in `@sodax/types` (`leverageYieldConfig`) and derives every address from the canonical `LsodaTokens` / `SodaTokens` registries, so a deployment-address change lives in exactly one place. Look vaults up with `listVaults()`, `getVault(name)`, or `getVaultByAddress(address)`.
@@ -344,7 +344,7 @@ Registry lookups (synchronous, no `Result`). `listVaults()` returns the registry
 type LeverageYieldVault = {
   name: string;        // lookup key — the lsoda* share-token symbol (e.g. 'lsodaWEETH')
   vault: Address;      // deployed vault proxy on Sonic — also the lsoda* token address
-  asset: Address;      // underlying Sodax vault token (e.g. sodaWEETH)
+  asset: Address;      // underlying Sodax vault token (e.g. SodaTokens.sodaWEETH, symbol weETH)
   borrowToken: Address; // token borrowed against asset (e.g. sodaETH)
 };
 ```

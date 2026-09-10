@@ -1,42 +1,50 @@
 ---
 title: Liquidity and execution, across every network
 sidebarTitle: Home
-description: A liquidity and cross-network execution solution. Pick API or SDK, then install → quote → execute.
+description: Choose a product, follow an integration guide, or look up the API and SDK reference.
 icon: house
 "og:image": "/images/og/docs-home-card.png"
 "twitter:image": "/images/og/docs-home-card.png"
 ---
 
-<div className="sodax-home-hero">
-  <p className="sodax-home-hero-kicker">SODAX Docs</p>
-  <p className="sodax-home-hero-sub">What can we help you build?</p>
-</div>
-
-<p className="sodax-stat-line">
-  <span data-sodax-config="count" data-metric="networks" data-suffix="+">22+</span> networks · <span data-sodax-config="count" data-metric="reserve-assets" data-suffix="+">30+</span> lending assets · <span data-sodax-config="count" data-metric="swap-tokens" data-suffix="+">140+</span> tokens · <span>8</span> audit reports
-</p>
-
-{/* Newest two from resources/product-updates.mdx; art is the article image, resized to 1200px
-    wide into /images/news/. Cards land on the docs for what shipped, not the article. */}
-
-### Latest product updates
+## What do you want to build?
 
 <CardGroup cols={2}>
-  <Card title="Leveraged staking vaults in Balanced widgets" img="/images/news/balanced-vault-widget.jpg" href="/yield" arrow>
-    Vault positions enter and exit as ordinary intent-based swaps.
+  <Card title="Swap" icon="rotate" href="/swap" horizontal arrow>
+    Quote and execute cross-network swaps through the HTTP API or TypeScript SDK.
   </Card>
-  <Card title="Candlestick price data, direct to your app" img="/images/news/candlestick-price-data.jpg" href="/developers/http-api/oracle" arrow>
-    Fixed-interval USD candles over an unauthenticated `GET`.
+  <Card title="Lend & borrow" icon="sack-dollar" href="/money-market" horizontal arrow>
+    Supply, borrow, withdraw, and repay through the SDK. HTTP provides reserve and position reads.
+  </Card>
+  <Card title="Move an asset" icon="bridge-suspension" href="/bridge" horizontal arrow>
+    Transfer assets through hub-and-spoke vaults using the Bridge SDK.
+  </Card>
+  <Card title="Earn yield" icon="money-bill-trend-up" href="/yield" horizontal arrow>
+    Enter and exit leveraged yield vaults. Compare the SDK and HTTP paths.
   </Card>
 </CardGroup>
 
-[All product updates →](/resources/product-updates)
+## Start with your first swap
 
-### Building with an AI agent?
+Follow [Your first swap](/quickstart) to install the SDK, get a quote, submit an intent,
+and track settlement. Quoting needs no funds or signature; execution uses mainnet funds.
 
-Add the [Builders MCP](/builders-mcp) (`https://builders.sodax.com/mcp`) for live chains, tokens, quotes, and API + SDK docs while you integrate, and [`@sodax/skills`](/ai-integration-guide) so the code it writes is v2-correct.
+Prefer [HTTP](/developers/http-api/swaps) or [Solana](/solana/quickstart)? Start with the guide for your integration.
 
-### How it works
+**Building with an AI agent?** Add [Builders MCP](/builders-mcp) for live data and docs, and
+[SDK skills](/ai-integration-guide) for coding guidance.
+
+## Find the right documentation
+
+| You need to… | Start here |
+| --- | --- |
+| Choose a product and integration path | The product choices above |
+| Implement a specific task | [How To](/developers/how-to) |
+| Look up an HTTP endpoint or request field | [HTTP API](/developers/http-api) |
+| Look up a TypeScript method or type | [SDK reference](/developers/packages) |
+| Build a React frontend | [dapp-kit](/developers/packages/experience/dapp-kit) |
+
+## How it works
 
 SODAX is not a router you operate. **SODAX routes and settles.** Independent **solvers** on the marketplace **fill**. You submit an intent (the outcome you want) — not the hop-by-hop route.
 
@@ -46,218 +54,20 @@ SODAX is not a router you operate. **SODAX routes and settles.** Independent **s
 
 [Full execution model →](/home/how-execution-works)
 
-***
+## Latest product updates
 
-Pick a solution. Then choose the **HTTP API** or the **open-source SDK**.
+<CardGroup cols={2}>
+  <Card title="Leveraged staking vaults in Balanced widgets" img="/images/news/balanced-vault-widget.jpg" href="/yield" horizontal arrow>
+    Vault positions enter and exit as ordinary intent-based swaps.
+  </Card>
+  <Card title="Candlestick price data, direct to your app" img="/images/news/candlestick-price-data.jpg" href="/developers/http-api/oracle" arrow>
+    Fixed-interval USD candles over an unauthenticated `GET`.
+  </Card>
+</CardGroup>
 
-<Tabs>
-  <Tab title="Swap">
-    <h3 className="text-lg font-bold mb-2">Cross-network swaps, filled by solvers</h3>
+[All product updates →](/resources/product-updates)
 
-    <p className="text-gray-500 mt-2 mb-5">
-      Quote and execute an intent across networks. Solvers fill it — you don't manage liquidity or routing.
-    </p>
-
-    <CardGroup cols={2}>
-      <Card title="HTTP API" icon="server" href="/developers/http-api/swaps" horizontal arrow>
-        Quote, build intent, submit-tx, and status — any language.
-      </Card>
-      <Card title="Open-source SDK" icon="code" href="/developers/packages/foundation/sdk/functional-modules/swaps" horizontal arrow>
-        End-to-end `sodax.swaps` in TypeScript.
-      </Card>
-    </CardGroup>
-
-    <CardGroup cols={2}>
-      <Card title="Solution hub" icon="compass" href="/swap" horizontal arrow>
-        All Swap docs in one place.
-      </Card>
-      <Card title="Make a swap (SDK)" icon="repeat" href="/developers/how-to/how_to_make_a_swap" horizontal arrow>
-        Walkthrough: init, quote, execute, errors.
-      </Card>
-    </CardGroup>
-
-    <CodeGroup>
-      ```bash curl
-      curl -s -X POST 'https://api.sodax.com/v1/swaps/quote' \
-        -H 'content-type: application/json' \
-        -d '{
-          "tokenSrc": "0x…",
-          "tokenSrcChainKey": "sonic",
-          "tokenDst": "0x…",
-          "tokenDstChainKey": "0x2105.base",
-          "amount": "1000000",
-          "quoteType": "exact_input"
-        }'
-      ```
-
-      ```typescript sdk.ts
-      import { Sodax, ChainKeys } from '@sodax/sdk';
-
-      const sodax = new Sodax();
-      const deadlineResult = await sodax.swaps.getSwapDeadline(300n);
-      if (!deadlineResult.ok) throw deadlineResult.error;
-
-      const result = await sodax.swaps.swap({
-        params: {
-          inputToken: '0x2170...f9338',
-          outputToken: '0x2f2a...fC5B0f',
-          inputAmount: 1_000_000_000_000_000n,
-          minOutputAmount: 900_000n,
-          deadline: deadlineResult.value,
-          allowPartialFill: false,
-          srcChainKey: ChainKeys.BSC_MAINNET,
-          dstChainKey: ChainKeys.ARBITRUM_MAINNET,
-          srcAddress: await evmWalletProvider.getWalletAddress(),
-          dstAddress: '0x...',
-          data: '0x',
-        },
-        walletProvider: evmWalletProvider,
-      });
-
-      if (result.ok) console.log('Swap submitted', result.value);
-      ```
-    </CodeGroup>
-  </Tab>
-
-  <Tab title="Lend & Borrow">
-    <h3 className="text-lg font-bold mb-2">One money market, every network</h3>
-
-    <p className="text-gray-500 mt-2 mb-5">
-      Supply collateral from any spoke network, borrow against it. The money market lives on the Sonic hub.
-    </p>
-
-    <CardGroup cols={2}>
-      <Card title="Open-source SDK" icon="code" href="/developers/packages/foundation/sdk/functional-modules/money_market" horizontal arrow>
-        Supply, borrow, withdraw, repay, and reserve data.
-      </Card>
-      <Card title="HTTP API" icon="server" href="/developers/http-api" horizontal arrow>
-        Reserve/position reads exist. No write API yet — use the SDK to supply and borrow.
-      </Card>
-    </CardGroup>
-
-    <Card title="Solution hub" icon="compass" href="/money-market" horizontal arrow>
-      All Money Market docs in one place.
-    </Card>
-
-    <CodeGroup>
-      ```typescript supply.ts
-      import { Sodax, ChainKeys } from '@sodax/sdk';
-
-      const sodax = new Sodax();
-
-      const result = await sodax.moneyMarket.supply({
-        params: {
-          srcChainKey: ChainKeys.BSC_MAINNET,
-          srcAddress: '0x...',
-          token: '0x...',
-          amount: 1000n,
-          action: 'supply',
-        },
-        walletProvider: evmWalletProvider,
-      });
-
-      if (result.ok) console.log('Supplied', result.value);
-      ```
-    </CodeGroup>
-  </Tab>
-
-  <Tab title="Bridge">
-    <h3 className="text-lg font-bold mb-2">Move assets, network to network</h3>
-
-    <p className="text-gray-500 mt-2 mb-5">
-      Hub-and-spoke transfer primitives when you need asset movement without swap logic.
-    </p>
-
-    <CardGroup cols={2}>
-      <Card title="Open-source SDK" icon="code" href="/developers/packages/foundation/sdk/functional-modules/bridge" horizontal arrow>
-        Spoke → hub, hub → spoke, and spoke → spoke.
-      </Card>
-      <Card title="HTTP API" icon="server" href="/developers/http-api" horizontal arrow>
-        No Bridge write API yet. Live HTTP surfaces: Swaps, Yield, Oracle, and Stats.
-      </Card>
-    </CardGroup>
-
-    <Card title="Solution hub" icon="compass" href="/bridge" horizontal arrow>
-      All Bridge docs in one place.
-    </Card>
-
-    <CodeGroup>
-      ```typescript bridge.ts
-      import { Sodax, ChainKeys } from '@sodax/sdk';
-
-      const sodax = new Sodax();
-
-      const result = await sodax.bridge.bridge({
-        params: {
-          srcChainKey: ChainKeys.BASE_MAINNET,
-          srcAddress: '0xYourAddress...',
-          srcToken: '0x1234...cdef',
-          amount: 1_000_000_000_000_000_000n,
-          dstChainKey: ChainKeys.POLYGON_MAINNET,
-          dstToken: '0xabcd...567890',
-          recipient: '0x9876...dcba',
-        },
-        walletProvider: evmWalletProvider,
-      });
-
-      if (result.ok) console.log('Bridged', result.value);
-      ```
-    </CodeGroup>
-  </Tab>
-
-  <Tab title="Yield">
-    <h3 className="text-lg font-bold mb-2">Leveraged yield vaults, one swap away</h3>
-
-    <p className="text-gray-500 mt-2 mb-5">
-      Enter and exit vault positions as ordinary intent-based swaps — no vault-specific approvals.
-    </p>
-
-    <CardGroup cols={2}>
-      <Card title="HTTP API" icon="server" href="/developers/http-api/leverage" horizontal arrow>
-        Vault deposit / withdraw over HTTP.
-      </Card>
-      <Card title="Open-source SDK" icon="code" href="/developers/packages/foundation/sdk/functional-modules/leverage_yield" horizontal arrow>
-        Deposit, withdraw, APR, and position data.
-      </Card>
-    </CardGroup>
-
-    <Card title="Solution hub" icon="compass" href="/yield" horizontal arrow>
-      All Yield docs in one place.
-    </Card>
-
-    <CodeGroup>
-      ```typescript deposit.ts
-      import { ChainKeys } from '@sodax/sdk';
-
-      const vault = sodax.leverageYield.getVault('lsodaWEETH');
-
-      const intentResult = await sodax.leverageYield.deposit({
-        vault: vault.vault,
-        srcChainKey: ChainKeys.ARBITRUM_MAINNET,
-        srcAddress: '0xYourArbitrumEOA...',
-        inputToken: '0x...weETHonArbitrum',
-        inputAmount: 1_000_000_000_000_000_000n,
-        minOutputAmount: 900_000_000_000_000_000n,
-      });
-
-      if (intentResult.ok) {
-        const swapResult = await sodax.leverageYield.vaultSwap({
-          ...intentResult.value,
-          walletProvider: evmWalletProvider,
-        });
-      }
-      ```
-    </CodeGroup>
-  </Tab>
-</Tabs>
-
-***
-
-<Note>
-**Building a React frontend?** [`@sodax/dapp-kit`](/developers/packages/experience/dapp-kit) wraps swap, bridge, money market, staking, and migration in hooks, with wallet connection included.
-</Note>
-
-### Audits
+## Audits
 
 Eight published reports covering contracts across Sui, Solana, Soroban (Stellar), Near, Stacks, the Relay, and collaborative reviews (including a Sherlock collaborative on the LST / leverage-yield vault).
 
@@ -267,7 +77,7 @@ Eight published reports covering contracts across Sui, Solana, Soroban (Stellar)
 
 ***
 
-### What you get
+## What you get
 
 * **One surface, every network.** Integrate once via API or SDK.
 * **Execution that settles.** Swaps, borrows, and deposits complete under real cross-network conditions.
@@ -275,7 +85,7 @@ Eight published reports covering contracts across Sui, Solana, Soroban (Stellar)
 
 ***
 
-### Go deeper
+## Go deeper
 
 <CardGroup cols={2}>
   <Card title="Your first swap" icon="bolt" href="/quickstart">

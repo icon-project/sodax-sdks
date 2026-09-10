@@ -29,6 +29,8 @@ export type XToken = {
   readonly hubAsset: Address;
   readonly vault: Address;
   readonly access?: XTokenAccess;
+  /** Tokenized stock, ETF or commodity; omission means no RWA classification is declared. */
+  readonly isRwa?: boolean;
 };
 
 /**
@@ -108,8 +110,8 @@ export type HubVaultSymbol = (typeof HubVaultSymbols)[number];
 
 export const SodaTokens = {
   sodaBNB: {
-    symbol: 'sodaBNB',
-    name: 'Soda BNB',
+    symbol: 'BNB',
+    name: 'BNB',
     decimals: 18,
     address: '0x40Cd41b35DB9e5109ae7E54b44De8625dB320E6b',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -117,8 +119,8 @@ export const SodaTokens = {
     vault: '0x40Cd41b35DB9e5109ae7E54b44De8625dB320E6b',
   },
   sodaAVAX: {
-    symbol: 'sodaAVAX',
-    name: 'Soda AVAX',
+    symbol: 'AVAX',
+    name: 'Avalanche',
     decimals: 18,
     address: '0x14238D267557E9d799016ad635B53CD15935d290',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -127,7 +129,7 @@ export const SodaTokens = {
   },
   sodaETH: {
     symbol: 'sodaETH',
-    name: 'Soda ETH',
+    name: 'SODA ETH',
     decimals: 18,
     address: '0x4effB5813271699683C25c734F4daBc45B363709',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -135,8 +137,8 @@ export const SodaTokens = {
     vault: '0x4effB5813271699683C25c734F4daBc45B363709',
   },
   sodaBTC: {
-    symbol: 'sodaBTC',
-    name: 'Soda BTC',
+    symbol: 'BTC',
+    name: 'Bitcoin',
     decimals: 18,
     address: '0x7A1A5555842Ad2D0eD274d09b5c4406a95799D5d',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -145,7 +147,7 @@ export const SodaTokens = {
   },
   sodaWBTC: {
     symbol: 'sodaWBTC',
-    name: 'Soda Wrapped BTC',
+    name: 'SODA WBTC',
     decimals: 18,
     address: '0x811C3fCc13f9c2a23AE2Ae2DCadacFAC6eb5f0eB',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -153,8 +155,8 @@ export const SodaTokens = {
     vault: '0x811C3fCc13f9c2a23AE2Ae2DCadacFAC6eb5f0eB',
   },
   sodaSOL: {
-    symbol: 'sodaSOL',
-    name: 'Soda SOL',
+    symbol: 'SOL',
+    name: 'Solana',
     decimals: 18,
     address: '0xdEa692287E2cE8Cb08FA52917Be0F16b1DACDC87',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -162,8 +164,8 @@ export const SodaTokens = {
     vault: '0xdEa692287E2cE8Cb08FA52917Be0F16b1DACDC87',
   },
   sodaXLM: {
-    symbol: 'sodaXLM',
-    name: 'Soda XLM',
+    symbol: 'XLM',
+    name: 'Stellar Lumens',
     decimals: 18,
     address: '0x6BC8C37cba91F76E68C9e6d689A9C21E4d32079B',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -171,8 +173,8 @@ export const SodaTokens = {
     vault: '0x6BC8C37cba91F76E68C9e6d689A9C21E4d32079B',
   },
   sodaINJ: {
-    symbol: 'sodaINJ',
-    name: 'Soda INJ',
+    symbol: 'INJ',
+    name: 'Injective',
     decimals: 18,
     address: '0x1f22279C89B213944b7Ea41daCB0a868DdCDFd13',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -180,8 +182,8 @@ export const SodaTokens = {
     vault: '0x1f22279C89B213944b7Ea41daCB0a868DdCDFd13',
   },
   sodaSUI: {
-    symbol: 'sodaSUI',
-    name: 'Soda SUI',
+    symbol: 'SUI',
+    name: 'Sui',
     decimals: 18,
     address: '0xdc5B4b00F98347E95b9F94911213DAB4C687e1e3',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -199,7 +201,7 @@ export const SodaTokens = {
   },
   sodaUSDC: {
     symbol: 'sodaUSDC',
-    name: 'Soda USDC',
+    name: 'SODA USDC',
     decimals: 18,
     address: '0xAbbb91c0617090F0028BDC27597Cd0D038F3A833',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -208,7 +210,7 @@ export const SodaTokens = {
   },
   sodaUSDT: {
     symbol: 'sodaUSDT',
-    name: 'Soda USDT',
+    name: 'SODA USDT',
     decimals: 18,
     address: '0xbDf1F453FCB61424011BBDDCB96cFDB30f3Fe876',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -226,7 +228,7 @@ export const SodaTokens = {
   },
   sodaS: {
     symbol: 'sodaS',
-    name: 'Soda S',
+    name: 'SODA S',
     decimals: 18,
     address: '0x62ecc3Eeb80a162c57624B3fF80313FE69f5203e',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -234,8 +236,8 @@ export const SodaTokens = {
     vault: '0x62ecc3Eeb80a162c57624B3fF80313FE69f5203e',
   },
   sodaPOL: {
-    symbol: 'sodaPOL',
-    name: 'Soda POL',
+    symbol: 'POL',
+    name: 'Polygon Ecosystem Token',
     decimals: 18,
     address: '0x208ED38f4783328aA9eBFeC360D32e7520A9B779',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -244,7 +246,7 @@ export const SodaTokens = {
   },
   sodaSODA: {
     symbol: 'sodaSODA',
-    name: 'Soda SODA',
+    name: 'SODA SODA',
     decimals: 18,
     address: '0x21685E341DE7844135329914Be6Bd8D16982d834',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -252,8 +254,8 @@ export const SodaTokens = {
     vault: '0x21685E341DE7844135329914Be6Bd8D16982d834',
   },
   sodaHYPE: {
-    symbol: 'sodaHYPE',
-    name: 'Soda HYPE',
+    symbol: 'HYPE',
+    name: 'Hyperliquid',
     decimals: 18,
     address: '0x6E81124fC5d2Bf666B16a0A5d90066eBf35c7411',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -261,8 +263,8 @@ export const SodaTokens = {
     vault: '0x6E81124fC5d2Bf666B16a0A5d90066eBf35c7411',
   },
   sodaRBNT: {
-    symbol: 'sodaRBNT',
-    name: 'Soda RBNT',
+    symbol: 'RBNT',
+    name: 'Redbelly Network Token',
     decimals: 18,
     address: '0x4B207114F9118dEAC56436e1aE3c45648783c7Ac',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -270,8 +272,8 @@ export const SodaTokens = {
     vault: '0x4B207114F9118dEAC56436e1aE3c45648783c7Ac',
   },
   sodaLL: {
-    symbol: 'sodaLL',
-    name: 'Soda LL',
+    symbol: 'LL',
+    name: 'LightLink',
     decimals: 18,
     address: '0x14C5eB2D25dFb834852dFc85744875d1eCb09748',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -279,8 +281,8 @@ export const SodaTokens = {
     vault: '0x14C5eB2D25dFb834852dFc85744875d1eCb09748',
   },
   sodaWEETH: {
-    symbol: 'sodaWEETH',
-    name: 'SODA WEETH',
+    symbol: 'weETH',
+    name: 'Wrapped eETH',
     decimals: 18,
     address: '0xCb6B152D3a943f25157381aFcA7fEFCD2ef5a357',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -288,8 +290,8 @@ export const SodaTokens = {
     vault: '0xCb6B152D3a943f25157381aFcA7fEFCD2ef5a357',
   },
   sodaWSTETH: {
-    symbol: 'sodaWSTETH',
-    name: 'SODA WSTETH',
+    symbol: 'wstETH',
+    name: 'Wrapped liquid staked Ether',
     decimals: 18,
     address: '0x58b0538D7EEaeE69EF32f9F1dE5cbF32A10a977B',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -297,8 +299,8 @@ export const SodaTokens = {
     vault: '0x58b0538D7EEaeE69EF32f9F1dE5cbF32A10a977B',
   },
   sodaNEAR: {
-    symbol: 'sodaNEAR',
-    name: 'SODA NEAR',
+    symbol: 'NEAR',
+    name: 'NEAR Protocol',
     decimals: 18,
     address: '0xf4ba497c9b805e4bd88a8a9e6a7b8f74984c3e39',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -306,8 +308,8 @@ export const SodaTokens = {
     vault: '0xf4ba497c9b805e4bd88a8a9e6a7b8f74984c3e39',
   },
   sodaKAIA: {
-    symbol: 'sodaKAIA',
-    name: 'Soda KAIA',
+    symbol: 'KAIA',
+    name: 'Kaia',
     decimals: 18,
     address: '0xD7d41b5f803b6A40F8A6eAa34E459A4564e39891',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -315,8 +317,8 @@ export const SodaTokens = {
     vault: '0xD7d41b5f803b6A40F8A6eAa34E459A4564e39891',
   },
   sodaSTX: {
-    symbol: 'sodaSTX',
-    name: 'Soda STX',
+    symbol: 'STX',
+    name: 'Stacks',
     decimals: 18,
     address: '0x1Fbe5229e9d189F26bEE77E5bFa24309FdA90483',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -324,8 +326,8 @@ export const SodaTokens = {
     vault: '0x1Fbe5229e9d189F26bEE77E5bFa24309FdA90483',
   },
   sodaSUSDS: {
-    symbol: 'sodaSUSDS',
-    name: 'SODA sUSDS',
+    symbol: 'sUSDS',
+    name: 'Savings USDS',
     decimals: 18,
     address: '0x243b0c26c8b38793908d7C64e8510f21B19B4613',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -333,8 +335,8 @@ export const SodaTokens = {
     vault: '0x243b0c26c8b38793908d7C64e8510f21B19B4613',
   },
   sodaHBAR: {
-    symbol: 'sodaHBAR',
-    name: 'Soda HBAR',
+    symbol: 'HBAR',
+    name: 'Hedera',
     decimals: 18,
     address: '0x3BB956cc8922E1Ba4148dc10eD1b4Fa19aa599c4',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -342,8 +344,8 @@ export const SodaTokens = {
     vault: '0x3BB956cc8922E1Ba4148dc10eD1b4Fa19aa599c4',
   },
   sodaJITOSOL: {
-    symbol: 'sodaJITOSOL',
-    name: 'Soda JITOSOL',
+    symbol: 'JitoSOL',
+    name: 'Jito Staked SOL',
     decimals: 18,
     address: '0xe1bad4400d947Bc4fa66f9c0A143D800002083a0',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -351,8 +353,8 @@ export const SodaTokens = {
     vault: '0xe1bad4400d947Bc4fa66f9c0A143D800002083a0',
   },
   sodaUSDS: {
-    symbol: 'sodaUSDS',
-    name: 'Soda USDS',
+    symbol: 'USDS',
+    name: 'USDS',
     decimals: 18,
     address: '0xA3AeFa2BAfEAB479c4Aca6024A16906bbC75566e',
     chainKey: ChainKeys.SONIC_MAINNET,
@@ -370,6 +372,7 @@ export const SodaTokens = {
   },
   SPCX: {
     symbol: 'SPCX',
+    isRwa: true,
     name: 'Space Exploration Technologies Corp. Class A Common Stock • Robinhood Token',
     decimals: 18,
     address: '0xB585e2EEa070eB4E4D877A707aEC3B718edb2373',
@@ -379,6 +382,7 @@ export const SodaTokens = {
   },
   NVDA: {
     symbol: 'NVDA',
+    isRwa: true,
     name: 'NVIDIA • Robinhood Token',
     decimals: 18,
     address: '0x2D5D2250EE426cA318efBd03ddf926B23c96f74B',
@@ -388,6 +392,7 @@ export const SodaTokens = {
   },
   GME: {
     symbol: 'GME',
+    isRwa: true,
     name: 'GameStop • Robinhood Token',
     decimals: 18,
     address: '0x996e5591e4692e2B7d8fB6926DeA4EE1950Ef394',
@@ -397,6 +402,7 @@ export const SodaTokens = {
   },
   MSTR: {
     symbol: 'MSTR',
+    isRwa: true,
     name: 'Strategy Inc. • Robinhood Token',
     decimals: 18,
     address: '0xE0E2aF45EBf5700a90E63c41B0ecE042A240Fab1',
@@ -406,6 +412,7 @@ export const SodaTokens = {
   },
   AAPL: {
     symbol: 'AAPL',
+    isRwa: true,
     name: 'Apple • Robinhood Token',
     decimals: 18,
     address: '0x4712D2D49Ba3be41DA334FCB3616FDdc0d745185',
@@ -415,6 +422,7 @@ export const SodaTokens = {
   },
   TSLA: {
     symbol: 'TSLA',
+    isRwa: true,
     name: 'Tesla • Robinhood Token',
     decimals: 18,
     address: '0x8B7F46967Ed9367A70b2e046D5e26a03625d53b1',
@@ -424,6 +432,7 @@ export const SodaTokens = {
   },
   MU: {
     symbol: 'MU',
+    isRwa: true,
     name: 'Micron Technology • Robinhood Token',
     decimals: 18,
     address: '0x108147b16186B895344F5752468190B9EE0e3A22',
@@ -433,6 +442,7 @@ export const SodaTokens = {
   },
   SNDK: {
     symbol: 'SNDK',
+    isRwa: true,
     name: 'Sandisk Corporation • Robinhood Token',
     decimals: 18,
     address: '0x568F29855B7B46EdA38ed95771FAeC498c507EF7',
@@ -442,6 +452,7 @@ export const SodaTokens = {
   },
   SPY: {
     symbol: 'SPY',
+    isRwa: true,
     name: 'SPDR S&P 500 ETF Trust • Robinhood Token',
     decimals: 18,
     address: '0x1816E408f0448D0CaD3e0D490bd2590d921Bb0c8',
@@ -451,6 +462,7 @@ export const SodaTokens = {
   },
   QQQ: {
     symbol: 'QQQ',
+    isRwa: true,
     name: 'Invesco QQQ • Robinhood Token',
     decimals: 18,
     address: '0x454ab3DeFd9df0749d450b145D4516e317E3e500',
@@ -460,6 +472,7 @@ export const SodaTokens = {
   },
   SGOV: {
     symbol: 'SGOV',
+    isRwa: true,
     name: 'iShares 0-3 Month Treasury Bond • Robinhood Token',
     decimals: 18,
     address: '0xf6938087cf794B08739b926B41FF8F1E90816E74',
@@ -469,6 +482,7 @@ export const SodaTokens = {
   },
   USO: {
     symbol: 'USO',
+    isRwa: true,
     name: 'United States Oil Fund • Robinhood Token',
     decimals: 18,
     address: '0x8DaBbADcecfc1a0B91fc68c72301090bc220D2bc',
@@ -478,6 +492,7 @@ export const SodaTokens = {
   },
   SLV: {
     symbol: 'SLV',
+    isRwa: true,
     name: 'iShares Silver Trust • Robinhood Token',
     decimals: 18,
     address: '0x690B92c27ac80015E57DB8cc02A81255814f49A2',
@@ -876,6 +891,7 @@ export const solanaSupportedTokens = {
   },
   CRCLx: {
     symbol: 'CRCLx',
+    isRwa: true,
     name: 'Circle xStock',
     decimals: 8,
     address: 'XsueG8BtpquVJX9LVLLEGuViXUungE6WmK5YZ3p3bd1',
@@ -885,6 +901,7 @@ export const solanaSupportedTokens = {
   },
   TSLAx: {
     symbol: 'TSLAx',
+    isRwa: true,
     name: 'Tesla xStock',
     decimals: 8,
     address: 'XsDoVfqeBukxuZHWhdvWHBhgEHjGNst4MLodqsJHzoB',
@@ -894,6 +911,7 @@ export const solanaSupportedTokens = {
   },
   SPYx: {
     symbol: 'SPYx',
+    isRwa: true,
     name: 'SP500 xStock',
     decimals: 8,
     address: 'XsoCS1TfEyfFhfvj8EtZ528L3CaKBDBRqRapnBbDF2W',
@@ -903,6 +921,7 @@ export const solanaSupportedTokens = {
   },
   NVDAx: {
     symbol: 'NVDAx',
+    isRwa: true,
     name: 'NVIDIA xStock',
     decimals: 8,
     address: 'Xsc9qvGR1efVDFGLrVsmkzv3qi45LTBjeUKSPmx9qEh',
@@ -912,6 +931,7 @@ export const solanaSupportedTokens = {
   },
   QQQx: {
     symbol: 'QQQx',
+    isRwa: true,
     name: 'Nasdaq xStock',
     decimals: 8,
     address: 'Xs8S1uUs1zvS2p7iwtsG3b6fkhpvmwz4GYU3gWAmWHZ',
@@ -921,6 +941,7 @@ export const solanaSupportedTokens = {
   },
   MSTRx: {
     symbol: 'MSTRx',
+    isRwa: true,
     name: 'MicroStrategy xStock',
     decimals: 8,
     address: 'XsP7xzNPvEHS1m6qfanPUGjNmdnmsLKEoNAnHjdxxyZ',
@@ -930,6 +951,7 @@ export const solanaSupportedTokens = {
   },
   COINx: {
     symbol: 'COINx',
+    isRwa: true,
     name: 'Coinbase xStock',
     decimals: 8,
     address: 'Xs7ZdzSHLU9ftNJsii5fCeJhoRWSC32SQGzGQtePxNu',
@@ -939,6 +961,7 @@ export const solanaSupportedTokens = {
   },
   GOOGLx: {
     symbol: 'GOOGLx',
+    isRwa: true,
     name: 'Alphabet xStock',
     decimals: 8,
     address: 'XsCPL9dNWBMvFtTmwcCA5v3xWPSMEBCszbQdiLLq6aN',
@@ -2118,6 +2141,7 @@ export const stellarSupportedTokens = {
   },
   SPCX: {
     symbol: 'SPCX',
+    isRwa: true,
     name: 'SpaceX Class A',
     decimals: 7,
     address: 'CAI4HHAYO57QICZOZ4JF7R66RLGJRD7BGTX7H6MILCITVEYYEFRYFISK',
@@ -2127,6 +2151,7 @@ export const stellarSupportedTokens = {
   },
   NVDA: {
     symbol: 'NVDA',
+    isRwa: true,
     name: 'NVIDIA',
     decimals: 7,
     address: 'CCQFCT4FHJURUQ4RQA4NHYW5GQRHCBDXF33ADXZRTDTDVGKOJO3ZPEMY',
@@ -2136,6 +2161,7 @@ export const stellarSupportedTokens = {
   },
   GME: {
     symbol: 'GME',
+    isRwa: true,
     name: 'GameStop',
     decimals: 7,
     address: 'CAPSLSLCTFOZM22SUIPQENMM54T24GTDRHZ5STYAO6EYMK5GGGYVKWBX',
@@ -2145,6 +2171,7 @@ export const stellarSupportedTokens = {
   },
   MSTR: {
     symbol: 'MSTR',
+    isRwa: true,
     name: 'Strategy',
     decimals: 7,
     address: 'CAFQQXZSECLJNU76OS2OKLJQJBQHYJCVAYZJ4KGEN7VHXH5BTGNLVQND',
@@ -2154,6 +2181,7 @@ export const stellarSupportedTokens = {
   },
   AAPL: {
     symbol: 'AAPL',
+    isRwa: true,
     name: 'Apple',
     decimals: 7,
     address: 'CAZSFDNSSR2RKJ2LIIB2Y4G4WOSYYKC4646EUJ63PQLDDHOVQYZ4HDTK',
@@ -2163,6 +2191,7 @@ export const stellarSupportedTokens = {
   },
   TSLA: {
     symbol: 'TSLA',
+    isRwa: true,
     name: 'Tesla',
     decimals: 7,
     address: 'CARLFQDI2S2FSYFB47AZLKGUFZVGBEUVNW77SCJHHHGL2KPGT3TN5PAB',
@@ -2172,6 +2201,7 @@ export const stellarSupportedTokens = {
   },
   MU: {
     symbol: 'MU',
+    isRwa: true,
     name: 'Micron',
     decimals: 7,
     address: 'CBPTKA32BTUEX4VFAER6AUFWQZCWJKQAMLV2PMFFN7EHLGLJN4JWIZ3F',
@@ -2181,6 +2211,7 @@ export const stellarSupportedTokens = {
   },
   SNDK: {
     symbol: 'SNDK',
+    isRwa: true,
     name: 'SanDisk',
     decimals: 7,
     address: 'CDXNTHFMGQM33UGQBSLZI3BV5UWW62QGZLCEKOXJKMFN2W3KQZKE3LTQ',
@@ -2190,6 +2221,7 @@ export const stellarSupportedTokens = {
   },
   SPY: {
     symbol: 'SPY',
+    isRwa: true,
     name: 'SPDR S&P 500 ETF Trust',
     decimals: 7,
     address: 'CD3ZMWOS4PZS2RQITEHBOTS27DTDP4QKOK7IEO5IB64GQKHRJYTVL3SW',
@@ -2199,6 +2231,7 @@ export const stellarSupportedTokens = {
   },
   QQQ: {
     symbol: 'QQQ',
+    isRwa: true,
     name: 'Invesco QQQ Trust',
     decimals: 7,
     address: 'CC7DQX43J2KBK5MJACQWTNHENIYB5GUVCFXGDKQWDLUWA4VKLOOU5PWB',
@@ -2208,6 +2241,7 @@ export const stellarSupportedTokens = {
   },
   SGOV: {
     symbol: 'SGOV',
+    isRwa: true,
     name: 'iShares 0-3 Month Treasury Bond ETF',
     decimals: 7,
     address: 'CBQMRO2JTUJ6NXVBQ3XGJV34PDTXR34DD74TLLRCW5SV2CV2NN2VDMLH',
@@ -2217,6 +2251,7 @@ export const stellarSupportedTokens = {
   },
   USO: {
     symbol: 'USO',
+    isRwa: true,
     name: 'United States Oil Fund LP',
     decimals: 7,
     address: 'CCFRCTIW5EK2OK626V6C4YRTJCKACIRDI2GHOKWM57ZXACK2ZTWWWLC7',
@@ -2226,6 +2261,7 @@ export const stellarSupportedTokens = {
   },
   SLV: {
     symbol: 'SLV',
+    isRwa: true,
     name: 'iShares Silver Trust',
     decimals: 7,
     address: 'CBY3U32O5T2B555HNJLX6C6HW3O2FLRSJGH472UOOHT6H6ZMGMSSZTLW',
@@ -2673,6 +2709,7 @@ export const ethereumSupportedTokens = {
   },
   PAXG: {
     symbol: 'PAXG',
+    isRwa: true,
     name: 'PAX Gold',
     decimals: 18,
     address: '0x45804880De22913dAFE09f4980848ECE6EcbAf78',
@@ -2682,6 +2719,7 @@ export const ethereumSupportedTokens = {
   },
   XAUt: {
     symbol: 'XAUt',
+    isRwa: true,
     name: 'Tether Gold',
     decimals: 6,
     address: '0x68749665FF8D2d112Fa859AA293F07A622782F38',
@@ -2913,6 +2951,7 @@ export const hederaSupportedTokens = {
   },
   SPCX: {
     symbol: 'SPCX',
+    isRwa: true,
     name: 'SpaceX Class A',
     decimals: 8,
     address: '0x0000000000000000000000000000000000a5669e',
@@ -2922,6 +2961,7 @@ export const hederaSupportedTokens = {
   },
   NVDA: {
     symbol: 'NVDA',
+    isRwa: true,
     name: 'NVIDIA',
     decimals: 8,
     address: '0x0000000000000000000000000000000000a5669f',
@@ -2931,6 +2971,7 @@ export const hederaSupportedTokens = {
   },
   GME: {
     symbol: 'GME',
+    isRwa: true,
     name: 'GameStop',
     decimals: 8,
     address: '0x0000000000000000000000000000000000a567d9',
@@ -2940,6 +2981,7 @@ export const hederaSupportedTokens = {
   },
   MSTR: {
     symbol: 'MSTR',
+    isRwa: true,
     name: 'Strategy',
     decimals: 8,
     address: '0x0000000000000000000000000000000000a567e0',
@@ -2949,6 +2991,7 @@ export const hederaSupportedTokens = {
   },
   AAPL: {
     symbol: 'AAPL',
+    isRwa: true,
     name: 'Apple',
     decimals: 8,
     address: '0x0000000000000000000000000000000000a567e1',
@@ -2958,6 +3001,7 @@ export const hederaSupportedTokens = {
   },
   TSLA: {
     symbol: 'TSLA',
+    isRwa: true,
     name: 'Tesla',
     decimals: 8,
     address: '0x0000000000000000000000000000000000a567e2',
@@ -2967,6 +3011,7 @@ export const hederaSupportedTokens = {
   },
   MU: {
     symbol: 'MU',
+    isRwa: true,
     name: 'Micron',
     decimals: 8,
     address: '0x0000000000000000000000000000000000a567e3',
@@ -2976,6 +3021,7 @@ export const hederaSupportedTokens = {
   },
   SNDK: {
     symbol: 'SNDK',
+    isRwa: true,
     name: 'SanDisk',
     decimals: 8,
     address: '0x0000000000000000000000000000000000a567e5',
@@ -2985,6 +3031,7 @@ export const hederaSupportedTokens = {
   },
   SPY: {
     symbol: 'SPY',
+    isRwa: true,
     name: 'SPDR S&P 500 ETF Trust',
     decimals: 8,
     address: '0x0000000000000000000000000000000000a567e7',
@@ -2994,6 +3041,7 @@ export const hederaSupportedTokens = {
   },
   QQQ: {
     symbol: 'QQQ',
+    isRwa: true,
     name: 'Invesco QQQ Trust',
     decimals: 8,
     address: '0x0000000000000000000000000000000000a567ea',
@@ -3003,6 +3051,7 @@ export const hederaSupportedTokens = {
   },
   SGOV: {
     symbol: 'SGOV',
+    isRwa: true,
     name: 'iShares 0-3 Month Treasury Bond ETF',
     decimals: 8,
     address: '0x0000000000000000000000000000000000a567ec',
@@ -3012,6 +3061,7 @@ export const hederaSupportedTokens = {
   },
   USO: {
     symbol: 'USO',
+    isRwa: true,
     name: 'United States Oil Fund LP',
     decimals: 8,
     address: '0x0000000000000000000000000000000000a567ed',
@@ -3021,6 +3071,7 @@ export const hederaSupportedTokens = {
   },
   SLV: {
     symbol: 'SLV',
+    isRwa: true,
     name: 'iShares Silver Trust',
     decimals: 8,
     address: '0x0000000000000000000000000000000000a567f2',
@@ -3074,6 +3125,7 @@ export const robinhoodSupportedTokens = {
   // feed exists for them, so the solver cannot price or swap them.
   SPCX: {
     symbol: 'SPCX',
+    isRwa: true,
     name: 'SpaceX Class A',
     decimals: 18,
     address: '0x4a0E65A3EcceC6dBe60AE065F2e7bb85Fae35eEa',
@@ -3083,6 +3135,7 @@ export const robinhoodSupportedTokens = {
   },
   NVDA: {
     symbol: 'NVDA',
+    isRwa: true,
     name: 'NVIDIA',
     decimals: 18,
     address: '0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC',
@@ -3092,6 +3145,7 @@ export const robinhoodSupportedTokens = {
   },
   GME: {
     symbol: 'GME',
+    isRwa: true,
     name: 'GameStop',
     decimals: 18,
     address: '0x1b0E319c6A659F002271B69dB8A7df2F911c153E',
@@ -3101,6 +3155,7 @@ export const robinhoodSupportedTokens = {
   },
   MSTR: {
     symbol: 'MSTR',
+    isRwa: true,
     name: 'Strategy',
     decimals: 18,
     address: '0xec262a75e413fAfD0dF80480274532C79D42da09',
@@ -3110,6 +3165,7 @@ export const robinhoodSupportedTokens = {
   },
   AAPL: {
     symbol: 'AAPL',
+    isRwa: true,
     name: 'Apple',
     decimals: 18,
     address: '0xaF3D76f1834A1d425780943C99Ea8A608f8a93f9',
@@ -3119,6 +3175,7 @@ export const robinhoodSupportedTokens = {
   },
   TSLA: {
     symbol: 'TSLA',
+    isRwa: true,
     name: 'Tesla',
     decimals: 18,
     address: '0x322F0929c4625eD5bAd873c95208D54E1c003b2d',
@@ -3128,6 +3185,7 @@ export const robinhoodSupportedTokens = {
   },
   MU: {
     symbol: 'MU',
+    isRwa: true,
     name: 'Micron',
     decimals: 18,
     address: '0xfF080c8ce2E5feadaCa0Da81314Ae59D232d4afD',
@@ -3137,6 +3195,7 @@ export const robinhoodSupportedTokens = {
   },
   SNDK: {
     symbol: 'SNDK',
+    isRwa: true,
     name: 'SanDisk',
     decimals: 18,
     address: '0xB90A19fF0Af67f7779afF50A882A9CfF42446400',
@@ -3146,6 +3205,7 @@ export const robinhoodSupportedTokens = {
   },
   SPY: {
     symbol: 'SPY',
+    isRwa: true,
     name: 'SPDR S&P 500 ETF Trust',
     decimals: 18,
     address: '0x117cc2133c37B721F49dE2A7a74833232B3B4C0C',
@@ -3155,6 +3215,7 @@ export const robinhoodSupportedTokens = {
   },
   QQQ: {
     symbol: 'QQQ',
+    isRwa: true,
     name: 'Invesco QQQ Trust',
     decimals: 18,
     address: '0xD5f3879160bc7c32ebb4dC785F8a4F505888de68',
@@ -3164,6 +3225,7 @@ export const robinhoodSupportedTokens = {
   },
   SGOV: {
     symbol: 'SGOV',
+    isRwa: true,
     name: 'iShares 0-3 Month Treasury Bond ETF',
     decimals: 18,
     address: '0x92FD66527192E3e61d4DDd13322Aa222DE86F9B5',
@@ -3173,6 +3235,7 @@ export const robinhoodSupportedTokens = {
   },
   USO: {
     symbol: 'USO',
+    isRwa: true,
     name: 'United States Oil Fund LP',
     decimals: 18,
     address: '0xa30FA36Db767ad9eD3f7a60fC79526fB4d56D344',
@@ -3182,6 +3245,7 @@ export const robinhoodSupportedTokens = {
   },
   SLV: {
     symbol: 'SLV',
+    isRwa: true,
     name: 'iShares Silver Trust',
     decimals: 18,
     address: '0x411eFb0E7f985935DAec3D4C3ebaEa0d0AD7D89f',
@@ -3265,3 +3329,18 @@ export const supportedTokensByChain = {
   [ChainKeys.HEDERA_MAINNET]: hederaSupportedTokens,
   [ChainKeys.ROBINHOOD_MAINNET]: robinhoodSupportedTokens,
 } as const satisfies Record<ChainKey, Record<string, XToken>>;
+
+/**
+ * Whether a token's chain/address identifies a declared RWA in the packaged registry.
+ * Symbols are not used. Unknown tokens return false; this does not validate swap support.
+ * EVM hex addresses are case-insensitive; non-EVM identifiers retain their exact casing.
+ */
+export function isRealWorldAsset(token: { chainKey: string; address: string }): boolean {
+  const registry: Readonly<Record<string, Readonly<Record<string, XToken>>>> = supportedTokensByChain;
+  const chainTokens = registry[token.chainKey];
+  if (!chainTokens) return false;
+  const tokens = Object.values(chainTokens);
+  const normalize = (address: string): string => (/^0x[0-9a-f]{40}$/i.test(address) ? address.toLowerCase() : address);
+  const address = normalize(token.address);
+  return tokens.some(candidate => normalize(candidate.address) === address && candidate.isRwa === true);
+}

@@ -20,7 +20,7 @@ The constructor signature is `new Sodax(config?: SodaxOptions)`, where `SodaxOpt
 
 ### Dynamic Configuration
 
-For the latest tokens and chains, call `initialize()` before usage. Without this call the SDK falls back to the static defaults bundled with the installed version:
+Read effective configuration from `sodax.config`, which includes packaged defaults and constructor overrides. `initialize()` is available for the initialization lifecycle:
 
 ```typescript
 const initResult = await sodax.initialize();
@@ -29,7 +29,7 @@ if (!initResult.ok) {
 }
 ```
 
-`initialize()` returns `Promise<Result<void>>`. On success, `ConfigService` is populated with up-to-date chain and token data fetched from the backend API. On failure the SDK continues to work with the packaged defaults — the error is informational only.
+`initialize()` returns `Promise<Result<void>>`. The current implementation returns success without fetching backend configuration; it preserves the constructor-merged configuration. Do not use it as a token-support refresh. A direct import of `spokeChainConfig` is only the packaged snapshot and does not include your overrides.
 
 ## SodaxConfig overview
 
@@ -233,7 +233,7 @@ On any non-success (submission rejected, a 200 the backend did not accept, termi
 
 ### RadFi/Bound request signer (`radfi.signRequest`)
 
-`radfi` is a **client-side runtime option** on `SodaxOptions` (like `logger`) — never part of the backend-fetched `SodaxConfig`. The SDK calls `signRequest` once per outbound Bound Exchange (RadFi) `apiUrl` request and merges the returned headers onto it, so a server-to-server caller can attach Bound's `x-api-signature` HMAC header without the SDK ever holding the credential.
+`radfi` is a **client-side runtime option** on `SodaxOptions` (like `logger`) — never part of the backend-fetched `SodaxConfig`. The SDK calls `signRequest` once per outbound Bound Exchange (RadFi) request on **any** routed host — `svc.bound.exchange`, `auth.bound.exchange` or `api.radfi.co` — and merges the returned headers onto it, so a server-to-server caller can attach Bound's `x-api-signature` HMAC header without the SDK ever holding the credential. The context carries `baseUrl`, so a signer that must scope its credential per origin can branch on it. UMS calls (`/wallets/balance`, `/utxos`) bypass this and are never signed.
 
 ```typescript
 import { createHmac } from 'node:crypto';
@@ -251,7 +251,7 @@ const sodax = new Sodax({
 
 **Server-side only** — the closure holds a service credential, so never ship one in a browser bundle. Omit `radfi` and requests go out exactly as before.
 
-The signer receives `{ method, path }`, may be async, and is invoked per request (Bound's signature embeds a timestamp valid for 60 s, so a cached one would replay). Its headers are merged **last**, so it must not return `Authorization`: that carries the per-user Bound access token, which is separate and passed per call via `extras.bound.accessToken`.
+The signer receives `{ method, path, baseUrl }` — `baseUrl` is the resolved Bound host for that call, so a signer that must scope its credential per origin can branch on it. It may be async, and is invoked per request (Bound's signature embeds a timestamp valid for 60 s, so a cached one would replay). Its headers are merged **last**, so it must not return `Authorization`: that carries the per-user Bound access token, which is separate and passed per call via `extras.bound.accessToken`.
 
 ### Money market (`moneyMarket`)
 
@@ -310,7 +310,7 @@ EVM spokes use `rpcUrl` on their spoke config; Stellar uses `horizonRpcUrl` and 
 
 ### Backend API (`api`)
 
-[`ApiConfig`](https://github.com/icon-project/sodax-sdks/blob/main/packages/types/src/common/constants.ts) controls `baseURL`, `timeout`, and `headers` for `BackendApiService` (used by `ConfigService` and `initialize()`). It is either a flat `BackendApiConfig` (shown below — shared by `sodax.backendApi`, the swaps client `sodax.api.swaps`, and the bridge client `sodax.api.bridge`) or a nested `CustomApiConfig` (`{ baseApiConfig?, swapsApiConfig?, sponsoringApiConfig? }`) to point an individual client at its own endpoint.
+[`ApiConfig`](https://github.com/icon-project/sodax-sdks/blob/main/packages/types/src/common/constants.ts) controls `baseURL`, `timeout`, and `headers` for `BackendApiService` (the configuration service currently does not fetch through `initialize()`). It is either a flat `BackendApiConfig` (shown below — shared by `sodax.backendApi`, the swaps client `sodax.api.swaps`, and the bridge client `sodax.api.bridge`) or a nested `CustomApiConfig` (`{ baseApiConfig?, swapsApiConfig?, sponsoringApiConfig? }`) to point an individual client at its own endpoint.
 
 #### How a request URL is composed
 

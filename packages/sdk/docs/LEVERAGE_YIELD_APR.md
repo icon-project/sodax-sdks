@@ -98,7 +98,7 @@ A snapshot of the weETH vault at the moment of writing:
 
 | Term | Value | Source |
 |---|---|---|
-| `aaveSupply` (sodaWEETH) | 0.00% | AAVE `getReserveData(asset).currentLiquidityRate` |
+| `aaveSupply` (weETH vault) | 0.00% | AAVE `getReserveData(asset).currentLiquidityRate` |
 | `lsdStaking` (weETH) | 2.92% | DefiLlama pool `46bd2bdf-…`, latest `apy` |
 | `effectiveSupply` | 0.00 + 2.92 = **2.92%** | sum |
 | `aaveBorrow` (sodaETH) | 1.04% | AAVE `getReserveData(borrowToken).currentVariableBorrowRate` |

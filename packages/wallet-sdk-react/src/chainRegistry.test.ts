@@ -210,8 +210,6 @@ describe('chainRegistry — defaults forwarding to provider constructors', () =>
           chains: {
             [ChainKeys.BITCOIN_MAINNET]: {
               rpcUrl: 'https://mempool.space/api',
-              radfiApiUrl: 'https://api.bound.exchange/api',
-              radfiUmsUrl: 'https://api.ums.bound.exchange/api',
               defaults: { defaultFinalize: true },
             },
           },
@@ -231,8 +229,6 @@ describe('chainRegistry — defaults forwarding to provider constructors', () =>
           chains: {
             [ChainKeys.BITCOIN_MAINNET]: {
               rpcUrl: 'https://mempool.space/api',
-              radfiApiUrl: 'https://api.bound.exchange/api',
-              radfiUmsUrl: 'https://api.ums.bound.exchange/api',
             },
           },
         },
@@ -443,8 +439,6 @@ describe('chainRegistry — rpcUrl/network forwarding to XService.getInstance', 
         chains: {
           [ChainKeys.BITCOIN_MAINNET]: {
             rpcUrl: 'https://mempool.example/api',
-            radfiApiUrl: 'https://radfi-api.example',
-            radfiUmsUrl: 'https://radfi-ums.example',
           },
         },
       },

@@ -40,6 +40,10 @@ export type StellarSharedChainConfig = TxPollingConfig & {
 
 export type RadfiConfig = {
   apiUrl: string;
+  /** `/auth/*` + `/wallets/*`. Unset resolves via `BOUND_COMPANION_HOSTS[apiUrl]`, then `apiUrl`. */
+  authUrl?: string;
+  /** `/transactions/*`. Unset resolves via `BOUND_COMPANION_HOSTS[apiUrl]`, then `apiUrl`. */
+  transactionsUrl?: string;
   apiKey: string;
   umsUrl: string;
   accessToken: string;
@@ -74,7 +78,8 @@ export const bridgeConfig = {} satisfies BridgeDefaultConfig;
  * deliberately kept OUT of the serializable {@link RadfiConfig} data contract so it is never fetched
  * from or overwritten by the backend config, and so no credential ever lives on the SDK config object.
  *
- * The SDK invokes it once per outbound RadFi `apiUrl` request and merges the returned headers onto that
+ * The SDK invokes it once per outbound RadFi request on any routed host — `baseUrl` says which — and
+ * merges the returned headers
  * request. The consumer (e.g. a backend) owns the credential and computes the signature; the SDK holds
  * only the function reference. Used to add Bound's `x-api-signature` HMAC header for server-to-server
  * callers (see swaps-api gh-831), keeping the per-user `accessToken` and the backend credential separate.
@@ -82,10 +87,12 @@ export const bridgeConfig = {} satisfies BridgeDefaultConfig;
 export type RadfiSignContext = {
   method: string; // HTTP method of the outbound RadFi request
   path: string; // request endpoint, e.g. `/sodax/transaction`
+  /** Resolved base URL this request goes to. Bound serves several hosts — scope credentials on it. */
+  baseUrl: string;
 };
 export type RadfiSigner = (ctx: RadfiSignContext) => Record<string, string> | Promise<Record<string, string>>;
 export type RadfiOptions = {
-  signRequest?: RadfiSigner; // returns extra headers (e.g. `x-api-signature`) merged onto each RadFi apiUrl request
+  signRequest?: RadfiSigner; // extra headers (e.g. `x-api-signature`) merged onto each routed RadFi request
 };
 
 /**

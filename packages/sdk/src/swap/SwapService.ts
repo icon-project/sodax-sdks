@@ -1572,9 +1572,11 @@ export class SwapService {
   /**
    * Returns the relay extra data (`address` + `payload`) required to submit an intent to the relayer API.
    *
-   * Currently only required when the source chain is Solana or Bitcoin, where extra call data must be
-   * bundled with the relay submission. On other chains this is derived automatically inside
-   * `createIntent`.
+   * Only required when the source chain is Solana or Bitcoin, whose deposits commit a hash of the relay
+   * payload on-chain, so the relayer needs the exact bytes bundled with the submission. For an intent
+   * created by {@link SwapService.createIntent} the payload is byte-identical to the `relayData` that
+   * call returned; see {@link SwapService.reconstructRelayData}, which this delegates to, for the
+   * derivation and the one intent shape it cannot reconstruct.
    *
    * Accepts either a hub-chain tx hash (will fetch the intent on-chain first) or a
    * pre-fetched `Intent` object directly.
@@ -1583,37 +1585,28 @@ export class SwapService {
    * @returns A `Result` containing `RelayExtraData`: `{ address: Hex; payload: Hex }`.
    */
   public async getIntentSubmitTxExtraData(params: GetIntentSubmitTxExtraDataParams): Promise<Result<RelayExtraData>> {
-    try {
-      let intent: Intent;
-      if ('txHash' in params) {
-        const intentResult = await this.getIntent(params.txHash);
-        if (!intentResult.ok) return intentResult;
-        intent = intentResult.value;
-      } else {
-        intent = params.intent;
-      }
-
-      const txData = EvmSolverService.encodeCreateIntent(intent, this.solver.intentsContract);
-
-      return {
-        ok: true,
-        value: {
-          address: intent.creator,
-          payload: txData.data,
-        },
-      };
-    } catch (error) {
-      return { ok: false, error };
+    if ('txHash' in params) {
+      const intentResult = await this.getIntent(params.txHash);
+      if (!intentResult.ok) return intentResult;
+      return this.reconstructRelayData(intentResult.value);
     }
+    return this.reconstructRelayData(params.intent);
   }
 
   /**
-   * Re-derives the byte-identical relay extra data (`{ address, payload }`) for a swap intent from a
-   * fully-populated `Intent` alone — no on-chain call, no original `createIntent` return value needed.
+   * Re-derives the byte-identical relay extra data (`{ address, payload }`) for an intent created by
+   * {@link SwapService.createIntent} (or `swap` / `createLimitOrderIntent`) from a fully-populated
+   * `Intent` alone — no on-chain call, no original `createIntent` return value needed.
    *
    * The `payload` matches exactly what `createIntent` relayed when the intent was first created:
    * - Sonic-hub source — raw `createIntent(intent)` calldata.
    * - Any spoke source — the `[approve, createIntent]` multicall (uniform across all spokes).
+   *
+   * Not reconstructable: a `LeverageYieldService.vaultSwap` / `createVaultIntent` intent with
+   * `hubWalletSwap`. Its `srcChain` is the hub while the relayed payload is the spoke multicall sent
+   * through `sendMessage`, so it is indistinguishable here from a Sonic-source swap and would yield raw
+   * `createIntent` calldata. Keep the `relayData` that call returned, or use
+   * `sodax.api.leverageYield.getIntentSubmitTxExtraData`.
    *
    * Byte-identity is possible because the only originally-random field, `intentId`, is already
    * carried on the `Intent`; everything else in the payload is a pure function of the intent and
