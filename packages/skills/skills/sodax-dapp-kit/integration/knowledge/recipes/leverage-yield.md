@@ -223,7 +223,7 @@ const approved = await sodax.leverageYield.approvePositionFunding({
 if (!approved.ok) throw approved.error;
 
 // 2. Open. `borrowAmount` / `minCollateralOut` come from `sizeLeverageBorrow` + `projectLeverageLeg`
-//    (see the sizing section) — never from oracle parity.
+//    (sized below) — never from oracle parity.
 const opened = await sodax.leverageYield.openPosition({
   params: { srcChainKey, srcAddress, token, amount, eModeCategory, borrowToken, borrowAmount, minCollateralOut },
   walletProvider,
@@ -235,6 +235,45 @@ await notifySolver.mutateAsync({ intent_tx_hash: opened.value.dstChainTxHash });
 ```
 
 `operatePosition` is the same shape, taking `calls` from the builders instead of a deposit.
+
+**Sizing the leg.** The hook borrows against what the solver actually paid, so the pool sees
+`deposit + solver output`, never `deposit × leverage` — size from oracle parity and the borrow reverts
+at fill with Aave `'36'`. Two SDK helpers size it, with the solver quote taken between them:
+
+```typescript
+import { sizeLeverageBorrow, projectLeverageLeg, type LeverageLegRequest } from '@sodax/sdk';
+
+const request: LeverageLegRequest = {
+  side: 'collateral', // 'debt' when funding with the debt token instead
+  deposit, depositDecimals, collateralPriceUsd, borrowPriceUsd, borrowDecimals, leverage,
+  feeBps, // the position's own PositionConfig fee — borrowed on top, so it moves LTV
+};
+
+// Quote `intentInput`, not `borrowAmount`: a debt-side open hands your contribution to the solver too.
+const { borrowAmount, intentInput } = sizeLeverageBorrow(request);
+const quote = await sodax.leverageYield.getQuote({
+  token_src: borrowReserve, token_src_blockchain_id: 'sonic', // both legs are HUB reserves; do not
+  token_dst: collateralReserve, token_dst_blockchain_id: 'sonic', // map them back to spoke originals
+  amount: intentInput,
+  quote_type: 'exact_input',
+  partnerFee: { address: feeReceiver, percentage: 0 }, // else a configured vault fee is pre-deducted
+});
+if (!quote.ok) throw quote.error;
+
+const projected = projectLeverageLeg(
+  request,
+  { quotedCollateral: quote.value.quoted_amount, collateralDecimals },
+  { ltv, liquidationThreshold },
+  slippagePct,
+);
+if (projected.exceedsMaxLtv) throw new Error(`max ~${projected.usableMaxLeverage.toFixed(2)}x at this quote`);
+// Open with `borrowAmount` and `minCollateralOut: projected.minCollateralOut`.
+```
+
+`exceedsMaxLtv` is a hard gate, not a warning: post through it and the intent is accepted, then fails
+at fill. Read `ltv` / `liquidationThreshold` from `useEModes` whenever the position sets an
+`eModeCategory`, since a category's LTV replaces the reserve's own. Why parity fails, and what
+`haircut` / `costUsd` are for, is in the SDK's `LEVERAGE_YIELD.md` § "Sizing the leg".
 
 Approve the deposit with `approvePositionFunding` (gate on `isPositionFundingAllowanceValid`): the
 spender is the hub wallet on Sonic and the spoke asset manager elsewhere, so a hand-rolled approval
