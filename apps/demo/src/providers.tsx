@@ -12,7 +12,7 @@ import {
 } from '@sodax/dapp-kit';
 import { defaultUseBackendSubmitTx, productionSolverConfig, stagingSolverConfig } from './constants';
 import { SolverEnv, useAppStore } from './zustand/useAppStore';
-import { envSodaxApiKey, envSwapsApiBaseUrl, isHttpUrl, nonEmptyEnv } from './lib/sodaxSettings';
+import { effectiveSodaxApiKey, effectiveSwapsApiBaseUrl, isHttpUrl, nonEmptyEnv } from './lib/sodaxSettings';
 import { createDatadogLogger } from './lib/loggers/datadogLogger';
 import { createDemoAnalytics } from './lib/analytics';
 
@@ -133,14 +133,12 @@ export default function Providers({ children }: { children: ReactNode }) {
         // service appends its own path (`/be`, `/swaps`, `/bridge`, `/sponsorships/*`).
         // `undefined` slices are skipped by `deepMerge`, so an unset override is the same as no key.
         ...(s.apiBaseUrl ? { baseApiConfig: { baseURL: s.apiBaseUrl } } : {}),
-        swapsApiConfig: s.swapsApiBaseUrl
-          ? { baseURL: s.swapsApiBaseUrl }
-          : envSwapsApiBaseUrl
-            ? { baseURL: envSwapsApiBaseUrl }
-            : undefined,
+        // Resolved rather than layered, so the Swaps API page's direct client can be built from the
+        // same value — a page submitting to one deployment and polling another never shows a status.
+        swapsApiConfig: { baseURL: effectiveSwapsApiBaseUrl(s) },
         sponsoringApiConfig,
       },
-      apiKey: s.apiKey ?? envSodaxApiKey,
+      apiKey: effectiveSodaxApiKey(s),
       logger: createDatadogLogger(),
       // Opt-in user-action analytics (issue #175). Enabled by default in the demo; the sink logs each
       // event and re-emits it as a `sodax:analytics` window CustomEvent. `false` when disabled, which

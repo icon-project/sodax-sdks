@@ -1,6 +1,6 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { swapsApi } from '@/components/swaps-api/lib/swapsApi';
+import { useSwapsApiClient } from '@/components/swaps-api/lib/swapsApi';
 
 export type SwapsApiOrder = {
   txHash: string;
@@ -8,6 +8,8 @@ export type SwapsApiOrder = {
 };
 
 export default function OrderStatus({ order }: { order: SwapsApiOrder }) {
+  const swapsApi = useSwapsApiClient();
+
   // Polls /swaps/submit-tx/status every second and stops on 'solved' | 'failed'.
   const { data: statusResponse } = useQuery({
     queryKey: ['swapsApi', 'submitTx', 'status', order.txHash, order.srcChainKey],

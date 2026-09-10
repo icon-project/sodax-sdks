@@ -37,6 +37,7 @@ import {
   useStellarGate,
   useBitcoinTradingSetup,
   useBalances,
+  runApprovalPlan,
   ChainKeys,
   isBitcoinChainKey,
   isStacksChainKey,
@@ -54,12 +55,8 @@ import { buildOrderSummary, type Order } from '@/components/swaps/OrderStatus';
 import { appendOrder } from '@/lib/orderHistory';
 import { loadSwapsApiSelection, saveSwapsApiSelection } from '@/components/swaps-api/lib/lastSelection';
 import { toIntentRequest, toXToken } from '@/components/swaps-api/lib/mappers';
-import { formatSwapsApiError, swapsApi } from '@/components/swaps-api/lib/swapsApi';
-import {
-  isSignableSwapsApiChain,
-  signAndBroadcastSwapsApiTx,
-  waitForTxFinality,
-} from '@/components/swaps-api/lib/signAndBroadcast';
+import { formatSwapsApiError, useSwapsApiClient } from '@/components/swaps-api/lib/swapsApi';
+import { isSignableSwapsApiChain, signAndBroadcastSwapsApiTx } from '@/components/swaps-api/lib/signAndBroadcast';
 import { useDebouncedValue } from '@/components/swaps-api/lib/useDebouncedValue';
 import { useAppStore } from '@/zustand/useAppStore';
 import { BitcoinSetupPanel } from '@/components/bitcoin/BitcoinSetupPanel';
@@ -77,6 +74,8 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   }));
   const srcChainKey = src.chain as SpokeChainKey;
   const dstChainKey = dst.chain as SpokeChainKey;
+
+  const swapsApi = useSwapsApiClient();
 
   // The delivery hook — if any — the registry accepts for this destination chain + output token.
   // Registry-driven, so a newly registered hook surfaces here without touching this component.
@@ -362,25 +361,17 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
     setApproveError(null);
     setIsApproving(true);
     try {
-      // The API only builds the unsigned transactions — signing and broadcasting happen here.
-      const { tx, resetTx } = await swapsApi.approve(intentParams);
-
-      const broadcast = async (raw: typeof tx): Promise<void> => {
-        const txHash = await signAndBroadcastSwapsApiTx({
-          chainKey: srcChainKey,
-          tx: raw,
-          walletProvider: sourceWalletProvider,
-        });
-        await waitForTxFinality(srcChainKey, sourceWalletProvider, txHash);
-      };
-
-      // A guarded source token (2017 TetherToken lineage) rejects an allowance change from one
-      // non-zero value to another, so the API hands back a reset that must be mined BEFORE the
-      // approve is a valid state transition. Out of order, the approve is certain to revert.
-      if (resetTx) {
-        await broadcast(resetTx);
-      }
-      await broadcast(tx);
+      // The API only builds the unsigned transactions; the shared plan runner signs and broadcasts
+      // them. It owns the ordering a guarded source token needs — a stale allowance must be zeroed
+      // and MINED before the approve is a valid state transition — and it rejects a reverted receipt
+      // instead of reading arrival as success.
+      const plan = await swapsApi.approve(intentParams);
+      await runApprovalPlan({
+        plan,
+        srcChainKey,
+        walletProvider: sourceWalletProvider,
+        hookName: 'SwapCard',
+      });
 
       // Confirmation happened client-side, so the allowance query can't know — refetch manually.
       await refetchAllowance();

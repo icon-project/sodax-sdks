@@ -1,16 +1,27 @@
 import { SwapsApi, SwapsApiError } from '@sodax/swaps-api';
+import { useMemo } from 'react';
+import { effectiveSodaxApiKey, effectiveSwapsApiBaseUrl } from '@/lib/sodaxSettings';
 import { formatMutationFailureMessage } from '@/lib/utils';
+import { useAppStore } from '@/zustand/useAppStore';
 
 /**
  * Direct `@sodax/swaps-api` client for this page. Unlike the rest of the demo (which reaches the
  * swaps backend through `sodax.api.swaps` / dapp-kit hooks), this page drives the original wire
  * client itself — dapp-kit stays involved only for wallet/signing and chain-prerequisite concerns
- * the API doesn't cover. Base URL includes the version prefix; the canary host mounts swaps under
- * `/v1` (same host the demo's providers point `swapsApiConfig` at).
+ * the API doesn't cover.
+ *
+ * Base URL and key come from the same effective settings the provider hands the SDK, because the
+ * page's order-status panel polls through `sodax.api.swaps`: a client configured on its own would
+ * submit to one deployment and poll another, leaving every order pending. A hook rather than a
+ * module singleton because the Sodax Settings modal changes both at runtime.
  */
-const baseUrl = import.meta.env.VITE_SWAPS_API_BASE_URL ?? 'https://canary-api.sodax.com/v1';
+export function useSwapsApiClient(): SwapsApi {
+  const { sodaxSettings } = useAppStore();
+  const baseUrl = effectiveSwapsApiBaseUrl(sodaxSettings);
+  const apiKey = effectiveSodaxApiKey(sodaxSettings);
 
-export const swapsApi = new SwapsApi({ baseUrl });
+  return useMemo(() => new SwapsApi({ baseUrl, ...(apiKey ? { apiKey } : {}) }), [baseUrl, apiKey]);
+}
 
 /**
  * Human-readable text for a failed swaps-api call. A `SwapsApiError`'s own message is generic
