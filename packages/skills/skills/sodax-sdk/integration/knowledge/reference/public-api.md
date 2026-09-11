@@ -15,6 +15,14 @@ import {
   type SodaxDefaultConfig, // static data contract the backend serves / defaults are built from
   type DeepPartial,
 
+  // Release identity — see "Config version" below
+  CONFIG_VERSION,
+  SDK_VERSION,
+  configVersionFor,
+  formatConfigVersion,
+  parseConfigVersion,
+  type ParsedConfigVersion,
+
   // Logging (see recipes/logging.md)
   type SodaxLogger,
   type SodaxLoggerOption,
@@ -214,6 +222,34 @@ This is a partial list — see `src/index.ts` of the published tarball for the a
 
 ---
 
+
+## Config version
+
+`CONFIG_VERSION` identifies the SDK release a SODAX config belongs to. The backend serves this same
+constant from the `@sodax/sdk` release it has installed, so comparing the two answers *are the SDK and
+the API on the same release?* It is derived from the package version:
+`major * 1e6 + minor * 1e4 + patch * 100 + (rc ?? 99)`, where the `99` rc slot means "stable".
+
+```ts
+import { CONFIG_VERSION, SDK_VERSION, configVersionFor, formatConfigVersion, parseConfigVersion } from '@sodax/sdk';
+
+SDK_VERSION;                     // '2.0.0-rc.17' — computed from CONFIG_VERSION, so it cannot go stale
+formatConfigVersion(2_020_099);  // '2.2.0'
+parseConfigVersion(2_020_006);   // { major: 2, minor: 2, patch: 0, rc: 6 }
+configVersionFor('2.2.0');       // 2_020_099
+```
+
+**All three helpers are total** — they return `null` rather than throwing, for anything outside the
+encoding: an out-of-grammar version (`configVersionFor('2.3.0-beta.1')`), a field out of range
+(`configVersionFor('2.2.100')` — minor and patch cap at 99, rc at 98, major at 1..99), or a number that
+is not a config version at all (`parseConfigVersion(235)`, a legacy counter value). Handle the `null`;
+do not assume a value came back.
+
+`rc` is `null` for a stable release. `rc: 0` is legal and falsy, so compare against `null` rather than
+testing truthiness.
+
+Do not unpack the integer by hand, and do not write your own copy of the formula — the field widths are
+part of the contract and are enforced at release time.
 
 ## Cross-references
 

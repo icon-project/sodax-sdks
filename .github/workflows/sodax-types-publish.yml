@@ -42,6 +42,13 @@ jobs:
           node-version: '24.x'
           registry-url: 'https://registry.npmjs.org'
 
+      # CI never runs on the release branch, where every bump happens, so this is the only automation
+      # that sees the constant before it ships. The step above already pins the manifest to the tag,
+      # so checking the constant against the manifest pins it to the tag too. Node builtins only —
+      # deliberately before the install, so a bad constant fails fast.
+      - name: Validate CONFIG_VERSION matches the released version
+        run: node scripts/config-version.mjs --check
+
       - name: Install pnpm
         uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
         with:

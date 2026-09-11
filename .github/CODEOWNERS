@@ -3,6 +3,12 @@
 /.github/scripts/ @icon-project/frontend-write
 /.github/CODEOWNERS @icon-project/frontend-write
 
+# Same reasoning as the docs gates below: these decide every published version and the
+# CONFIG_VERSION that ships with it, and nothing in CI re-runs them against real history.
+/scripts/release.mjs @icon-project/frontend-write
+/scripts/bump-versions.sh @icon-project/frontend-write
+/scripts/config-version.mjs @icon-project/frontend-write
+
 # The docs gates run from the PR head, so a PR can edit them to pass itself — including
 # trimming the frozen must-not-break URL list, or the map Docs Drift reads.
 /scripts/docs-pages-map.json @icon-project/frontend-write

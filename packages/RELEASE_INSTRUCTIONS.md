@@ -5,8 +5,9 @@ Every publishable `@sodax/*` package shares one version, cut as a single `@sdks@
 
 1. **Merge everything you are shipping into `main`.**
 
-2. **Sync `release`, then merge `main` into it.** A stale `release` bumps from the wrong base and
-   reuses the previous `CONFIG_VERSION`, so do not skip the fetch or the ff-only pull:
+2. **Sync `release`, then merge `main` into it.** A stale `release` bumps from the wrong base — the
+   wrong version, with release notes measured against it — so do not skip the fetch or the ff-only
+   pull. (`CONFIG_VERSION` itself is safe: it is derived from the version, not carried forward.)
 
    ```bash
    git checkout release
@@ -21,8 +22,8 @@ Every publishable `@sodax/*` package shares one version, cut as a single `@sdks@
    printed. An invalid or non-advancing version is refused and re-prompted. Pass it as an argument
    (`pnpm release 2.2.0`) to skip the prompt.
 
-4. **It stops after mutating.** Every manifest is set to that version, `CONFIG_VERSION` is
-   incremented once, and the gitignored `release-notes.md` is written. Nothing is committed or
+4. **It stops after mutating.** Every manifest is set to that version, `CONFIG_VERSION` is derived
+   from it, and the gitignored `release-notes.md` is written. Nothing is committed or
    tagged for you. On failure it prints the two cleanup commands — `git checkout -- packages/` and
    `rm -f release-notes.md` — but does not run them: a partial mutation stays on disk until you do.
 
@@ -73,7 +74,15 @@ It stops before changing anything if:
   `packages/` — this is what stops a new package being versioned but never published, or the reverse
 
 `scripts/bump-versions.sh` is the only thing that edits versions. Never hand-edit a package
-`version` or `CONFIG_VERSION`.
+`version` or `CONFIG_VERSION` — the latter is a pure function of the former
+(`major * 1e6 + minor * 1e4 + patch * 100 + (rc ?? 99)`, see
+[`packages/types/README.md`](types/README.md#config-version)), and three checks enforce it: `pnpm
+release` asserts the landed value, `node scripts/config-version.mjs --check` runs in the publish
+workflows, and `scripts/config-version.test.mjs` asserts it on every pull request.
+
+One consequence worth knowing before you pick a number: the encoding caps minor and patch at 99 and
+rc at 98, and has no 0.x range. `pnpm release` refuses anything outside that rather than shipping a
+number that would collide with another release.
 
 ## Republishing a single package
 
