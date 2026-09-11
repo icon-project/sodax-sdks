@@ -100,6 +100,7 @@ import {
   leverageYieldInvariant,
 } from './errors.js';
 import { resolvePositionFundingAddress } from './positionFunding.js';
+import type { PositionLegQuote } from './positionLegQuote.js';
 import {
   reportPositionIntent,
   type LeveragePositionIntentResult,
@@ -2979,6 +2980,42 @@ export class LeverageYieldService {
   public resolvePositionFunding(chainKey: SpokeChainKey, token: XToken): Address | undefined {
     const address = resolvePositionFundingAddress(chainKey, this.hubProvider.chainConfig.chain.key, token);
     return address === '' ? undefined : (address as Address);
+  }
+
+  /**
+   * Quotes one leg of a position operation: the borrowed side when levering up, the collateral when
+   * levering down or exiting.
+   *
+   * Use this rather than {@link LeverageYieldService.getQuote} for a position. Both hit the same
+   * endpoint, but this one names the hub reserves as the pair the intent actually swaps and quotes
+   * GROSS — see `positionLegQuote.ts` for why either alone gets the floor wrong. Feed `quotedAmount`
+   * to {@link projectLeverageLeg}.
+   *
+   * A refusal is not always a dead pair: {@link isNoRouteRefusal} is also what the solver answers
+   * for a leg that is only too small, and telling the two apart means quoting again at a healthy
+   * notional. That size is priced, so it is the caller's to choose.
+   */
+  public async getPositionLegQuote(params: {
+    /** Hub reserve given up. */
+    inputHubToken: Address;
+    /** Hub reserve expected back. */
+    outputHubToken: Address;
+    /** Input amount in `inputHubToken`'s units. */
+    amount: bigint;
+  }): Promise<Result<PositionLegQuote, SolverErrorResponse | LeverageYieldLookupError>> {
+    const hubChainKey = this.hubProvider.chainConfig.chain.key;
+    const quote = await this.getQuote({
+      token_src: params.inputHubToken,
+      token_src_blockchain_id: hubChainKey,
+      token_dst: params.outputHubToken,
+      token_dst_blockchain_id: hubChainKey,
+      amount: params.amount,
+      quote_type: 'exact_input',
+      // Explicit, not omitted: omitting it applies the configured leverage-yield fee.
+      partnerFee: { address: zeroAddress, percentage: 0 },
+    });
+    if (!quote.ok) return quote;
+    return { ok: true, value: { quotedAmount: quote.value.quoted_amount } };
   }
 
   /**

@@ -4,3 +4,4 @@ export * from './positionSizing.js';
 export * from './positionIntent.js';
 export * from './positionApyMath.js';
 export * from './positionFunding.js';
+export * from './positionLegQuote.js';
