@@ -61,6 +61,7 @@ import type {
   SpokeChainKey,
   SpokeExecActionParams,
   TxReturnType,
+  XToken,
 } from '@sodax/types';
 import type { BackendApiService } from '../backendApi/index.js';
 import { runBackendSubmitTx } from '../backendApi/runBackendSubmitTx.js';
@@ -98,6 +99,12 @@ import {
   type LeverageYieldSwapError,
   leverageYieldInvariant,
 } from './errors.js';
+import { resolvePositionFundingAddress } from './positionFunding.js';
+import {
+  reportPositionIntent,
+  type LeveragePositionIntentResult,
+  type PositionIntentNotifier,
+} from './positionIntent.js';
 
 // ─── ABIs ─────────────────────────────────────────────────────────────────
 //
@@ -2145,6 +2152,24 @@ export class LeverageYieldService {
    * The fee is FIXED AT CREATION on-chain, so this is read when a position is created and never
    * again; changing the config later does not re-price positions already open.
    */
+  /**
+   * The fee a position created NOW would carry, in basis points, plus who receives it.
+   *
+   * Public because a caller cannot project a position correctly without it and cannot derive it:
+   * the fee resolves from `leverageYield.partnerFee`, then the global fee, then none, and it is
+   * FIXED AT CREATION on-chain. Feed `feeBps` to {@link projectLeverageLeg} — the hooks require
+   * `inputAmount + fee`, so a leverage-up borrows the fee ON TOP of what the solver is paid. Leaving
+   * it out understates LTV and overstates the ceiling, which is the Aave `'36'` failure at fill time
+   * this module exists to prevent: 50 bp takes a debt-side ceiling from 9.88x to about 9.44x.
+   *
+   * Pass the same `override` here as to the open call, or omit it on both.
+   */
+  public getEffectivePositionFee(
+    override?: PartnerFee,
+  ): Result<{ feeReceiver: Address; feeBps: number }, LeverageYieldLookupError> {
+    return this.resolvePositionFee(override, 'getEffectivePositionFee');
+  }
+
   private resolvePositionFee(
     override: PartnerFee | undefined,
     method: string,
@@ -2926,6 +2951,131 @@ export class LeverageYieldService {
       return { ok: false, error: executionFailed('leverageYield', error, { ...baseCtx, phase: 'intentCreation' }) };
     }
   }
+
+  /**
+   * Which address actually funds a position from `chainKey` — what a balance must be read against,
+   * and what the deposit is built from.
+   *
+   * ONE ANSWER FOR BOTH, because two answers cost an open on mainnet: the balance was read from the
+   * registry `address` while the deposit rewrote it to `hubAsset`, so for Sonic's native S the form
+   * showed 42 S and the batch then called `wS.transferFrom(user, hubWallet, 5e18)` against a wS
+   * balance of zero. The approval was correct; the revert surfaced as nothing but "External call
+   * failed". Any integrator reading a balance for a position deposit needs this same answer.
+   *
+   * Three addresses hang off a registry entry and they are not interchangeable:
+   *
+   *   `address`   the spoke-side original; for a bridged entry it can name another chain entirely
+   *   `hubAsset`  what the user holds ON THE HUB, and the vault's deposit input
+   *   `vault`     the hub money-market reserve the position ends up in
+   *
+   * Off the hub the answer is always `address` — that is the chain the user is on. On the hub it is
+   * `hubAsset`, EXCEPT for a native entry: `EvmSpokeService.deposit` keys on the chain's own
+   * `nativeToken` to send `msg.value` rather than an ERC-20 `transferFrom`, and the native entry
+   * carries exactly that sentinel as its `address`. Rewriting that to the wrapper asks for a token
+   * the wallet does not hold.
+   *
+   * @returns The funding address, or `undefined` when the token is not supported on `chainKey`.
+   */
+  public resolvePositionFunding(chainKey: SpokeChainKey, token: XToken): Address | undefined {
+    const address = resolvePositionFundingAddress(chainKey, this.hubProvider.chainConfig.chain.key, token);
+    return address === '' ? undefined : (address as Address);
+  }
+
+  /**
+   * Opens a leveraged position AND reports the intent it posts. Prefer this to
+   * {@link LeverageYieldService.openPosition} / {@link LeverageYieldService.openPositionFromDebtToken}.
+   *
+   * Those two only post the intent. Reporting it is a separate call that must not be skipped — an
+   * unreported intent expires unfilled, so the owner is left funded with leverage that never arrives
+   * and nothing said so. Pairing them here is the difference between an API that works and one that
+   * works only if you read the docs.
+   *
+   * `side` picks which asset funds the open: `'collateral'` supplies the deposit and borrows against
+   * it, `'debt'` hands the deposit to the solver and ends up long collateral never held.
+   *
+   * RESOLVING MEANS THE INTENT IS LIVE, not that the position is open, and a failed notification is
+   * still `ok: true` — see {@link LeveragePositionIntentResult}.
+   *
+   * @experimental OFF-HUB (SPOKE) ORIGINS ARE UNVERIFIED ON-CHAIN — see `operatePosition`.
+   */
+  public async openLeveragePosition<K extends SpokeChainKey>(
+    _params:
+      | ({ side?: 'collateral' } & SpokeExecActionParams<K, false, OpenPositionParams<K>>)
+      | ({ side: 'debt' } & SpokeExecActionParams<K, false, OpenPositionFromDebtTokenParams<K>>),
+  ): Promise<Result<LeveragePositionIntentResult, LeverageYieldSwapError | LeverageYieldLookupError>> {
+    return this.config.analytics.trackResult(
+      'leverageYield',
+      'openLeveragePosition',
+      async () => {
+        const { side, ...rest } = _params;
+        const opened =
+          side === 'debt'
+            ? await this.openPositionFromDebtToken(
+                rest as SpokeExecActionParams<K, false, OpenPositionFromDebtTokenParams<K>>,
+              )
+            : await this.openPosition(rest as SpokeExecActionParams<K, false, OpenPositionParams<K>>);
+        if (!opened.ok) return opened;
+        return { ok: true, value: await reportPositionIntent(this.notifyIntent, opened.value) };
+      },
+      {
+        start: () => ({ srcChainKey: _params.params.srcChainKey, side: _params.side ?? 'collateral' }),
+        success: result => ({ ...result.txHashes, notified: result.notified }),
+        failure: error => ({ code: error.code }),
+      },
+    );
+  }
+
+  /**
+   * Runs position calls that POST A SOLVER INTENT — `increaseLeverage` and `decreaseLeverage` — and
+   * reports it. Prefer this to {@link LeverageYieldService.operatePosition} for those two.
+   *
+   * USE {@link LeverageYieldService.runLeveragePositionOperation} FOR `withdraw`, `settle` AND
+   * `cancel`. Those are synchronous on the hub and need no notification, and the split is not
+   * cosmetic: sending a leverage change through the route-only path leaves an intent nothing will
+   * fill, and it expires without a word. The other direction is merely noisy.
+   *
+   * @experimental OFF-HUB (SPOKE) ORIGINS ARE UNVERIFIED ON-CHAIN — see `operatePosition`.
+   */
+  public async submitLeveragePositionIntent<K extends SpokeChainKey>(
+    _params: SpokeExecActionParams<K, false, PositionOperationParams<K>>,
+  ): Promise<Result<LeveragePositionIntentResult, LeverageYieldSwapError>> {
+    return this.config.analytics.trackResult(
+      'leverageYield',
+      'submitLeveragePositionIntent',
+      async () => {
+        const routed = await this.operatePosition(_params);
+        if (!routed.ok) return routed;
+        return { ok: true, value: await reportPositionIntent(this.notifyIntent, routed.value) };
+      },
+      {
+        start: () => ({ srcChainKey: _params.params.srcChainKey, calls: _params.params.calls.length }),
+        success: result => ({ ...result.txHashes, notified: result.notified }),
+        failure: error => ({ code: error.code }),
+      },
+    );
+  }
+
+  /**
+   * Runs position calls that do NOT post an intent — `withdraw`, `settle` and `cancel` — as the
+   * owning hub wallet. They are synchronous on the hub, so resolving means the work is done.
+   *
+   * Still routed, never sent directly: the position's `onlyOwner` is the hub wallet, so a builder's
+   * transaction sent from the signer reverts `NotOwner`. Use
+   * {@link LeverageYieldService.submitLeveragePositionIntent} for `increaseLeverage` and
+   * `decreaseLeverage`, which this deliberately does not report.
+   *
+   * @experimental OFF-HUB (SPOKE) ORIGINS ARE UNVERIFIED ON-CHAIN, and this path carries the worst of
+   *              it: an exit or cancellation delivering the underlying back to the spoke it came from
+   *              has never run on mainnet.
+   */
+  public async runLeveragePositionOperation<K extends SpokeChainKey>(
+    _params: SpokeExecActionParams<K, false, PositionOperationParams<K>>,
+  ): Promise<Result<TxHashPair, LeverageYieldSwapError>> {
+    return this.operatePosition(_params);
+  }
+
+  /** Bound once so the notify half can be handed around without losing `this`. */
+  private readonly notifyIntent: PositionIntentNotifier = request => this.notifySolver(request);
 
   /**
    * Runs position calls as the user's hub wallet, from any chain.

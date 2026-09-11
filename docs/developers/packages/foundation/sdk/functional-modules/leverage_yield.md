@@ -484,6 +484,40 @@ Those base-currency figures are for display only. Any amount going into a transa
 
 ### Writes
 
+**Use the high-level calls.** `openPosition`, `openPositionFromDebtToken` and `operatePosition` only
+*post* the intent — reporting it is a separate `notifySolver` call, and an unreported intent expires
+unfilled, so the owner ends up funded with leverage that never arrives and nothing said so. Three
+methods pair the two steps for you, and which one to use is decided by the operation:
+
+| operation | method | notifies |
+| --- | --- | --- |
+| open, either side | `openLeveragePosition({ side, params, walletProvider })` | yes |
+| `buildAddLeverage` / `buildDecreaseLeverage` | `submitLeveragePositionIntent(...)` | yes |
+| `buildPositionWithdraw` / `buildSettlePosition` / `buildCancelPositionOperation` | `runLeveragePositionOperation(...)` | no |
+
+`withdraw`, `settle` and `cancel` are synchronous on the hub and need no notification. The split is
+not cosmetic: sending a leverage change through the route-only method leaves an intent nothing will
+fill, and it expires without a word. The other direction is merely noisy.
+
+```ts
+const result = await sodax.leverageYield.openLeveragePosition({
+  side: 'collateral',                // 'debt' funds with the debt token instead
+  params: { srcChainKey, srcAddress, token, amount, eModeCategory, borrowToken, borrowAmount, minCollateralOut },
+  walletProvider,
+});
+if (!result.ok) throw result.error;
+// Resolving means the intent is LIVE, not that the position is open.
+if (!result.value.notified) warn(result.value.notifyError);
+```
+
+**A failed notification is `ok: true`, deliberately.** The money has already moved and the intent is
+live on the hub; returning a failure would tell the caller nothing happened, and a caller that retries
+on failure would open a second position. It is reported on the value, not raised.
+
+The low-level methods remain for callers driving the relay themselves.
+
+### Writes (low level)
+
 Positions are driven by direct Sonic transactions rather than solver intents, so these are builders returning an `EvmRawTransaction` for the caller to sign with a hub wallet provider.
 
 | Builder | Effect |

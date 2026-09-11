@@ -38,7 +38,11 @@ export type LeverageYieldAction =
   | 'vaultSwap'
   | 'openPosition'
   | 'openPositionFromDebtToken'
-  | 'operatePosition';
+  | 'operatePosition'
+  | 'openLeveragePosition'
+  | 'submitLeveragePositionIntent'
+  | 'runLeveragePositionOperation'
+  | 'getPositionLegQuote';
 
 export type LeverageYieldCreateIntentErrorCode = CreateIntentErrorCode;
 export type LeverageYieldApproveErrorCode = ApproveErrorCode;
