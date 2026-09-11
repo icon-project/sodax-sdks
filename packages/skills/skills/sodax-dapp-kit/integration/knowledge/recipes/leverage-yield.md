@@ -30,6 +30,12 @@ Leveraged-yield ERC-4626 vaults on Sonic. Deposit any token → `lsoda*` shares,
 | `useLeveragePositionsForUser` | The same, resolved from a spoke address's hub wallet |
 | `useLeveragePositionInfo` | Static descriptor for one position (owner, both legs, eMode category) |
 | `useLeveragePositionAccount` | Live AAVE account for one position (collateral, debt, LTV, health factor) |
+| `useOpenLeveragePosition` | Open a position and report its intent — `side: 'collateral' \| 'debt'` |
+| `useSubmitLeveragePositionIntent` | `increaseLeverage` / `decreaseLeverage`, then report the intent |
+| `useRunLeveragePositionOperation` | `withdraw` / `settle` / `cancel` — no intent, nothing to report |
+| `useLeveragePositionPayoutAddress` | Where a withdrawal can be paid; off the hub, not the signer |
+| `useLeveragePositionFundingAllowance` | Is the funding token approved? The spender differs per chain |
+| `useApproveLeveragePositionFunding` | Approve it, against the spender the SDK resolves |
 | `useLeveragePositionCollateral` | Exact aToken balance — the only figure that can size a full exit |
 | `useLeveragePositionPending` | The operation slot: is an intent live, does it need settling |
 
@@ -199,22 +205,31 @@ const { data: account } = useLeveragePositionAccount({ params: { position: posit
 > trading wallet, so a Bitcoin `srcChainKey` returns `VALIDATION_FAILED` instead of funding the wrong
 > hub wallet.
 
-Writes go through `sodax.leverageYield.openPosition` / `openPositionFromDebtToken` (which carry the
-deposit) and `operatePosition` (which carries calls built by `buildAddLeverage` /
-`buildDecreaseLeverage` / `buildPositionWithdraw` / `buildSettlePosition` /
-`buildCancelPositionOperation`). Use those rather than sending a builder's transaction directly: every
-position call is `onlyOwner` against the user's **hub wallet**, and these are what make the calls
-execute as that wallet — locally through the wallet router on Sonic, relayed from anywhere else.
-Sending a built transaction from the signer reverts `NotOwner`.
+Every position call is `onlyOwner` against the user's **hub wallet**, so a builder's transaction sent
+from the signer reverts `NotOwner`. Three mutation hooks run the calls as that wallet — locally
+through the wallet router on Sonic, relayed from anywhere else.
 
-No dapp-kit mutation hook wraps the position writes yet, so reach the service through
-`useSodaxContext()` — do not assume a `useOpenPosition`-style hook exists:
+**Which hook is decided by the operation, not by preference.** `increaseLeverage` and
+`decreaseLeverage` only *post* a solver intent, and an intent the solver was never told about expires
+unfilled — leaving the owner funded with leverage that never arrives. `withdraw`, `settle` and
+`cancel` are synchronous on the hub and need no notification.
+
+| operation | hook | notifies |
+| --- | --- | --- |
+| open (collateral or debt side) | `useOpenLeveragePosition` | yes |
+| `buildAddLeverage` / `buildDecreaseLeverage` | `useSubmitLeveragePositionIntent` | yes |
+| `buildPositionWithdraw` / `buildSettlePosition` / `buildCancelPositionOperation` | `useRunLeveragePositionOperation` | no |
+
+The hooks are thin over SDK methods of the same shape — `sodax.leverageYield.openLeveragePosition`,
+`submitLeveragePositionIntent`, `runLeveragePositionOperation` — so a non-React caller gets the same
+pairing. The low-level `openPosition` / `operatePosition` / `notifySolver` remain for anyone driving
+the relay by hand.
 
 ```typescript
-import { useSodaxContext, useLeverageYieldNotifySolver } from '@sodax/dapp-kit';
+import { useOpenLeveragePosition, useSodaxContext } from '@sodax/dapp-kit';
 
 const { sodax } = useSodaxContext();
-const notifySolver = useLeverageYieldNotifySolver();
+const { mutateAsync: openPosition } = useOpenLeveragePosition();
 
 // 1. Approve, and wait for it — `approvePositionFunding` resolves the right spender per chain.
 const approved = await sodax.leverageYield.approvePositionFunding({
@@ -223,18 +238,20 @@ const approved = await sodax.leverageYield.approvePositionFunding({
 if (!approved.ok) throw approved.error;
 
 // 2. Open. `borrowAmount` / `minCollateralOut` come from `sizeLeverageBorrow` + `projectLeverageLeg`
-//    (sized below) — never from oracle parity.
-const opened = await sodax.leverageYield.openPosition({
+//    (sized below) — never from oracle parity. The hook reports the intent for you.
+const result = await openPosition({
+  side: 'collateral', // 'debt' funds with the debt token instead
   params: { srcChainKey, srcAddress, token, amount, eModeCategory, borrowToken, borrowAmount, minCollateralOut },
   walletProvider,
 });
-if (!opened.ok) throw opened.error;
 
-// 3. Report the HUB hash, or the intent expires unfilled.
-await notifySolver.mutateAsync({ intent_tx_hash: opened.value.dstChainTxHash });
+// 3. Resolving means the intent is LIVE, not that the position is open. Check this before telling
+//    the user to wait: false means nothing will fill it before it expires.
+if (!result.notified) showWarning(result.notifyError);
 ```
 
-`operatePosition` is the same shape, taking `calls` from the builders instead of a deposit.
+Payouts have one more trap: `withdraw` pays to an address **on the hub**, which off the hub is not the
+signer. `useLeveragePositionPayoutAddress(chainKey, signerAddress, owner)` returns the one that works.
 
 **Sizing the leg.** The hook borrows against what the solver actually paid, so the pool sees
 `deposit + solver output`, never `deposit × leverage` — size from oracle parity and the borrow reverts

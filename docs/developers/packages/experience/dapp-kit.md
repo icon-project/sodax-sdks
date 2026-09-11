@@ -190,6 +190,31 @@ function SwapButton({ intentParams }: { intentParams: CreateIntentParams }) {
 - [`useInstantUnstakeRatio()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/staking/useInstantUnstakeRatio.ts) — Instant unstake rate
 - [`useConvertedAssets()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/staking/useConvertedAssets.ts) — xSODA to SODA conversion
 
+### Leverage Position Hooks
+
+A position is one Aave account owned by the user's **hub wallet**, never their signing address — pass
+the signer as `params.srcAddress` and the SDK resolves the owner.
+
+Which write hook to use is decided by the operation, not by preference. `increaseLeverage` and
+`decreaseLeverage` only **post** a solver intent, and an intent the solver was never told about
+expires unfilled, so those go through `useSubmitLeveragePositionIntent()`, which reports it.
+`withdraw`, `settle` and `cancel` are synchronous on the hub and need no notification.
+
+- [`useOpenLeveragePosition()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/leverageYield/useOpenLeveragePosition.ts) — Open a position (`side: 'collateral' | 'debt'`) and report its intent
+- [`useSubmitLeveragePositionIntent()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/leverageYield/useSubmitLeveragePositionIntent.ts) — Run `increaseLeverage` / `decreaseLeverage` and report the intent
+- [`useRunLeveragePositionOperation()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/leverageYield/useRunLeveragePositionOperation.ts) — Run `withdraw` / `settle` / `cancel`; no intent, nothing to report
+- [`useLeveragePositionPayoutAddress()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/leverageYield/useLeveragePositionPayoutAddress.ts) — Where a withdrawal can be paid, which off the hub is not the signer
+- [`useLeveragePositionFundingAllowance()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/leverageYield/useLeveragePositionFundingAllowance.ts) — Whether the funding token is approved; the spender is chain-dependent
+- [`useApproveLeveragePositionFunding()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/leverageYield/useApproveLeveragePositionFunding.ts) — Approve it, against the spender the SDK resolves
+- [`useLeveragePositionsForUser()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/leverageYield/useLeveragePositionsForUser.ts) — A user's positions, discovered through their hub wallet
+- [`useLeveragePositionAccount()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/leverageYield/useLeveragePositionAccount.ts) — Collateral, debt, LTV and health factor
+- [`useLeveragePositionInfo()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/leverageYield/useLeveragePositionInfo.ts) — The position's collateral and borrow reserves
+- [`useLeveragePositionCollateral()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/leverageYield/useLeveragePositionCollateral.ts) — Collateral balance held
+- [`useLeveragePositionPending()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/leverageYield/useLeveragePositionPending.ts) — The pending-operation slot; a position permits one at a time
+
+> Resolving means the intent is **live**, not that leverage moved. Off-hub (spoke) origins are
+> experimental and unverified on-chain; see each hook's JSDoc.
+
 ### DEX Hooks
 
 - [`usePools()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/dex/usePools.ts) — List available pools
