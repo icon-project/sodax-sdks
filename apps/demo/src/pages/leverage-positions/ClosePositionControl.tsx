@@ -41,7 +41,11 @@ import {
 } from '@sodax/dapp-kit';
 import { formatUnits, parseUnits, type Address } from 'viem';
 import { getReadableTxError } from '@/lib/utils';
-import { useHubWalletRoute, usePositionPayoutAddress, useSubmitPositionIntent } from './useHubWalletRoute';
+import {
+  useLeveragePositionPayoutAddress,
+  useRunPositionOperation,
+  useSubmitPositionIntent,
+} from './useHubWalletRoute';
 import { useLegQuote } from './useLegQuote';
 import { Notice } from './PositionSummary';
 
@@ -90,10 +94,12 @@ export function ClosePositionControl({
 }) {
   const { sodax } = useSodaxContext();
   const queryClient = useQueryClient();
-  const { route, signer } = useHubWalletRoute(chain);
+  const { route, signer } = useRunPositionOperation(chain);
   const submitIntent = useSubmitPositionIntent(chain);
   // Not the signer: off the hub, the signer's address is not one the hub could pay out to.
-  const payoutAddress = usePositionPayoutAddress(chain, owner);
+  const payoutAddress = useLeveragePositionPayoutAddress({
+    params: { chainKey: chain, signerAddress: signer as Address | undefined, owner },
+  });
   /**
    * Which of the user's two addresses the payout lands at. `withdraw` takes a destination, so on the
    * hub it can be their own; anywhere else it has to be the hub wallet, and those are not the same
@@ -188,16 +194,29 @@ export function ClosePositionControl({
     return Math.min((debt * WITHDRAW_TARGET_HF) / liquidationThreshold, collateral);
   }, [hasResidualDebt, account.currentLiquidationThreshold, debt, collateral]);
 
+  /**
+   * The position's own fee, which on an exit is collateral given up ON TOP of what the solver is
+   * paid. So the position must hold `input x (1 + fee)`, and sizing the input at the whole balance
+   * leaves nothing for the fee — the operation cannot settle. Fixed at creation; read rather than
+   * assumed, since a caller cannot tell which config layer supplied it.
+   */
+  const feeBps = useMemo(() => {
+    const fee = sodax.leverageYield.getEffectivePositionFee();
+    return fee.ok ? BigInt(fee.value.feeBps) : 0n;
+  }, [sodax]);
+
   /** Collateral to sell, in collateral-token units: the whole balance for a full exit, else the debt's worth. */
   const repayInput = useMemo(() => {
     if (phase !== 'repay') return undefined;
-    if (fullExit) return held?.balance;
+    // Leave room for the fee: what is handed over is the input, what leaves is input + fee.
+    if (fullExit) return held?.balance === undefined ? undefined : (held.balance * 10_000n) / (10_000n + feeBps);
     if (!collateralReserve) return undefined;
     const price = Number(collateralReserve.priceInUSD);
     if (!(price > 0)) return undefined;
-    const needed = Math.min((debt * REPAY_OVERSHOOT) / price, collateral / price);
+    const feeMultiple = 1 + Number(feeBps) / 10_000;
+    const needed = Math.min((debt * REPAY_OVERSHOOT) / price, collateral / (price * feeMultiple));
     return parseUnits(needed.toFixed(collateralReserve.decimals), collateralReserve.decimals);
-  }, [phase, fullExit, held, collateralReserve, debt, collateral]);
+  }, [phase, fullExit, held, collateralReserve, debt, collateral, feeBps]);
 
   // The repay leg sells collateral for the borrow token, so quote it for real: the floor has to be
   // what the solver will pay, and a pair it does not support must fail here rather than as a silent

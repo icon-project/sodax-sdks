@@ -25,6 +25,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Label } from '@/components/ui/label';
 import {
   useSodaxContext,
+  useOpenLeveragePosition,
   useReservesUsdFormat,
   useEModes,
   useXBalances,
@@ -52,8 +53,7 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import { getReadableTxError } from '@/lib/utils';
-import { useOpenPosition } from './useHubWalletRoute';
-import { useLegQuote } from './useLegQuote';
+import { useLegQuote, useLegRoutesAtProbeSize } from './useLegQuote';
 import { LeveragedApyPanel, apyPctFromReserve } from './LeveragedApyPanel';
 import {
   DetailGrid,
@@ -106,8 +106,9 @@ export function CreatePositionCard({ chain, owner }: { chain: SpokeChainKey; own
   const { isWrongChain, handleSwitchChain } = useEvmSwitchChain({ xChainId: chain });
   const walletProvider = useWalletProvider({ xChainId: chain });
   const signer = useXAccount({ xChainId: chain }).address;
-  // Opens from `chain`, reports the intent, and records the order — see useOpenPosition.
-  const openPosition = useOpenPosition(chain);
+  // Opens from `chain` and reports the intent it posts — the notify half is not optional, so it
+  // belongs to the hook rather than to this call site.
+  const { mutateAsync: openPosition } = useOpenLeveragePosition();
   const isHubChain = chain === sodax.hubProvider.chainConfig.chain.key;
 
   const { data: reserves } = useReservesUsdFormat();
@@ -199,24 +200,13 @@ export function CreatePositionCard({ chain, owner }: { chain: SpokeChainKey; own
   );
 
   /**
-   * The address the funding is pulled from, which is what a balance has to be read against and what
-   * the deposit is built from. One source for both, because they disagreed and it cost an open: the
-   * balance was read from the registry `address` while the deposit rewrote it to `hubAsset`, so for
-   * Sonic's native S the form showed 42 S and the batch then called
-   * `wS.transferFrom(user, hubWallet, 5e18)` against a wS balance of zero. The approval was correct;
-   * the revert surfaced as nothing but "External call failed".
+   * One resolver for the balance AND the deposit, from the SDK — two answers cost an open on
+   * mainnet, and the SDK owns the rule so a partner reading a balance gets the same one.
    */
   const fundingAddressFor = useCallback(
-    (token: XToken | undefined): string => {
-      if (!isHubChain) return token?.address ?? '';
-      // A native entry funds AS native: `EvmSpokeService.deposit` keys on the chain's own
-      // `nativeToken` to send msg.value rather than an ERC-20 transferFrom, and Sonic's S carries
-      // exactly that sentinel as its `address`. Rewriting that to wS asks for a token the wallet
-      // does not hold. The hub-asset rewrite is for BRIDGED entries, whose `address` is foreign.
-      if (token && isNativeToken(chain, token)) return token.address;
-      return token?.hubAsset ?? token?.address ?? '';
-    },
-    [isHubChain, chain],
+    (token: XToken | undefined): string =>
+      token ? (sodax.leverageYield.resolvePositionFunding(chain, token) ?? '') : '',
+    [sodax, chain],
   );
 
   // Balances of what the user holds ON `chain`, which is not the hub unless they are on it. Keyed by
@@ -243,7 +233,6 @@ export function CreatePositionCard({ chain, owner }: { chain: SpokeChainKey; own
     () => reserves?.find(r => r.underlyingAsset.toLowerCase() === borrowToken.toLowerCase()),
     [reserves, borrowToken],
   );
-
   const borrowBalance = balances?.[fundingAddressFor(borrowTokenSel)];
   const startingDebtSide = startFrom === 'debt';
   const depositReserve = startingDebtSide ? borrowReserve : collateralReserve;
@@ -252,6 +241,7 @@ export function CreatePositionCard({ chain, owner }: { chain: SpokeChainKey; own
   const depositDecimals = depositToken?.decimals ?? depositReserve?.decimals ?? 18;
   const depositHubAsset = (startingDebtSide ? borrowHubAsset : collateralHubAsset) as Address;
   const depositVault = (startingDebtSide ? borrowToken : collateral) as Address;
+
   /**
    * The address to fund with, as held on `chain`. On the hub that is the hub asset — the registry's
    * spoke `address` for a bridged token can point at another chain entirely (the live Sonic sUSDS
@@ -305,6 +295,16 @@ export function CreatePositionCard({ chain, owner }: { chain: SpokeChainKey; own
    * solver has already filled, and a partner integrating without this UI needs the same arithmetic.
    * This component only decides what the user typed.
    */
+  /**
+   * The fee the position will be created with, which the projection must borrow ON TOP of the leg.
+   * Omitting it understates LTV and overstates the ceiling — the Aave '36' at fill time. Read from
+   * the SDK rather than assumed: it resolves through two config layers and is fixed at creation.
+   */
+  const positionFeeBps = useMemo(() => {
+    const fee = sodax.leverageYield.getEffectivePositionFee();
+    return fee.ok ? fee.value.feeBps : 0;
+  }, [sodax]);
+
   const legRequest = useMemo(() => {
     if (!collateralReserve || !borrowReserve || leverage <= 1) return undefined;
     const collateralPriceUsd = Number(collateralReserve.priceInUSD);
@@ -325,8 +325,9 @@ export function CreatePositionCard({ chain, owner }: { chain: SpokeChainKey; own
       borrowPriceUsd,
       borrowDecimals: borrowReserve.decimals,
       leverage,
+      feeBps: positionFeeBps,
     } satisfies LeverageLegRequest;
-  }, [collateralReserve, borrowReserve, leverage, amount, depositDecimals, startingDebtSide]);
+  }, [collateralReserve, borrowReserve, leverage, amount, depositDecimals, startingDebtSide, positionFeeBps]);
 
   /** Oracle-parity figures, shown until the solver quote lands and `projection` supersedes them. */
   const quote = useMemo(() => {
@@ -360,6 +361,15 @@ export function CreatePositionCard({ chain, owner }: { chain: SpokeChainKey; own
     outputHubToken: isAddress(collateral) ? (collateral as Address) : undefined,
     amount: leverageInput,
   });
+  /** Only asked once the quote has failed, and only to tell a dead pair from an undersized leg. */
+  const legTooSmall = useLegRoutesAtProbeSize({
+    inputHubToken: isAddress(borrowToken) ? (borrowToken as Address) : undefined,
+    outputHubToken: isAddress(collateral) ? (collateral as Address) : undefined,
+    amount: leverageInput,
+    inputPriceUsd: borrowReserve ? Number(borrowReserve.priceInUSD) : undefined,
+    inputDecimals: borrowReserve?.decimals,
+    enabled: legQuote.isNoRoute,
+  });
 
   /**
    * What the position ACTUALLY looks like after the fill, priced off the solver rather than the
@@ -384,7 +394,10 @@ export function CreatePositionCard({ chain, owner }: { chain: SpokeChainKey; own
       usableMax: p.usableMaxLeverage,
       exceedsMaxLtv: p.exceedsMaxLtv,
       costUsd: p.costUsd,
-      equityUsd: quote.depositUsd,
+      // What the owner is left holding, which the haircut has already bitten into — not the deposit.
+      // `timeToBreakevenYears` divides by this, so the deposit made every payback look shorter.
+      equityUsd: p.collateralUsd - p.debtUsd,
+      depositUsd: quote.depositUsd,
       minCollateralOut: p.minCollateralOut,
     };
   }, [legRequest, legQuote.data, quote, riskParams, slippagePct]);
@@ -477,7 +490,12 @@ export function CreatePositionCard({ chain, owner }: { chain: SpokeChainKey; own
       // Only fillable if the solver quotes the leg. Blocking here is what stops an intent going out
       // with a floor the solver cannot meet, which fails instead of filling.
       if (legQuote.isLoading) return { message: 'Waiting for the solver quote…' };
-      if (legQuote.error) return { message: `No solver quote for this pair: ${legQuote.error.message}` };
+      // A routing refusal covers an unroutable pair AND a leg that is merely too small, so which of
+      // the two it is has to come from the probe.
+      if (legQuote.error)
+        return legTooSmall
+          ? { field: 'amount', message: 'Too small for the solver to route. Deposit more, or raise the leverage.' }
+          : { message: `No solver quote for this pair: ${legQuote.error.message}` };
       if (!minCollateralOut) return { message: 'No solver quote for this pair yet' };
       // The pool checks this at FILL time, after the solver's collateral is supplied. Catching it here
       // is the difference between a blocked button and an intent that posts and then reverts on solve
@@ -504,6 +522,7 @@ export function CreatePositionCard({ chain, owner }: { chain: SpokeChainKey; own
     leverage,
     legQuote.isLoading,
     legQuote.error,
+    legTooSmall,
     minCollateralOut,
     needsWrap,
     vaultTokenInfo,
@@ -584,26 +603,23 @@ export function CreatePositionCard({ chain, owner }: { chain: SpokeChainKey; own
         minCollateralOut,
       } as const;
 
-      const result = await openPosition({
-        open: provider =>
-          (startingDebtSide
-            ? sodax.leverageYield.openPositionFromDebtToken({
-                params: { ...funding, collateral: collateral as Address, totalInput: leverageInput },
-                walletProvider: provider as GetWalletProviderType<typeof chain>,
-              })
-            : sodax.leverageYield.openPosition({
-                params: { ...funding, borrowToken: borrowToken as Address, borrowAmount: leverageInput },
-                walletProvider: provider as GetWalletProviderType<typeof chain>,
-              })
-          ).then(r => {
-            if (!r.ok) throw r.error;
-            return r.value;
-          }),
-      });
+      const result = await openPosition(
+        startingDebtSide
+          ? {
+              side: 'debt',
+              params: { ...funding, collateral: collateral as Address, totalInput: leverageInput },
+              walletProvider: walletProvider as GetWalletProviderType<typeof chain>,
+            }
+          : {
+              side: 'collateral',
+              params: { ...funding, borrowToken: borrowToken as Address, borrowAmount: leverageInput },
+              walletProvider: walletProvider as GetWalletProviderType<typeof chain>,
+            },
+      );
       setStatus(
         result.notified
           ? `Opened at ${leverage.toFixed(2)}x. It appears below once a solver fills it.`
-          : `Opened at ${leverage.toFixed(2)}x, but the solver rejected the notification: ${result.error}. It will expire and refund the deposit.`,
+          : `Opened at ${leverage.toFixed(2)}x, but the solver rejected the notification: ${result.notifyError}. It will expire and refund the deposit.`,
       );
       await queryClient.invalidateQueries({ queryKey: ['leverageYield'] });
     } catch (e) {
@@ -637,8 +653,9 @@ export function CreatePositionCard({ chain, owner }: { chain: SpokeChainKey; own
   // At the floor like the rest of the projection, so it reads above the fill. Oracle parity has no
   // spread, so the pre-quote fallback is the slider itself.
   const landsAt = projection?.exposureLeverage ?? (quote ? leverage : undefined);
+  // Against the deposit, which is what the tile says and what the owner actually handed over.
   const costPct =
-    projection && projection.equityUsd > 0 ? (projection.costUsd / projection.equityUsd) * 100 : undefined;
+    projection && projection.depositUsd > 0 ? (projection.costUsd / projection.depositUsd) * 100 : undefined;
   const health = outcome ? healthTone(outcome.hf) : undefined;
   const eModeLabel =
     eModeCategory === '0'

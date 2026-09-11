@@ -127,6 +127,17 @@ export function AdjustLeverageControl({
    * when increasing (borrow it, swap into collateral), the collateral when decreasing (sell it to
    * repay). Base currency is USD-denominated on this pool, so base ÷ price gives token units.
    */
+  /**
+   * The position's own fee, borrowed ON TOP of what the solver is paid on an increase and given up as
+   * extra collateral on a decrease — so it moves LTV without buying anything. Fixed at creation, read
+   * from the SDK because a caller cannot derive which config layer supplied it.
+   */
+  const positionFeeBps = useMemo(() => {
+    const fee = sodax.leverageYield.getEffectivePositionFee();
+    return fee.ok ? fee.value.feeBps : 0;
+  }, [sodax]);
+  const feeRate = positionFeeBps / 10_000;
+
   const inputAmount = useMemo(() => {
     if (!quote) return undefined;
     const reserve = quote.direction === 'increase' ? borrowReserve : collateralReserve;
@@ -174,8 +185,11 @@ export function AdjustLeverageControl({
     if (!(outPrice > 0)) return undefined;
     const floorUsd = floor * outPrice;
 
-    const collateralAfter = quote.direction === 'increase' ? collateral + floorUsd : collateral - quote.deltaBase;
-    const debtAfter = quote.direction === 'increase' ? debt + quote.deltaBase : Math.max(debt - floorUsd, 0);
+    // The fee rides on the side that hurts: extra debt on the way up, extra collateral given up on
+    // the way down. Omitting it understates LTV, which is the AAVE 36 at fill time.
+    const withFee = quote.deltaBase * (1 + feeRate);
+    const collateralAfter = quote.direction === 'increase' ? collateral + floorUsd : collateral - withFee;
+    const debtAfter = quote.direction === 'increase' ? debt + withFee : Math.max(debt - floorUsd, 0);
     const haircut = quote.deltaBase > 0 ? 1 - floorUsd / quote.deltaBase : 0;
 
     return {
@@ -188,7 +202,7 @@ export function AdjustLeverageControl({
       // Only an increase can be rejected by the pool: a decrease reduces debt, which never trips it.
       exceedsMaxLtv: quote.direction === 'increase' && collateralAfter > 0 && debtAfter / collateralAfter > maxLtv,
     };
-  }, [quote, minOut, legQuote.data, collateralReserve, borrowReserve, collateral, debt, liqThreshold, maxLtv]);
+  }, [quote, minOut, legQuote.data, collateralReserve, borrowReserve, collateral, debt, liqThreshold, maxLtv, feeRate]);
 
   /**
    * Entry cost of this adjustment and the equity it earns back on.
@@ -208,8 +222,13 @@ export function AdjustLeverageControl({
     const quotedUsd = Number(formatUnits(legQuote.data.outputAmount, legQuote.data.outputDecimals)) * outPrice;
     const equityUsd = collateral - debt;
     if (!(equityUsd > 0)) return undefined;
-    return { costUsd: quote.deltaBase - quotedUsd, equityUsd, fromLeverage: currentLeverage };
-  }, [quote, legQuote.data, collateralReserve, collateral, debt, currentLeverage]);
+    // The fee is owed without buying anything, so it is part of what the adjustment costs.
+    return {
+      costUsd: quote.deltaBase - quotedUsd + quote.deltaBase * feeRate,
+      equityUsd,
+      fromLeverage: currentLeverage,
+    };
+  }, [quote, legQuote.data, collateralReserve, collateral, debt, currentLeverage, feeRate]);
 
   const onAdjust = useCallback(async () => {
     if (!owner || !quote || !inputAmount || !legQuote.data || !minOut) return;

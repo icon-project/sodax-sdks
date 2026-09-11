@@ -25,7 +25,7 @@ import { erc20Abi } from 'viem';
 import type { Address } from 'viem';
 import { Check, CircleAlert, Loader2 } from 'lucide-react';
 import { getReadableTxError } from '@/lib/utils';
-import { useHubWalletRoute } from './useHubWalletRoute';
+import { useRunPositionOperation } from './useHubWalletRoute';
 import { Notice } from './PositionSummary';
 
 export function PendingOperationControl({
@@ -45,7 +45,7 @@ export function PendingOperationControl({
 }) {
   const { sodax } = useSodaxContext();
   const queryClient = useQueryClient();
-  const { route } = useHubWalletRoute(chain);
+  const { route } = useRunPositionOperation(chain);
 
   /**
    * Whether settling would move anything. A close that delivered its surplus leaves the position

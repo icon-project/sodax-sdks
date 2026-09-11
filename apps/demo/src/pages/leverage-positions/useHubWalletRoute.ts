@@ -1,154 +1,84 @@
 /**
- * Runs position calls as the user's hub wallet, from whatever chain they are on.
+ * Binds the dapp-kit position hooks to this app's wallet layer.
  *
- * Every write on a leverage position needs this. The position's `onlyOwner` is the hub wallet, not
- * the signer's address, so a call sent straight from the signer reverts `NotOwner` — and building the
- * transaction with `from: owner` does not help, because an address cannot send as another address.
+ * Thin on purpose. The operations themselves — routing calls as the owning hub wallet, and reporting
+ * the intents that need reporting — now live in `@sodax/dapp-kit`, which is where an integrator
+ * finds them. What cannot live there is the wallet: dapp-kit is built not to depend on
+ * `@sodax/wallet-sdk-react`, so the provider and signer are supplied by the app. That binding is
+ * this file, and it keeps the call sites reading the way they did.
  *
- * `sodax.leverageYield.operatePosition` is what makes the calls execute as the wallet: on Sonic it
- * routes them locally through the wallet router, and from a spoke it relays them as a hub-wallet
- * message and waits for the hub side to land. This used to hand-roll the Sonic router call, which is
- * why the page could only be operated from Sonic.
- *
- * TWO HASHES COME BACK and they are not interchangeable. `srcChainTxHash` is what the user signed;
- * `dstChainTxHash` is the hub transaction where an intent, if the call posted one, actually exists.
- * The solver has to be told about the hub one — see `useSubmitPositionIntent`.
+ * WHICH HOOK FOR WHICH CALL is not a style choice. `increaseLeverage` and `decreaseLeverage` only
+ * POST an intent that a solver fills later, and an unreported one expires unfilled — so they go
+ * through `useSubmitPositionIntent`. `withdraw`, `settle` and `cancel` are synchronous on the hub
+ * and need no notification; they go through `useRunPositionOperation`.
  */
 
 import { useCallback } from 'react';
-import type { Address, Hex } from 'viem';
+import type { Hex } from 'viem';
 import {
-  useSodaxContext,
-  type GetWalletProviderType,
-  type SpokeChainKey,
+  useRunLeveragePositionOperation,
+  useSubmitLeveragePositionIntent,
   type EvmRawTransaction,
+  type GetWalletProviderType,
+  type LeveragePositionIntentResult,
+  type SpokeChainKey,
   type TxHashPair,
 } from '@sodax/dapp-kit';
 import { useWalletProvider, useXAccount } from '@sodax/wallet-sdk-react';
-import { useLeverageYieldNotifySolver } from '@sodax/dapp-kit';
 
-export function useHubWalletRoute(chain: SpokeChainKey): {
-  /** The address the user signs with on `chain`. */
+/** The provider cast the SDK validates against `chain`, so a mismatch fails before signing. */
+function useSigning(chain: SpokeChainKey) {
+  const walletProvider = useWalletProvider({ xChainId: chain });
+  const signer = useXAccount({ xChainId: chain }).address;
+  return { walletProvider: walletProvider as GetWalletProviderType<typeof chain>, signer };
+}
+
+/** Runs `withdraw` / `settle` / `cancel` as the hub wallet. No intent, so nothing to notify. */
+export function useRunPositionOperation(chain: SpokeChainKey): {
   signer: string | undefined;
-  /** Sends the calls and resolves once the hub side has landed. */
   route: (calls: readonly EvmRawTransaction[]) => Promise<TxHashPair>;
 } {
-  const { sodax } = useSodaxContext();
-  const walletProvider = useWalletProvider({ xChainId: chain });
-  const account = useXAccount({ xChainId: chain });
-  const signer = account.address;
+  const { walletProvider, signer } = useSigning(chain);
+  const { mutateAsync } = useRunLeveragePositionOperation();
 
   const route = useCallback(
     async (calls: readonly EvmRawTransaction[]) => {
       if (!signer) throw new Error('Connect a wallet');
-      const result = await sodax.leverageYield.operatePosition({
-        params: { srcChainKey: chain, srcAddress: signer, calls },
-        // The SDK validates the provider against the chain, so a mismatch fails before signing.
-        walletProvider: walletProvider as GetWalletProviderType<typeof chain>,
-      });
-      if (!result.ok) throw result.error;
-      return result.value;
+      return mutateAsync({ params: { srcChainKey: chain, srcAddress: signer, calls }, walletProvider });
     },
-    [sodax, chain, signer, walletProvider],
+    [mutateAsync, chain, signer, walletProvider],
   );
 
   return { signer, route };
 }
 
-/**
- * The tail both submit paths share: tell the solver about the hub transaction and report whether that
- * landed.
- *
- * Shared because the notify step is the one that must not be skipped — an intent the solver was never
- * told about simply expires — and two copies of it is two places for that to be dropped.
- */
-function useReportPositionIntent(): (params: {
-  dstChainTxHash: Hex;
-}) => Promise<{ hash: Hex; notified: boolean; error?: string }> {
-  const notifySolver = useLeverageYieldNotifySolver();
-
-  return useCallback(
-    async ({ dstChainTxHash }) => {
-      // Caught rather than thrown: the intent exists on the hub either way, and the caller needs to
-      // say so — throwing would leave the user funded with no idea the solver was never told.
-      let error: string | undefined;
-      try {
-        await notifySolver.mutateAsync({ intent_tx_hash: dstChainTxHash });
-      } catch (caught) {
-        error = caught instanceof Error ? caught.message : String(caught);
-      }
-      return { hash: dstChainTxHash, notified: error === undefined, error };
-    },
-    [notifySolver],
-  );
-}
-
-/**
- * Posts a position intent: runs the calls as the hub wallet, then tells the solver.
- *
- * Both steps belong together. An intent created on the hub is invisible to the solver until its hub
- * transaction hash is reported, and an unreported one simply expires — so a caller that routes
- * without notifying has silently thrown the operation away. Having one path for it is what stops the
- * call sites drifting, which is how the create flow ended up sizing its floor differently from the
- * others.
- *
- * Note which hash is notified: `dstChainTxHash`. On Sonic that is the transaction the user signed, but
- * from a spoke the intent is created by the relayed message, so the signed hash is not where it lives.
- */
+/** Posts an `increaseLeverage` / `decreaseLeverage` intent and reports it to the solver. */
 export function useSubmitPositionIntent(
   chain: SpokeChainKey,
 ): (params: { calls: readonly EvmRawTransaction[] }) => Promise<{ hash: Hex; notified: boolean; error?: string }> {
-  const { route } = useHubWalletRoute(chain);
-  const report = useReportPositionIntent();
+  const { walletProvider, signer } = useSigning(chain);
+  const { mutateAsync } = useSubmitLeveragePositionIntent();
 
   return useCallback(
     async ({ calls }) => {
-      // The hub hash is where the intent lives; `TxHashPair` types both as plain strings, so the
-      // cast is the boundary between the SDK's chain-agnostic shape and viem's hex type.
-      const dstChainTxHash = (await route(calls)).dstChainTxHash as Hex;
-      return report({ dstChainTxHash });
+      if (!signer) throw new Error('Connect a wallet');
+      const result = await mutateAsync({
+        params: { srcChainKey: chain, srcAddress: signer, calls },
+        walletProvider,
+      });
+      return toLegacyShape(result);
     },
-    [route, report],
+    [mutateAsync, chain, signer, walletProvider],
   );
 }
 
-/**
- * Opens a position, funded from `chain`, and reports the intent it posts.
- *
- * The deposit-carrying sibling of `useSubmitPositionIntent`: a create moves funds, so it goes through
- * `openPosition` rather than a bare message. Same reason both live here — the notify step is not
- * optional, and an open that skips it leaves the user funded with leverage that never arrives.
- */
-export function useOpenPosition(chain: SpokeChainKey): (params: {
-  open: (walletProvider: unknown) => Promise<TxHashPair>;
-}) => Promise<{
-  hash: Hex;
-  notified: boolean;
-  error?: string;
-}> {
-  const walletProvider = useWalletProvider({ xChainId: chain });
-  const report = useReportPositionIntent();
-
-  return useCallback(
-    async ({ open }) => {
-      const { dstChainTxHash } = await open(walletProvider);
-      return report({ dstChainTxHash: dstChainTxHash as Hex });
-    },
-    [walletProvider, report],
-  );
+/** The hub hash is where the intent lives; the call sites read a flat shape. */
+function toLegacyShape(result: LeveragePositionIntentResult) {
+  return {
+    hash: result.txHashes.dstChainTxHash as Hex,
+    notified: result.notified,
+    error: result.notifyError,
+  };
 }
 
-/**
- * Where funds leaving a position can actually go.
- *
- * `withdraw` is a plain pool withdrawal, so it pays out to an address ON THE HUB. For a Sonic user
- * that can be their own address; for anyone else it cannot — their signing address belongs to another
- * chain, and for a non-EVM chain it is not even an address the hub could pay. The hub wallet is the
- * one destination that is always theirs, and bridging onward from there is a separate operation.
- */
-export function usePositionPayoutAddress(chain: SpokeChainKey, owner: Address | undefined): Address | undefined {
-  const { sodax } = useSodaxContext();
-  const account = useXAccount({ xChainId: chain });
-  const isHub = chain === sodax.hubProvider.chainConfig.chain.key;
-  return isHub ? (account.address as Address | undefined) : owner;
-}
+export { useLeveragePositionPayoutAddress } from '@sodax/dapp-kit';
