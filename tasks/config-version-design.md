@@ -1,6 +1,8 @@
 # Design: derive `CONFIG_VERSION` from the package version
 
-**Status:** proposal, not implemented. Nothing in this document has been applied to the codebase.
+**Status:** implemented on this branch — see the `feat(types): derive CONFIG_VERSION from the package
+version` commit. This document is the design record behind it; where the two ever disagree, the code
+and its tests are authoritative.
 **Scope:** `packages/types/src/index.ts`, the release tooling in `scripts/`, and the publish workflows.
 
 ---
