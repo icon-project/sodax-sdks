@@ -34,7 +34,7 @@ Granular skill for the swap hooks of `@sodax/dapp-kit` v2. React-only — backen
 - **Passing the SDK request directly under `params` on `useQuote`.** It nests under `params.payload` (a `SolverIntentQuoteRequest`). `useSwapAllowance` nests `payload` + `srcChainKey` + `walletProvider` under `params`.
 - **Reading `data.status` on `useQuote` / `useStatus` without `data?.ok`.** Both return a `Result<…>` as their `data` — branch on `.ok` first. (`useSwapAllowance` is the opposite — already-unwrapped `boolean`.)
 - **`useStatus` key is `intentTxHash`, not `intentHash`.**
-- **Flattening `getSupportedSwapTokens()` and keying rows on `address`.** The same token address recurs across chains — use a composite `${address}-${blockchain_id}` key.
+- **Flattening `getSupportedSwapTokens()` and keying rows on `address`.** The same token address recurs across chains — use a composite `${address}-${chainKey}` key (`XToken` carries `chainKey`, not `blockchain_id`).
 - **Reaching for `useSpokeProvider`.** Deleted. Pass `walletProvider` into `mutate(vars)` for `useSwap`/`useSwapApprove`; cancel hooks take it flat.
 
 ## Migration workflow (port v1 swap hooks to v2)
@@ -55,7 +55,7 @@ Granular skill for the swap hooks of `@sodax/dapp-kit` v2. React-only — backen
 ## Related granular skills (same family)
 
 - [`../money-market/SKILL.md`](../money-market/SKILL.md) — if the swap feeds a supply/borrow action.
-- [`../auxiliary-services/SKILL.md`](../auxiliary-services/SKILL.md) — `useBackendSubmitSwapTx` / intent-tracking + orderbook reads (step-by-step swap + diagnostics), partner fee-claim swaps.
+- [`../auxiliary-services/SKILL.md`](../auxiliary-services/SKILL.md) — `useSwapsApiSubmitTx` / intent-tracking + orderbook reads (step-by-step swap + diagnostics), partner fee-claim swaps.
 
 For tasks spanning multiple features, load the broad [`sodax-dapp-kit` skill](../SKILL.md) instead.
 

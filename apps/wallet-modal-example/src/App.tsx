@@ -25,8 +25,7 @@ export default function App() {
         <h1 className="text-2xl font-semibold">Sodax Headless Wallet Modal — Demo</h1>
         <p className="text-sm text-gray-600">
           Reference app exercising every primitive in{' '}
-          <code className="rounded bg-gray-100 px-1">@sodax/wallet-sdk-react</code> shipped under
-          issue #1123.
+          <code className="rounded bg-gray-100 px-1">@sodax/wallet-sdk-react</code> shipped under issue #1123.
         </p>
       </header>
 
@@ -34,8 +33,8 @@ export default function App() {
         <h2 className="text-base font-semibold">Open the modal</h2>
         <OpenModalButton />
         <p className="text-xs text-gray-500">
-          Driven by <code>useWalletModal()</code>. The modal is rendered below as a sibling — both
-          buttons and the modal share the same Zustand-backed state machine.
+          Driven by <code>useWalletModal()</code>. The modal is rendered below as a sibling — both buttons and the modal
+          share the same Zustand-backed state machine.
         </p>
       </section>
 

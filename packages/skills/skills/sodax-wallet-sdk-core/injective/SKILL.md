@@ -28,7 +28,7 @@ Granular skill for `InjectiveWalletProvider` — the low-level Injective wallet 
 ### Injective-specific anti-patterns
 
 - **Passing a top-level `privateKey`.** Not accepted — wrap it as `{ secret: { privateKey } }` (or `{ secret: { mnemonics } }`). This was always the shape, in v1 too.
-- **Mismatching `chainId` and `network`.** They must agree (`Mainnet` + `injective-1`, `Testnet` + `injective-888`) — mismatches surface as RPC-looking failures.
+- **Treating `chainId` as endpoint selection.** `chainId` is required by the config type but is never consumed for network/endpoint selection — only `network` drives endpoints. A mismatch does not itself cause a runtime RPC failure; still pass a coherent pair (`Mainnet` + `injective-1`, `Testnet` + `injective-888`).
 - **Relying on the zero `sequence` / `accountNumber` defaults.** Override when the on-chain account state differs.
 - **Expecting `evmOptions` to do anything.** It's reserved/unused — declared to keep the config shape stable.
 - **Mixing secret + browser-extension fields.** Discriminated union — don't `as`.
@@ -42,7 +42,7 @@ Granular skill for `InjectiveWalletProvider` — the low-level Injective wallet 
 ## Verification
 
 1. `pnpm tsc --noEmit` exits clean.
-2. Credential is nested under `secret`; `chainId` and `network` agree.
+2. Credential is nested under `secret`; both `chainId` and `network` are present (pass a coherent pair — only `network` selects endpoints).
 3. No v1 deep imports from `@sodax/wallet-sdk-core/wallet-providers/` (migration only).
 
 ## Related skills (same family)

@@ -55,8 +55,8 @@ type StacksWalletDefaults = {
 | Method | Signature | Returns |
 |---|---|---|
 | `getWalletAddress` | `() => Promise<string>` | Stacks address (`SP…` / `ST…`) |
-| `getPublicKey` | `() => Promise<string>` | hex pubkey |
-| `sendTransaction` | `(params: StacksTransactionParams) => Promise<…>` | tx response |
+| `getPublicKey` | `() => Promise<string>` | hex pubkey — **PK-mode only**; throws `'getPublicKey is only supported for private key wallet configuration'` for browser-extension configs |
+| `sendTransaction` | `(params: StacksTransactionParams) => Promise<string>` | broadcast txid |
 | `readContract` | `(txParams: StacksTransactionParams) => Promise<ClarityValue>` | read-only call result |
 | `getBalance` | `(address: string) => Promise<bigint>` | STX micro-balance |
 

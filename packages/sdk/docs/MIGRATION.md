@@ -23,7 +23,7 @@ const iconChainKey: SpokeChainKey = ChainKeys.ICON_MAINNET;
 const migrationTokens = ['ICX', 'bnUSD', 'BALN'] as const;
 ```
 
-Please refer to [SDK ChainKeys](https://github.com/icon-project/sodax-sdks/blob/main/packages/types/src/constants/index.ts) for more. For a direct mapping from old `*_CHAIN_ID` constants to `ChainKeys.*` see `packages/sdk/CHAIN_ID_MIGRATION.md`.
+Please refer to [SDK ChainKeys](https://github.com/icon-project/sodax-sdks/blob/main/packages/types/src/chains/chain-keys.ts) for more. For a direct mapping from old `*_CHAIN_ID` constants to `ChainKeys.*` see `packages/sdk/CHAIN_ID_MIGRATION.md`.
 
 ### Wallet Providers
 
@@ -122,6 +122,13 @@ if (!isAllowedRevert.ok) {
 ### Approve Tokens
 
 For reverse migrations, if the allowance check returns false, you need to approve the tokens before creating the revert migration intent.
+
+**Some tokens take two transactions.** A few ERC-20s of the 2017 TetherToken lineage — Ethereum USDT
+is the only one in the SODAX token list today — reject an allowance change from one non-zero value to
+another, so `approve` sends `approve(0)` first and waits for it to be mined before the real approval.
+The user signs twice; the returned value is still a single transaction hash, the **last** one's.
+Detection simulates the approval rather than consulting a token list, so a token listed later behaves
+the same way.
 
 **Note**: For Stellar-based operations, the approval system works differently:
 - **Source Chain (Stellar)**: The standard `approve` method works as expected for EVM chains, but for Stellar as the source chain, this method establishes trustlines instead.
@@ -659,11 +666,11 @@ if (!result.ok) {
 
 | Method | Codes |
 |---|---|
-| `migratebnUSD` / `migrateIcxToSoda` / `migrateBaln` (forward orchestrators) | `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `TX_VERIFICATION_FAILED`, `TX_SUBMIT_FAILED`, `RELAY_TIMEOUT`, `RELAY_FAILED`, `EXECUTION_FAILED`, `UNKNOWN` |
-| `revertMigrateSodaToIcx` (reverse orchestrator) | `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `TX_SUBMIT_FAILED`, `RELAY_TIMEOUT`, `RELAY_FAILED`, `EXECUTION_FAILED`, `UNKNOWN` |
-| `createMigratebnUSDIntent` / `createMigrateIcxToSodaIntent` / `createMigrateBalnIntent` (forward intent creators) | `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `UNKNOWN` |
-| `createRevertSodaToIcxMigrationIntent` (reverse intent creator) | `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `UNKNOWN` |
-| `approve` | `VALIDATION_FAILED`, `APPROVE_FAILED`, `UNKNOWN` |
+| `migratebnUSD` / `migrateIcxToSoda` / `migrateBaln` (forward orchestrators) | `USER_REJECTED`, `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `TX_VERIFICATION_FAILED`, `TX_SUBMIT_FAILED`, `RELAY_TIMEOUT`, `RELAY_FAILED`, `EXECUTION_FAILED`, `UNKNOWN` |
+| `revertMigrateSodaToIcx` (reverse orchestrator) | `USER_REJECTED`, `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `TX_SUBMIT_FAILED`, `RELAY_TIMEOUT`, `RELAY_FAILED`, `EXECUTION_FAILED`, `UNKNOWN` |
+| `createMigratebnUSDIntent` / `createMigrateIcxToSodaIntent` / `createMigrateBalnIntent` (forward intent creators) | `USER_REJECTED`, `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `UNKNOWN` |
+| `createRevertSodaToIcxMigrationIntent` (reverse intent creator) | `USER_REJECTED`, `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `UNKNOWN` |
+| `approve` | `USER_REJECTED`, `VALIDATION_FAILED`, `APPROVE_FAILED`, `UNKNOWN` |
 | `isAllowanceValid` | `VALIDATION_FAILED`, `ALLOWANCE_CHECK_FAILED`, `UNKNOWN` |
 | `IcxMigrationService.getAvailableAmount` | `VALIDATION_FAILED`, `LOOKUP_FAILED`, `UNKNOWN` |
 

@@ -10,7 +10,7 @@ The identifiers are **open**: any string works. The table below lists every bran
 
 | Identifier | Chains it matches | Underlying connector id / name |
 |---|---|---|
-| `'hana'` | EVM, ICON, Sui, Stellar | EVM via EIP-6963 RDNS (e.g. `io.havah.hana`); ICON id `hana`; Sui/Stellar — connector names containing "Hana" |
+| `'hana'` | EVM, ICON, Sui, Stellar, Bitcoin | EVM via EIP-6963 RDNS (e.g. `io.havah.hana`); ICON id `hana`; Bitcoin id `hana-bitcoin`; Sui/Stellar — connector names containing "Hana" |
 | `'phantom'` | EVM, Solana | EVM RDNS `app.phantom`; Solana adapter name `Phantom` |
 | `'metamask'` | EVM, Injective | EVM RDNS `io.metamask`; Injective `Wallet.Metamask` strategy |
 | `'xverse'` | Bitcoin, Stacks | Bitcoin id `xverse`; Stacks id `XverseProviders.BitcoinProvider` |

@@ -1,9 +1,16 @@
 import type { Hex, XDR } from '@sodax/types';
 import type { Keypair } from '@stellar/stellar-sdk';
 
+/**
+ * Minimal duck-typed slice of `@creit.tech/stellar-wallets-kit` this provider depends on.
+ * `address` selects the signer; `signerAddress` is reported only by some wallets.
+ */
 export interface StellarWalletsKit {
   getAddress(): Promise<{ address: string }>;
-  signTransaction(tx: XDR, options: { networkPassphrase: string }): Promise<{ signedTxXdr: XDR }>;
+  signTransaction(
+    tx: XDR,
+    options: { networkPassphrase: string; address?: string },
+  ): Promise<{ signedTxXdr: XDR; signerAddress?: string }>;
 }
 
 export type StellarNetwork = 'TESTNET' | 'PUBLIC';
@@ -25,7 +32,10 @@ export type PrivateKeyStellarWalletConfig = {
   type: 'PRIVATE_KEY';
   privateKey: Hex;
   network: StellarNetwork;
+  /** Horizon server URL. Defaults per network. */
   rpcUrl?: string;
+  /** Soroban RPC server URL used to broadcast transactions. Defaults per network. */
+  sorobanRpcUrl?: string;
   defaults?: StellarWalletDefaults;
 };
 
@@ -34,7 +44,10 @@ export type BrowserExtensionStellarWalletConfig = {
   type: 'BROWSER_EXTENSION';
   walletsKit: StellarWalletsKit;
   network: StellarNetwork;
+  /** Horizon server URL. Defaults per network. */
   rpcUrl?: string;
+  /** Soroban RPC server URL used to broadcast transactions. Defaults per network. */
+  sorobanRpcUrl?: string;
   defaults?: StellarWalletDefaults;
 };
 

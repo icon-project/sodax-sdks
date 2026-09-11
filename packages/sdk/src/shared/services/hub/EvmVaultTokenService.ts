@@ -1,6 +1,13 @@
-import { type Address, type Hash, type HttpTransport, type PublicClient, encodeFunctionData } from 'viem';
+import { type Address, type Hash, type PublicClient, encodeFunctionData } from 'viem';
 import { vaultTokenAbi } from '../../abis/index.js';
-import type { IEvmWalletProvider, TokenInfo, EvmContractCall, VaultReserves } from '@sodax/types';
+import {
+  ChainKeys,
+  type IEvmWalletProvider,
+  type TokenInfo,
+  type EvmContractCall,
+  type VaultReserves,
+} from '@sodax/types';
+import { getEvmViemChain } from '../../utils/constant-utils.js';
 
 export class EvmVaultTokenService {
   private constructor() {}
@@ -9,14 +16,10 @@ export class EvmVaultTokenService {
    * Fetches token information for a specific token in the vault.
    * @param vault - The address of the vault.
    * @param token - The address of the token.
-   * @param publicClient - PublicClient<HttpTransport>
+   * @param publicClient - PublicClient
    * @returns Token information as a TokenInfo object.
    */
-  public static async getTokenInfo(
-    vault: Address,
-    token: Address,
-    publicClient: PublicClient<HttpTransport>,
-  ): Promise<TokenInfo> {
+  public static async getTokenInfo(vault: Address, token: Address, publicClient: PublicClient): Promise<TokenInfo> {
     const [decimals, depositFee, withdrawalFee, maxDeposit, isSupported] = await publicClient.readContract({
       address: vault,
       abi: vaultTokenAbi,
@@ -37,7 +40,7 @@ export class EvmVaultTokenService {
   public static async getTokenInfos(
     vault: Address,
     tokens: Address[],
-    publicClient: PublicClient<HttpTransport>,
+    publicClient: PublicClient,
   ): Promise<TokenInfo[]> {
     const infos = await publicClient.multicall({
       contracts: tokens.map(
@@ -61,13 +64,10 @@ export class EvmVaultTokenService {
   /**
    * Retrieves the reserves of the vault.
    * @param vault - The address of the vault.
-   * @param publicClient - PublicClient<HttpTransport>
+   * @param publicClient - PublicClient
    * @returns An object containing tokens and their balances.
    */
-  public static async getVaultReserves(
-    vault: Address,
-    publicClient: PublicClient<HttpTransport>,
-  ): Promise<VaultReserves> {
+  public static async getVaultReserves(vault: Address, publicClient: PublicClient): Promise<VaultReserves> {
     const [tokens, balances] = await publicClient.readContract({
       address: vault,
       abi: vaultTokenAbi,
@@ -81,33 +81,33 @@ export class EvmVaultTokenService {
     };
   }
 
-    /**
+  /**
    * Retrieves all token information for the vault.
    * @param vault - The address of the vault.
-   * @param publicClient - PublicClient<HttpTransport>
+   * @param publicClient - PublicClient
    * @returns A promise that resolves to an object containing tokens, their infos, and reserves.
    */
-    public static async getAllTokenInfo(
-      vault: Address,
-      publicClient: PublicClient<HttpTransport>,
-    ): Promise<{
-      tokens: readonly Address[];
-      infos: readonly TokenInfo[];
-      reserves: readonly bigint[];
-    }> {
-      const [tokens, infos, reserves] = await publicClient.readContract({
-        address: vault,
-        abi: vaultTokenAbi,
-        functionName: 'getAllTokenInfo',
-        args: [],
-      });
+  public static async getAllTokenInfo(
+    vault: Address,
+    publicClient: PublicClient,
+  ): Promise<{
+    tokens: readonly Address[];
+    infos: readonly TokenInfo[];
+    reserves: readonly bigint[];
+  }> {
+    const [tokens, infos, reserves] = await publicClient.readContract({
+      address: vault,
+      abi: vaultTokenAbi,
+      functionName: 'getAllTokenInfo',
+      args: [],
+    });
 
-      return {
-        tokens,
-        infos,
-        reserves,
-      };
-    }
+    return {
+      tokens,
+      infos,
+      reserves,
+    };
+  }
 
   /**
    * Deposits a specified amount of a token into the vault.
@@ -124,16 +124,20 @@ export class EvmVaultTokenService {
     walletProvider: IEvmWalletProvider,
   ): Promise<Hash> {
     const from = (await walletProvider.getWalletAddress()) as `0x${string}`;
-    return walletProvider.sendTransaction({
-      from,
-      to: vault,
-      value: 0n,
-      data: encodeFunctionData({
-        abi: vaultTokenAbi,
-        functionName: 'deposit',
-        args: [token, amount],
-      }),
-    });
+    return walletProvider.sendTransaction(
+      {
+        from,
+        to: vault,
+        value: 0n,
+        data: encodeFunctionData({
+          abi: vaultTokenAbi,
+          functionName: 'deposit',
+          args: [token, amount],
+        }),
+      },
+      // Vaults live on the hub; refuse to broadcast from a wallet on another EVM network.
+      { expectedChainId: getEvmViemChain(ChainKeys.SONIC_MAINNET).id },
+    );
   }
 
   /**
@@ -151,16 +155,19 @@ export class EvmVaultTokenService {
     provider: IEvmWalletProvider,
   ): Promise<Hash> {
     const from = (await provider.getWalletAddress()) as `0x${string}`;
-    return provider.sendTransaction({
-      from,
-      to: vault,
-      value: 0n,
-      data: encodeFunctionData({
-        abi: vaultTokenAbi,
-        functionName: 'withdraw',
-        args: [token, amount],
-      }),
-    });
+    return provider.sendTransaction(
+      {
+        from,
+        to: vault,
+        value: 0n,
+        data: encodeFunctionData({
+          abi: vaultTokenAbi,
+          functionName: 'withdraw',
+          args: [token, amount],
+        }),
+      },
+      { expectedChainId: getEvmViemChain(ChainKeys.SONIC_MAINNET).id },
+    );
   }
 
   /**

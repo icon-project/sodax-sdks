@@ -81,7 +81,7 @@ Full SDK-level detail: `sodax-sdk`: `migration-v1-to-v2/knowledge/breaking-chang
 
 ## `SodaxConfig` reshape — `rpcConfig` → `chains`
 
-`SodaxProvider`'s config prop is `SodaxOptions` (`= DeepPartial<SodaxConfig> & { logger? }`). The SDK renamed/restructured the config:
+`SodaxProvider`'s config prop is `SodaxOptions` (`= DeepPartial<SodaxDefaultConfig> & SodaxOptionalConfig` — the data override plus client-side options `logger` + global `fee`). The SDK renamed/restructured the config:
 
 ```diff
 - <SodaxProvider rpcConfig={{
@@ -131,7 +131,7 @@ If your dapp-kit consumer code catches errors from mutations and uses `instanceo
 + }
 ```
 
-`isSodaxError` is re-exported from `@sodax/dapp-kit`. Discriminate via `(error.feature, error.code)` — the feature is now a first-class field, and the code vocabulary is unified to 13 reason-only codes.
+`isSodaxError` is re-exported from `@sodax/dapp-kit`. Discriminate via `(error.feature, error.code)` — the feature is now a first-class field, and the code vocabulary is unified to 14 reason-only codes (`'USER_REJECTED'` is reachable from any orchestrator that wraps a wallet sign step, which lets consumers render a "Cancelled" UI distinct from real failures).
 
 Full SDK-level detail: `sodax-sdk`: `migration-v1-to-v2/knowledge/breaking-changes/result-and-errors.md`.
 

@@ -120,4 +120,8 @@ export interface IInjectiveWalletProvider extends ICoreWallet {
     msg: JsonObject,
     funds?: InjectiveCoin[],
   ) => Promise<InjectiveExecuteResponse>;
+  /** Broadcast an already-signed, proto-encoded Cosmos `TxRaw`. Returns the tx hash. */
+  sendTransaction?: (signedTxRaw: Uint8Array) => Promise<string>;
+  /** Sign and broadcast an unsigned `InjectiveRawTransaction` (e.g. from the Swaps API). Returns the tx hash. */
+  signAndSendTransaction?: (tx: InjectiveRawTransaction) => Promise<string>;
 }

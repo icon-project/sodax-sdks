@@ -5,7 +5,7 @@ One row per chain. Use this when you know the chain and need to look up everythi
 | Chain | Class | Config union | Interface (`@sodax/types`) | Default merge helper | Discriminant |
 |---|---|---|---|---|---|
 | EVM       | `EvmWalletProvider`       | `EvmWalletConfig`       | `IEvmWalletProvider`       | `mergePolicy` (per-method)   | Field presence (no `type`) |
-| Solana    | `SolanaWalletProvider`    | `SolanaWalletConfig`    | `ISolanaWalletProvider`    | `mergePolicy` (per-method)   | Field presence (no `type`) |
+| Solana    | `SolanaWalletProvider`    | `SolanaWalletConfig`    | `ISolanaWalletProvider`    | flat (read directly)         | Field presence (no `type`) |
 | Sui       | `SuiWalletProvider`       | `SuiWalletConfig`       | `ISuiWalletProvider`       | `mergePolicy` (per-method)   | Field presence — uses `mnemonics` |
 | Bitcoin   | `BitcoinWalletProvider`   | `BitcoinWalletConfig`   | `IBitcoinWalletProvider`   | `mergeDefaults` (flat)       | **`type` field** (`'PRIVATE_KEY' \| 'BROWSER_EXTENSION'`) |
 | Stellar   | `StellarWalletProvider`   | `StellarWalletConfig`   | `IStellarWalletProvider`   | `mergeDefaults` (flat)       | **`type` field** |
@@ -14,7 +14,7 @@ One row per chain. Use this when you know the chain and need to look up everythi
 | NEAR      | `NearWalletProvider`      | `NearWalletConfig`      | `INearWalletProvider`      | `mergeDefaults` (flat)       | Field presence (no `type`) |
 | Stacks    | `StacksWalletProvider`    | `StacksWalletConfig`    | `IStacksWalletProvider`    | `mergeDefaults` (flat)       | Field presence (no `type`) |
 
-> EVM, Solana, and Sui group their `defaults` per method (e.g. `defaults.sendTransaction`, `defaults.signAndExecuteTxn`). Every other chain has a flat `defaults` object. See [`../architecture.md`](../architecture.md) § `BaseWalletProvider`.
+> EVM and Sui group their `defaults` per method (e.g. `defaults.sendTransaction`, `defaults.signAndExecuteTxn`) via `mergePolicy`. Every other chain (incl. Solana) has a flat `defaults` object. See [`../architecture.md`](../architecture.md) § `BaseWalletProvider`.
 
 ---
 

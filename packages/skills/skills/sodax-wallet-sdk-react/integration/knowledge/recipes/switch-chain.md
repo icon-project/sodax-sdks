@@ -121,7 +121,7 @@ Keplr and Leap on Injective don't have this constraint — `isWrongChain` is `fa
 
 ## Safe to call when EVM is disabled
 
-`useEvmSwitchChain` checks `useEnabledChains()` and returns a no-op result `{ isWrongChain: false, handleSwitchChain: () => {} }` when the EVM slot isn't mounted in `SodaxWalletProvider` config. Calling wagmi's hooks outside a `WagmiProvider` would throw — the early-return lets components opt-in to a "switch chain" CTA without checking EVM-enabled themselves at every call site.
+`useEvmSwitchChain` checks `useIsChainEnabled('EVM')` and returns a no-op result `{ isWrongChain: false, handleSwitchChain: () => {} }` when the EVM slot isn't mounted in `SodaxWalletProvider` config. Calling wagmi's hooks outside a `WagmiProvider` would throw — the early-return lets components opt-in to a "switch chain" CTA without checking EVM-enabled themselves at every call site.
 
 ---
 

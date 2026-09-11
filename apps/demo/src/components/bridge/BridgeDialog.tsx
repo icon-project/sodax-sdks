@@ -12,8 +12,7 @@ import {
   useBridge,
   useBridgeAllowance,
   useBridgeApprove,
-  useStellarTrustlineCheck,
-  useRequestTrustline,
+  useStellarGate,
   useBitcoinBalance,
   useNearStorageGate,
   ChainKeys,
@@ -22,7 +21,6 @@ import {
   type XToken,
   type GetWalletProviderType,
   type IBitcoinWalletProvider,
-  type IStellarWalletProvider,
   type CreateBridgeIntentParams,
 } from '@sodax/dapp-kit';
 import { useEvmSwitchChain, useWalletProvider, useXAccount } from '@sodax/wallet-sdk-react';
@@ -40,8 +38,6 @@ interface BridgeDialogProps {
   walletProvider: GetWalletProviderType<SpokeChainKey>;
   fromChainType: ChainType | undefined;
   toChainKey: SpokeChainKey;
-  fromBtcConnector?: { name: string; icon: string };
-  toBtcConnector?: { name: string; icon: string };
 }
 
 export function BridgeDialog({
@@ -53,8 +49,6 @@ export function BridgeDialog({
   walletProvider,
   fromChainType,
   toChainKey,
-  fromBtcConnector,
-  toBtcConnector,
 }: BridgeDialogProps) {
   const [isFromBtcReady, setIsFromBtcReady] = useState(false);
   const [isToBtcReady, setIsToBtcReady] = useState(false);
@@ -88,17 +82,13 @@ export function BridgeDialog({
   const toBtcWalletProvider =
     toWalletProvider?.chainType === 'BITCOIN' ? (toWalletProvider as IBitcoinWalletProvider) : undefined;
 
-  const stellarWalletProvider =
-    toWalletProvider?.chainType === 'STELLAR' ? (toWalletProvider as IStellarWalletProvider) : undefined;
-  const { data: hasSufficientTrustline, isPending: isTrustlineLoading } = useStellarTrustlineCheck({
-    params: {
-      token: order.dstToken,
-      amount: order.amount,
-      chainId: toChainKey,
-      walletProvider: stellarWalletProvider,
-    },
+  const stellar = useStellarGate({
+    dstChainKey: toChainKey,
+    token: order.dstToken,
+    amount: order.amount,
+    address: toAccount.address,
+    walletProvider: toWalletProvider,
   });
-  const { requestTrustline, isLoading: isRequestingTrustline } = useRequestTrustline(order.dstToken);
 
   const nearStorage = useNearStorageGate({
     dstChainKey: toChainKey,
@@ -129,14 +119,18 @@ export function BridgeDialog({
     onClose();
   };
 
+  const handleActivateStellarAccount = async () => {
+    const result = await stellar.activate();
+    if (result && !result.ok) {
+      setBridgeError(formatMutationFailureMessage(result.error, 'Stellar account activation failed'));
+    }
+  };
+
   const handleRequestTrustline = async () => {
-    if (!stellarWalletProvider) return;
-    await requestTrustline({
-      token: order.dstToken,
-      amount: order.amount,
-      srcChainKey: ChainKeys.STELLAR_MAINNET,
-      walletProvider: stellarWalletProvider,
-    });
+    const result = await stellar.requestTrustline();
+    if (result && !result.ok) {
+      setBridgeError(formatMutationFailureMessage(result.error, 'Trustline request failed'));
+    }
   };
 
   const handleRegisterNearStorage = async () => {
@@ -146,15 +140,12 @@ export function BridgeDialog({
     }
   };
 
-  const isDestinationStellar = toChainKey === ChainKeys.STELLAR_MAINNET;
-  const needsTrustline = isDestinationStellar && !isTrustlineLoading && !hasSufficientTrustline;
-
   const isBridgeDisabled =
     isBridging ||
     (fromChainType === 'EVM' && !hasAllowance) ||
     (order.srcChainKey === ChainKeys.BITCOIN_MAINNET && !isFromBtcReady) ||
     (toChainKey === ChainKeys.BITCOIN_MAINNET && !isToBtcReady) ||
-    needsTrustline ||
+    stellar.blocksAction ||
     nearStorage.blocksAction;
 
   return (
@@ -175,8 +166,30 @@ export function BridgeDialog({
           <div>Amount: {formatUnits(order.amount, fromToken?.decimals ?? 0)}</div>
           <div className="break-all">Recipient: {order.recipient}</div>
 
-          {needsTrustline && (
+          {/* Keep activation in-flow; funding has no client-side remedy. */}
+          {stellar.needsActivation && (
+            <div className="text-red-500">
+              Recipient's Stellar account does not exist yet — activate it to proceed. SODAX sponsors the reserve, so
+              this is free.
+            </div>
+          )}
+
+          {stellar.needsFunding && (
+            <div className="text-red-500">
+              Recipient's Stellar account holds no XLM, so it cannot pay for a trustline. Send it some XLM first —
+              receiving XLM needs no trustline.
+            </div>
+          )}
+
+          {stellar.needsTrustline && (
             <div className="text-red-500">Insufficient Stellar trustline — request trustline to proceed.</div>
+          )}
+
+          {stellar.checkFailed && (
+            <div className="text-red-500">
+              Couldn't check the recipient's Stellar account, so the bridge is on hold
+              {stellar.error ? `: ${stellar.error.message}` : ''}
+            </div>
           )}
 
           {nearStorage.needsRegistration && (
@@ -187,12 +200,7 @@ export function BridgeDialog({
         </div>
 
         {fromBtcWalletProvider && order.srcChainKey === ChainKeys.BITCOIN_MAINNET && (
-          <BitcoinSetupPanel
-            walletProvider={fromBtcWalletProvider}
-            onReadyChange={setIsFromBtcReady}
-            connectorName={fromBtcConnector?.name}
-            connectorIcon={fromBtcConnector?.icon}
-          />
+          <BitcoinSetupPanel walletProvider={fromBtcWalletProvider} onReadyChange={setIsFromBtcReady} />
         )}
 
         {toBtcWalletProvider && toChainKey === ChainKeys.BITCOIN_MAINNET && toBtcBalance !== undefined && (
@@ -200,8 +208,6 @@ export function BridgeDialog({
             walletProvider={toBtcWalletProvider}
             onReadyChange={setIsToBtcReady}
             nativeBalance={toBtcBalance}
-            connectorName={toBtcConnector?.name}
-            connectorIcon={toBtcConnector?.icon}
             isDestination
           />
         )}
@@ -224,11 +230,29 @@ export function BridgeDialog({
             </Button>
           )}
 
-          {isDestinationStellar && isTrustlineLoading && <span className="text-sm">Checking trustline…</span>}
+          {stellar.isStellar && stellar.isChecking && <span className="text-sm">Checking Stellar account…</span>}
 
-          {needsTrustline && (
-            <Button className="w-full" onClick={handleRequestTrustline} disabled={isRequestingTrustline}>
-              {isRequestingTrustline ? 'Requesting…' : 'Request Trustline'}
+          {stellar.needsActivation && (
+            <Button className="w-full" onClick={handleActivateStellarAccount} disabled={stellar.isActivating}>
+              {stellar.isActivating ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Activating…
+                </>
+              ) : (
+                'Activate Stellar Account'
+              )}
+            </Button>
+          )}
+
+          {stellar.needsTrustline && (
+            <Button className="w-full" onClick={handleRequestTrustline} disabled={stellar.isRequestingTrustline}>
+              {stellar.isRequestingTrustline ? 'Requesting…' : 'Request Trustline'}
+            </Button>
+          )}
+
+          {stellar.checkFailed && (
+            <Button className="w-full" onClick={stellar.retry} disabled={stellar.isChecking}>
+              {stellar.isChecking ? 'Rechecking…' : 'Retry Stellar Check'}
             </Button>
           )}
 

@@ -215,6 +215,43 @@ describe('EvmWalletProvider', () => {
       expect(spy).toHaveBeenCalledWith(expect.objectContaining({ ...RAW_TX, gas: 500_000n }));
     });
 
+    // The guard must refuse a wallet sitting on a different chain than the calldata targets.
+    it('refuses to send when the wallet is on a different chain than expectedChainId', async () => {
+      const config = makeBrowserExtensionConfig();
+      const provider = new EvmWalletProvider(config);
+      vi.spyOn(config.walletClient, 'getChainId').mockResolvedValue(8453); // wallet moved to Base
+      const spy = vi.spyOn(config.walletClient, 'sendTransaction').mockResolvedValue('0xtxhash');
+
+      await expect(provider.sendTransaction(RAW_TX, { expectedChainId: sonic.id })).rejects.toThrow(
+        /connected to chain 8453 but the transaction targets chain 146/,
+      );
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('sends when the wallet chain matches expectedChainId, without leaking the option into the tx', async () => {
+      const config = makeBrowserExtensionConfig();
+      const provider = new EvmWalletProvider(config);
+      vi.spyOn(config.walletClient, 'getChainId').mockResolvedValue(sonic.id);
+      const spy = vi.spyOn(config.walletClient, 'sendTransaction').mockResolvedValue('0xtxhash');
+
+      await provider.sendTransaction(RAW_TX, { expectedChainId: sonic.id });
+
+      expect(spy).toHaveBeenCalledWith(expect.objectContaining(RAW_TX));
+      expect(spy).toHaveBeenCalledWith(expect.not.objectContaining({ expectedChainId: sonic.id }));
+    });
+
+    it('skips the chain check entirely when expectedChainId is not passed', async () => {
+      const config = makeBrowserExtensionConfig();
+      const provider = new EvmWalletProvider(config);
+      const chainIdSpy = vi.spyOn(config.walletClient, 'getChainId').mockResolvedValue(8453);
+      const spy = vi.spyOn(config.walletClient, 'sendTransaction').mockResolvedValue('0xtxhash');
+
+      await provider.sendTransaction(RAW_TX);
+
+      expect(chainIdSpy).not.toHaveBeenCalled();
+      expect(spy).toHaveBeenCalledWith(expect.objectContaining(RAW_TX));
+    });
+
     it('tx data is preserved alongside policy fields without collision', async () => {
       const config = makeBrowserExtensionConfig();
       const provider = new EvmWalletProvider({

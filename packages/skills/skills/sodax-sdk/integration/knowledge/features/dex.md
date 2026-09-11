@@ -40,11 +40,11 @@ sodax.dex.clService.claimRewards<K>(action): Promise<Result<TxHashPair, SodaxErr
 
 sodax.dex.clService.getPools(): PoolKey[];                 // synchronous in v2
 sodax.dex.clService.getPoolData(poolKey, publicClient): Promise<Result<PoolData, SodaxError>>;
-sodax.dex.clService.getPositionInfo(tokenId, poolKey, publicClient): Promise<Result<PositionInfo, SodaxError>>;
+sodax.dex.clService.getPositionInfo(tokenId, publicClient): Promise<Result<ClPositionInfo, SodaxError>>;
 sodax.dex.clService.getAssetsForPool(srcChainKey, poolKey): { token0, token1 };   // chain-key-first; sync
 
 // Static math helpers (still throw on error — utility class):
-ClService.priceToTick(price): number;
+ClService.priceToTick(price, token0, token1, tickSpacing): bigint;
 ClService.calculateAmount0FromAmount1(...): bigint;
 ClService.calculateAmount1FromAmount0(...): bigint;
 ```
@@ -58,7 +58,7 @@ type CreateAssetDepositParams<K extends SpokeChainKey> = {
   asset: `0x${string}`;       // spoke-side token address
   amount: bigint;
   poolToken: `0x${string}`;   // hub-side pool token (vault address)
-  dst?: { chainKey: SpokeChainKey; address: string };  // optional cross-chain delivery
+  dst?: { dstChainKey: SpokeChainKey; dstAddress: string };  // optional cross-chain delivery
 };
 
 type CreateAssetWithdrawParams<K> = { /* same shape */ };
@@ -67,8 +67,8 @@ type ClSupplyParams<K> = {
   srcChainKey: K;
   srcAddress: GetAddressType<K>;
   poolKey: PoolKey;
-  tickLower: number;
-  tickUpper: number;
+  tickLower: bigint;
+  tickUpper: bigint;
   liquidity: bigint;
   amount0Max: bigint;
   amount1Max: bigint;
@@ -117,8 +117,8 @@ const result = await sodax.dex.clService.supplyLiquidity({
     srcChainKey: ChainKeys.ARBITRUM_MAINNET,
     srcAddress: '0x…',
     poolKey: { /* { currency0, currency1, fee, tickSpacing, hooks } */ },
-    tickLower: -887220,
-    tickUpper: 887220,
+    tickLower: -887220n,
+    tickUpper: 887220n,
     liquidity: 1000000n,
     amount0Max: parseUnits('100', 6),
     amount1Max: parseUnits('100', 6),
@@ -164,6 +164,12 @@ The underlying read does not consult the wallet provider; pass `raw: true` to sa
 | `getAssetsForPool` | `{ token0: XToken, token1: XToken }` (synchronous; takes `srcChainKey` to filter by spoke availability) |
 
 > `getPools()` is **synchronous** in v2 (was `Promise<PoolKey[]>` in v1). v2 reads from cached config — no I/O. `await sodax.dex.clService.getPools()` works (TS allows `await` on non-promise) but `.then(...)` is a runtime error.
+
+`approve` can send **two** transactions on a token that rejects a non-zero to non-zero allowance
+change (Ethereum USDT is the only listed one today): `approve(0)` is mined first, then the real
+approval, so the user signs twice. The returned value is unchanged — one hash, the **last**
+transaction's. Detection simulates the approval, so never gate on a token list. Full note: "ERC-20
+approval can take two transactions" in [`architecture.md`](../architecture.md).
 
 ## Error codes
 

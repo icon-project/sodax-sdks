@@ -1,0 +1,103 @@
+---
+title: Liquidity and execution, across every network
+sidebarTitle: Home
+description: Choose a product, follow an integration guide, or look up the API and SDK reference.
+icon: house
+"og:image": "/images/og/docs-home-card.png"
+"twitter:image": "/images/og/docs-home-card.png"
+---
+
+## What do you want to build?
+
+<CardGroup cols={2}>
+  <Card title="Swap" icon="rotate" href="/swap" horizontal arrow>
+    Quote and execute cross-network swaps through the HTTP API or TypeScript SDK.
+  </Card>
+  <Card title="Lend & borrow" icon="sack-dollar" href="/money-market" horizontal arrow>
+    Supply, borrow, withdraw, and repay through the SDK. HTTP provides reserve and position reads.
+  </Card>
+  <Card title="Move an asset" icon="bridge-suspension" href="/bridge" horizontal arrow>
+    Transfer assets through hub-and-spoke vaults using the Bridge SDK.
+  </Card>
+  <Card title="Earn yield" icon="money-bill-trend-up" href="/yield" horizontal arrow>
+    Enter and exit leveraged yield vaults. Compare the SDK and HTTP paths.
+  </Card>
+</CardGroup>
+
+## Start with your first swap
+
+Follow [Your first swap](/quickstart) to install the SDK, get a quote, submit an intent,
+and track settlement. Quoting needs no funds or signature; execution uses mainnet funds.
+
+Prefer [HTTP](/developers/http-api/swaps) or [Solana](/solana/quickstart)? Start with the guide for your integration.
+
+**Building with an AI agent?** Add [Builders MCP](/builders-mcp) for live data and docs, and
+[SDK skills](/ai-integration-guide) for coding guidance.
+
+## Find the right documentation
+
+| You need to… | Start here |
+| --- | --- |
+| Choose a product and integration path | The product choices above |
+| Implement a specific task | [How To](/developers/how-to) |
+| Look up an HTTP endpoint or request field | [HTTP API](/developers/http-api) |
+| Look up a TypeScript method or type | [SDK reference](/developers/packages) |
+| Build a React frontend | [dapp-kit](/developers/packages/experience/dapp-kit) |
+
+## How it works
+
+SODAX is not a router you operate. **SODAX routes and settles.** Independent **solvers** on the marketplace **fill**. You submit an intent (the outcome you want) — not the hop-by-hop route.
+
+1. **Submit** — Quote and submit an intent. Declare the outcome, not the hop-by-hop route.
+2. **Fill** — Independent solvers fill across networks from coordinated liquidity.
+3. **Settle** — Poll until solved or failed — terminal states, not a silent partial fill.
+
+[Full execution model →](/home/how-execution-works)
+
+## Latest product updates
+
+<CardGroup cols={2}>
+  <Card title="Leveraged staking vaults in Balanced widgets" img="/images/news/balanced-vault-widget.jpg" href="/yield" horizontal arrow>
+    Vault positions enter and exit as ordinary intent-based swaps.
+  </Card>
+  <Card title="Candlestick price data, direct to your app" img="/images/news/candlestick-price-data.jpg" href="/developers/http-api/oracle" arrow>
+    Fixed-interval USD candles over an unauthenticated `GET`.
+  </Card>
+</CardGroup>
+
+[All product updates →](/resources/product-updates)
+
+## Audits
+
+Eight published reports covering contracts across Sui, Solana, Soroban (Stellar), Near, Stacks, the Relay, and collaborative reviews (including a Sherlock collaborative on the LST / leverage-yield vault).
+
+<Card title="Audit reports" icon="shield-halved" href="/developers/audits" horizontal arrow>
+  Named reports and PDF downloads.
+</Card>
+
+***
+
+## What you get
+
+* **One surface, every network.** Integrate once via API or SDK.
+* **Execution that settles.** Swaps, borrows, and deposits complete under real cross-network conditions.
+* **Your app stays yours.** You own UX, pricing, and risk — SODAX is infrastructure underneath.
+
+***
+
+## Go deeper
+
+<CardGroup cols={2}>
+  <Card title="Your first swap" icon="bolt" href="/quickstart">
+    Install → quote → execute on mainnet.
+  </Card>
+  <Card title="Get started" icon="signs-post" href="/introduction">
+    Solana, Bitcoin, SDK, API, AI agents, or talk to the team.
+  </Card>
+  <Card title="AI coding agents" icon="robot" href="/ai-integration-guide">
+    Wire `@sodax/skills` into Cursor, Claude Code, or Copilot.
+  </Card>
+  <Card title="Why build with SODAX" icon="chart-line" href="/home/why-sodax">
+    Proof points and ecosystem reach.
+  </Card>
+</CardGroup>

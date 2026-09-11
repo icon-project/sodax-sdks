@@ -1,5 +1,6 @@
 import type { Address } from '../shared/shared.js';
 import { LsodaTokens, SodaTokens } from '../chains/tokens.js';
+import type { PartnerFee, Prettify } from '../common/common.js';
 
 /**
  * A single deployed LeverageYieldVault.
@@ -107,12 +108,51 @@ export const leverageYieldVaults = [
       label: 'Lido (stETH)',
     },
   },
+  {
+    name: LsodaTokens.lsodaJITOSOL.symbol,
+    vault: LsodaTokens.lsodaJITOSOL.vault,
+    asset: SodaTokens.sodaJITOSOL.address, // sodaJITOSOL on Sonic
+    borrowToken: SodaTokens.sodaSOL.address, // sodaSOL on Sonic
+    lsdSource: {
+      // DefiLlama pool for Jito's JitoSOL native staking on Solana (project: 'jito-liquid-staking').
+      poolId: '0e7d0722-9054-4907-8593-567b353c0900',
+      fallbackAprPct: 5.5,
+      label: 'Jito (JitoSOL)',
+    },
+  },
+  {
+    name: LsodaTokens.lsodaSUSDS.symbol,
+    vault: LsodaTokens.lsodaSUSDS.vault,
+    asset: SodaTokens.sodaSUSDS.address, // sodaSUSDS (sUSDS) on Sonic — eMode-3 collateral
+    borrowToken: SodaTokens.sodaUSSD.address, // sodaUSSD (USSD) on Sonic — eMode-3 borrowable
+    lsdSource: {
+      // DefiLlama pool for the Sky Savings Rate on sUSDS (project: 'sky-lending', Ethereum).
+      // sUSDS appreciates against USDS at the SSR — yield AAVE's currentLiquidityRate omits.
+      poolId: 'd8c4eff5-c8a9-46fc-a888-057c4c668e72',
+      fallbackAprPct: 3.5,
+      label: 'Sky (sUSDS)',
+    },
+  },
 ] as const satisfies readonly LeverageYieldVault[];
 
-export type LeverageYieldConfig = {
+// options for the leverage yield service to be configured by the integrator
+export type LeverageYieldOptions = {
+  partnerFee?: PartnerFee; // enables override of global partner fee
+  /**
+   * Route `vaultSwap()` (and so `deposit`/`withdraw`) through the backend submit-tx flow. Default
+   * `false` — the backend leverage-yield submit-tx path is opt-in while it beds in, unlike the
+   * swaps/bridge toggles which default on. Client-side only — not part of backend SodaxDefaultConfig.
+   * Read the effective value via `sodax.config.leverageYieldUseBackendSubmitTx`.
+   */
+  useBackendSubmitTx?: boolean;
+};
+
+export type LeverageYieldConfig = Prettify<LeverageYieldDefaultConfig & LeverageYieldOptions>;
+
+export type LeverageYieldDefaultConfig = {
   vaults: readonly LeverageYieldVault[];
 };
 
 export const leverageYieldConfig = {
   vaults: leverageYieldVaults,
-} as const satisfies LeverageYieldConfig;
+} as const satisfies LeverageYieldDefaultConfig;

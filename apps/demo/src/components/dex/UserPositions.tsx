@@ -52,7 +52,12 @@ function PositionListItem({
 }: PositionListItemProps): JSX.Element | null {
   const srcAddress = userAddress as `0x${string}`;
   const [percentageToRemove, setPercentageToRemove] = useState(0);
-  const { data, isLoading, isError, error: positionInfoError } = usePositionInfo({
+  const {
+    data,
+    isLoading,
+    isError,
+    error: positionInfoError,
+  } = usePositionInfo({
     params: { tokenId, poolKey },
   });
   const claimRewardsMutation = useClaimRewards();
@@ -324,7 +329,9 @@ export function UserPositions({
     try {
       const mintPositionEventResult = await sodax.dex.clService.getMintPositionEvent(hubTxHashInput.trim() as Hash);
       if (!mintPositionEventResult.ok) {
-        globalThis.alert(`Find position ID failed: ${mintPositionEventResult.error instanceof Error ? mintPositionEventResult.error.message : 'Unknown error'}`);
+        globalThis.alert(
+          `Find position ID failed: ${mintPositionEventResult.error instanceof Error ? mintPositionEventResult.error.message : 'Unknown error'}`,
+        );
         return;
       }
       saveTokenIdToLocalStorage(userAddress, chainKey, mintPositionEventResult.value.tokenId.toString());

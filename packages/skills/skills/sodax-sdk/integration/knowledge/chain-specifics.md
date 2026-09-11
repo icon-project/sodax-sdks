@@ -1,14 +1,34 @@
-# Chain specifics — Non-EVM quirks
+# Chain specifics — chain quirks
 
-EVM chains (12 of them) work uniformly through `IEvmWalletProvider`. Non-EVM chains have particularities you need to handle. This file documents each chain family's quirks.
+EVM chains mostly work uniformly through `IEvmWalletProvider`, with **one** native-value exception (Hedera, below). Non-EVM chains have more particularities you need to handle. This file documents each chain family's quirks.
 
 ## Section index
+
+EVM:
+
+0. [Hedera HBAR msg.value scaling](#0-hedera-hbar-msgvalue-scaling) — `HEDERA_MAINNET`. The only EVM-family quirk: native deposits scale `msg.value` by 10^10. Handled automatically by the SDK.
+
+Non-EVM:
 
 1. [Stellar trustline](#1-stellar-trustline) — `STELLAR_MAINNET`. Required before receiving any non-XLM asset.
 2. [Bitcoin PSBT and Bound Exchange](#2-bitcoin-psbt-and-radfi) — `BITCOIN_MAINNET`. PSBT signing; trading wallet; Bound Exchange auth/session.
 3. [Solana PDA derivation](#3-solana-pda-derivation) — `SOLANA_MAINNET`. Deterministic addresses; one-time setup utilities.
 4. [ICON Hana wallet](#4-icon-hana-wallet) — `ICON_MAINNET`. Low-level Hana-extension helpers; chain key string vs numeric ID.
 5. [NEAR connector discovery](#5-near-connector-discovery) — `NEAR_MAINNET`. Account-id semantics; multiple wallet variants.
+
+---
+
+## 0. Hedera HBAR msg.value scaling
+
+**Quirk:** HBAR is tracked with **8 decimals** in SODAX spoke accounting, but Hedera's EVM layer treats native `msg.value` as **18 decimals**. So for a native-HBAR deposit the on-chain `msg.value` must be the 8-decimal amount multiplied by **10^10**, even though the asset-manager `transfer` argument stays in 8 decimals.
+
+### How v2 handles it
+
+**Nothing to do — it's automatic.** `EvmSpokeService` scales `msg.value` internally when the source chain is `HEDERA_MAINNET` and the deposit is native; every other EVM chain passes the amount through unchanged. You always pass the canonical 8-decimal HBAR amount to the deposit / swap / bridge call, exactly as you would any other chain's native amount — the spoke service applies the 10^10 factor only to the transaction's `value` field.
+
+### Pitfall
+
+Do **not** pre-scale the amount yourself. Pass the plain 8-decimal HBAR amount; multiplying by 10^10 before handing it to the SDK double-scales and overpays. The scaling applies only to the native token (HBAR) — HTS / ERC-20 token deposits on Hedera carry `value: 0` and are unaffected.
 
 ---
 
@@ -80,6 +100,28 @@ const balance = await radfi.getBalance(tradingWallet.address);
 const exists = await radfi.checkIfTradingWalletExists(personalAddress);
 ```
 
+**Bound hosts.** Bound serves its API from three hosts and the SDK routes per path family: `/sodax/*` on `svc.bound.exchange`, `/auth/*` + `/wallets/*` on `auth.bound.exchange`, `/transactions/*` on `api.radfi.co`, and `/wallets/balance` + `/utxos` on `api.ums.bound.exchange`. The packaged defaults are correct, so no configuration is needed. `api.bound.exchange` is retired and **refused**: a `radfi.apiUrl`/`authUrl`/`transactionsUrl` still naming it throws at construction, naming the replacement for that field. Two things to know: `api.radfi.co` is a **different registrable domain**, so a Content-Security-Policy `connect-src` or egress allowlist written as `https://*.bound.exchange` will block BTC withdrawal and UTXO renewal; and setting `radfi.apiUrl` yourself sends the **three routed** families to that host (deliberate — it keeps a single-host or proxy setup working and makes a half-migration impossible). To keep the split while moving one family, set `radfi.authUrl` or `radfi.transactionsUrl` explicitly. UMS is not routed by `apiUrl`: `/wallets/balance` and `/utxos` always use `radfi.umsUrl`, so a proxy that must capture all Bound traffic has to override that too.
+
+**Server-side / raw flows (no interactive sign-in).** A backend that builds raw Bitcoin intents can't run the BIP322 login, so seed a pre-provisioned Bound token instead of authenticating. `RadfiProvider` honors three injection points: `new Sodax({ ... })` with `radfi.accessToken` (and optional `refreshToken`) in the Bitcoin chain config (the constructor seeds them), `radfi.setRadfiAccessToken(token)` at runtime, or a per-action `extras.bound.accessToken` on `createIntent` (the Bitcoin-gated `bound` slot groups Bound/Radfi inputs). If an authenticated Bound call has neither a token nor a configured `apiKey`, `RadfiProvider` throws a legible `RadfiApiError` (the message names the fix: inject via `setRadfiAccessToken` or `new Sodax({ ... })` with `radfi.accessToken`) instead of sending an empty bearer and getting an opaque 403.
+
+**Backend request signing.** Separate from the per-user token above: if Bound authenticates your service itself, pass `radfi.signRequest` to `new Sodax({ ... })`. The SDK calls it once per outbound Bound request and merges the returned headers onto it, so the credential stays in your closure and never on the SDK config:
+
+```ts
+import { createHmac } from 'node:crypto';
+
+new Sodax({
+  radfi: {
+    signRequest: () => {
+      const ts = `${Date.now()}`;
+      const signature = createHmac('sha256', secretKey).update(`${secretWord}_${ts}`).digest('hex');
+      return { 'x-api-signature': `${signature}_${ts}` };
+    },
+  },
+});
+```
+
+It receives `{ method, path, baseUrl }` — `baseUrl` is the resolved Bound host for that call, so a signer holding a per-origin credential can branch on it. It may be async, and runs on every routed request (a timestamped signature must not be cached); UMS calls (`/wallets/balance`, `/utxos`) bypass it and go out unsigned. Its headers merge last, so do not return `Authorization` — that is the per-user token. Server-side only: never ship a credential in a browser bundle.
+
 Other public methods on `RadfiProvider` you may need: `setRadfiAccessToken`, `refreshAccessToken`, `createTradingWallet`, `createWithdrawTransaction`, `requestRadfiSignature`, `getExpiredUtxos`, `buildRenewUtxoTransaction`, `signAndBroadcastRenewUtxo`, `withdrawToUser`, `signAndBroadcastWithdraw`, `getMaxWithdrawable`. Read `RadfiProvider` source for argument shapes — the API surface is broader than typical chain providers.
 
 ### Pitfall
@@ -109,7 +151,7 @@ const solanaSpoke = sodax.spoke.getSpokeService(ChainKeys.SOLANA_MAINNET) as Sol
 
 ### Pitfall
 
-Solana addresses are base58 PublicKey strings, not `0x…` hex. `GetAddressType<typeof ChainKeys.SOLANA_MAINNET>` resolves to a base58-typed string brand; passing a hex address is a TypeScript error.
+Solana addresses are base58 PublicKey strings, not `0x…` hex. `GetAddressType<typeof ChainKeys.SOLANA_MAINNET>` resolves to `SolanaBase58PublicKey`, which is a plain `string` alias — not a brand — so a hex address compiles and then throws inside `new PublicKey(...)` when the spoke service reads the balance or builds the deposit. Pass the base58 address.
 
 ---
 
@@ -199,8 +241,8 @@ Deposits **from** NEAR (`deposit()` / `fillIntent()` on the NEAR spoke service) 
 
 | Chain | Notes |
 |---|---|
-| **Sui** (`SUI_MAINNET`) | Address: 32-byte `0x…` (different from EVM addresses despite the prefix). Wallet provider `ISuiWalletProvider` uses `@mysten/sui` under the hood. |
-| **Stacks** (`STACKS_MAINNET`) | Address: `SP…` (mainnet) / `ST…` (testnet). Uses `@stacks/transactions` for tx construction. |
+| **Sui** (`SUI_MAINNET`) | Address: 32-byte `0x…` (different from EVM addresses despite the prefix). Wallet provider `ISuiWalletProvider` uses `@mysten/sui` under the hood. Reads and submission go over gRPC-web (`grpc_url`, default `https://fullnode.mainnet.sui.io`; `rpc_url` remains a deprecated alias that wins when set) — Mysten's public fullnodes stopped serving JSON-RPC in July 2026, and `sui-node` drops it in October 2026. |
+| **Stacks** (`STACKS_MAINNET`) | Address: `SP…` (mainnet) / `ST…` (testnet). Uses `@stacks/transactions` for tx construction. Wallet-signed deposits use post-condition mode `Deny` with exact spend caps (uSTX for native; one cap per fungible token the SIP-10 contract defines), so wallets display the exact spend and anything beyond it aborts on-chain. FT deposits resolve the on-chain asset names via the node's contract-interface endpoint and fail before signing if that lookup fails; `raw: true` skips the lookup — the serialized payload cannot carry post-conditions. |
 | **Injective** (`INJECTIVE_MAINNET`) | Cosmos-ecosystem chain. Address: `inj1…`. Wallet provider uses `@injectivelabs/sdk-ts`. |
 
 Each has its own `I*WalletProvider` interface with chain-specific signing methods. The `chainType` discriminant on every `I*WalletProvider` instance lets you narrow at runtime without `instanceof`.

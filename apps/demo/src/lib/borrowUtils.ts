@@ -7,9 +7,7 @@ export function findMoneyMarketAssetForBorrowable(
   vaultAddress: string,
   allMoneyMarketAssets: readonly MoneyMarketAsset[],
 ): MoneyMarketAsset | undefined {
-  return allMoneyMarketAssets.find(
-    asset => asset.reserveAddress.toLowerCase() === vaultAddress.toLowerCase(),
-  );
+  return allMoneyMarketAssets.find(asset => asset.reserveAddress.toLowerCase() === vaultAddress.toLowerCase());
 }
 
 export interface BorrowableAssetWithData {

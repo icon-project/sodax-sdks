@@ -34,7 +34,8 @@ export function useBridgeApprove<K extends SpokeChainKey = SpokeChainKey>({
   return useSafeMutation<TxReturnType<K, false>, Error, UseBridgeApproveVars<K>>({
     mutationKey: ['bridge', 'approve'],
     ...mutationOptions,
-    mutationFn: async vars => unwrapResult(await sodax.bridge.approve({ ...vars, raw: false } as BridgeParams<K, false>)),
+    mutationFn: async vars =>
+      unwrapResult(await sodax.bridge.approve({ ...vars, raw: false } as BridgeParams<K, false>)),
     onSuccess: async (data, vars, ctx) => {
       queryClient.invalidateQueries({ queryKey: ['bridge', 'allowance'] });
       await mutationOptions?.onSuccess?.(data, vars, ctx);

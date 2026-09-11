@@ -7,11 +7,12 @@ Access: `sodax.recovery`. Service class: `RecoveryService`. Feature tag for erro
 ## Methods
 
 ```ts
-// Read: list balances of all known hub assets in a user's hub wallet abstraction.
+// Read: list non-zero hub-asset balances in a user's hub wallet for one spoke chain
+// (excludes leverage-yield vault share tokens).
 sodax.recovery.fetchHubAssetBalances(args): Promise<Result<HubAssetBalance[], SodaxError>>;
 
 // Mutation: withdraw a single hub asset back to a spoke chain.
-// Returns a tx-pair when raw: false (the hub-side spend + the relayed spoke-side receive).
+// Returns a single chain-specific tx hash (a TxReturnType) when raw: false — not a tx-pair.
 sodax.recovery.withdrawHubAsset<K extends SpokeChainKey, Raw extends boolean>(
   action: WithdrawHubAssetAction<K, Raw>,
 ): Promise<Result<TxReturnType<K, Raw>, SodaxError>>;
@@ -21,13 +22,13 @@ sodax.recovery.withdrawHubAsset<K extends SpokeChainKey, Raw extends boolean>(
 
 ```ts
 // 1. Find what's stuck on the hub for this user:
-const balances = await sodax.recovery.fetchHubAssetBalances({ /* user / hub-wallet args */ });
+const balances = await sodax.recovery.fetchHubAssetBalances({ chainKey, srcAddress });
 if (!balances.ok || balances.value.length === 0) return;
 
 // 2. Withdraw one entry back to a spoke chain:
 const result = await sodax.recovery.withdrawHubAsset({
   params: {
-    /* hub-asset address, amount, destination spoke chain key, destination address */
+    /* token (the spoke-side token address, i.e. spokeTokenAddress), amount, srcChainKey, srcAddress (also the withdrawal destination) */
   },
   raw: false,
   walletProvider: sonicWp,

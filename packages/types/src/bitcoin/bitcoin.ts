@@ -1,4 +1,33 @@
 import type { ICoreWallet } from '../wallet/wallet.js';
+import type { XToken } from '../chains/tokens.js';
+
+/**
+ * Bitcoin protocol dust limit, in satoshis. Any native-BTC output below this is "dust" — economically
+ * unspendable, and nodes/relays reject transactions that create it. Native-BTC deposits (Bitcoin as the
+ * source) and deliveries (Bitcoin as the destination) must clear this threshold. Single source of truth
+ * for the value; number-based UTXO math converts it with `Number(...)`.
+ */
+export const BITCOIN_DUST_SATS = 546n;
+
+/**
+ * True when `token` (an address or symbol) is native BTC for the given Bitcoin chain config, matched
+ * against the config's own native identifiers — the literal 'btc', its `nativeToken` symbol, and the
+ * BTC token address (e.g. '0:0') — all case-insensitively. Single source of truth for native-BTC
+ * identity so the deposit-PSBT builder and the swap/bridge dust-limit guard never drift. Note: the
+ * generic `isNativeToken` cannot be used here because Bitcoin's `nativeToken` is a symbol, not an
+ * on-chain address.
+ */
+export function isNativeBitcoinToken(
+  chainConfig: { nativeToken: string; supportedTokens: Partial<Record<string, XToken>> },
+  token: string,
+): boolean {
+  const nativeBtcTokens = new Set(
+    ['btc', chainConfig.nativeToken, chainConfig.supportedTokens.BTC?.address]
+      .filter((value): value is string => !!value)
+      .map(value => value.toLowerCase()),
+  );
+  return nativeBtcTokens.has(token.toLowerCase());
+}
 
 /** Check whether an AddressType is supported for signing/spending. */
 export function isSupportedBitcoinAddressType(addressType: string): addressType is BtcAddressType {

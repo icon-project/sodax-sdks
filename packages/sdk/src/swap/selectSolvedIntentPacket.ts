@@ -34,10 +34,7 @@ export function decodePacketIntentTarget(payload: string): string | undefined {
  *  - exactly one candidate → that candidate (single-packet flows, unchanged)
  *  - multiple candidates, no field[1] match → the highest `conn_sn` (last ordered by conn_sn)
  */
-export function selectSolvedIntentPacket(
-  packets: PacketData[],
-  intentsContract: Address,
-): PacketData | undefined {
+export function selectSolvedIntentPacket(packets: PacketData[], intentsContract: Address): PacketData | undefined {
   if (packets.length <= 1) return packets[0];
   const target = intentsContract.toLowerCase();
   const matched = packets.find(packet => decodePacketIntentTarget(packet.payload) === target);

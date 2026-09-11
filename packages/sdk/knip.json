@@ -4,6 +4,7 @@
   "project": ["src/**/*.ts"],
   "ignore": ["ai-exported/**"],
   "ignoreBinaries": ["biome"],
-  "ignoreDependencies": ["@sodax/types", "@sodax/libs"],
+  "ignoreDependencies": ["@sodax/types", "@sodax/libs", "@sodax/swaps-api"],
+  "ignoreMembers": ["HOOK"],
   "ignoreExportsUsedInFile": true
 }

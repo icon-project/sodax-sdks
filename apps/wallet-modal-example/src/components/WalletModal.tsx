@@ -19,12 +19,7 @@ export function WalletModal() {
       <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
         <header className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold">{titleFor(modal.state.kind)}</h2>
-          <button
-            type="button"
-            onClick={modal.close}
-            className="text-gray-500 hover:text-gray-900"
-            aria-label="Close"
-          >
+          <button type="button" onClick={modal.close} className="text-gray-500 hover:text-gray-900" aria-label="Close">
             ✕
           </button>
         </header>
@@ -32,11 +27,7 @@ export function WalletModal() {
         {modal.state.kind === 'chainSelect' && <ChainList onPick={modal.selectChain} />}
 
         {modal.state.kind === 'walletSelect' && (
-          <WalletList
-            chainType={modal.state.chainType}
-            onPick={modal.selectWallet}
-            onBack={modal.back}
-          />
+          <WalletList chainType={modal.state.chainType} onPick={modal.selectWallet} onBack={modal.back} />
         )}
 
         {modal.state.kind === 'connecting' && (
@@ -62,9 +53,7 @@ export function WalletModal() {
             <p className="text-green-700">
               Connected {modal.state.chainType} via {modal.state.connector.name}
             </p>
-            <code className="block break-all rounded bg-gray-100 p-2 text-xs">
-              {modal.state.account.address}
-            </code>
+            <code className="block break-all rounded bg-gray-100 p-2 text-xs">{modal.state.account.address}</code>
             <button
               type="button"
               onClick={modal.close}

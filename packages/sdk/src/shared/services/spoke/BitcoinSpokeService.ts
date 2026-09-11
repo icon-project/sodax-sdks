@@ -1,12 +1,22 @@
 import { initEccLib, networks, Transaction, Psbt, payments, opcodes, script } from 'bitcoinjs-lib';
 import type {
   BitcoinChainKey,
+  BitcoinRawTransaction,
   BitcoinRawTransactionReceipt,
   IBitcoinWalletProvider,
   Result,
   TxReturnType,
 } from '@sodax/types';
-import { ChainKeys, detectBitcoinAddressType, getIntentRelayChainId, usesBip322MessageSigning } from '@sodax/types';
+import type { RelayExtraData } from '../../types/relay-types.js';
+import {
+  BITCOIN_DUST_SATS,
+  ChainKeys,
+  detectBitcoinAddressType,
+  getIntentRelayChainId,
+  isNativeBitcoinToken,
+  isNativeToken,
+  usesBip322MessageSigning,
+} from '@sodax/types';
 import * as ecc from '@bitcoinerlab/secp256k1';
 import { keccak256, stringToBytes } from 'viem';
 import type { OnDemandRelayData } from '../../types/types.js';
@@ -14,10 +24,13 @@ import type {
   DepositParams,
   EstimateGasParams,
   GetDepositParams,
+  GetBalanceParams,
+  GetBalancesParams,
   SendMessageParams,
   WaitForTxReceiptParams,
   WaitForTxReceiptReturnType,
 } from '../../types/spoke-types.js';
+import { createBalanceCollector, settleWalletBalances, type WalletBalanceMap } from './balance-utils.js';
 import type { ConfigService } from '../../config/ConfigService.js';
 import { sleep } from '../../utils/shared-utils.js';
 import { RadfiProvider } from '../../entities/btc/RadfiProvider.js';
@@ -60,7 +73,8 @@ export interface OnDemandBtcPayload {
 }
 
 const BITCOIN_DEFAULT_FEE_RATE = 3;
-const DUST_THRESHOLD = 546;
+// UTXO math (bitcoinjs-lib) is number-based; convert the canonical bigint sats value once.
+const DUST_THRESHOLD = Number(BITCOIN_DUST_SATS);
 
 export class BitcoinSpokeService {
   private readonly config: ConfigService;
@@ -75,7 +89,9 @@ export class BitcoinSpokeService {
     // since we only support mainnet for now, we can hardcode the single bitcoin chain config
     const chainConfig = config.getChainConfig(ChainKeys.BITCOIN_MAINNET);
     this.rpcUrl = chainConfig.rpcUrl;
-    this.radfi = new RadfiProvider(chainConfig.radfi);
+    // Pass the client-side RadFi signer (if any) so server-to-server callers can attach Bound's
+    // `x-api-signature` HMAC header. `config.radfiSigner` is undefined for browser callers. See gh-831.
+    this.radfi = new RadfiProvider(chainConfig.radfi, { signer: config.radfiSigner });
     this.walletMode = chainConfig.radfi.walletMode ?? 'TRADING';
     this.pollingIntervalMs = chainConfig.pollingConfig.pollingIntervalMs;
     this.maxTimeoutMs = chainConfig.pollingConfig.maxTimeoutMs;
@@ -95,6 +111,36 @@ export class BitcoinSpokeService {
     throw new Error('Token balance queries not yet implemented for non-BTC assets');
   }
 
+  /**
+   * Get the user's own wallet balance of a token on Bitcoin, in satoshis. Only native BTC is
+   * readable (summed from confirmed/unconfirmed UTXOs). Non-native spoke tokens are Rune ids
+   * (`block:tx`), whose amounts the Esplora UTXO endpoint does not carry, so they resolve to 0n.
+   * @param {GetBalanceParams<BitcoinChainKey>} params - The chain key, user address, and token.
+   * @returns {Promise<bigint>} The balance in satoshis.
+   */
+  public async getWalletBalance(params: GetBalanceParams<BitcoinChainKey>): Promise<bigint> {
+    const { srcChainKey, srcAddress, token } = params;
+
+    if (isNativeToken(srcChainKey, token)) {
+      const utxos = await this.fetchUTXOs(srcAddress);
+      return BigInt(utxos.reduce((sum, utxo) => sum + utxo.value, 0));
+    }
+
+    return 0n;
+  }
+
+  /**
+   * Get the user's own wallet balances of multiple tokens on Bitcoin, in satoshis.
+   * @param {GetBalancesParams<BitcoinChainKey>} params - The chain key, user address, and tokens.
+   * @returns {Promise<WalletBalanceMap>} A map of token address to balance in smallest units.
+   */
+  public async getWalletBalances(params: GetBalancesParams<BitcoinChainKey>): Promise<WalletBalanceMap> {
+    const { srcChainKey, srcAddress, tokens } = params;
+    const collector = createBalanceCollector({ logger: this.config.logger, chainKey: srcChainKey });
+    await settleWalletBalances(collector, tokens, token => this.getWalletBalance({ srcChainKey, srcAddress, token }));
+    return collector.finish();
+  }
+
   public async fetchScriptPubKey(utxo: BitcoinUTXO): Promise<string> {
     const txHex = await this.fetchRawTransaction(utxo.txid);
     const tx = Transaction.fromHex(txHex);
@@ -112,6 +158,7 @@ export class BitcoinSpokeService {
    */
   public async getEffectiveWalletAddress(personalAddress: string): Promise<string> {
     if (this.walletMode === 'TRADING') {
+      // The trading-wallet lookup is a public GET — no access token required.
       const tradingWallet = await this.radfi.getTradingWallet(personalAddress);
       return tradingWallet.tradingAddress;
     }
@@ -375,7 +422,7 @@ export class BitcoinSpokeService {
    * Deposit operation - transfer BTC to the asset manager
    */
   public async deposit<Raw extends boolean = false>(
-    params: DepositParams<BitcoinChainKey, Raw> & { accessToken?: string },
+    params: DepositParams<BitcoinChainKey, Raw>,
   ): Promise<TxReturnType<BitcoinChainKey, Raw>> {
     try {
       const {
@@ -479,6 +526,40 @@ export class BitcoinSpokeService {
   }
 
   /**
+   * Sign and submit a TRADING-wallet raw transaction — the Bound-built *unsigned* PSBT returned by
+   * `deposit({ raw: true })` / the Swaps API (`createIntent().tx.data`). Signs it with the wallet
+   * provider's key, then sends it to Bound Exchange to co-sign with the second 2-of-2 key and
+   * broadcast. Returns the broadcast tx id.
+   *
+   * This is the client-side completion of the TRADING deposit flow: the backend builds the PSBT
+   * (it can't broadcast — the user's signature is missing), the client signs here, and Bound
+   * co-signs + broadcasts. `relayData` ({ address, payload }) is the relay identity returned by
+   * `createIntent()`; forwarding it lets Bound auto-resubmit a stuck relay. It is **not** recoverable
+   * from `rawTx` (whose `to` is the asset manager, not the hub wallet), so callers must supply it.
+   *
+   * @throws if the chain is not in `TRADING` wallet mode (raw txs only exist in TRADING mode).
+   */
+  public async signAndSubmitRawTransaction(params: {
+    rawTx: BitcoinRawTransaction;
+    walletProvider: IBitcoinWalletProvider;
+    relayData?: RelayExtraData;
+    accessToken?: string;
+  }): Promise<string> {
+    if (this.walletMode !== 'TRADING') {
+      throw new Error('signAndSubmitRawTransaction requires TRADING wallet mode.');
+    }
+    const { rawTx, walletProvider, relayData, accessToken = this.radfi.accessToken } = params;
+    // Bitcoin is the one chain whose Swaps API raw tx isn't schema-validated upstream (it hits the
+    // permissive `AnyRawTxSchema`), so guard the fields this flow depends on before signing.
+    if (!rawTx?.data || !rawTx?.from) {
+      throw new Error('signAndSubmitRawTransaction: rawTx.data (PSBT) and rawTx.from are required.');
+    }
+    const signedTx = await walletProvider.signTransaction(rawTx.data, false);
+    const signedBase64Tx = normalizePsbtToBase64(signedTx);
+    return this.radfi.requestRadfiSignature({ userAddress: rawTx.from, signedBase64Tx, relayData }, accessToken);
+  }
+
+  /**
    * Build deposit PSBT with embedded cross-chain data
    */
   public async buildDepositPsbt(
@@ -492,13 +573,7 @@ export class BitcoinSpokeService {
   ): Promise<Psbt> {
     const chainConfig = this.config.getChainConfig(srcChainKey);
     const assetManagerAddress = chainConfig.addresses.assetManager;
-    const normalizedToken = token.toLocaleLowerCase();
-    const nativeBtcTokens = new Set(
-      ['btc', chainConfig.nativeToken, chainConfig.supportedTokens.BTC?.address]
-        .filter((value): value is string => !!value)
-        .map(value => value.toLocaleLowerCase()),
-    );
-    const isNativeBtc = nativeBtcTokens.has(normalizedToken);
+    const isNativeBtc = isNativeBitcoinToken(chainConfig, token);
 
     if (isNativeBtc) {
       const OP_RETURN = opcodes.OP_RETURN;

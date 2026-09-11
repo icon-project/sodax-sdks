@@ -1,11 +1,6 @@
 import { useMemo } from 'react';
 import type { ChainType } from '@sodax/types';
-import {
-  sortConnectors,
-  useIsWalletInstalled,
-  useXConnectors,
-  type XConnector,
-} from '@sodax/wallet-sdk-react';
+import { sortConnectors, useIsWalletInstalled, useXConnectors, type XConnector } from '@sodax/wallet-sdk-react';
 
 type WalletListProps = {
   chainType: ChainType;

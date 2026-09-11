@@ -30,7 +30,7 @@ Granular skill for the everyday connect / disconnect + account-state + connector
 - **Passing both `xChainId` and `xChainType`** to `useXAccount` — mutually exclusive (throws).
 - **Reading `useXConnect`'s resolved value for the account.** For provider-managed chains (EVM/Solana/Sui) it resolves `undefined` — read the account via `useXAccount` *after* the mutation lands.
 - **Importing concrete connector classes from the barrel.** `EvmXService`, `XverseXConnector`, etc. are deep-import only (`@sodax/wallet-sdk-react/xchains/<chain>`) — see [`../integration/knowledge/recipes/sub-path-imports.md`](../integration/knowledge/recipes/sub-path-imports.md).
-- **Calling hooks on a slot not in `walletConfig`.** Read-hooks degrade to empty (`useXConnectors` returns `[]` + a one-time warn); mutation-hooks reject. Safe to call unconditionally, but branch on the return.
+- **Calling hooks on a slot not in `walletConfig`.** Read-hooks degrade to empty (`useXConnectors` returns `[]` + a one-time warn). `useXConnect` *throws* (`Chain "<X>" is not enabled or ChainActions not registered`); `useXDisconnect` does not — it warns and resolves silently. Safe to call unconditionally, but branch on the return.
 
 ## Migration workflow (port v1 → v2)
 

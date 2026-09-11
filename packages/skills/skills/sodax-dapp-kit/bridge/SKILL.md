@@ -1,6 +1,6 @@
 ---
 name: sodax-dapp-kit-bridge
-description: 'Granular skill for the @sodax/dapp-kit v2 bridge feature only — React Query hooks for cross-chain token transfer via the hub-and-spoke vault: useBridge, useBridgeApprove, useBridgeAllowance, useGetBridgeableAmount, useGetBridgeableTokens. Use when a React dapp task is specifically bridging (e.g. "useBridge with dapp-kit", "bridge tokens cross-chain in React", "check bridgeable amount hook", "list bridgeable destinations"). useBridge resolves to TxHashPair = { srcChainTxHash, dstChainTxHash }. Covers BOTH integration (new v2 hooks) and migration (port v1 bridge hooks — field renames srcChainId→srcChainKey, recipient→dstAddress, mutateAsyncSafe). Links into the parent sodax-dapp-kit knowledge tree. For backend/Node, use the sodax-sdk skill.'
+description: 'Granular skill for the @sodax/dapp-kit v2 bridge feature only — React Query hooks for cross-chain token transfer via the hub-and-spoke vault: useBridge, useBridgeApprove, useBridgeAllowance, useGetBridgeableAmount, useGetBridgeableTokens. Use when a React dapp task is specifically bridging (e.g. "useBridge with dapp-kit", "bridge tokens cross-chain in React", "check bridgeable amount hook", "list bridgeable destinations"). useBridge resolves to TxHashPair = { srcChainTxHash, dstChainTxHash }. Covers BOTH integration (new v2 hooks) and migration (port v1 bridge hooks — field renames srcChainId→srcChainKey / srcAsset→srcToken / dstAsset→dstToken, new required srcAddress, recipient unchanged, mutateAsyncSafe). Links into the parent sodax-dapp-kit knowledge tree. For backend/Node, use the sodax-sdk skill.'
 license: MIT
 metadata:
   version: '0.0.1'
@@ -38,14 +38,14 @@ Granular skill for the bridge hooks of `@sodax/dapp-kit` v2. queryKey/mutationKe
 
 1. [`../migration-v1-to-v2/knowledge/ai-rules.md`](../migration-v1-to-v2/knowledge/ai-rules.md) — DO / DO NOT (read first).
 2. Cross-cutting deltas: [`../migration-v1-to-v2/knowledge/breaking-changes/hook-signatures.md`](../migration-v1-to-v2/knowledge/breaking-changes/hook-signatures.md), [`../migration-v1-to-v2/knowledge/breaking-changes/result-handling.md`](../migration-v1-to-v2/knowledge/breaking-changes/result-handling.md), [`../migration-v1-to-v2/knowledge/breaking-changes/sdk-leakage.md`](../migration-v1-to-v2/knowledge/breaking-changes/sdk-leakage.md).
-3. [`../migration-v1-to-v2/knowledge/features/bridge.md`](../migration-v1-to-v2/knowledge/features/bridge.md) — `useBridge` param renames (`srcChainId` → `srcChainKey`, `recipient` → `dstAddress`); `useGetBridgeableAmount` shape change (bigint → `BridgeLimit`).
+3. [`../migration-v1-to-v2/knowledge/features/bridge.md`](../migration-v1-to-v2/knowledge/features/bridge.md) — `useBridge` param renames (`srcChainId` → `srcChainKey`, `dstChainId` → `dstChainKey`, `srcAsset` → `srcToken`, `dstAsset` → `dstToken`; new required `srcAddress`; `recipient` is UNCHANGED — NOT renamed to `dstAddress`); `useGetBridgeableAmount` shape change (bigint → `BridgeLimit`).
 
 ## Verification
 
 1. `pnpm tsc --noEmit` clean.
 2. `useBridge` consumers destructure `{ srcChainTxHash, dstChainTxHash }` (no array/string).
 3. `useGetBridgeableAmount` consumers read `data.amount` (not a scalar).
-4. No `useSpokeProvider`, no `srcChainId`/`recipient` v1 field names (migration only).
+4. No `useSpokeProvider`, no `srcChainId`/`srcAsset`/`dstAsset` v1 field names (migration only); `recipient` stays `recipient` (do NOT rename to `dstAddress`).
 
 ## Related granular skills (same family)
 

@@ -62,7 +62,7 @@ function ChainPicker({ onPick }: { onPick: (chainType: ChainType) => void }) {
 | Field | Type | Source |
 |-------|------|--------|
 | `chainType` | `ChainType` | The slot key (`'EVM'`, `'SOLANA'`, …) |
-| `chainIds` | `readonly SpokeChainKey[]` | All chain keys sharing this `chainType` (e.g. all 12 EVM `ChainKeys.*` for `'EVM'`) |
+| `chainIds` | `readonly SpokeChainKey[]` | All chain keys sharing this `chainType` (e.g. all 13 EVM `ChainKeys.*` for `'EVM'`) |
 | `displayName` | `string` | From `chainRegistry[chainType].displayName`, fallback to `chainType` |
 | `iconUrl` | `string \| undefined` | From `chainRegistry`. `undefined` = SDK doesn't ship one — provide your own |
 | `isConnected` | `boolean` | `true` when `xConnections[chainType].xAccount.address` is set |

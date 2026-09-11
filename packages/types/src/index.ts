@@ -6,6 +6,7 @@ export * from './backend/index.js';
 export * from './bitcoin/index.js';
 export * from './dex/index.js';
 export * from './evm/index.js';
+export * from './hooks/index.js';
 export * from './icon/index.js';
 export * from './injective/index.js';
 export * from './moneyMarket/index.js';
@@ -19,4 +20,4 @@ export * from './swap/index.js';
 export * from './utils/index.js';
 export * from './wallet/index.js';
 
-export const CONFIG_VERSION = 100; // this value should be incremented (inside release/sdk branch) each time @sodax/types package is updated
+export const CONFIG_VERSION = 100; // bumped once per release by scripts/bump-versions.sh, on the release branch

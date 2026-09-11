@@ -1,6 +1,6 @@
 # Backend API Hooks
 
-This directory contains React hooks for interacting with the Sodax Backend API through the `BackendApiService`. These hooks provide a React-friendly interface with automatic caching, error handling, and loading states using React Query.
+This directory contains React hooks for interacting with the SODAX Backend API through the `BackendApiService`. These hooks provide a React-friendly interface with automatic caching, error handling, and loading states using React Query.
 
 ## Available Hooks
 

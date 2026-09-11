@@ -2,7 +2,8 @@
 #
 # Validate the @sodax/skills package layout.
 #
-# plugin.json registers ONLY the 4 broad skills. Each broad skill bundles its
+# plugin.json registers ONLY top-level skills (the EXPECTED_BROAD_SKILLS plus the
+# EXPECTED_META_SKILLS arrays below are the source of truth). Each broad skill bundles its
 # nested granular per-feature SKILL.md files (skills/<broad>/<feature>/SKILL.md)
 # inside its own directory; those ship with the broad skill and are loaded from
 # within it, so they are validated but NOT registered. (They are not separately
@@ -21,9 +22,9 @@
 #      plugin.json (no orphan broad skills). Nested granular dirs are exempt —
 #      they ship bundled inside their parent broad skill.
 #   5. Structural layout invariants:
-#      a. plugin.json registers EXACTLY the four broad skills (sodax-sdk,
-#         sodax-wallet-sdk-core, sodax-wallet-sdk-react, sodax-dapp-kit) and
-#         nothing else.
+#      a. plugin.json registers EXACTLY the expected broad SDK skills
+#         (EXPECTED_BROAD_SKILLS) plus the expected meta skills
+#         (EXPECTED_META_SKILLS) — and nothing else.
 #      b. Each BROAD skill contains BOTH integration/knowledge/ and
 #         migration-v1-to-v2/knowledge/ subtrees, and they are non-empty.
 #         Nested granular skills reuse the parent's knowledge tree and do NOT
@@ -92,7 +93,7 @@ done
 # 3. Every SKILL.md under skills/ has valid frontmatter.
 #
 # Validates ALL SKILL.md files, not just registered ones: plugin.json registers
-# only the 4 broad skills, but each broad skill bundles nested granular SKILL.md
+# only the top-level skills, but each broad skill bundles nested granular SKILL.md
 # files (skills/<broad>/<feature>/SKILL.md) that ship inside it. Those bundled
 # files must still satisfy the name convention and single-quoted-description
 # rule, so they are validated here even though they are not registered.
@@ -167,8 +168,8 @@ done
 # 4. No orphan top-level skill directories
 #
 # Every top-level skills/<dir>/ that contains a SKILL.md must be registered in
-# plugin.json (i.e. it must be one of the 4 broad skills) — this catches a new
-# broad skill that was added but never registered. Nested dirs
+# plugin.json (i.e. it must be a registered broad or meta skill) — this catches a
+# new top-level skill that was added but never registered. Nested dirs
 # (skills/<broad>/<feature>/) are NOT required to be registered: granular
 # SKILL.md files ship bundled inside their parent broad skill, not as separate
 # registry entries. Their frontmatter is still validated in section 3.
@@ -187,14 +188,24 @@ fi
 # -----------------------------------------------------------------------------
 # 5. Structural layout invariants
 # -----------------------------------------------------------------------------
-# 5a. plugin.json must register EXACTLY the four broad skills — nothing more,
-#     nothing less. Granular per-feature skills are intentionally NOT registered;
-#     they ship bundled inside their parent broad skill.
+# 5a. plugin.json must register every entry in EXPECTED_BROAD_SKILLS plus every
+#     entry in EXPECTED_META_SKILLS — nothing more, nothing less. Granular
+#     per-feature skills are intentionally NOT registered; they ship bundled
+#     inside their parent broad skill. Meta skills (the EXPECTED_META_SKILLS
+#     entries) are a deliberately different category: a single front-door /
+#     ideation skill with a flat knowledge/ tree and no integration/migration
+#     split, so the 5b subtree requirement does not apply.
 EXPECTED_BROAD_SKILLS=(
   "skills/sodax-sdk"
   "skills/sodax-wallet-sdk-core"
   "skills/sodax-wallet-sdk-react"
   "skills/sodax-dapp-kit"
+)
+# Cross-cutting meta skills: registered + frontmatter-validated like any skill,
+# but exempt from the integration/ + migration-v1-to-v2/ subtree requirement (5b)
+# because they ship a single flat knowledge/ tree.
+EXPECTED_META_SKILLS=(
+  "skills/sodax-build"
 )
 for expected in "${EXPECTED_BROAD_SKILLS[@]}"; do
   if ! printf '%s\n' "${REGISTERED[@]}" | grep -qFx "$expected"; then
@@ -202,9 +213,10 @@ for expected in "${EXPECTED_BROAD_SKILLS[@]}"; do
   fi
 done
 for reg in "${REGISTERED[@]}"; do
-  if ! printf '%s\n' "${EXPECTED_BROAD_SKILLS[@]}" | grep -qFx "$reg"; then
-    err "Only the 4 broad skills may be registered in plugin.json; remove: $reg"
+  if printf '%s\n' "${EXPECTED_BROAD_SKILLS[@]}" "${EXPECTED_META_SKILLS[@]}" | grep -qFx "$reg"; then
+    continue
   fi
+  err "Only expected broad skills (EXPECTED_BROAD_SKILLS) + expected meta skills (EXPECTED_META_SKILLS) may be registered in plugin.json; remove: $reg"
 done
 
 # 5b. Each BROAD skill has both integration/knowledge/ and
@@ -220,6 +232,25 @@ for skill_dir in "${EXPECTED_BROAD_SKILLS[@]}"; do
     fi
     if [[ -z "$(ls -A "$kdir" 2>/dev/null)" ]]; then
       err "Required subtree exists but is empty: $kdir"
+    fi
+  done
+done
+
+# 5b-meta. Each META skill has a non-empty FLAT knowledge/ tree and does NOT
+#     carry integration/ or migration-v1-to-v2/ subtrees. This is the invariant
+#     that keeps a meta skill from silently becoming a broad skill in disguise:
+#     a meta skill is single-mode (ideation), so a mode-split subtree is a bug.
+for skill_dir in "${EXPECTED_META_SKILLS[@]}"; do
+  [[ -d "$skill_dir" ]] || continue   # already flagged in section 2
+  kdir="$skill_dir/knowledge"
+  if [[ ! -d "$kdir" ]]; then
+    err "Meta skill missing required flat knowledge/ subtree: $kdir"
+  elif [[ -z "$(ls -A "$kdir" 2>/dev/null)" ]]; then
+    err "Meta skill knowledge/ exists but is empty: $kdir"
+  fi
+  for forbidden in integration migration-v1-to-v2; do
+    if [[ -d "$skill_dir/$forbidden" ]]; then
+      err "Meta skill must use a flat knowledge/ — remove the '$forbidden/' subtree: $skill_dir/$forbidden"
     fi
   done
 done

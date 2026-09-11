@@ -51,7 +51,9 @@
         "noArrayIndexKey": "off",
         "noImplicitAnyLet": "error",
         "noAssignInExpressions": "off",
-        "noAsyncPromiseExecutor": "off"
+        "noAsyncPromiseExecutor": "off",
+        "noFocusedTests": "error",
+        "noSkippedTests": "error"
       },
       "performance": {
         "noDelete": "off",

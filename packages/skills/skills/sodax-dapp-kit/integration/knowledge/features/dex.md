@@ -29,11 +29,16 @@ useLiquidityAmounts({ params, queryOptions });
 // Param builders (compute derived params client-side) — these take a FLAT props object,
 // NOT a `{ params }` wrapper. They return memoized derived params that the consumer adds
 // `srcChainKey` + `srcAddress` to at the mutation call site.
-useCreateDepositParams({ tokenIndex, amount, poolData, poolSpokeAssets, dst? });
-useCreateWithdrawParams({ tokenIndex, amount, poolData, poolSpokeAssets, dst? });
+useCreateDepositParams({ tokenIndex, amount, poolData, poolSpokeAssets });        // no dst — deposits always target the hub
+useCreateWithdrawParams({ tokenIndex, amount, poolData, poolSpokeAssets, dst? }); // dst? — withdraw routes hub → spoke
 useCreateSupplyLiquidityParams({ poolData, poolKey, minPrice, maxPrice, liquidityToken0Amount, liquidityToken1Amount, slippageTolerance, positionId?, isValidPosition? });
 useCreateDecreaseLiquidityParams({ /* see source for fields */ });
 ```
+
+`use*Approve` is unchanged and still resolves to one transaction hash, but the SDK may send **two**
+transactions on a token that rejects a non-zero to non-zero allowance change (Ethereum USDT today) —
+the user signs twice and the hash is the **last** one's. An `isPending`-driven "Approving…" should say
+so. See "Approve hooks can prompt the wallet twice" in [`architecture.md`](../architecture.md).
 
 ## SDK param types (passed via `mutate({ params, walletProvider })`)
 

@@ -59,7 +59,7 @@ function ConnectButton() {
 
   return (
     <div>
-      {connectors.map((connector) => (
+      {connectors.map(connector => (
         <button
           type="button"
           key={connector.id}

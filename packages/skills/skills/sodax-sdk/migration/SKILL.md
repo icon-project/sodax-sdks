@@ -46,7 +46,7 @@ Only continue here if the task involves one of the three legacy-token sources be
 
 - **Assuming `BalnSwapService.stake/unstake/claim/...` return `Result<T>`.** They still THROW — deliberate tech debt. Wrap them in `try/catch` until cleaned up.
 - **Using `migration` (the SDK module) and `migration-v1-to-v2` (the SDK port) interchangeably.** Different concerns; reading one playbook for the other will produce broken code.
-- **Skipping `getAvailableAmount` for partial ICX migrations.** Tells you how much SODA the user can claim from a partial migration.
+- **Misreading `getAvailableAmount`.** It lives on `sodax.migration.icxMigration`, takes **no arguments**, and reads the migration contract's **total available SODA liquidity** on the hub — it is not a per-user "claimable from a partial migration" amount.
 
 ## Migration workflow (v1 → v2 of the SDK itself)
 

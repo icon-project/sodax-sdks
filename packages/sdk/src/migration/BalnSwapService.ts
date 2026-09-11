@@ -10,11 +10,12 @@ import {
   type WalletProviderSlot,
 } from '@sodax/types';
 // packages/sdk/src/services/hub/BalnSwapService.ts
-import { type Address, type Hex, type HttpTransport, type PublicClient, encodeFunctionData } from 'viem';
+import { type Address, type Hex, type PublicClient, encodeFunctionData } from 'viem';
 import { balnSwapAbi } from '../shared/abis/balnSwap.abi.js';
 import type { HubProvider } from '../shared/types/types.js';
 import { encodeContractCalls, Erc20Service } from '../shared/index.js';
 import { invariant } from '../shared/utils/tiny-invariant.js';
+import { getEvmViemChain } from '../shared/utils/constant-utils.js';
 import type { ConfigService } from '../shared/config/ConfigService.js';
 
 /**
@@ -299,10 +300,7 @@ export class BalnSwapService {
    * @param user - The EVM address of the user to query locks for.
    * @returns An immutable array of `DetailedLock` objects, one per active lock.
    */
-  async getDetailedUserLocks(
-    publicClient: PublicClient<HttpTransport>,
-    user: Address,
-  ): Promise<readonly DetailedLock[]> {
+  async getDetailedUserLocks(publicClient: PublicClient, user: Address): Promise<readonly DetailedLock[]> {
     return await publicClient.readContract({
       address: this.hubProvider.chainConfig.addresses.balnSwap,
       abi: balnSwapAbi,
@@ -456,8 +454,8 @@ export class BalnSwapService {
       return tx satisfies TxReturnType<SonicChainKey, true> as TxReturnType<SonicChainKey, R>;
     }
 
-    return walletProviderSlot.walletProvider.sendTransaction(tx) satisfies Promise<
-      TxReturnType<SonicChainKey, false>
-    > as Promise<TxReturnType<SonicChainKey, R>>;
+    return walletProviderSlot.walletProvider.sendTransaction(tx, {
+      expectedChainId: getEvmViemChain(ChainKeys.SONIC_MAINNET).id,
+    }) satisfies Promise<TxReturnType<SonicChainKey, false>> as Promise<TxReturnType<SonicChainKey, R>>;
   }
 }

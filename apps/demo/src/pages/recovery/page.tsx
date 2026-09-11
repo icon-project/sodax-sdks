@@ -37,7 +37,10 @@ export default function RecoveryPage() {
   const [withdrawingAssets, setWithdrawingAssets] = useState<Set<string>>(new Set());
 
   const allowedChains = useMemo(
-    () => Object.values(baseChainInfo).filter(chain => chain.type === 'EVM').map(chain => chain.key),
+    () =>
+      Object.values(baseChainInfo)
+        .filter(chain => chain.type === 'EVM')
+        .map(chain => chain.key),
     [],
   );
 

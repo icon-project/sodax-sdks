@@ -13,11 +13,16 @@ Standard pattern. Drop `spokeProvider`; pass `walletProvider`. Add `srcChainKey`
 | Type | v1 shape | v2 shape | Notes |
 |---|---|---|---|
 | Partner action params | non-generic | now generic `<K>` with `srcChainKey`, `srcAddress` | |
-| Partner errors (5 types) | `PartnerFeeClaimError<...>` and 4 siblings | `SodaxError<C>` with `feature: 'partner'` | All 5 v1 typed errors collapse. |
+| Partner errors (5 types) | `PartnerFeeClaimError<...>` and 4 siblings | `SodaxError<C>` with `feature: 'partner'` | All 5 v1 typed errors collapse into `SodaxError`, but onto FOUR distinct codes (see crosswalk). |
 
 ## v1 → v2 error code crosswalk
 
-All 5 v1 partner error codes map to `EXECUTION_FAILED` with `error.context.action` discriminating between the operations.
+The v1 partner errors collapse into `SodaxError<C>` with `feature: 'partner'`, but they do NOT all become `EXECUTION_FAILED`. The service emits FOUR distinct codes, with `error.context.action` (and `error.context.method` for reads) discriminating between the operations:
+
+- `VALIDATION_FAILED` — same-token guard (output token equals the fee token) in `createIntentAutoSwap` / `swap`.
+- `APPROVE_FAILED` — `approveToken` failure.
+- `EXECUTION_FAILED` — the swap-wait / on-chain execution failure in the auto-swap flow.
+- `LOOKUP_FAILED` — all read methods (`isTokenApproved`, `getUserIntent`, `getIntentDetails`, balance/preference reads, etc.).
 
 ## Per-method delta
 
@@ -27,10 +32,10 @@ Partner operations live on `sodax.partners.feeClaim` (a `PartnerFeeClaimService`
 - await sodax.partners.claimFees({ /* … */ }, spokeProvider);
 + // Approve once, then configure auto-swap preference, then run swaps.
 + // Full method list lives in integration/features/partner.md.
-+ const approved = await sodax.partners.feeClaim.isTokenApproved({ token, srcAddress });
++ const approved = await sodax.partners.feeClaim.isTokenApproved({ srcChainKey, srcAddress, token });
 + if (approved.ok && !approved.value) {
 +   await sodax.partners.feeClaim.approveToken({
-+     params: { token, amount },
++     params: { srcChainKey, srcAddress, token },
 +     raw: false,
 +     walletProvider,
 +   });
@@ -40,7 +45,7 @@ Partner operations live on `sodax.partners.feeClaim` (a `PartnerFeeClaimService`
 ## Pitfalls
 
 1. **Partner methods moved.** They live on `sodax.partners.feeClaim`, not `sodax.partners` directly. The parent only exposes `feeClaim` and `config` as public fields.
-2. **All 5 v1 partner errors collapse to `feature: 'partner'`.** Even though they share the `EXECUTION_FAILED` code with every other feature.
+2. **All 5 v1 partner errors collapse to `feature: 'partner'`.** They span four codes — `VALIDATION_FAILED`, `APPROVE_FAILED`, `EXECUTION_FAILED`, `LOOKUP_FAILED` — not a single `EXECUTION_FAILED`. Discriminate on `error.code` plus `error.context.action` / `error.context.method`.
 
 ## Verification
 

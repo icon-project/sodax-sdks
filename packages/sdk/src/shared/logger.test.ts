@@ -76,16 +76,14 @@ describe('Sodax logger wiring', () => {
     expect(new Sodax({ logger: 'silent' }).config.logger).toBe(silentLogger);
   });
 
-  it('uses a custom logger and keeps it after a failed dynamic-config initialize()', async () => {
+  it('uses a custom logger and keeps it across initialize()', async () => {
     const custom: SodaxLogger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
     const sodax = new Sodax({ logger: custom });
     expect(sodax.config.logger).toBe(custom);
 
-    // A dynamic-config fetch that fails must not replace the resolved logger. Stub fetch to reject
-    // fast so this doesn't wait on the real backend timeout.
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('network down'));
-    await sodax.config.initialize().catch(() => undefined);
+    // The resolved sink lives outside the swappable SodaxConfig, so initialize() never replaces it.
+    // (initialize() is currently a no-op pending the v2 config endpoint; the guarantee holds either way.)
+    await sodax.initialize();
     expect(sodax.config.logger).toBe(custom);
-    fetchSpy.mockRestore();
   });
 });

@@ -66,14 +66,12 @@ Pair: [`features/dex.md`](../../../integration/knowledge/features/dex.md).
 
 ### `supplyLiquidity` (mint new) and `increaseLiquidity` (existing)
 
-The pure-helper `createSupplyLiquidityParamsProps` returns the helper-relevant subset (no `srcChainKey`/`srcAddress`). Spread it at the call site:
+An `@sodax/sdk` consumer builds the `ClSupplyParams` object directly — there is no SDK-side params helper. (The `createSupplyLiquidityParamsProps` convenience helper lives only in `@sodax/dapp-kit`; don't import it from `@sodax/sdk`.) Construct the object inline and add `srcChainKey`/`srcAddress`:
 
 ```diff
-- const params = createSupplyLiquidityParamsProps({ /* … */ });
 - await sodax.dex.clService.supplyLiquidity({ params, spokeProvider });
-+ const helperOutput = createSupplyLiquidityParamsProps({ /* … */ });
 + const srcAddress = (await walletProvider.getWalletAddress()) as `0x${string}`;
-+ const params = { ...helperOutput, srcChainKey, srcAddress };
++ const params = { srcChainKey, srcAddress, poolKey, tickLower, tickUpper, liquidity, amount0Max, amount1Max, sqrtPriceX96 };
 + const result = await sodax.dex.clService.supplyLiquidity({ params, raw: false, walletProvider });
 + if (!result.ok) return;
 + const { dstChainTxHash } = result.value;

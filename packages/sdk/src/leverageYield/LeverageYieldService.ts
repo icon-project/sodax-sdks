@@ -1,5 +1,6 @@
 import {
   type SpokeService,
+  adjustAmountByFee,
   Erc20Service,
   Erc4626Service,
   poolAbi,
@@ -8,32 +9,43 @@ import {
   isHubChainKeyType,
   isBitcoinChainKeyType,
   isBitcoinWalletProviderType,
+  isPartnerFeeAmount,
+  isPartnerFeePercentage,
   isUndefinedOrValidWalletProviderForChainKey,
   relayTxAndWaitPacket,
+  RELAY_FALLBACK_FLOOR_MS,
   retry,
   type RelayExtraData,
   type IntentDeliveryInfo,
 } from '../shared/index.js';
 import type { HubProvider } from '../shared/types/types.js';
-import { isBitcoinChainKey } from '@sodax/types';
+import { DEFAULT_RELAY_TX_TIMEOUT, FEE_PERCENTAGE_SCALE, isBitcoinChainKey } from '@sodax/types';
 import type {
   Address,
   FeeAmount,
   GetAddressType,
   GetTokenAddressType,
   GetWalletProviderType,
+  Hex,
   HubChainKey,
   IEvmWalletProvider,
   LeverageYieldVault,
   PartnerFee,
   Result,
+  SolverErrorResponse,
   SolverExecutionRequest,
   SolverExecutionResponse,
+  SolverIntentQuoteRequest,
+  SolverIntentQuoteResponse,
   SonicChainKey,
   SpokeChainKey,
   SpokeExecActionParams,
   TxReturnType,
 } from '@sodax/types';
+import type { BackendApiService } from '../backendApi/index.js';
+import { runBackendSubmitTx } from '../backendApi/runBackendSubmitTx.js';
+import { createSubmitTxAttempt, type SubmitTxAttempt } from '../backendApi/submitTxAttempt.js';
+import { resolveTimeoutMs } from '../shared/utils/resolveTimeoutMs.js';
 import { erc20Abi, parseAbi } from 'viem';
 import type { ConfigService } from '../shared/config/ConfigService.js';
 import type { CreateIntentParams, Intent } from '../shared/types/intent-types.js';
@@ -287,8 +299,9 @@ export type LeverageYieldSwapDepositParams = {
   /** Optional specific solver. `0x0` = any solver. */
   solver?: Address;
   /**
-   * Partner fee for this deposit, carried on the payload as the swap layer's per-intent
-   * fee override. Defaults to the globally configured `config.swaps.partnerFee`.
+   * Partner fee for this deposit, carried on the payload as the per-intent fee override.
+   * Defaults to the effective leverage-yield fee (`config.leverageYieldPartnerFee` = the
+   * `leverageYield` override if set, else the global `fee`).
    */
   partnerFee?: PartnerFee;
 };
@@ -320,6 +333,29 @@ export type LeverageYieldSwapWithdrawParams = {
   deadline?: bigint;
   /** Optional specific solver. `0x0` = any solver. */
   solver?: Address;
+  /**
+   * Partner fee for this withdraw, carried on the payload as the per-intent fee override.
+   * Defaults to the effective leverage-yield fee (`config.leverageYieldPartnerFee` = the
+   * `leverageYield` override if set, else the global `fee`).
+   *
+   * A withdraw's input token is the vault itself, so the fee is deducted from `inputAmount`
+   * in **lsoda\* shares** — the fee receiver accrues vault shares, not the output token.
+   */
+  partnerFee?: PartnerFee;
+};
+
+/**
+ * Params for {@link LeverageYieldService.getQuote}. Superset of `SolverIntentQuoteRequest`
+ * with the same per-call fee override the vault intent builders take, so a quote and the
+ * intent it sizes can be driven by one value.
+ */
+export type LeverageYieldQuoteParams = SolverIntentQuoteRequest & {
+  /**
+   * Per-call fee override. Omit to use the effective leverage-yield fee
+   * (`config.leverageYieldPartnerFee`); pass the same value you pass to
+   * {@link LeverageYieldService.vaultSwap} when overriding per intent.
+   */
+  partnerFee?: PartnerFee;
 };
 
 /**
@@ -333,7 +369,11 @@ export type LeverageYieldSwapWithdrawParams = {
 export type LeverageYieldSwapPayload = {
   params: CreateIntentParams;
   hubWalletSwap?: true;
-  /** Per-intent partner-fee override (deposit only). */
+  /**
+   * Per-intent partner-fee override, set by `deposit` / `withdraw` when the caller supplies one.
+   * Absent means the effective leverage-yield fee applies — **both directions are charged**;
+   * this key only controls whether that configured fee is overridden for this intent.
+   */
   partnerFee?: PartnerFee;
 };
 
@@ -347,8 +387,8 @@ export type LeverageYieldSwapPayload = {
  *   user's hub wallet — `srcChainKey` is then the chain the user *signs* on, and the
  *   intent is created by authorising the hub wallet via a `Connection.sendMessage`
  *   instead of a spoke-side AssetManager deposit.
- * - `partnerFee` overrides the globally configured `config.swaps.partnerFee` for this
- *   intent only.
+ * - `partnerFee` overrides the effective leverage-yield fee
+ *   (`config.leverageYieldPartnerFee`) for this intent only.
  */
 export type VaultSwapActionParams<K extends SpokeChainKey, Raw extends boolean = false> = SpokeExecActionParams<
   K,
@@ -395,6 +435,7 @@ export type LeverageYieldServiceConstructorParams = {
   hubProvider: HubProvider;
   config: ConfigService;
   spoke: SpokeService;
+  backendApi: BackendApiService;
 };
 
 /**
@@ -403,6 +444,8 @@ export type LeverageYieldServiceConstructorParams = {
  * `vaultSwap()` — the generic swap surface stays untouched by vault concerns.
  *
  * Methods:
+ * - `getQuote` — solver quote for a vault deposit/withdraw, sized with the effective
+ *   leverage-yield fee so the quote matches what the vault intent will charge.
  * - `deposit` / `withdraw` — build a {@link LeverageYieldSwapPayload} for a swap-style deposit
  *   (any token → lsoda*) and withdraw (lsoda* → any token); spread the result into
  *   `vaultSwap()`. `withdraw` sets `hubWalletSwap: true` so the vault swap spends the lsoda*
@@ -427,11 +470,22 @@ export class LeverageYieldService {
   private readonly hubProvider: HubProvider;
   private readonly config: ConfigService;
   private readonly spoke: SpokeService;
+  private readonly backendApi: BackendApiService;
 
-  constructor({ hubProvider, config, spoke }: LeverageYieldServiceConstructorParams) {
+  /**
+   * Effective backend submit-tx flow (`leverageYield.useBackendSubmitTx`, default off). Read live off
+   * `ConfigService`, like `config.leverageYieldPartnerFee`, so the config object and the behavior can
+   * never disagree.
+   */
+  get useBackendSubmitTx(): boolean {
+    return this.config.leverageYieldUseBackendSubmitTx;
+  }
+
+  constructor({ hubProvider, config, spoke, backendApi }: LeverageYieldServiceConstructorParams) {
     this.hubProvider = hubProvider;
     this.config = config;
     this.spoke = spoke;
+    this.backendApi = backendApi;
   }
 
   // ─── Registry ──────────────────────────────────────────────────────────
@@ -483,15 +537,93 @@ export class LeverageYieldService {
   }
 
   /**
+   * Quotes a vault deposit or withdraw. Vault shares are solver-tradeable, so this is the
+   * generic solver quote with one difference that matters: the fee deducted before quoting is
+   * the effective **leverage-yield** fee, matching what {@link LeverageYieldService.createVaultIntent}
+   * will charge. `sodax.swaps.getQuote` deducts the effective *swap* fee instead, so quoting a
+   * vault flow through it makes the quote and the intent disagree whenever the two feature fees
+   * differ. Quoting a vault flow through the swap service can be made to agree — pass the same fee
+   * explicitly, using a zero fee (`{ address, percentage: 0 }`) where the effective leverage-yield
+   * fee is `undefined`, since an explicit `undefined` there falls back to the swap fee — but this
+   * method resolves it for you and is the canonical way to quote a vault flow.
+   *
+   * Pass the vault address as `token_dst` to quote a deposit, or as `token_src` to quote a
+   * withdraw; subtract your slippage tolerance from `quoted_amount` to get `minOutputAmount`.
+   * When overriding the fee per intent, pass the same `partnerFee` here and to whichever builder
+   * you use ({@link LeverageYieldService.deposit}, {@link LeverageYieldService.withdraw}) or
+   * directly to {@link LeverageYieldService.vaultSwap} — omitting it everywhere is equally safe,
+   * since each side then resolves the same effective leverage-yield fee. Both directions are
+   * charged, so this applies to withdrawals as much as deposits.
+   *
+   * @returns `SolverIntentQuoteResponse` on success. On failure `result.error` is either the
+   *   solver's own `SolverErrorResponse` (no path, insufficient liquidity, …) or a SodaxError
+   *   with `VALIDATION_FAILED` (bad `amount`, or a partner fee that leaves nothing to quote),
+   *   `LOOKUP_FAILED` (unsupported token — the solver payload could not be assembled) or
+   *   `UNKNOWN`. Discriminate with `isSodaxError(error)`.
+   */
+  public async getQuote(
+    payload: LeverageYieldQuoteParams,
+  ): Promise<Result<SolverIntentQuoteResponse, SolverErrorResponse | LeverageYieldLookupError>> {
+    const { partnerFee = this.config.leverageYieldPartnerFee, ...request } = payload;
+    // Not `srcChainKey`/`dstChainKey`: on a withdraw quote `token_src_blockchain_id` is the hub,
+    // not the chain the user signs on, so reusing those field names would invert their meaning
+    // relative to every other method in this service.
+    const baseCtx = {
+      method: 'getQuote',
+      tokenSrcChainKey: request.token_src_blockchain_id,
+      tokenDstChainKey: request.token_dst_blockchain_id,
+    };
+    try {
+      leverageYieldInvariant(request.amount > 0n, 'amount must be greater than 0', {
+        ...baseCtx,
+        field: 'amount',
+      });
+      // The fee arithmetic below throws bare invariants for a malformed or oversized fee, and the
+      // solver throws for a non-positive net amount. Those are caller/config input problems, so
+      // assert them here as VALIDATION_FAILED rather than letting them surface as LOOKUP_FAILED.
+      if (isPartnerFeeAmount(partnerFee)) {
+        leverageYieldInvariant(
+          partnerFee.amount < request.amount,
+          `partnerFee amount (${partnerFee.amount}) must be less than the quote amount (${request.amount})`,
+          { ...baseCtx, field: 'partnerFee' },
+        );
+      } else if (isPartnerFeePercentage(partnerFee)) {
+        // Integer-ness matters beyond the bounds check: `calculatePercentageFeeAmount` does
+        // `BigInt(percentage)`, which throws a RangeError on a fractional value that is otherwise
+        // inside range (e.g. 0.5).
+        leverageYieldInvariant(
+          Number.isInteger(partnerFee.percentage) &&
+            partnerFee.percentage >= 0 &&
+            partnerFee.percentage <= Number(FEE_PERCENTAGE_SCALE),
+          `partnerFee percentage must be a whole number of basis points between 0 and ${FEE_PERCENTAGE_SCALE} (got ${partnerFee.percentage})`,
+          { ...baseCtx, field: 'partnerFee' },
+        );
+      }
+      const netAmount = adjustAmountByFee(request.amount, partnerFee, request.quote_type);
+      leverageYieldInvariant(netAmount > 0n, 'amount net of the partner fee must be greater than 0', {
+        ...baseCtx,
+        field: 'partnerFee',
+      });
+      const adjustedPayload = { ...request, amount: netAmount } satisfies SolverIntentQuoteRequest;
+      // `await`, not a bare `return`: SolverApiService.getQuote asserts its own preconditions
+      // (unsupported token, unresolvable hub asset) as rejections, and a returned promise would
+      // settle outside this try block.
+      return await SolverApiService.getQuote(adjustedPayload, this.config.solver, this.config);
+    } catch (error) {
+      if (isLeverageYieldLookupError(error)) return { ok: false, error };
+      return { ok: false, error: lookupFailed('leverageYield', 'getQuote', error, baseCtx) };
+    }
+  }
+
+  /**
    * Builds the {@link LeverageYieldSwapPayload} for a leverage-yield deposit (any token → lsoda*).
    * The lsoda* output is delivered to the user's hub wallet on Sonic so a later
    * {@link LeverageYieldService.withdraw} can swap it back. Spread the result into
    * {@link LeverageYieldService.vaultSwap}: `vaultSwap({ ...payload, walletProvider })`.
    * An optional `partnerFee` is forwarded on the payload as the per-intent fee override.
    *
-   * For `minOutputAmount`, quote via `sodax.swaps.getQuote` with the vault address as the
-   * destination token (`token_dst`) — vault shares are solver-tradeable, so the generic swap
-   * quote applies; then subtract your slippage tolerance.
+   * For `minOutputAmount`, quote via {@link LeverageYieldService.getQuote} with the vault
+   * address as the destination token (`token_dst`), then subtract your slippage tolerance.
    */
   public async deposit(
     params: LeverageYieldSwapDepositParams,
@@ -550,9 +682,13 @@ export class LeverageYieldService {
    * a call shape uniform with {@link LeverageYieldService.deposit}; async because the default
    * `deadline` is read from the hub block timestamp.
    *
-   * For `minOutputAmount`, quote via `sodax.swaps.getQuote` with the vault address as the
-   * source token (`token_src`) — vault shares are solver-tradeable, so the generic swap quote
-   * applies; then subtract your slippage tolerance.
+   * An optional `partnerFee` is forwarded on the payload as the per-intent fee override; omit it
+   * and the configured leverage-yield fee applies. Withdrawals **are** charged — the fee comes out
+   * of `inputAmount`, which for a withdraw is the vault's own shares, so the receiver accrues
+   * lsoda\* rather than the output token.
+   *
+   * For `minOutputAmount`, quote via {@link LeverageYieldService.getQuote} with the vault
+   * address as the source token (`token_src`), then subtract your slippage tolerance.
    */
   public async withdraw(
     params: LeverageYieldSwapWithdrawParams,
@@ -591,6 +727,9 @@ export class LeverageYieldService {
             data: '0x',
           },
           hubWalletSwap: true,
+          // Per-intent fee override — only included when the caller supplies one, so the
+          // payload stays free of undefined-valued keys (mirrors `deposit`).
+          ...(params.partnerFee !== undefined && { partnerFee: params.partnerFee }),
         },
       };
     } catch (error) {
@@ -626,8 +765,9 @@ export class LeverageYieldService {
   public async createVaultIntent<K extends SpokeChainKey, Raw extends boolean>(
     _params: VaultSwapActionParams<K, Raw>,
   ): Promise<Result<CreateVaultIntentResult<K, Raw>, LeverageYieldCreateIntentError>> {
-    // Per-intent partnerFee override beats the globally configured fee (undefined = no fee).
-    const { params, skipSimulation, hubWalletSwap, partnerFee = this.config.swaps.partnerFee } = _params;
+    // Per-intent partnerFee override beats the effective leverage-yield fee (per-feature override,
+    // else global). undefined = no fee. `swaps.partnerFee` deliberately does NOT apply to vault intents.
+    const { params, skipSimulation, hubWalletSwap, partnerFee = this.config.leverageYieldPartnerFee } = _params;
     const baseCtx = { srcChainKey: params.srcChainKey, dstChainKey: params.dstChainKey };
 
     try {
@@ -864,78 +1004,212 @@ export class LeverageYieldService {
     const { params } = _params;
     const srcChainKey = params.srcChainKey;
     const baseCtx = { srcChainKey, dstChainKey: params.dstChainKey, action: 'vaultSwap' satisfies LeverageYieldAction };
-    try {
-      const timeout = _params.timeout;
-      const createIntentResult = await this.createVaultIntent(_params);
-      if (!createIntentResult.ok) {
-        // LeverageYieldCreateIntentErrorCode ⊂ LeverageYieldSwapErrorCode by definition.
-        return { ok: false, error: createIntentResult.error };
-      }
+    return this.config.analytics.trackResult(
+      'leverageYield',
+      'vaultSwap',
+      async () => {
+        try {
+          const createIntentResult = await this.createVaultIntent(_params);
+          if (!createIntentResult.ok) {
+            // LeverageYieldCreateIntentErrorCode ⊂ LeverageYieldSwapErrorCode by definition.
+            return { ok: false, error: createIntentResult.error };
+          }
 
-      const { tx: spokeTxHash, intent, relayData } = createIntentResult.value;
+          const created = createIntentResult.value;
 
-      const verifyTxHashResult = await this.spoke.verifyTxHash({
-        txHash: spokeTxHash,
-        chainKey: srcChainKey,
-      });
-      if (!verifyTxHashResult.ok) {
-        return {
-          ok: false,
-          error: verifyFailed('leverageYield', verifyTxHashResult.error, baseCtx),
-        };
-      }
+          // `timeout` is a PER-ATTEMPT budget, not an end-to-end one: the backend attempt gets it, and if
+          // that attempt fails the client-side relay fallback gets a fresh one. Sharing a single deadline
+          // would leave the fallback whatever the backend had not spent, which is how a relay that needs
+          // longer than the leftovers ends in RELAY_TIMEOUT. Resolved (not just defaulted) so a non-finite
+          // caller value cannot reach either budget — see `resolveTimeoutMs`. Mirrors SwapService.swap.
+          const timeoutMs = resolveTimeoutMs(_params.timeout, DEFAULT_RELAY_TX_TIMEOUT);
 
-      let dstIntentTxHash: string;
-      if (isHubChainKeyType(srcChainKey)) {
-        dstIntentTxHash = spokeTxHash;
-      } else {
-        const packet = await relayTxAndWaitPacket({
-          srcTxHash: spokeTxHash,
-          data: relayData,
-          chainKey: srcChainKey,
-          relayerApiEndpoint: this.config.relay.relayerApiEndpoint,
-          timeout,
-        });
-        if (!packet.ok) {
+          // Opt-in backend 2-step flow: hand the broadcast intent tx to the leverage-yield API, which
+          // relays + post-executes server-side. On ANY non-success we fall back to the client-side
+          // relay so the vault swap still completes — safe because re-relay / re-post are idempotent.
+          if (this.useBackendSubmitTx) {
+            const submitted = await this.submitTx(_params, created, createSubmitTxAttempt(timeoutMs));
+            if (submitted.ok) return submitted;
+            this.config.logger.warn(
+              '[leverageYield] backend submit-tx did not complete; falling back to the client-side relay',
+              { error: submitted.error },
+            );
+          }
+
+          return this.fallbackVaultSwapSteps(_params, created, timeoutMs);
+        } catch (error) {
+          // Narrow guard: preserve SodaxErrors whose code is in the vault-swap union; wrap
+          // unknown codes (e.g. an accidental cross-feature code) as UNKNOWN.
+          if (isLeverageYieldSwapError(error)) return { ok: false, error };
           return {
             ok: false,
-            error: mapRelayFailure(packet.error, { feature: 'leverageYield', ...baseCtx }),
+            error: unknownFailed('leverageYield', error, baseCtx),
           };
         }
-        dstIntentTxHash = packet.value.dst_tx_hash;
-      }
+      },
+      {
+        start: () => ({
+          srcChainKey: _params.params.srcChainKey,
+          dstChainKey: _params.params.dstChainKey,
+          srcAddress: _params.params.srcAddress,
+          dstAddress: _params.params.dstAddress,
+          inputToken: _params.params.inputToken,
+          outputToken: _params.params.outputToken,
+          inputAmount: _params.params.inputAmount,
+        }),
+        success: value => ({
+          intentId: value.intent.intentId,
+          srcTxHash: value.intentDeliveryInfo.srcTxHash,
+          dstTxHash: value.intentDeliveryInfo.dstTxHash,
+        }),
+        failure: error => ({ code: error.code }),
+      },
+    );
+  }
 
-      const postExecResult = await this.notifySolver({
-        intent_tx_hash: dstIntentTxHash as `0x${string}`,
+  /**
+   * Client-side vault-swap completion (the default path): verify the broadcast intent tx landed,
+   * relay it to the hub (Sonic) — or use it directly when the source IS the hub — then notify the
+   * solver via {@link LeverageYieldService.notifySolver} and build the {@link VaultSwapResponse}.
+   * Extracted from `vaultSwap()` so the opt-in backend 2-step path ({@link LeverageYieldService.submitTx})
+   * can fall back to it on any non-success. Leverage-yield copy of `SwapService.fallbackSwapSteps`.
+   */
+  private async fallbackVaultSwapSteps<K extends SpokeChainKey>(
+    _params: VaultSwapActionParams<K, false>,
+    created: CreateVaultIntentResult<K, false>,
+    timeoutMs: number,
+  ): Promise<Result<VaultSwapResponse, LeverageYieldSwapError>> {
+    const { params } = _params;
+    const srcChainKey = params.srcChainKey;
+    const baseCtx = { srcChainKey, dstChainKey: params.dstChainKey, action: 'vaultSwap' satisfies LeverageYieldAction };
+    const { tx: spokeTxHash, intent, relayData } = created;
+
+    const verifyTxHashResult = await this.spoke.verifyTxHash({
+      txHash: spokeTxHash,
+      chainKey: srcChainKey,
+    });
+    if (!verifyTxHashResult.ok) {
+      return { ok: false, error: verifyFailed('leverageYield', verifyTxHashResult.error, baseCtx) };
+    }
+
+    let dstIntentTxHash: string;
+    if (isHubChainKeyType(srcChainKey)) {
+      dstIntentTxHash = spokeTxHash;
+    } else {
+      const packet = await relayTxAndWaitPacket({
+        srcTxHash: spokeTxHash,
+        data: relayData,
+        chainKey: srcChainKey,
+        relayerApiEndpoint: this.config.relay.relayerApiEndpoint,
+        // The caller's full `timeout`, starting HERE — whether this runs as the only path or as the
+        // backend's fallback, so a stalled backend attempt cannot shorten the relay wait. The floor
+        // covers a sub-floor caller `timeout`: `relayTxAndWaitPacket` SUBMITS before `timeout` bounds
+        // anything, so a zero budget would strand an already-landed tx unrelayed.
+        timeout: Math.max(timeoutMs, RELAY_FALLBACK_FLOOR_MS),
       });
-      if (!postExecResult.ok) {
-        // LeverageYieldPostExecutionErrorCode ⊂ LeverageYieldSwapErrorCode by definition.
-        return { ok: false, error: postExecResult.error };
+      if (!packet.ok) {
+        return { ok: false, error: mapRelayFailure(packet.error, { feature: 'leverageYield', ...baseCtx }) };
       }
+      dstIntentTxHash = packet.value.dst_tx_hash;
+    }
 
-      return {
-        ok: true,
-        value: {
-          solverExecutionResponse: postExecResult.value,
+    const postExecResult = await this.notifySolver({
+      intent_tx_hash: dstIntentTxHash as `0x${string}`,
+    });
+    if (!postExecResult.ok) {
+      // LeverageYieldPostExecutionErrorCode ⊂ LeverageYieldSwapErrorCode by definition.
+      return { ok: false, error: postExecResult.error };
+    }
+
+    return {
+      ok: true,
+      value: {
+        solverExecutionResponse: postExecResult.value,
+        intent,
+        intentDeliveryInfo: {
+          srcChainKey,
+          srcTxHash: spokeTxHash,
+          srcAddress: params.srcAddress,
+          dstChainKey: params.dstChainKey,
+          dstTxHash: dstIntentTxHash,
+          dstAddress: params.dstAddress,
+        } satisfies IntentDeliveryInfo,
+      },
+    };
+  }
+
+  /**
+   * Backend 2-step vault-swap path (opt-in via `leverageYield.useBackendSubmitTx`): hand the
+   * broadcast intent tx to the leverage-yield API (`POST /leverage-yield/submit-tx`); the backend
+   * relays + post-executes server-side. Polls `getSubmitTxStatus` until `solved`, then reconstructs
+   * the same {@link VaultSwapResponse} the client-side path returns.
+   *
+   * Never throws — returns `{ ok: false }` on any non-success (submit `!ok`, a 200 the backend did not
+   * accept, terminal `failed` / abandoned, or poll timeout) so `vaultSwap()` falls back to
+   * {@link LeverageYieldService.fallbackVaultSwapSteps}. Falling back is safe: re-relaying / re-posting
+   * an already-processed vault swap is idempotent (the relay dedups the `executed` packet and the solver
+   * re-affirms the intent — no double-fill), and load-bearing rather than belt-and-braces: the backend
+   * keeps processing after this attempt gives up, so the fallback's relay can race the backend's own.
+   *
+   * The attempt itself — POST, budget clamps, status poll — is {@link runBackendSubmitTx}, shared with
+   * swaps and bridge. What is leverage-yield-specific and lives here: the request body (including the
+   * `operation` discriminator), the `solved` terminal status, the mapping to a
+   * {@link VaultSwapResponse}, and the leverage-yield error taxonomy.
+   *
+   * `attempt` bounds this attempt alone — the POST and every status request draw on it, and the
+   * client-side fallback holds a separate fresh `timeout`.
+   */
+  private async submitTx<K extends SpokeChainKey>(
+    _params: VaultSwapActionParams<K, false>,
+    created: CreateVaultIntentResult<K, false>,
+    attempt: SubmitTxAttempt,
+  ): Promise<Result<VaultSwapResponse, LeverageYieldSwapError>> {
+    const { params } = _params;
+    const srcChainKey = params.srcChainKey;
+    const baseCtx = { srcChainKey, dstChainKey: params.dstChainKey, action: 'vaultSwap' satisfies LeverageYieldAction };
+    const { tx: spokeTxHash, intent, relayData } = created;
+
+    try {
+      const outcome = await runBackendSubmitTx({
+        attempt,
+        api: this.backendApi.leverageYield,
+        body: {
+          txHash: spokeTxHash,
+          srcChainKey,
+          walletAddress: params.srcAddress,
           intent,
-          intentDeliveryInfo: {
-            srcChainKey,
-            srcTxHash: spokeTxHash,
-            srcAddress: params.srcAddress,
-            dstChainKey: params.dstChainKey,
-            dstTxHash: dstIntentTxHash,
-            dstAddress: params.dstAddress,
-          } satisfies IntentDeliveryInfo,
+          relayData: relayData.payload,
+          // `withdraw` sets `hubWalletSwap: true` (spends the hub-wallet lsoda*); a plain deposit doesn't.
+          operation: _params.hubWalletSwap ? 'withdraw' : 'deposit',
         },
-      };
+        statusQuery: { txHash: spokeTxHash, srcChainKey },
+        // A vault deposit/withdraw IS a solver swap, so terminal success is `solved` — not bridge's
+        // `executed`.
+        terminalStatus: 'solved',
+        onExecuted: (result): VaultSwapResponse | undefined =>
+          result?.dstIntentTxHash && result.intent_hash
+            ? {
+                // Backend serializes the hex intent_hash as a plain string; brand it at the boundary.
+                solverExecutionResponse: { answer: 'OK', intent_hash: result.intent_hash as Hex },
+                intent,
+                intentDeliveryInfo: {
+                  srcChainKey,
+                  srcTxHash: spokeTxHash,
+                  srcAddress: params.srcAddress,
+                  dstChainKey: params.dstChainKey,
+                  dstTxHash: result.dstIntentTxHash,
+                  dstAddress: params.dstAddress,
+                } satisfies IntentDeliveryInfo,
+              }
+            : undefined,
+      });
+      // Any non-success — rejected POST, terminal `failed`, spent attempt — becomes the cause
+      // vaultSwap() logs before falling back to the client-side relay.
+      return outcome.ok
+        ? { ok: true, value: outcome.value }
+        : { ok: false, error: executionFailed('leverageYield', outcome.cause, baseCtx) };
     } catch (error) {
-      // Narrow guard: preserve SodaxErrors whose code is in the vault-swap union; wrap
-      // unknown codes (e.g. an accidental cross-feature code) as UNKNOWN.
-      if (isLeverageYieldSwapError(error)) return { ok: false, error };
-      return {
-        ok: false,
-        error: unknownFailed('leverageYield', error, baseCtx),
-      };
+      return { ok: false, error: unknownFailed('leverageYield', error, baseCtx) };
     }
   }
 
@@ -958,7 +1232,12 @@ export class LeverageYieldService {
     request: SolverExecutionRequest,
   ): Promise<Result<SolverExecutionResponse, LeverageYieldPostExecutionError>> {
     try {
-      const result = await SolverApiService.postExecution(request, this.config.solver, this.config.logger);
+      const result = await SolverApiService.postExecution(
+        request,
+        this.config.solver,
+        this.config.logger,
+        this.config.apiKey,
+      );
       if (result.ok) return result;
 
       // Defensive: SolverApiService is contractually typed to return SolverErrorResponse,
@@ -1018,12 +1297,23 @@ export class LeverageYieldService {
         const tx = await Erc20Service.approve<true>({ ...baseApprove, raw: true });
         return { ok: true, value: tx as TxReturnType<HubChainKey, R> };
       }
-      const tx = await Erc20Service.approve<false>({
-        ...baseApprove,
+
+      // Route through SpokeService rather than calling Erc20Service directly, so a stale allowance
+      // on a USDT-class asset is reset before the approve instead of dead-ending.
+      const result = await this.spoke.approve<HubChainKey, false>({
+        srcChainKey: this.hubProvider.chainConfig.chain.key,
+        token: baseApprove.token,
+        amount: baseApprove.amount,
+        owner: from,
+        spender: baseApprove.spender,
         raw: false,
         walletProvider: params.walletProvider,
       });
-      return { ok: true, value: tx as TxReturnType<HubChainKey, R> };
+      if (!result.ok) {
+        return { ok: false, error: approveFailed('leverageYield', result.error, baseCtx) };
+      }
+
+      return { ok: true, value: result.value as TxReturnType<HubChainKey, R> };
     } catch (error) {
       if (isLeverageYieldApproveError(error)) return { ok: false, error };
       return { ok: false, error: approveFailed('leverageYield', error, baseCtx) };

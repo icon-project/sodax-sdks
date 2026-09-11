@@ -98,7 +98,7 @@ A snapshot of the weETH vault at the moment of writing:
 
 | Term | Value | Source |
 |---|---|---|
-| `aaveSupply` (sodaWEETH) | 0.00% | AAVE `getReserveData(asset).currentLiquidityRate` |
+| `aaveSupply` (weETH vault) | 0.00% | AAVE `getReserveData(asset).currentLiquidityRate` |
 | `lsdStaking` (weETH) | 2.92% | DefiLlama pool `46bd2bdf-…`, latest `apy` |
 | `effectiveSupply` | 0.00 + 2.92 = **2.92%** | sum |
 | `aaveBorrow` (sodaETH) | 1.04% | AAVE `getReserveData(borrowToken).currentVariableBorrowRate` |
@@ -118,10 +118,10 @@ The 19.5-percentage-point gap between `effectiveNet` and `aaveOnlyNet` is **the 
 
 ## Code references
 
-- Formula implementation: [`LeverageYieldService.getEffectiveApr`](../src/leverageYield/LeverageYieldService.ts) (`packages/sdk/src/leverageYield/LeverageYieldService.ts`)
+- Formula implementation: [`LeverageYieldService.getEffectiveApr`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/src/leverageYield/LeverageYieldService.ts) (`packages/sdk/src/leverageYield/LeverageYieldService.ts`)
 - LSD fetcher: `fetchDefillamaApr` in the same file
 - AAVE-only calculation: `LeverageYieldService.getApr` (also same file)
-- Vault registry (with `lsdSource.poolId`): [`packages/types/src/leverageYield/leverageYield.ts`](../../types/src/leverageYield/leverageYield.ts)
+- Vault registry (with `lsdSource.poolId`): [`packages/types/src/leverageYield/leverageYield.ts`](https://github.com/icon-project/sodax-sdks/blob/main/packages/types/src/leverageYield/leverageYield.ts)
 
 ## Caveats
 

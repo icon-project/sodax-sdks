@@ -26,11 +26,7 @@ describe('isFeatureError', () => {
 
 describe('isCodeMember', () => {
   type CreateIntentCode = Extract<SodaxErrorCode, 'VALIDATION_FAILED' | 'INTENT_CREATION_FAILED' | 'UNKNOWN'>;
-  const CREATE_INTENT_CODES = new Set<CreateIntentCode>([
-    'VALIDATION_FAILED',
-    'INTENT_CREATION_FAILED',
-    'UNKNOWN',
-  ]);
+  const CREATE_INTENT_CODES = new Set<CreateIntentCode>(['VALIDATION_FAILED', 'INTENT_CREATION_FAILED', 'UNKNOWN']);
   const isCreateIntentError = isCodeMember<CreateIntentCode>(CREATE_INTENT_CODES);
 
   it('returns true for SodaxError whose code is in the set', () => {

@@ -30,10 +30,7 @@ export type SafeUseMutationResult<TData, TError, TVars, TContext = unknown> = Us
    * `if (!hasAllowance) await approve(...); await action(...)` chains where the user-reject
    * case is the modal failure mode, not an exceptional one.
    */
-  mutateAsyncSafe: (
-    vars: TVars,
-    options?: MutateOptions<TData, TError, TVars, TContext>,
-  ) => Promise<Result<TData>>;
+  mutateAsyncSafe: (vars: TVars, options?: MutateOptions<TData, TError, TVars, TContext>) => Promise<Result<TData>>;
 };
 
 /**

@@ -29,8 +29,7 @@ export function useApproveToken({
   return useSafeMutation<ApproveTokenData, Error, UseApproveTokenVars>({
     mutationKey: ['partner', 'approveToken'],
     ...mutationOptions,
-    mutationFn: async vars =>
-      unwrapResult(await sodax.partners.feeClaim.approveToken<false>({ ...vars, raw: false })),
+    mutationFn: async vars => unwrapResult(await sodax.partners.feeClaim.approveToken<false>({ ...vars, raw: false })),
     onSuccess: async (data, vars, ctx) => {
       const { params } = vars;
       queryClient.invalidateQueries({

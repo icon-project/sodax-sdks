@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { ChainKeys } from '@sodax/types';
-import { createWagmiConfig } from './EvmXService.js';
+import { createWagmiConfig, tryCookieToInitialState } from './EvmXService.js';
 import type { EvmTypeConfig } from '@/types/config.js';
 
 // Verifies user-supplied `rpcUrl` from `SodaxWalletConfig.EVM.chains[K]` is
@@ -55,5 +55,41 @@ describe('createWagmiConfig — rpcUrl forwarding', () => {
     const arbClient = config.getClient({ chainId: 42161 });
     const ethClient = config.getClient({ chainId: 1 });
     expect(arbClient.transport.url).not.toBe(ethClient.transport.url);
+  });
+});
+
+// `persistKey` is the base storage key; wagmi writes the cookie as `<key>.store`.
+describe('createWagmiConfig — persistKey (cookie storage)', () => {
+  it('defaults the storage key to "sodax" (cookie sodax.store) for backward compatibility', () => {
+    expect(createWagmiConfig().storage?.key).toBe('sodax');
+  });
+
+  it('uses a custom persistKey as the storage base key (cookie <key>.store)', () => {
+    expect(createWagmiConfig(undefined, { persistKey: 'my-app' }).storage?.key).toBe('my-app');
+  });
+});
+
+describe('tryCookieToInitialState', () => {
+  const config = createWagmiConfig();
+
+  it('returns undefined for a missing cookie', () => {
+    expect(tryCookieToInitialState(config, null)).toBeUndefined();
+    expect(tryCookieToInitialState(config, undefined)).toBeUndefined();
+  });
+
+  it('returns undefined when no wagmi state cookie is present', () => {
+    expect(tryCookieToInitialState(config, 'foo=bar')).toBeUndefined();
+  });
+
+  it('returns undefined and does NOT throw on a malformed state cookie', () => {
+    const malformed = `${config.storage?.key}.store=${encodeURIComponent('{')}`;
+    expect(() => tryCookieToInitialState(config, malformed)).not.toThrow();
+    expect(tryCookieToInitialState(config, malformed)).toBeUndefined();
+  });
+
+  it('returns the decoded state from a well-formed cookie', () => {
+    // wagmi reads `<key>.store`, then `deserialize(value).state`; the value is not URL-decoded.
+    const cookie = `${config.storage?.key}.store=${JSON.stringify({ state: { chainId: 1 } })}`;
+    expect(tryCookieToInitialState(config, cookie)).toEqual({ chainId: 1 });
   });
 });

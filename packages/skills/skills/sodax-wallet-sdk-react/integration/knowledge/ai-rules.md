@@ -21,12 +21,12 @@ cat <user>/package.json | grep '"react"'
 cat <user>/package.json | grep '"@tanstack/react-query'
 
 # Existing wallet libraries that may conflict
-grep -l "wagmi\|@solana/wallet-adapter\|@mysten/dapp-kit" <user>/package.json
+grep -l "wagmi\|@solana/wallet-adapter\|@mysten/dapp-kit-react" <user>/package.json
 ```
 
 **If React < 19**, stop and tell the user — this package requires React 19.
 
-**If wagmi / @solana/wallet-adapter / @mysten/dapp-kit are already direct dependencies**, stop and ask the user — this package mounts those internally; running both will cause duplicate provider context errors.
+**If wagmi / @solana/wallet-adapter / @mysten/dapp-kit-react are already direct dependencies**, stop and ask the user — this package mounts those internally; running both will cause duplicate provider context errors.
 
 ### 2. Always start with `setup.md`
 

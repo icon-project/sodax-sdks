@@ -17,7 +17,7 @@ Granular skill for the lending/borrowing feature of `@sodax/sdk` v2. Access via 
 2. **Which operation?** `supply`, `borrow`, `withdraw`, `repay`, or just position reads.
 3. **Same-chain or cross-chain borrow?** `borrow` can deliver funds back to the source chain or to a different spoke chain.
 4. **Signed flow or unsigned-tx (`createXxxIntent`)?**
-5. **Need user-position reads** (aToken balance, reserves data, formatted summaries)? Those come from `sodax.backendApi`, not `MoneyMarketService` — load [`../backend-api/SKILL.md`](../backend-api/SKILL.md) alongside.
+5. **Need reserves / position reads** (aToken balances, reserves data, formatted summaries)? Those live on `sodax.moneyMarket.data`. Backend-indexed user position (`getMoneyMarketPosition`, asset lists) comes from `sodax.backendApi` — load [`../backend-api/SKILL.md`](../backend-api/SKILL.md) alongside.
 
 ## Integration workflow
 
@@ -32,9 +32,9 @@ Granular skill for the lending/borrowing feature of `@sodax/sdk` v2. Access via 
 
 ### Money-market-specific anti-patterns
 
-- **Confusing `token` (hub asset address) with the spoke-chain token address.** `MoneyMarketParams<K>.token` is the hub asset (a `0x...` address on Sonic), not the user's spoke-chain ERC20.
+- **Passing the hub asset address as `token`.** `MoneyMarketParams<K>.token` is the user's spoke-chain original asset address (e.g. `USDC_ARBITRUM.address` with `srcChainKey: ARBITRUM_MAINNET`), validated via `getSpokeTokenFromOriginalAssetAddress`; the hub asset is derived internally. Don't substitute a hub (`0x…` on Sonic) address.
 - **Skipping allowance check before `supply` / `repay`.** Use `isAllowanceValid` then `approve` with the action-discriminated args.
-- **Calling reserve-data reads on `MoneyMarketService`.** Those live on `sodax.backendApi`.
+- **Routing reserve-data reads to `sodax.backendApi`.** Those live on `sodax.moneyMarket.data` (`getReservesData`, `getUserReservesData`, `getATokensBalances`, `getReservesHumanized`, `getUserReservesHumanized`, `formatUserSummary`).
 
 ## Migration workflow (v1 → v2)
 

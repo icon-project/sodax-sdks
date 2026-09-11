@@ -31,7 +31,7 @@ Granular skill for `RecoveryService` — `sodax.recovery`. Feature tag for error
 ### Recovery-specific anti-patterns
 
 - **Treating recovery as a routine flow.** It's a workaround for failures; calling it on successfully completed flows wastes gas and confuses users.
-- **Skipping the balance read.** `fetchHubAssetBalances` returns the full set of hub assets for a user; pick the one to withdraw rather than guessing the address.
+- **Skipping the balance read.** `fetchHubAssetBalances` returns only the non-zero hub-asset balances for one spoke chain (it takes `{ chainKey, srcAddress }` and excludes leverage-yield vault share tokens); pick the entry to withdraw rather than guessing the address.
 - **Ignoring the underlying failure.** Recovery moves the asset but doesn't explain why the original op failed — investigate first (relay timeout? bad params? destination chain issue?).
 
 ## Migration workflow (v1 → v2)

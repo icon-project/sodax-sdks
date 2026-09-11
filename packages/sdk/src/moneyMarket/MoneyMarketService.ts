@@ -223,17 +223,28 @@ export class MoneyMarketService {
   readonly spoke: SpokeService;
 
   // money market config (hoisted from config for ergonomics, mirrors SwapService)
-  readonly partnerFee: PartnerFee | undefined;
   readonly relayerApiEndpoint: HttpUrl;
 
   // sub-service
   readonly data: MoneyMarketDataService;
 
+  /**
+   * Effective money-market partner fee (`moneyMarket.partnerFee`, else the global `fee`). Read live
+   * off `ConfigService` rather than snapshotted in the constructor, so it cannot diverge from
+   * `config.moneyMarketPartnerFee` if the config object is ever replaced. Mirrors
+   * {@link SwapService.partnerFee}.
+   *
+   * Money market has no per-action override: unlike swap / bridge / leverage-yield, every flow here
+   * charges this configured fee.
+   */
+  get partnerFee(): PartnerFee | undefined {
+    return this.config.moneyMarketPartnerFee;
+  }
+
   public constructor({ config, hubProvider, spoke }: MoneyMarketServiceConstructorParams) {
     this.config = config;
     this.hubProvider = hubProvider;
     this.spoke = spoke;
-    this.partnerFee = config.moneyMarket.partnerFee;
     this.relayerApiEndpoint = config.relay.relayerApiEndpoint;
     this.data = new MoneyMarketDataService({ hubProvider, config: config });
   }
@@ -520,58 +531,76 @@ export class MoneyMarketService {
   public async supply<K extends SpokeChainKey>(
     _params: MoneyMarketSupplyActionParams<K, false>,
   ): Promise<Result<TxHashPair, MoneyMarketOrchestrationError>> {
-    const { params, timeout = DEFAULT_RELAY_TX_TIMEOUT } = _params;
-    const srcChainKey = params.srcChainKey;
-    const baseCtx = { srcChainKey, dstChainKey: params.dstChainKey, action: 'supply' as const };
+    return this.config.analytics.trackResult(
+      'moneyMarket',
+      'supply',
+      async () => {
+        const { params, timeout = DEFAULT_RELAY_TX_TIMEOUT } = _params;
+        const srcChainKey = params.srcChainKey;
+        const baseCtx = { srcChainKey, dstChainKey: params.dstChainKey, action: 'supply' as const };
 
-    try {
-      const txResult = await this.createSupplyIntent(_params);
-      // CreateSupplyIntentErrorCode ⊂ SupplyErrorCode, so the SodaxError narrows correctly.
-      if (!txResult.ok) return { ok: false, error: txResult.error };
+        try {
+          const txResult = await this.createSupplyIntent(_params);
+          // CreateSupplyIntentErrorCode ⊂ SupplyErrorCode, so the SodaxError narrows correctly.
+          if (!txResult.ok) return { ok: false, error: txResult.error };
 
-      const verify = await this.spoke.verifyTxHash({ txHash: txResult.value.tx, chainKey: srcChainKey });
-      if (!verify.ok) {
-        return {
-          ok: false,
-          error: verifyFailed('moneyMarket', verify.error, baseCtx),
-        };
-      }
+          const verify = await this.spoke.verifyTxHash({ txHash: txResult.value.tx, chainKey: srcChainKey });
+          if (!verify.ok) {
+            return {
+              ok: false,
+              error: verifyFailed('moneyMarket', verify.error, baseCtx),
+            };
+          }
 
-      // Relay skipped only when source chain is the hub.
-      if (isHubChainKeyType(srcChainKey)) {
-        return {
-          ok: true,
-          value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: txResult.value.tx },
-        };
-      }
+          // Relay skipped only when source chain is the hub.
+          if (isHubChainKeyType(srcChainKey)) {
+            return {
+              ok: true,
+              value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: txResult.value.tx },
+            };
+          }
 
-      const packet = await relayTxAndWaitPacket({
-        srcTxHash: txResult.value.tx,
-        data: txResult.value.relayData,
-        chainKey: srcChainKey,
-        relayerApiEndpoint: this.relayerApiEndpoint,
-        timeout,
-      });
+          const packet = await relayTxAndWaitPacket({
+            srcTxHash: txResult.value.tx,
+            data: txResult.value.relayData,
+            chainKey: srcChainKey,
+            relayerApiEndpoint: this.relayerApiEndpoint,
+            timeout,
+          });
 
-      if (!packet.ok)
-        return {
-          ok: false,
-          error: mapRelayFailure(packet.error, {
-            feature: 'moneyMarket',
-            action: baseCtx.action,
-            srcChainKey: baseCtx.srcChainKey,
-            dstChainKey: baseCtx.dstChainKey,
-          }),
-        };
+          if (!packet.ok)
+            return {
+              ok: false,
+              error: mapRelayFailure(packet.error, {
+                feature: 'moneyMarket',
+                action: baseCtx.action,
+                srcChainKey: baseCtx.srcChainKey,
+                dstChainKey: baseCtx.dstChainKey,
+              }),
+            };
 
-      return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: packet.value.dst_tx_hash } };
-    } catch (error) {
-      if (isMoneyMarketOrchestrationError(error)) return { ok: false, error };
-      return {
-        ok: false,
-        error: executionFailed('moneyMarket', error, { ...baseCtx, phase: 'intentCreation' }),
-      };
-    }
+          return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: packet.value.dst_tx_hash } };
+        } catch (error) {
+          if (isMoneyMarketOrchestrationError(error)) return { ok: false, error };
+          return {
+            ok: false,
+            error: executionFailed('moneyMarket', error, { ...baseCtx, phase: 'intentCreation' }),
+          };
+        }
+      },
+      {
+        start: () => ({
+          srcChainKey: _params.params.srcChainKey,
+          srcAddress: _params.params.srcAddress,
+          dstChainKey: _params.params.dstChainKey,
+          dstAddress: _params.params.dstAddress,
+          token: _params.params.token,
+          amount: _params.params.amount,
+        }),
+        success: value => ({ srcChainTxHash: value.srcChainTxHash, dstChainTxHash: value.dstChainTxHash }),
+        failure: error => ({ code: error.code }),
+      },
+    );
   }
 
   /**
@@ -725,72 +754,90 @@ export class MoneyMarketService {
   public async borrow<K extends SpokeChainKey>(
     _params: MoneyMarketBorrowActionParams<K, false>,
   ): Promise<Result<TxHashPair, MoneyMarketOrchestrationError>> {
-    const { params, timeout = DEFAULT_RELAY_TX_TIMEOUT } = _params;
-    const srcChainKey = params.srcChainKey;
-    const hubChainId = this.hubProvider.chainConfig.chain.key;
-    const baseCtx = { srcChainKey, dstChainKey: params.dstChainKey, action: 'borrow' as const };
+    return this.config.analytics.trackResult(
+      'moneyMarket',
+      'borrow',
+      async () => {
+        const { params, timeout = DEFAULT_RELAY_TX_TIMEOUT } = _params;
+        const srcChainKey = params.srcChainKey;
+        const hubChainId = this.hubProvider.chainConfig.chain.key;
+        const baseCtx = { srcChainKey, dstChainKey: params.dstChainKey, action: 'borrow' as const };
 
-    try {
-      const txResult = await this.createBorrowIntent(_params);
-      if (!txResult.ok) return { ok: false, error: txResult.error };
+        try {
+          const txResult = await this.createBorrowIntent(_params);
+          if (!txResult.ok) return { ok: false, error: txResult.error };
 
-      const verify = await this.spoke.verifyTxHash({ txHash: txResult.value.tx, chainKey: srcChainKey });
-      if (!verify.ok) {
-        return {
-          ok: false,
-          error: verifyFailed('moneyMarket', verify.error, baseCtx),
-        };
-      }
+          const verify = await this.spoke.verifyTxHash({ txHash: txResult.value.tx, chainKey: srcChainKey });
+          if (!verify.ok) {
+            return {
+              ok: false,
+              error: verifyFailed('moneyMarket', verify.error, baseCtx),
+            };
+          }
 
-      // Relay is not required when the borrow is executed on hub AND the target is also hub.
-      // (Borrow from hub to a different target chain still needs the relay to deliver tokens.)
-      const needsRelay =
-        srcChainKey !== hubChainId ||
-        (params.dstChainKey != null && params.dstAddress != null && params.dstChainKey !== hubChainId);
+          // Relay is not required when the borrow is executed on hub AND the target is also hub.
+          // (Borrow from hub to a different target chain still needs the relay to deliver tokens.)
+          const needsRelay =
+            srcChainKey !== hubChainId ||
+            (params.dstChainKey != null && params.dstAddress != null && params.dstChainKey !== hubChainId);
 
-      if (!needsRelay) {
-        return {
-          ok: true,
-          value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: txResult.value.tx },
-        };
-      }
+          if (!needsRelay) {
+            return {
+              ok: true,
+              value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: txResult.value.tx },
+            };
+          }
 
-      const relayIdentity = this.buildRelayIdentity(srcChainKey, txResult.value.tx, txResult.value.relayData);
-      const packet = await relayTxAndWaitPacket({
-        ...relayIdentity,
-        chainKey: srcChainKey,
-        relayerApiEndpoint: this.relayerApiEndpoint,
-        timeout,
-      });
+          const relayIdentity = this.buildRelayIdentity(srcChainKey, txResult.value.tx, txResult.value.relayData);
+          const packet = await relayTxAndWaitPacket({
+            ...relayIdentity,
+            chainKey: srcChainKey,
+            relayerApiEndpoint: this.relayerApiEndpoint,
+            timeout,
+          });
 
-      if (!packet.ok)
-        return {
-          ok: false,
-          error: mapRelayFailure(packet.error, {
-            feature: 'moneyMarket',
-            action: baseCtx.action,
-            srcChainKey: baseCtx.srcChainKey,
-            dstChainKey: baseCtx.dstChainKey,
-          }),
-        };
+          if (!packet.ok)
+            return {
+              ok: false,
+              error: mapRelayFailure(packet.error, {
+                feature: 'moneyMarket',
+                action: baseCtx.action,
+                srcChainKey: baseCtx.srcChainKey,
+                dstChainKey: baseCtx.dstChainKey,
+              }),
+            };
 
-      // On-demand relays expose the derived poll id (od:<hash>) as the source identifier — what the
-      // relay/SodaxScan track — not the opaque signed payload; other chains keep the spoke tx (see
-      // buildRelayIdentity).
-      return {
-        ok: true,
-        value: {
-          srcChainTxHash: relayIdentity.pollTxHash ?? txResult.value.tx,
-          dstChainTxHash: packet.value.dst_tx_hash,
-        },
-      };
-    } catch (error) {
-      if (isMoneyMarketOrchestrationError(error)) return { ok: false, error };
-      return {
-        ok: false,
-        error: executionFailed('moneyMarket', error, { ...baseCtx, phase: 'intentCreation' }),
-      };
-    }
+          // On-demand relays expose the derived poll id (od:<hash>) as the source identifier — what the
+          // relay/SodaxScan track — not the opaque signed payload; other chains keep the spoke tx (see
+          // buildRelayIdentity).
+          return {
+            ok: true,
+            value: {
+              srcChainTxHash: relayIdentity.pollTxHash ?? txResult.value.tx,
+              dstChainTxHash: packet.value.dst_tx_hash,
+            },
+          };
+        } catch (error) {
+          if (isMoneyMarketOrchestrationError(error)) return { ok: false, error };
+          return {
+            ok: false,
+            error: executionFailed('moneyMarket', error, { ...baseCtx, phase: 'intentCreation' }),
+          };
+        }
+      },
+      {
+        start: () => ({
+          srcChainKey: _params.params.srcChainKey,
+          srcAddress: _params.params.srcAddress,
+          dstChainKey: _params.params.dstChainKey,
+          dstAddress: _params.params.dstAddress,
+          token: _params.params.token,
+          amount: _params.params.amount,
+        }),
+        success: value => ({ srcChainTxHash: value.srcChainTxHash, dstChainTxHash: value.dstChainTxHash }),
+        failure: error => ({ code: error.code }),
+      },
+    );
   }
 
   /**
@@ -914,75 +961,93 @@ export class MoneyMarketService {
   public async withdraw<K extends SpokeChainKey>(
     _params: MoneyMarketWithdrawActionParams<K, false>,
   ): Promise<Result<TxHashPair, MoneyMarketOrchestrationError>> {
-    const { params, timeout = DEFAULT_RELAY_TX_TIMEOUT } = _params;
-    const srcChainKey = params.srcChainKey;
-    const hubChainId = this.hubProvider.chainConfig.chain.key;
-    const walletRouter = this.hubProvider.chainConfig.addresses.walletRouter;
-    const baseCtx = { srcChainKey, dstChainKey: params.dstChainKey, action: 'withdraw' as const };
+    return this.config.analytics.trackResult(
+      'moneyMarket',
+      'withdraw',
+      async () => {
+        const { params, timeout = DEFAULT_RELAY_TX_TIMEOUT } = _params;
+        const srcChainKey = params.srcChainKey;
+        const hubChainId = this.hubProvider.chainConfig.chain.key;
+        const walletRouter = this.hubProvider.chainConfig.addresses.walletRouter;
+        const baseCtx = { srcChainKey, dstChainKey: params.dstChainKey, action: 'withdraw' as const };
 
-    try {
-      const txResult = await this.createWithdrawIntent(_params);
-      if (!txResult.ok) return { ok: false, error: txResult.error };
+        try {
+          const txResult = await this.createWithdrawIntent(_params);
+          if (!txResult.ok) return { ok: false, error: txResult.error };
 
-      const verify = await this.spoke.verifyTxHash({ txHash: txResult.value.tx, chainKey: srcChainKey });
-      if (!verify.ok) {
-        return {
-          ok: false,
-          error: verifyFailed('moneyMarket', verify.error, baseCtx),
-        };
-      }
+          const verify = await this.spoke.verifyTxHash({ txHash: txResult.value.tx, chainKey: srcChainKey });
+          if (!verify.ok) {
+            return {
+              ok: false,
+              error: verifyFailed('moneyMarket', verify.error, baseCtx),
+            };
+          }
 
-      // Relay is not required only when: source is hub AND target is hub AND target is not the walletRouter.
-      const needsRelay =
-        srcChainKey !== hubChainId ||
-        (params.dstChainKey != null &&
-          params.dstAddress != null &&
-          params.dstChainKey !== hubChainId &&
-          params.dstAddress !== walletRouter);
+          // Relay is not required only when: source is hub AND target is hub AND target is not the walletRouter.
+          const needsRelay =
+            srcChainKey !== hubChainId ||
+            (params.dstChainKey != null &&
+              params.dstAddress != null &&
+              params.dstChainKey !== hubChainId &&
+              params.dstAddress !== walletRouter);
 
-      if (!needsRelay) {
-        return {
-          ok: true,
-          value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: txResult.value.tx },
-        };
-      }
+          if (!needsRelay) {
+            return {
+              ok: true,
+              value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: txResult.value.tx },
+            };
+          }
 
-      const relayIdentity = this.buildRelayIdentity(srcChainKey, txResult.value.tx, txResult.value.relayData);
-      const packet = await relayTxAndWaitPacket({
-        ...relayIdentity,
-        chainKey: srcChainKey,
-        relayerApiEndpoint: this.relayerApiEndpoint,
-        timeout,
-      });
+          const relayIdentity = this.buildRelayIdentity(srcChainKey, txResult.value.tx, txResult.value.relayData);
+          const packet = await relayTxAndWaitPacket({
+            ...relayIdentity,
+            chainKey: srcChainKey,
+            relayerApiEndpoint: this.relayerApiEndpoint,
+            timeout,
+          });
 
-      if (!packet.ok)
-        return {
-          ok: false,
-          error: mapRelayFailure(packet.error, {
-            feature: 'moneyMarket',
-            action: baseCtx.action,
-            srcChainKey: baseCtx.srcChainKey,
-            dstChainKey: baseCtx.dstChainKey,
-          }),
-        };
+          if (!packet.ok)
+            return {
+              ok: false,
+              error: mapRelayFailure(packet.error, {
+                feature: 'moneyMarket',
+                action: baseCtx.action,
+                srcChainKey: baseCtx.srcChainKey,
+                dstChainKey: baseCtx.dstChainKey,
+              }),
+            };
 
-      // On-demand relays expose the derived poll id (od:<hash>) as the source identifier — what the
-      // relay/SodaxScan track — not the opaque signed payload; other chains keep the spoke tx (see
-      // buildRelayIdentity).
-      return {
-        ok: true,
-        value: {
-          srcChainTxHash: relayIdentity.pollTxHash ?? txResult.value.tx,
-          dstChainTxHash: packet.value.dst_tx_hash,
-        },
-      };
-    } catch (error) {
-      if (isMoneyMarketOrchestrationError(error)) return { ok: false, error };
-      return {
-        ok: false,
-        error: executionFailed('moneyMarket', error, { ...baseCtx, phase: 'intentCreation' }),
-      };
-    }
+          // On-demand relays expose the derived poll id (od:<hash>) as the source identifier — what the
+          // relay/SodaxScan track — not the opaque signed payload; other chains keep the spoke tx (see
+          // buildRelayIdentity).
+          return {
+            ok: true,
+            value: {
+              srcChainTxHash: relayIdentity.pollTxHash ?? txResult.value.tx,
+              dstChainTxHash: packet.value.dst_tx_hash,
+            },
+          };
+        } catch (error) {
+          if (isMoneyMarketOrchestrationError(error)) return { ok: false, error };
+          return {
+            ok: false,
+            error: executionFailed('moneyMarket', error, { ...baseCtx, phase: 'intentCreation' }),
+          };
+        }
+      },
+      {
+        start: () => ({
+          srcChainKey: _params.params.srcChainKey,
+          srcAddress: _params.params.srcAddress,
+          dstChainKey: _params.params.dstChainKey,
+          dstAddress: _params.params.dstAddress,
+          token: _params.params.token,
+          amount: _params.params.amount,
+        }),
+        success: value => ({ srcChainTxHash: value.srcChainTxHash, dstChainTxHash: value.dstChainTxHash }),
+        failure: error => ({ code: error.code }),
+      },
+    );
   }
 
   /**
@@ -1104,57 +1169,75 @@ export class MoneyMarketService {
   public async repay<K extends SpokeChainKey>(
     _params: MoneyMarketRepayActionParams<K, false>,
   ): Promise<Result<TxHashPair, MoneyMarketOrchestrationError>> {
-    const { params, timeout = DEFAULT_RELAY_TX_TIMEOUT } = _params;
-    const srcChainKey = params.srcChainKey;
-    const baseCtx = { srcChainKey, dstChainKey: params.dstChainKey, action: 'repay' as const };
+    return this.config.analytics.trackResult(
+      'moneyMarket',
+      'repay',
+      async () => {
+        const { params, timeout = DEFAULT_RELAY_TX_TIMEOUT } = _params;
+        const srcChainKey = params.srcChainKey;
+        const baseCtx = { srcChainKey, dstChainKey: params.dstChainKey, action: 'repay' as const };
 
-    try {
-      const txResult = await this.createRepayIntent(_params);
-      if (!txResult.ok) return { ok: false, error: txResult.error };
+        try {
+          const txResult = await this.createRepayIntent(_params);
+          if (!txResult.ok) return { ok: false, error: txResult.error };
 
-      const verify = await this.spoke.verifyTxHash({ txHash: txResult.value.tx, chainKey: srcChainKey });
-      if (!verify.ok) {
-        return {
-          ok: false,
-          error: verifyFailed('moneyMarket', verify.error, baseCtx),
-        };
-      }
+          const verify = await this.spoke.verifyTxHash({ txHash: txResult.value.tx, chainKey: srcChainKey });
+          if (!verify.ok) {
+            return {
+              ok: false,
+              error: verifyFailed('moneyMarket', verify.error, baseCtx),
+            };
+          }
 
-      // Relay skipped only when source chain is the hub.
-      if (isHubChainKeyType(srcChainKey)) {
-        return {
-          ok: true,
-          value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: txResult.value.tx },
-        };
-      }
+          // Relay skipped only when source chain is the hub.
+          if (isHubChainKeyType(srcChainKey)) {
+            return {
+              ok: true,
+              value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: txResult.value.tx },
+            };
+          }
 
-      const packet = await relayTxAndWaitPacket({
-        srcTxHash: txResult.value.tx,
-        data: txResult.value.relayData,
-        chainKey: srcChainKey,
-        relayerApiEndpoint: this.relayerApiEndpoint,
-        timeout,
-      });
+          const packet = await relayTxAndWaitPacket({
+            srcTxHash: txResult.value.tx,
+            data: txResult.value.relayData,
+            chainKey: srcChainKey,
+            relayerApiEndpoint: this.relayerApiEndpoint,
+            timeout,
+          });
 
-      if (!packet.ok)
-        return {
-          ok: false,
-          error: mapRelayFailure(packet.error, {
-            feature: 'moneyMarket',
-            action: baseCtx.action,
-            srcChainKey: baseCtx.srcChainKey,
-            dstChainKey: baseCtx.dstChainKey,
-          }),
-        };
+          if (!packet.ok)
+            return {
+              ok: false,
+              error: mapRelayFailure(packet.error, {
+                feature: 'moneyMarket',
+                action: baseCtx.action,
+                srcChainKey: baseCtx.srcChainKey,
+                dstChainKey: baseCtx.dstChainKey,
+              }),
+            };
 
-      return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: packet.value.dst_tx_hash } };
-    } catch (error) {
-      if (isMoneyMarketOrchestrationError(error)) return { ok: false, error };
-      return {
-        ok: false,
-        error: executionFailed('moneyMarket', error, { ...baseCtx, phase: 'intentCreation' }),
-      };
-    }
+          return { ok: true, value: { srcChainTxHash: txResult.value.tx, dstChainTxHash: packet.value.dst_tx_hash } };
+        } catch (error) {
+          if (isMoneyMarketOrchestrationError(error)) return { ok: false, error };
+          return {
+            ok: false,
+            error: executionFailed('moneyMarket', error, { ...baseCtx, phase: 'intentCreation' }),
+          };
+        }
+      },
+      {
+        start: () => ({
+          srcChainKey: _params.params.srcChainKey,
+          srcAddress: _params.params.srcAddress,
+          dstChainKey: _params.params.dstChainKey,
+          dstAddress: _params.params.dstAddress,
+          token: _params.params.token,
+          amount: _params.params.amount,
+        }),
+        success: value => ({ srcChainTxHash: value.srcChainTxHash, dstChainTxHash: value.dstChainTxHash }),
+        failure: error => ({ code: error.code }),
+      },
+    );
   }
 
   /**

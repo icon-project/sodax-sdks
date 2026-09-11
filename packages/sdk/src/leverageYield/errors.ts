@@ -53,6 +53,7 @@ export type LeverageYieldPostExecutionErrorCode = Extract<
  */
 export type LeverageYieldSwapErrorCode = Extract<
   SodaxErrorCode,
+  | 'USER_REJECTED'
   | 'VALIDATION_FAILED'
   | 'INTENT_CREATION_FAILED'
   | 'TX_VERIFICATION_FAILED'
@@ -66,6 +67,7 @@ export type LeverageYieldSwapErrorCode = Extract<
 
 export type LeverageYieldErrorCode = Extract<
   SodaxErrorCode,
+  | 'USER_REJECTED'
   | 'VALIDATION_FAILED'
   | 'INTENT_CREATION_FAILED'
   | 'APPROVE_FAILED'
@@ -89,6 +91,7 @@ export type LeverageYieldSwapError = SodaxError<LeverageYieldSwapErrorCode>;
 export type LeverageYieldError = SodaxError<LeverageYieldErrorCode>;
 
 const LEVERAGE_YIELD_CODES: ReadonlySet<LeverageYieldErrorCode> = new Set<LeverageYieldErrorCode>([
+  'USER_REJECTED',
   'VALIDATION_FAILED',
   'INTENT_CREATION_FAILED',
   'APPROVE_FAILED',
@@ -110,6 +113,7 @@ const LEVERAGE_YIELD_POST_EXECUTION_CODES: ReadonlySet<LeverageYieldPostExecutio
 ]);
 
 const LEVERAGE_YIELD_SWAP_CODES: ReadonlySet<LeverageYieldSwapErrorCode> = new Set([
+  'USER_REJECTED',
   'VALIDATION_FAILED',
   'INTENT_CREATION_FAILED',
   'TX_VERIFICATION_FAILED',

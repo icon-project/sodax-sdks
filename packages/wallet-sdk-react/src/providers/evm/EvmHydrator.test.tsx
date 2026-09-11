@@ -57,12 +57,15 @@ const setters = {
   setWalletProvider: vi.fn(),
   setXConnectors: vi.fn(),
   userDisconnected: {} as Partial<Record<'EVM', boolean>>,
+  xConnections: {} as Partial<
+    Record<'EVM', { xAccount: { address: string; xChainType: 'EVM' }; xConnectorId: string }>
+  >,
 };
 vi.mock('@/useXWalletStore.js', () => ({
   useXWalletStore: Object.assign((s: (st: unknown) => unknown) => s(setters), {
     getState: () => ({
       setXConnectors: setters.setXConnectors,
-      xConnections: {},
+      xConnections: setters.xConnections,
       userDisconnected: setters.userDisconnected,
     }),
     persist: {
@@ -99,14 +102,18 @@ describe('EvmHydrator → EvmWalletProvider', () => {
   // and the hydrator must pick the matching entry from `walletConfig.EVM.chains`.
   it.each([
     { name: 'Arbitrum (42161)', chainId: 42161, expected: { confirmations: 1, timeout: 60_000 } },
-    { name: 'Ethereum (1)',     chainId: 1,     expected: { confirmations: 3, timeout: 180_000 } },
+    { name: 'Ethereum (1)', chainId: 1, expected: { confirmations: 3, timeout: 180_000 } },
   ])('forwards $name defaults to ctor', ({ chainId, expected }) => {
     wagmiState.walletClient = wallet(chainId);
     renderWith({
       EVM: {
         chains: {
-          [ChainKeys.ARBITRUM_MAINNET]: { defaults: { waitForTransactionReceipt: { confirmations: 1, timeout: 60_000 } } },
-          [ChainKeys.ETHEREUM_MAINNET]: { defaults: { waitForTransactionReceipt: { confirmations: 3, timeout: 180_000 } } },
+          [ChainKeys.ARBITRUM_MAINNET]: {
+            defaults: { waitForTransactionReceipt: { confirmations: 1, timeout: 60_000 } },
+          },
+          [ChainKeys.ETHEREUM_MAINNET]: {
+            defaults: { waitForTransactionReceipt: { confirmations: 3, timeout: 180_000 } },
+          },
         },
       },
     });
@@ -163,7 +170,9 @@ describe('EvmHydrator → EvmWalletProvider', () => {
   it('writes the constructed provider into the EVM slot of the store', () => {
     wagmiState.walletClient = wallet(42161);
     renderWith({
-      EVM: { chains: { [ChainKeys.ARBITRUM_MAINNET]: { defaults: { waitForTransactionReceipt: { confirmations: 1 } } } } },
+      EVM: {
+        chains: { [ChainKeys.ARBITRUM_MAINNET]: { defaults: { waitForTransactionReceipt: { confirmations: 1 } } } },
+      },
     });
     const [chain, provider] = setters.setWalletProvider.mock.calls.at(-1) ?? [];
     expect(chain).toBe('EVM');
@@ -174,15 +183,15 @@ describe('EvmHydrator → EvmWalletProvider', () => {
     const fakeAddress = '0xabc' as const;
     const fakeConnector = { id: 'metamask' };
 
-    it.each(['connecting', 'reconnecting'] as const)(
-      'does not call setXConnection / unsetXConnection during %s',
-      status => {
-        wagmiState.account = { address: fakeAddress, status, connector: fakeConnector };
-        renderWith({ EVM: {} });
-        expect(setters.setXConnection).not.toHaveBeenCalled();
-        expect(setters.unsetXConnection).not.toHaveBeenCalled();
-      },
-    );
+    it.each([
+      'connecting',
+      'reconnecting',
+    ] as const)('does not call setXConnection / unsetXConnection during %s', status => {
+      wagmiState.account = { address: fakeAddress, status, connector: fakeConnector };
+      renderWith({ EVM: {} });
+      expect(setters.setXConnection).not.toHaveBeenCalled();
+      expect(setters.unsetXConnection).not.toHaveBeenCalled();
+    });
 
     it('calls setXConnection on connected once walletClient is ready', () => {
       wagmiState.walletClient = wallet(42161);
@@ -249,9 +258,34 @@ describe('EvmHydrator → EvmWalletProvider', () => {
       expect(providerCalls.every(([, p]) => p === undefined)).toBe(true);
     });
 
+    // #9: a persisted connection whose reconnect fails must be cleared, not left stale for the session.
+    it('clears a stale persisted EVM connection when reconnect ends in disconnected', () => {
+      setters.xConnections = { EVM: { xAccount: { address: '0xold', xChainType: 'EVM' }, xConnectorId: 'metamask' } };
+      wagmiState.account = { address: undefined, status: 'disconnected', connector: undefined };
+      const { rerender } = renderWith({ EVM: {} });
+      // Initial disconnected must not clear yet — reconnect hasn't been attempted/resolved.
+      expect(setters.unsetXConnection).not.toHaveBeenCalled();
+
+      const rerenderHydrator = () =>
+        rerender(
+          <WalletConfigProvider value={{ EVM: {} }}>
+            <EvmHydrator />
+          </WalletConfigProvider>,
+        );
+
+      wagmiState.account = { address: undefined, status: 'reconnecting', connector: undefined };
+      rerenderHydrator();
+      expect(setters.unsetXConnection).not.toHaveBeenCalled();
+
+      wagmiState.account = { address: undefined, status: 'disconnected', connector: undefined };
+      rerenderHydrator();
+      expect(setters.unsetXConnection).toHaveBeenCalledWith('EVM');
+    });
+
     afterEach(() => {
       wagmiState.account = { address: undefined, status: 'disconnected', connector: undefined };
       setters.userDisconnected = {};
+      setters.xConnections = {};
     });
   });
 });

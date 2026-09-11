@@ -46,7 +46,7 @@ Work this top-down. Each step is independent enough to land as its own commit; t
         the v2 shape is { tx, intent, relayData }. Stop destructuring tx-pair
         results as arrays — every cross-chain mutation returns
         TxHashPair = { srcChainTxHash, dstChainTxHash }.
-[ ] 15. For every backend-API call site: every method on IConfigApi now returns
+[ ] 15. For every backend-API call site: every method on IConfigApiV1 now returns
         Promise<Result<T>>. Wrap or unwrap accordingly.
 [ ] 16. (Optional) Adopt isSodaxError(e) over instanceof SodaxError in cross-bundle
         / cross-realm contexts.

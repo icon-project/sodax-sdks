@@ -19,9 +19,9 @@ import {
   useDexDeposit,
   useDexWithdraw,
   useSodaxContext,
-  useXBalances,
+  useBalances,
 } from '@sodax/dapp-kit';
-import { type IWalletProvider, type XAccount, getXChainType, useXService } from '@sodax/wallet-sdk-react';
+import type { IWalletProvider, XAccount } from '@sodax/wallet-sdk-react';
 import { UserPositions } from '@/components/dex/UserPositions';
 import { NavLink } from 'react-router';
 
@@ -99,12 +99,10 @@ export function ManageLiquidity({
     () => sodax.dex.clService.getAssetsForPool(selectedChainId, pools[selectedPoolIndex]),
     [sodax, selectedChainId, pools, selectedPoolIndex],
   );
-  const xService = useXService({ xChainType: getXChainType(selectedChainId) });
-  const { data: sourceBalances } = useXBalances({
+  const { data: sourceBalances } = useBalances({
     params: {
-      xService,
-      xChainId: selectedChainId,
-      xTokens: [poolSpokeAssets.token0, poolSpokeAssets.token1],
+      chainKey: selectedChainId,
+      tokens: [poolSpokeAssets.token0, poolSpokeAssets.token1],
       address: xAccount.address,
     },
   });
@@ -295,11 +293,11 @@ export function ManageLiquidity({
                 </div>
                 <div className="text-xs space-y-1">
                   <p className="text-muted-foreground">
-                    Balance ({spokeChainName}):{' '}
-                    {formatAmount(spokeToken0Balance, poolSpokeAssets.token0.decimals)} {poolSpokeAssets.token0.symbol}
+                    Balance ({spokeChainName}): {formatAmount(spokeToken0Balance, poolSpokeAssets.token0.decimals)}{' '}
+                    {poolSpokeAssets.token0.symbol}
                     <br />
-                    Deposited Balance ({hubChainName}):{' '}
-                    {formatAmount(token0Balance, poolData.token0.decimals)} {poolData.token0.symbol}
+                    Deposited Balance ({hubChainName}): {formatAmount(token0Balance, poolData.token0.decimals)}{' '}
+                    {poolData.token0.symbol}
                   </p>
                   {poolData.token0IsStatAToken &&
                     poolData.token0ConversionRate &&
@@ -369,11 +367,11 @@ export function ManageLiquidity({
                 </div>
                 <div className="text-xs space-y-1">
                   <p className="text-muted-foreground">
-                    Balance ({spokeChainName}):{' '}
-                    {formatAmount(spokeToken1Balance, poolSpokeAssets.token1.decimals)} {poolSpokeAssets.token1.symbol}
+                    Balance ({spokeChainName}): {formatAmount(spokeToken1Balance, poolSpokeAssets.token1.decimals)}{' '}
+                    {poolSpokeAssets.token1.symbol}
                     <br />
-                    Deposited Balance ({hubChainName}):{' '}
-                    {formatAmount(token1Balance, poolData.token1.decimals)} {poolData.token1.symbol}
+                    Deposited Balance ({hubChainName}): {formatAmount(token1Balance, poolData.token1.decimals)}{' '}
+                    {poolData.token1.symbol}
                   </p>
                   {poolData.token1IsStatAToken &&
                     poolData.token1ConversionRate &&

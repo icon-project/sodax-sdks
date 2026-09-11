@@ -31,7 +31,7 @@ Direct usage of `@sodax/wallet-sdk-core` is the right choice for:
 ### Workflow
 
 1. Read [`integration/knowledge/ai-rules.md`](./integration/knowledge/ai-rules.md) — DO / DON'T + workflow + stop conditions.
-2. Read [`integration/knowledge/architecture.md`](./integration/knowledge/architecture.md) — mental model: `BaseWalletProvider`, dual-config discriminants (`{ type: 'PRIVATE_KEY', … }` vs `{ type: 'BROWSER_EXTENSION', … }`), shallow `defaults` merge, library-exports.
+2. Read [`integration/knowledge/architecture.md`](./integration/knowledge/architecture.md) — mental model: `BaseWalletProvider`, dual-config discriminants (Bitcoin/Stellar via an explicit `type` field, every other chain via field presence), shallow `defaults` merge, library-exports.
 3. Read [`integration/knowledge/quickstart.md`](./integration/knowledge/quickstart.md) — copy-paste minimal example for the chain you need.
 4. For your chain, read [`integration/knowledge/features/`](./integration/knowledge/features/) — per-chain config table + methods + gotchas (one file per chain family).
 5. Task-specific recipes → [`integration/knowledge/recipes/`](./integration/knowledge/recipes/) — `setup-private-key.md`, `setup-browser-extension.md`, `sign-and-broadcast.md`, `defaults-and-overrides.md`, `library-exports.md`, `bridge-to-sdk.md` (pass provider to `@sodax/sdk`).
@@ -39,7 +39,7 @@ Direct usage of `@sodax/wallet-sdk-core` is the right choice for:
 
 ### Conventions to follow (integration)
 
-- **Dual-config discriminant.** Every chain's provider config has a `type` discriminator: `'PRIVATE_KEY'` (Node / scripts) or `'BROWSER_EXTENSION'` (consumer dApps). Pick one — don't merge them.
+- **Dual-config discriminant.** **Bitcoin and Stellar** configs carry an explicit `type` discriminator (`'PRIVATE_KEY'` for Node / scripts or `'BROWSER_EXTENSION'` for consumer dApps); **every other chain** (EVM, Solana, Sui, ICON, Injective, NEAR, Stacks) discriminates by field presence (e.g. `privateKey` vs `walletClient`/`wallet`). Either way, pick ONE variant — don't merge them.
 - **`defaults` is a shallow merge.** Each provider accepts a `defaults` field for per-method overrides (e.g. `waitForTransactionReceipt`, `gasPrice`). The merge into the per-call options is **shallow**, not deep. Top-level keys overwrite wholesale.
 - **Use barrel imports**, not deep imports. Import classes from `@sodax/wallet-sdk-core`, not from `@sodax/wallet-sdk-core/wallet-providers/<chain>.ts`.
 - **Re-import chain SDK types from the barrel.** `@sodax/wallet-sdk-core` re-exports the types you need (e.g. `WalletClient` from viem, `SuiClient` from `@mysten/sui`). Don't add the underlying SDK as a direct dep — risks version skew.

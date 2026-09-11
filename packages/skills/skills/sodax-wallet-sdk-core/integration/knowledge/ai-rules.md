@@ -14,7 +14,7 @@ Before changing anything, gather context:
 # Runtime — Node script? React dApp? Edge runtime?
 cat <user>/package.json | grep -E '"type|"main|"module'
 
-# Node version — must be >= 18
+# Node version — must be >= 20.12
 cat <user>/.nvmrc 2>/dev/null
 node --version
 

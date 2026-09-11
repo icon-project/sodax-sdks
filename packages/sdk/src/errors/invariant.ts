@@ -35,11 +35,7 @@ export function sodaxInvariant(
  * a named type so the `asserts cond` predicate survives the factory boundary — TypeScript
  * does not propagate `asserts` from arrow function bodies through inferred return types.
  */
-export type FeatureInvariant = (
-  cond: unknown,
-  message: string,
-  context?: Partial<SodaxErrorContext>,
-) => asserts cond;
+export type FeatureInvariant = (cond: unknown, message: string, context?: Partial<SodaxErrorContext>) => asserts cond;
 
 /**
  * Returns a feature-bound invariant helper. The call-site shape mirrors the legacy

@@ -29,7 +29,7 @@ Granular skill for the headless multi-chain modal + connection-flow + batch hook
 
 - **Rendering UI before persist hydration.** Gate on `useConnectedChains().status === 'ready'` — render too early and you get flicker / stale state.
 - **Expecting per-network EVM rows.** `useChainGroups` collapses every configured EVM network into a single `EVM` group (one wagmi connection covers all).
-- **Ignoring the batch result buckets.** `useBatchConnect` / `useBatchDisconnect` return `successful` / `failed` (with per-chain error) / `skipped` (when `skipConnected: true`) — surface all three.
+- **Ignoring the batch result buckets.** Both `useBatchConnect` and `useBatchDisconnect` return `successful` / `failed` (with per-chain error). Only `useBatchConnect` adds a `skipped` bucket (when `skipConnected: true`) — `BatchDisconnectResult` has no `skipped`. Surface every bucket the operation exposes.
 - **Treating `useWalletModal` as connection state.** It's a UI state machine (`closed → chainSelect → walletSelect → connecting → success | error`); the connection itself comes from `useXAccount` / `useConnectedChains`.
 
 ## Migration workflow (port v1 → v2)

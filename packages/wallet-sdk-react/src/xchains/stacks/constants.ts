@@ -1,3 +1,4 @@
+import { WALLET_METADATA } from '@/constants.js';
 import type { StacksProviderConfig } from './StacksXConnector.js';
 
 // Icons sourced from @stacks/connect DEFAULT_PROVIDERS
@@ -38,5 +39,13 @@ export const STACKS_PROVIDERS: StacksProviderConfig[] = [
     name: 'Fordefi',
     icon: FORDEFI_ICON,
     installUrl: 'https://chromewebstore.google.com/detail/fordefi/hcmehenccjdmfbojapcbcofkgdpbnlle',
+  },
+  {
+    // getProviderFromId walks 'hanaWallet.stacks' → window.hanaWallet.stacks,
+    // matching the namespace Hana's Bitcoin/Icon connectors already use.
+    id: 'hanaWallet.stacks',
+    name: 'Hana Wallet',
+    icon: WALLET_METADATA.hana.icon,
+    installUrl: WALLET_METADATA.hana.installUrl,
   },
 ];

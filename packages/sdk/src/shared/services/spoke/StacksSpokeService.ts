@@ -1,18 +1,20 @@
 import {
   Cl,
   noneCV,
+  Pc,
   PostConditionMode,
   someCV,
   uintCV,
   type ContractIdString,
   type ClarityValue,
+  type PostCondition,
   fetchCallReadOnlyFunction,
   parseContractId,
   type ContractPrincipalCV,
   type UIntCV,
   makeUnsignedContractCall,
   fetchFeeEstimateTransaction,
-  validateStacksAddress,
+  getAddressFromPublicKey,
   serializePayloadBytes,
   type StacksNetwork,
   createNetwork,
@@ -32,10 +34,13 @@ import type {
   DepositParams,
   EstimateGasParams,
   GetDepositParams,
+  GetBalanceParams,
+  GetBalancesParams,
   SendMessageParams,
   WaitForTxReceiptParams,
   WaitForTxReceiptReturnType,
 } from '../../types/spoke-types.js';
+import { createBalanceCollector, settleWalletBalances, type WalletBalanceMap } from './balance-utils.js';
 import type { ConfigService } from '../../config/ConfigService.js';
 import { bytesToHex } from 'viem';
 
@@ -98,6 +103,26 @@ export class StacksSpokeService {
     return result.value.value as bigint;
   }
 
+  private readonly ftAssetNames = new Map<string, string[]>();
+
+  /** Post-conditions need the on-chain `define-fungible-token` names; SIP-10 exposes no read for them. */
+  private async getFtAssetNames(tokenContractId: string): Promise<string[]> {
+    const cached = this.ftAssetNames.get(tokenContractId);
+    if (cached) return cached;
+    const [address, name] = parseContractId(tokenContractId as ContractIdString);
+    const response = await fetch(`${this.network.client.baseUrl}/v2/contracts/interface/${address}/${name}`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch the contract interface for ${tokenContractId}: ${response.statusText}`);
+    }
+    const abi = (await response.json()) as { fungible_tokens?: Array<{ name: string }> };
+    const assetNames = (abi.fungible_tokens ?? []).map(token => token.name);
+    if (assetNames.length === 0) {
+      throw new Error(`${tokenContractId} defines no fungible token — not a SIP-10 contract`);
+    }
+    this.ftAssetNames.set(tokenContractId, assetNames);
+    return assetNames;
+  }
+
   async getImplContractAddress(stateContract: string): Promise<string> {
     const [contractAddress, contractName] = parseContractId(stateContract as ContractIdString);
     const txParams = {
@@ -124,27 +149,43 @@ export class StacksSpokeService {
     const assetManagerImpl = await this.getImplContractAddress(chainConfig.addresses.assetManager);
     const [implAddress, implName] = parseContractId(assetManagerImpl as ContractIdString);
     const [connectionAddress, connectionName] = parseContractId(chainConfig.addresses.connection as ContractIdString);
+    const isNative = isNativeToken(params.srcChainKey, params.token);
     const reqData = {
       contractAddress: implAddress as string,
       contractName: implName as string,
       functionName: 'transfer',
       functionArgs: [
-        isNativeToken(params.srcChainKey, params.token) ? noneCV() : someCV(Cl.principal(params.token)),
+        isNative ? noneCV() : someCV(Cl.principal(params.token)),
         Cl.bufferFromHex(params.to),
         uintCV(params.amount),
         Cl.bufferFromHex(params.data),
         Cl.contractPrincipal(connectionAddress as string, connectionName as string),
       ],
-      postConditionMode: PostConditionMode.Allow,
     };
+    // Post-conditions cannot ride the raw return (`serializePayloadBytes` keeps the contract-call
+    // payload only), so raw mode skips the interface lookup they would need.
     if (params.raw === true) {
-      if (validateStacksAddress(params.srcAddress)) {
-        throw new Error('When using raw transactions, the public key must be provided as "from" parameter');
+      // srcPublicKey (builds the unsigned tx) and srcAddress (hub-wallet derivation + intent record) must
+      // be the same account — derive the address from the key and match, else the user signs a tx for another.
+      if (!params.srcPublicKey) {
+        throw new Error('Stacks raw transactions require srcPublicKey (the signer public key for srcAddress).');
+      }
+      let derivedAddress: string;
+      try {
+        // Reuse the network the service was built with (config-driven) so the address version matches.
+        derivedAddress = getAddressFromPublicKey(params.srcPublicKey, this.network);
+      } catch (error) {
+        throw new Error(`srcPublicKey is not a valid Stacks public key: ${(error as Error).message}`);
+      }
+      if (derivedAddress !== params.srcAddress) {
+        throw new Error(
+          `srcPublicKey does not match srcAddress: it derives ${derivedAddress}, but srcAddress is ${params.srcAddress}.`,
+        );
       }
 
       const tx = await makeUnsignedContractCall({
         ...reqData,
-        publicKey: params.srcAddress,
+        publicKey: params.srcPublicKey,
         network: this.network,
         fee: 0, // placeholder — we'll estimate
         nonce: 0n,
@@ -154,8 +195,32 @@ export class StacksSpokeService {
         payload: bytesToHex(serializePayloadBytes(tx.payload)),
       } satisfies StacksReturnType<true> as StacksReturnType<R>;
     }
-    const txId = await params.walletProvider.sendTransaction(reqData);
+    const txId = await params.walletProvider.sendTransaction({
+      ...reqData,
+      postConditionMode: PostConditionMode.Deny,
+      postConditions: await this.depositPostConditions(params.srcAddress, params.token, params.amount, isNative),
+    });
     return txId as StacksReturnType<R>;
+  }
+
+  /**
+   * Caps for a Deny-mode deposit: asset-manager-state.deposit moves exactly `amount` from the
+   * caller, so cap the sender at `amount` — one cap per FT the token contract defines (sBTC has
+   * two; the unmoved ones pass at 0 trivially), or uSTX for native.
+   */
+  private async depositPostConditions(
+    srcAddress: string,
+    token: string,
+    amount: bigint,
+    isNative: boolean,
+  ): Promise<PostCondition[]> {
+    if (isNative) return [Pc.principal(srcAddress).willSendLte(amount).ustx()];
+    const assetNames = await this.getFtAssetNames(token);
+    return assetNames.map(assetName =>
+      Pc.principal(srcAddress)
+        .willSendLte(amount)
+        .ft(token as ContractIdString, assetName),
+    );
   }
 
   /**
@@ -169,6 +234,35 @@ export class StacksSpokeService {
       return this.getSTXBalance(params.srcAddress);
     }
     return this.readTokenBalance(params.token, assetManager);
+  }
+
+  /**
+   * Get the user's own wallet balance of a token on Stacks, in smallest units. Native STX via the
+   * Hiro REST `/extended/v1/address/{addr}/balances` endpoint; SIP-010 fungible tokens via the
+   * read-only `get-balance` contract call. Unlike {@link getDeposit}, this reads the holding of
+   * `srcAddress` (the user), not the protocol asset manager.
+   * @param {GetBalanceParams<StacksChainKey>} params - The chain key, user address, and token.
+   * @returns {Promise<bigint>} The token balance in smallest units.
+   */
+  public async getWalletBalance(params: GetBalanceParams<StacksChainKey>): Promise<bigint> {
+    if (isNativeToken(params.srcChainKey, params.token)) {
+      return this.getSTXBalance(params.srcAddress);
+    }
+    return this.readTokenBalance(params.token.address, params.srcAddress);
+  }
+
+  /**
+   * Get the user's own wallet balances of multiple tokens on Stacks, in smallest units.
+   * @param {GetBalancesParams<StacksChainKey>} params - The chain key, user address, and tokens.
+   * @returns {Promise<WalletBalanceMap>} A map of token address to balance in smallest units.
+   */
+  public async getWalletBalances(params: GetBalancesParams<StacksChainKey>): Promise<WalletBalanceMap> {
+    const { srcChainKey, srcAddress, tokens } = params;
+    const collector = createBalanceCollector({ logger: this.config.logger, chainKey: srcChainKey });
+    await settleWalletBalances(collector, tokens, token =>
+      this.getWalletBalance({ srcChainKey, srcAddress, token }),
+    );
+    return collector.finish();
   }
 
   /**
@@ -186,10 +280,11 @@ export class StacksSpokeService {
       contractName: connectionName as string,
       functionName: 'send-message',
       functionArgs: [uintCV(dstRelayChainId), Cl.bufferFromHex(params.dstAddress), Cl.bufferFromHex(params.payload)],
-      postConditionMode: PostConditionMode.Allow,
     };
 
     if (params.raw === true) {
+      // TODO(follow-up): accept srcPublicKey here like deposit() does. Raw sendMessage still overloads
+      // srcAddress as the signer public key (money-market / recovery / swap-cancel callers).
       const tx = await makeUnsignedContractCall({
         ...reqData,
         publicKey: params.srcAddress,
@@ -203,7 +298,12 @@ export class StacksSpokeService {
       } satisfies StacksReturnType<true> as StacksReturnType<Raw>;
     }
 
-    const txId = await params.walletProvider.sendTransaction(reqData);
+    const txId = await params.walletProvider.sendTransaction({
+      ...reqData,
+      // send-message moves no assets — deny with no conditions aborts if it ever tries.
+      postConditionMode: PostConditionMode.Deny,
+      postConditions: [],
+    });
 
     return txId satisfies StacksReturnType<false> as StacksReturnType<Raw>;
   }

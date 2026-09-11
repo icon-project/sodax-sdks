@@ -1,442 +1,340 @@
+// apps/node/src/evm.ts
+//
+// E2E smoke test script for any EVM spoke chain.
+//
+// Pick the chain via `EVM_SPOKE_CHAIN_KEY` env var (defaults to Hedera).
+// Examples:
+//   EVM_SPOKE_CHAIN_KEY=hedera        pnpm evm address
+//   EVM_SPOKE_CHAIN_KEY=0x2105.base   pnpm evm bridge ETH 0x89.polygon POL 1000000000000000
+//   EVM_SPOKE_CHAIN_KEY=0x89.polygon  pnpm evm supply USDC 1000000
+//
+// Hedera quirk worth knowing:
+//  - Native HBAR is an 8-decimal token, but Hedera's EVM `msg.value` is 18 decimals.
+//    `EvmSpokeService.deposit` handles the 1e10 scaling automatically.
+//
+// Actions:
+//   address                                                show wallet address
+//   bridge          <srcSymbol> <dstChainKey> <dstSymbol> <amount> [recipient]
+//   supply          <symbol> <amount>                     supply to money market
+//   borrow          <symbol> <amount>                     borrow from money market
+//   withdraw        <symbol> <amount>                     withdraw from money market
+//   repay           <symbol> <amount>                     repay money market debt
+//
 import 'dotenv/config';
-import { encodeFunctionData, type Address, type Hash, type Hex } from 'viem';
+import type { Address, Hash, Hex } from 'viem';
 import {
-  EvmAssetManagerService,
-  EvmHubProvider,
-  type EvmSpokeChainConfig,
-  EvmSpokeProvider,
-  EvmWalletAbstraction,
-  spokeChainConfig,
-  SpokeService,
-  waitForTransactionReceipt,
-  IntentsAbi,
-  type CreateIntentParams,
-  getMoneyMarketConfig,
-  type EvmHubProviderConfig,
-  type SodaxConfig,
+  ChainKeys,
+  EVM_SPOKE_ONLY_CHAIN_KEYS_SET,
   Sodax,
-  type EvmRawTransaction,
-  type EvmChainId,
-  getHubChainConfig,
+  spokeChainConfig,
+  supportedSpokeChains,
+  type EvmSpokeChainConfig,
+  type EvmSpokeOnlyChainKey,
+  type SpokeChainKey,
 } from '@sodax/sdk';
 import { EvmWalletProvider } from '@sodax/wallet-sdk-core';
-import { SONIC_MAINNET_CHAIN_ID, AVALANCHE_MAINNET_CHAIN_ID, type HubChainId, type SpokeChainId } from '@sodax/types';
-import { solverConfig } from './config.js';
 
-// load PK from .env
-const privateKey = process.env.PRIVATE_KEY;
-const IS_TESTNET = process.env.IS_TESTNET === 'true';
-const DEFAULT_SPOKE_RPC_URL = IS_TESTNET ? 'https://avalanche-fuji.drpc.org' : 'https://api.avax.network/ext/bc/C/rpc';
-const DEFAULT_SPOKE_CHAIN_ID = AVALANCHE_MAINNET_CHAIN_ID;
-const HUB_CHAIN_ID: HubChainId = SONIC_MAINNET_CHAIN_ID;
-const HUB_RPC_URL = 'https://rpc.soniclabs.com';
-
-const EVM_SPOKE_CHAIN_ID = (process.env.SPOKE_CHAIN_ID || DEFAULT_SPOKE_CHAIN_ID) as EvmChainId & SpokeChainId; // Default to Avalanche
-const SPOKE_RPC_URL = process.env.SPOKE_RPC_URL || DEFAULT_SPOKE_RPC_URL;
-
-if (!privateKey) {
-  throw new Error('PRIVATE_KEY environment variable is required');
+const PRIVATE_KEY = process.env.PRIVATE_KEY ?? process.env.EVM_PRIVATE_KEY;
+if (!PRIVATE_KEY) {
+  throw new Error('PRIVATE_KEY (or EVM_PRIVATE_KEY) environment variable is required');
 }
 
-const hubEvmWallet = new EvmWalletProvider({
-  privateKey: privateKey as Hex,
-  chainId: SONIC_MAINNET_CHAIN_ID,
-  rpcUrl: HUB_RPC_URL as `http${string}`,
-});
-
-const spokeEvmWallet = new EvmWalletProvider({
-  privateKey: privateKey as Hex,
-  chainId: EVM_SPOKE_CHAIN_ID,
-  rpcUrl: SPOKE_RPC_URL as `http${string}`,
-});
-
-const hubConfig = {
-  hubRpcUrl: HUB_RPC_URL,
-  chainConfig: getHubChainConfig(),
-} satisfies EvmHubProviderConfig;
-
-const moneyMarketConfig = getMoneyMarketConfig(HUB_CHAIN_ID);
-
-const sodax = new Sodax({
-  swaps: solverConfig,
-  moneyMarket: moneyMarketConfig,
-  hubProviderConfig: hubConfig,
-} satisfies SodaxConfig);
-
-const hubProvider = new EvmHubProvider({
-  config: hubConfig,
-  configService: sodax.config,
-});
-
-const spokeCfg = spokeChainConfig[EVM_SPOKE_CHAIN_ID] as EvmSpokeChainConfig;
-const spokeProvider = new EvmSpokeProvider(spokeEvmWallet, spokeCfg);
-
-async function depositTo(token: Address, amount: bigint, recipient: Address) {
-  const walletAddress = (await spokeProvider.walletProvider.getWalletAddress()) as Address;
-  console.log(recipient);
-
-  const data = EvmAssetManagerService.depositToData(
-    {
-      token,
-      to: recipient,
-      amount,
-    },
-    spokeProvider.chainConfig.chain.id,
-    sodax.config,
-  );
-
-  const txHash: Hash = await SpokeService.deposit(
-    {
-      from: walletAddress,
-      token,
-      amount,
-      data,
-    },
-    spokeProvider,
-    hubProvider,
-  );
-
-  console.log('[depositTo] txHash', txHash);
-}
-
-async function withdrawAsset(token: Address, amount: bigint, recipient: Address) {
-  const walletAddress = (await spokeProvider.walletProvider.getWalletAddress()) as Address;
-  const hubWallet = await EvmWalletAbstraction.getUserHubWalletAddress(
-    spokeProvider.chainConfig.chain.id,
-    walletAddress,
-    hubProvider,
-  );
-
-  const data = EvmAssetManagerService.withdrawAssetData(
-    {
-      token,
-      to: recipient,
-      amount,
-    },
-    hubProvider,
-    spokeProvider.chainConfig.chain.id,
-  );
-  const txHash: Hash = await SpokeService.callWallet(hubWallet, data, spokeProvider, hubProvider);
-
-  console.log('[withdrawAsset] txHash', txHash);
-}
-
-async function supply(token: Address, amount: bigint) {
-  const walletAddress = (await spokeProvider.walletProvider.getWalletAddress()) as Address;
-  const hubWallet = await EvmWalletAbstraction.getUserHubWalletAddress(
-    spokeProvider.chainConfig.chain.id,
-    walletAddress,
-    hubProvider,
-  );
-
-  const data = sodax.moneyMarket.buildSupplyData(spokeProvider.chainConfig.chain.id, token, amount, hubWallet);
-
-  const txHash = await SpokeService.deposit(
-    {
-      from: walletAddress,
-      token,
-      amount,
-      data,
-    },
-    spokeProvider,
-    hubProvider,
-  );
-
-  console.log('[supply] txHash', txHash);
-}
-
-async function borrow(token: Address, amount: bigint) {
-  const walletAddress = (await spokeProvider.walletProvider.getWalletAddress()) as Address;
-  const hubWallet = await EvmWalletAbstraction.getUserHubWalletAddress(
-    spokeProvider.chainConfig.chain.id,
-    walletAddress,
-    hubProvider,
-  );
-  const data: Hex = sodax.moneyMarket.buildBorrowData(
-    hubWallet,
-    walletAddress,
-    token,
-    amount,
-    spokeProvider.chainConfig.chain.id,
-  );
-
-  const txHash: Hash = await SpokeService.callWallet(hubWallet, data, spokeProvider, hubProvider);
-
-  console.log('[borrow] txHash', txHash);
-}
-
-async function withdraw(token: Address, amount: bigint) {
-  const walletAddress = (await spokeProvider.walletProvider.getWalletAddress()) as Address;
-  const hubWallet = await EvmWalletAbstraction.getUserHubWalletAddress(
-    spokeProvider.chainConfig.chain.id,
-    walletAddress,
-    hubProvider,
-  );
-
-  const data: Hex = sodax.moneyMarket.buildWithdrawData(
-    hubWallet,
-    walletAddress,
-    token,
-    amount,
-    spokeProvider.chainConfig.chain.id,
-  );
-
-  const txHash: Hash = await SpokeService.callWallet(hubWallet, data, spokeProvider, hubProvider);
-
-  console.log('[withdraw] txHash', txHash);
-}
-
-async function repay(token: Address, amount: bigint) {
-  const walletAddress = (await spokeProvider.walletProvider.getWalletAddress()) as Address;
-  const hubWallet = await EvmWalletAbstraction.getUserHubWalletAddress(
-    spokeProvider.chainConfig.chain.id,
-    walletAddress,
-    hubProvider,
-  );
-  const data: Hex = sodax.moneyMarket.buildRepayData(spokeProvider.chainConfig.chain.id, token, amount, hubWallet);
-
-  const txHash: Hash = await SpokeService.deposit(
-    {
-      from: walletAddress,
-      token,
-      amount,
-      data,
-    },
-    spokeProvider,
-    hubProvider,
-  );
-
-  console.log('[repay] txHash', txHash);
-}
-
-// uses spoke assets to create intents
-async function createIntent(amount: bigint, nativeToken: Address, inputToken: Address, outputToken: Address) {
-  const walletAddress = (await spokeProvider.walletProvider.getWalletAddress()) as Address;
-  const intent = {
-    inputToken: inputToken,
-    outputToken: outputToken,
-    inputAmount: amount,
-    minOutputAmount: 0n,
-    deadline: 0n,
-    allowPartialFill: false,
-    srcChain: spokeProvider.chainConfig.chain.id,
-    dstChain: spokeProvider.chainConfig.chain.id,
-    srcAddress: walletAddress,
-    dstAddress: walletAddress,
-    solver: '0x0000000000000000000000000000000000000000',
-    data: '0x',
-  } satisfies CreateIntentParams;
-
-  const txHash = await sodax.swaps.createIntent({
-    intentParams: intent,
-    spokeProvider,
-  });
-
-  console.log('[createIntent] txHash', txHash);
-}
-
-// Helper function for testing only
-async function fillIntent(
-  intentId: bigint,
-  inputToken: Address,
-  outputToken: Address,
-  inputAmount: bigint,
-  outputAmount: bigint,
-) {
-  // Get the wallet client and account
-  const walletClient = spokeProvider.walletProvider;
-  const walletAddress = (await walletClient.getWalletAddress()) as Address;
-
-  console.log('Using account:', walletAddress);
-
-  // Get the creator's wallet on the hub chain
-  const hubWallet = await EvmWalletAbstraction.getUserHubWalletAddress(
-    spokeProvider.chainConfig.chain.id,
-    walletAddress,
-    hubProvider,
-  );
-
-  // Create the intent object with proper typing
-  const intent = {
-    intentId,
-    creator: hubWallet as Address,
-    inputToken,
-    outputToken,
-    inputAmount,
-    minOutputAmount: 0n,
-    deadline: 0n,
-    allowPartialFill: false,
-    srcChain: BigInt(spokeProvider.chainConfig.chain.id),
-    dstChain: BigInt(spokeProvider.chainConfig.chain.id),
-    srcAddress: walletAddress,
-    dstAddress: walletAddress,
-    solver: '0x0000000000000000000000000000000000000000' as Address,
-    data: '0x' as Hex,
-  };
-
-  console.log('Intent to fill:', intent);
-  console.log('Input amount:', inputAmount.toString());
-  console.log('Output amount:', outputAmount.toString());
-
-  try {
-    // Prepare the transaction request
-    const req = {
-      account: walletAddress,
-      address: solverConfig.intentsContract as `0x${string}`,
-      abi: IntentsAbi,
-      functionName: 'fillIntent' as const,
-      args: [
-        {
-          intentId: intent.intentId,
-          creator: intent.creator,
-          inputToken: intent.inputToken,
-          outputToken: intent.outputToken,
-          inputAmount: intent.inputAmount,
-          minOutputAmount: intent.minOutputAmount,
-          deadline: intent.deadline,
-          allowPartialFill: intent.allowPartialFill,
-          srcChain: intent.srcChain,
-          dstChain: intent.dstChain,
-          srcAddress: intent.srcAddress,
-          dstAddress: intent.dstAddress,
-          solver: intent.solver,
-          data: intent.data,
-        },
-        inputAmount,
-        outputAmount,
-        0n,
-      ] as const,
-      chainId: 57054,
-    };
-    const rawTx = {
-      from: walletAddress,
-      to: solverConfig.intentsContract as `0x${string}`,
-      data: encodeFunctionData({
-        abi: IntentsAbi,
-        functionName: 'fillIntent',
-        args: [
-          {
-            intentId: intent.intentId,
-            creator: intent.creator,
-            inputToken: intent.inputToken,
-            outputToken: intent.outputToken,
-            inputAmount: intent.inputAmount,
-            minOutputAmount: intent.minOutputAmount,
-            deadline: intent.deadline,
-            allowPartialFill: intent.allowPartialFill,
-            srcChain: intent.srcChain,
-            dstChain: intent.dstChain,
-            srcAddress: intent.srcAddress,
-            dstAddress: intent.dstAddress,
-            solver: intent.solver,
-            data: intent.data,
-          },
-          inputAmount,
-          outputAmount,
-          0n,
-        ],
-      }),
-      value: 0n,
-    } satisfies EvmRawTransaction;
-
-    // Estimate gas with the same account that will send the transaction
-    const { request } = await spokeProvider.publicClient.simulateContract(req);
-    console.log('[fillIntent] request', request);
-
-    // Send the transaction using the same request object
-    const txHash = await walletClient.sendTransaction(rawTx);
-
-    console.log('[fillIntent] txHash', txHash);
-
-    const txReceipt = await waitForTransactionReceipt(txHash, spokeProvider.walletProvider);
-
-    console.log(txReceipt);
-  } catch (error) {
-    console.error('Detailed error:', error);
-    throw error;
+function resolveSpokeChainKey(): EvmSpokeOnlyChainKey {
+  const raw = process.env.EVM_SPOKE_CHAIN_KEY ?? ChainKeys.HEDERA_MAINNET;
+  if (!EVM_SPOKE_ONLY_CHAIN_KEYS_SET.has(raw as EvmSpokeOnlyChainKey)) {
+    const supported = [...EVM_SPOKE_ONLY_CHAIN_KEYS_SET].join(', ');
+    throw new Error(`EVM_SPOKE_CHAIN_KEY="${raw}" is not a known EVM spoke chain. Supported: ${supported}`);
   }
+  return raw as EvmSpokeOnlyChainKey;
 }
 
-// uses spoke assets to create intents
-async function cancelIntent(intentCreateTxHash: string) {
-  const intent = await sodax.swaps.getIntent(intentCreateTxHash as Hash);
+const SPOKE_CHAIN_KEY = resolveSpokeChainKey();
+const spokeCfg = spokeChainConfig[SPOKE_CHAIN_KEY] satisfies EvmSpokeChainConfig;
+const RPC_URL = (process.env.EVM_RPC_URL ?? spokeCfg.rpcUrl) as `http${string}`;
 
-  const txResult = await sodax.swaps.cancelIntent(intent, spokeProvider);
+console.log(`[evm] using spoke chain ${SPOKE_CHAIN_KEY} (chainId ${spokeCfg.chain.chainId}) rpc=${RPC_URL}`);
 
-  if (txResult.ok) {
-    console.log('[cancelIntent] txHash', txResult.value);
-  } else {
-    console.error('[cancelIntent] error', txResult.error);
-  }
-}
+const walletProvider = new EvmWalletProvider({
+  privateKey: PRIVATE_KEY as Hex,
+  chainId: SPOKE_CHAIN_KEY,
+  rpcUrl: RPC_URL,
+});
 
-async function getIntent(txHash: string) {
-  const intent = await sodax.swaps.getIntent(txHash as Hash);
-  console.log(intent);
-}
+const sodax = new Sodax();
 
-async function getIntentState(txHash: string) {
-  const intentState = await sodax.swaps.getFilledIntent(txHash as Hash);
-  console.log(intentState);
-}
+const supportedTokens = spokeCfg.supportedTokens;
+type ChainSymbol = keyof typeof supportedTokens;
 
-// Main function to decide which function to call
-async function main() {
-  const functionName = process.argv[2]; // Get function name from command line argument
-
-  if (functionName === 'deposit') {
-    const token = process.argv[3] as Address; // Get token address from command line argument
-    const amount = BigInt(process.argv[4]); // Get amount from command line argument
-    const recipient = process.argv[5] as Address; // Get recipient address from command line argument
-    await depositTo(token, amount, recipient);
-  } else if (functionName === 'withdrawAsset') {
-    const token = process.argv[3] as Address; // Get token address from command line argument
-    const amount = BigInt(process.argv[4]); // Get amount from command line argument
-    const recipient = process.argv[5] as Address; // Get recipient address from command line argument
-    await withdrawAsset(token, amount, recipient);
-  } else if (functionName === 'supply') {
-    const token = process.argv[3] as Address; // Get token address from command line argument
-    const amount = BigInt(process.argv[4]); // Get amount from command line argument
-    await supply(token, amount);
-  } else if (functionName === 'borrow') {
-    const token = process.argv[3] as Address; // Get token address from command line argument
-    const amount = BigInt(process.argv[4]); // Get amount from command line argument
-    await borrow(token, amount);
-  } else if (functionName === 'withdraw') {
-    const token = process.argv[3] as Address; // Get token address from command line argument
-    const amount = BigInt(process.argv[4]); // Get amount from command line argument
-    await withdraw(token, amount);
-  } else if (functionName === 'repay') {
-    const token = process.argv[3] as Address; // Get token address from command line argument
-    const amount = BigInt(process.argv[4]); // Get amount from command line argument
-    await repay(token, amount);
-  } else if (functionName === 'createIntent') {
-    const amount = BigInt(process.argv[3]); // Get amount from command line argument
-    const nativeToken = process.argv[4] as Address; // Get input token address from command line argument
-    const inputToken = process.argv[5] as Address; // Get output token address from command line argument
-    const outputToken = process.argv[6] as Address; // Get output token address from command line argument
-    await createIntent(amount, nativeToken, inputToken, outputToken);
-  } else if (functionName === 'fillIntent') {
-    const intentId = BigInt(process.argv[3]); // Get intent ID from command line argument
-    const inputToken = process.argv[4] as Address; // Get input token address
-    const outputToken = process.argv[5] as Address; // Get output token address
-    const inputAmount = BigInt(process.argv[6]); // Get input amount
-    const outputAmount = BigInt(process.argv[7]); // Get output amount
-    await fillIntent(intentId, inputToken, outputToken, inputAmount, outputAmount);
-  } else if (functionName === 'cancelIntent') {
-    const txHash = process.argv[3]; // Get txHash from command line argument
-    await cancelIntent(txHash);
-  } else if (functionName === 'getIntent') {
-    const txHash = process.argv[3]; // Get txHash from command line argument
-    await getIntent(txHash);
-  } else if (functionName === 'getIntentState') {
-    const txHash = process.argv[3]; // Get txHash from command line argument
-    await getIntentState(txHash);
-  } else {
-    console.log(
-      'Function not recognized. Please use "deposit", "withdrawAsset", "supply", "borrow", "withdraw", "repay", "createIntent", "fillIntent", "cancelIntent", "getIntent", or "getIntentState".',
+function resolveToken(symbol: string): { address: Address; decimals: number; symbol: string } {
+  const key = symbol as ChainSymbol;
+  const token = supportedTokens[key];
+  if (!token) {
+    throw new Error(
+      `Unknown token symbol "${symbol}" on ${SPOKE_CHAIN_KEY}. Known: ${Object.keys(supportedTokens).join(', ')}`,
     );
   }
+  return { address: token.address as Address, decimals: token.decimals, symbol: token.symbol };
 }
 
-main();
+async function showAddress(): Promise<void> {
+  const address = await walletProvider.getWalletAddress();
+  console.log('[address]', address);
+}
+
+function listBridgeTargets(srcSymbol: string): void {
+  const srcToken = resolveToken(srcSymbol);
+  console.log(`[bridge-targets] ${srcToken.symbol} on ${SPOKE_CHAIN_KEY} (${srcToken.address})`);
+  console.log('chains where the same hub vault is available:');
+  let found = 0;
+  for (const dstChainKey of supportedSpokeChains) {
+    if (dstChainKey === SPOKE_CHAIN_KEY) continue;
+    const result = sodax.bridge.getBridgeableTokens(SPOKE_CHAIN_KEY, dstChainKey, srcToken.address);
+    if (!result.ok || result.value.length === 0) continue;
+    for (const dstToken of result.value) {
+      console.log(`  ${dstChainKey.padEnd(20)} ${dstToken.symbol.padEnd(10)} ${dstToken.address}`);
+      found++;
+    }
+  }
+  if (found === 0) {
+    console.log('  (none — this token has no bridgeable counterpart on other spoke chains)');
+  }
+}
+
+function resolveDstToken(dstChainKey: SpokeChainKey, dstSymbolOrAddress: string): string {
+  if (dstSymbolOrAddress.startsWith('0x')) return dstSymbolOrAddress;
+  const dstChainConfig = spokeChainConfig[dstChainKey];
+  if (!dstChainConfig) throw new Error(`Unknown destination chain: ${dstChainKey}`);
+  const tokens = dstChainConfig.supportedTokens as Record<string, { address: string }>;
+  const entry = tokens[dstSymbolOrAddress];
+  if (!entry) {
+    throw new Error(
+      `Token "${dstSymbolOrAddress}" not configured on ${dstChainKey}. Known: ${Object.keys(tokens).join(', ')}. Pass a 0x-address instead to bypass symbol lookup.`,
+    );
+  }
+  return entry.address;
+}
+
+async function bridge(
+  srcSymbol: string,
+  dstChainKey: SpokeChainKey,
+  dstSymbolOrAddress: string,
+  rawAmount: bigint,
+  recipientArg?: string,
+): Promise<void> {
+  const srcToken = resolveToken(srcSymbol);
+  const dstTokenAddress = resolveDstToken(dstChainKey, dstSymbolOrAddress);
+
+  const srcAddress = (await walletProvider.getWalletAddress()) as Address;
+  const recipient = recipientArg ?? srcAddress;
+
+  console.log(
+    `[bridge] ${rawAmount.toString()} ${srcToken.symbol} from ${SPOKE_CHAIN_KEY} → ${dstTokenAddress} on ${dstChainKey} → ${recipient}`,
+  );
+
+  const result = await sodax.bridge.bridge({
+    params: {
+      srcChainKey: SPOKE_CHAIN_KEY,
+      srcAddress,
+      srcToken: srcToken.address,
+      amount: rawAmount,
+      dstChainKey,
+      dstToken: dstTokenAddress,
+      recipient,
+    },
+    walletProvider,
+  });
+
+  if (!result.ok) {
+    console.error('[bridge] failed:', result.error);
+    return;
+  }
+  console.log('[bridge] srcTx', result.value.srcChainTxHash);
+  console.log('[bridge] dstTx', result.value.dstChainTxHash);
+}
+
+async function supply(symbol: string, amount: bigint): Promise<void> {
+  const { address: token } = resolveToken(symbol);
+  const srcAddress = (await walletProvider.getWalletAddress()) as Address;
+
+  const allowance = await sodax.moneyMarket.isAllowanceValid({
+    params: { srcChainKey: SPOKE_CHAIN_KEY, srcAddress, token, amount, action: 'supply' },
+  });
+  if (!allowance.ok) {
+    console.error('[supply] allowance check failed:', allowance.error);
+    return;
+  }
+  if (!allowance.value) {
+    console.log('[supply] approving…');
+    const approveResult = await sodax.moneyMarket.approve({
+      params: { srcChainKey: SPOKE_CHAIN_KEY, srcAddress, token, amount, action: 'supply' },
+      walletProvider,
+    });
+    if (!approveResult.ok) {
+      console.error('[supply] approve failed:', approveResult.error);
+      return;
+    }
+    await walletProvider.waitForTransactionReceipt(approveResult.value as Hash);
+    console.log('[supply] approved');
+  }
+
+  const result = await sodax.moneyMarket.supply({
+    params: { srcChainKey: SPOKE_CHAIN_KEY, srcAddress, token, amount, action: 'supply' },
+    walletProvider,
+  });
+  if (!result.ok) {
+    console.error('[supply] failed:', result.error);
+    return;
+  }
+  console.log('[supply] srcTx', result.value.srcChainTxHash);
+  console.log('[supply] dstTx', result.value.dstChainTxHash);
+}
+
+async function borrow(symbol: string, amount: bigint): Promise<void> {
+  const { address: token } = resolveToken(symbol);
+  const srcAddress = (await walletProvider.getWalletAddress()) as Address;
+
+  const result = await sodax.moneyMarket.borrow({
+    params: { srcChainKey: SPOKE_CHAIN_KEY, srcAddress, token, amount, action: 'borrow' },
+    walletProvider,
+  });
+  if (!result.ok) {
+    console.error('[borrow] failed:', result.error);
+    return;
+  }
+  console.log('[borrow] srcTx', result.value.srcChainTxHash);
+  console.log('[borrow] dstTx', result.value.dstChainTxHash);
+}
+
+async function withdraw(symbol: string, amount: bigint): Promise<void> {
+  const { address: token } = resolveToken(symbol);
+  const srcAddress = (await walletProvider.getWalletAddress()) as Address;
+
+  const result = await sodax.moneyMarket.withdraw({
+    params: { srcChainKey: SPOKE_CHAIN_KEY, srcAddress, token, amount, action: 'withdraw' },
+    walletProvider,
+  });
+  if (!result.ok) {
+    console.error('[withdraw] failed:', result.error);
+    return;
+  }
+  console.log('[withdraw] srcTx', result.value.srcChainTxHash);
+  console.log('[withdraw] dstTx', result.value.dstChainTxHash);
+}
+
+async function repay(symbol: string, amount: bigint): Promise<void> {
+  const { address: token } = resolveToken(symbol);
+  const srcAddress = (await walletProvider.getWalletAddress()) as Address;
+
+  const allowance = await sodax.moneyMarket.isAllowanceValid({
+    params: { srcChainKey: SPOKE_CHAIN_KEY, srcAddress, token, amount, action: 'repay' },
+  });
+  if (!allowance.ok) {
+    console.error('[repay] allowance check failed:', allowance.error);
+    return;
+  }
+  if (!allowance.value) {
+    const approveResult = await sodax.moneyMarket.approve({
+      params: { srcChainKey: SPOKE_CHAIN_KEY, srcAddress, token, amount, action: 'repay' },
+      walletProvider,
+    });
+    if (!approveResult.ok) {
+      console.error('[repay] approve failed:', approveResult.error);
+      return;
+    }
+    await walletProvider.waitForTransactionReceipt(approveResult.value as Hash);
+    console.log('[repay] approved');
+  }
+
+  const result = await sodax.moneyMarket.repay({
+    params: { srcChainKey: SPOKE_CHAIN_KEY, srcAddress, token, amount, action: 'repay' },
+    walletProvider,
+  });
+  if (!result.ok) {
+    console.error('[repay] failed:', result.error);
+    return;
+  }
+  console.log('[repay] srcTx', result.value.srcChainTxHash);
+  console.log('[repay] dstTx', result.value.dstChainTxHash);
+}
+
+function printUsage(): void {
+  console.log('Usage: EVM_SPOKE_CHAIN_KEY=<chainKey> pnpm evm <action> [args...]');
+  console.log('Actions:');
+  console.log('  address                                            show wallet address');
+  console.log('  bridge-targets <symbol>                            list chains+tokens that share the vault');
+  console.log('  bridge <srcSym> <dstChainKey> <dstSymOrAddress> <amount> [recipient]');
+  console.log('  supply <symbol> <amount>                           money market supply');
+  console.log('  borrow <symbol> <amount>                           money market borrow');
+  console.log('  withdraw <symbol> <amount>                         money market withdraw');
+  console.log('  repay <symbol> <amount>                            money market repay');
+  console.log(`Supported EVM spoke chains: ${[...EVM_SPOKE_ONLY_CHAIN_KEYS_SET].join(', ')}`);
+  console.log(`Known tokens on ${SPOKE_CHAIN_KEY}: ${Object.keys(supportedTokens).join(', ')}`);
+}
+
+async function main(): Promise<void> {
+  const [action, ...rest] = process.argv.slice(2);
+  switch (action) {
+    case 'address':
+      await showAddress();
+      return;
+    case 'bridge-targets': {
+      const [symbol] = rest;
+      if (!symbol) {
+        printUsage();
+        process.exit(1);
+      }
+      listBridgeTargets(symbol);
+      return;
+    }
+    case 'bridge': {
+      const [srcSym, dstChainKey, dstSym, amount, recipient] = rest;
+      if (!srcSym || !dstChainKey || !dstSym || !amount) {
+        printUsage();
+        process.exit(1);
+      }
+      await bridge(srcSym, dstChainKey as SpokeChainKey, dstSym, BigInt(amount), recipient);
+      return;
+    }
+    case 'supply': {
+      const [symbol, amount] = rest;
+      if (!symbol || !amount) {
+        printUsage();
+        process.exit(1);
+      }
+      await supply(symbol, BigInt(amount));
+      return;
+    }
+    case 'borrow': {
+      const [symbol, amount] = rest;
+      if (!symbol || !amount) {
+        printUsage();
+        process.exit(1);
+      }
+      await borrow(symbol, BigInt(amount));
+      return;
+    }
+    case 'withdraw': {
+      const [symbol, amount] = rest;
+      if (!symbol || !amount) {
+        printUsage();
+        process.exit(1);
+      }
+      await withdraw(symbol, BigInt(amount));
+      return;
+    }
+    case 'repay': {
+      const [symbol, amount] = rest;
+      if (!symbol || !amount) {
+        printUsage();
+        process.exit(1);
+      }
+      await repay(symbol, BigInt(amount));
+      return;
+    }
+    default:
+      printUsage();
+      process.exit(action ? 1 : 0);
+  }
+}
+
+await main();

@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react';
 import { headers } from 'next/headers';
-import { cookieToInitialState } from 'wagmi';
-import { createWagmiConfig } from '@sodax/wallet-sdk-react/xchains/evm';
+import { createWagmiConfig, tryCookieToInitialState } from '@sodax/wallet-sdk-react/xchains/evm';
 import Providers from './providers';
 
 export const metadata = { title: 'sodax next16 repro' };
@@ -13,7 +12,8 @@ export const metadata = { title: 'sodax next16 repro' };
 const wagmiConfig = createWagmiConfig();
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
-  const initialState = cookieToInitialState(wagmiConfig, (await headers()).get('cookie'));
+  // tryCookieToInitialState (not wagmi's cookieToInitialState) so a malformed cookie can't throw during SSR.
+  const initialState = tryCookieToInitialState(wagmiConfig, (await headers()).get('cookie'));
 
   return (
     <html lang="en" suppressHydrationWarning>

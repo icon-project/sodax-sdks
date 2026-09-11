@@ -256,6 +256,16 @@ export class MoneyMarketDataService {
   public buildReserveDataWithPrice(reserves: ReservesDataHumanized): FormatReservesUSDRequest<ReserveDataHumanized> {
     // Current UNIX timestamp in seconds
     const currentUnixTimestamp: number = Math.floor(Date.now() / 1000);
+
+    // Surface clock skew: only reserves whose lastUpdateTimestamp is ahead of the client clock
+    // get their interest accrual clamped to 0, so report the affected count rather than implying all.
+    const skewedReserves = reserves.reservesData.filter(r => r.lastUpdateTimestamp > currentUnixTimestamp);
+    if (skewedReserves.length > 0) {
+      this.config.logger.warn(
+        `[moneyMarket] client clock ${currentUnixTimestamp}s is behind chain block time; accrual clamped to 0 for ${skewedReserves.length} affected reserve(s)`,
+      );
+    }
+
     const baseCurrencyData = reserves.baseCurrencyData;
 
     return {

@@ -44,8 +44,18 @@ If the solver team says to add a token but **not activate it yet**, mark the par
 
 Confirm with the user which behavior the solver team intends, and match the comment style of the surrounding entries.
 
-## Step 4 — Verify
+## Step 4 — Docs Drift
+
+Changing `packages/types/src` triggers Docs Drift. Update
+`packages/sdk/docs/SWAPS.md` — any mapped `packages/sdk/docs/` page satisfies a
+`types` change. `packages/types/README.md` passes the gate but does not
+publish, so prefer a page that does. JSDoc does not pass. A brand-new
+`packages/sdk/docs/` page must join the `mirrored` list in
+`scripts/docs-pages-map.json` plus a `docs/docs.json` nav entry — or, if it is
+not ready to go live, the map's `unpublished` list.
+
+## Step 5 — Verify
 
 - The invariants are covered by [packages/types/src/swap/swap.test.ts](../../../packages/types/src/swap/swap.test.ts) (disjointness, staging-superset accessor, union validation) and [packages/types/src/chains/tokens-dedup.test.ts](../../../packages/types/src/chains/tokens-dedup.test.ts) (no intra-list duplicates). Tests run in CI; do not run builds locally unless the user asks.
-- Remind the user that production additions should be confirmed against the production solver oracle (`https://sodax-solver.iconblockchain.xyz/oracle`) or with the solver team.
+- Remind the user that production additions should be confirmed against the production solver oracle (`https://api.sodax.com/v1/intent/oracle`) or with the solver team.
 - **Non-EVM chains — a string match against the oracle is inconclusive.** EVM addresses are the same lowercase hex in the oracle and the SDK, so a case-insensitive match confirms membership. Non-EVM addresses diverge in format between oracle and SDK (Sui zero-padding, Bitcoin hex, Stacks `::token` suffix), so a token's SDK `address` may be absent from the oracle JSON even when the solver supports it — and the missing match can mislead in either direction. For Sui, Bitcoin, and Stacks especially, never decide production-readiness from a string match: confirm the underlying asset with the solver team before promoting. See the "Swap supported tokens" note in [packages/types/CLAUDE.md](../../../packages/types/CLAUDE.md).

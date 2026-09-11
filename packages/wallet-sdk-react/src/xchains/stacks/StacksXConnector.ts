@@ -53,6 +53,7 @@ export class StacksXConnector extends XConnector {
 
     return {
       address: stxAddress.address,
+      publicKey: stxAddress.publicKey,
       xChainType: this.xChainType,
     };
   }
