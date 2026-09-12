@@ -36,7 +36,7 @@ Leveraged-yield ERC-4626 vaults on Sonic. Deposit any token → `lsoda*` shares,
 | `useLeveragePositionPayoutAddress` | Where a withdrawal can be paid; off the hub, not the signer |
 | `useLeveragePositionFundingAllowance` | Is the funding token approved? The spender differs per chain |
 | `useApproveLeveragePositionFunding` | Approve it, against the spender the SDK resolves |
-| `useLeveragePositionCollateral` | Exact aToken balance — the only figure that can size a full exit |
+| `useLeveragePositionCollateral` | Exact aToken balance — what sizes a full exit, less the position's `feeBps` |
 | `useLeveragePositionPending` | The operation slot: is an intent live, does it need settling |
 
 > A deposit is a swap-style intent, so it approves the **spoke asset manager** via the swap-domain hooks — there is no leverage-yield-specific approve hook. A withdraw carries `hubWalletSwap: true` and needs no spoke approval.
@@ -220,6 +220,11 @@ unfilled — leaving the owner funded with leverage that never arrives. `withdra
 | `buildAddLeverage` / `buildDecreaseLeverage` | `useSubmitLeveragePositionIntent` | yes |
 | `buildPositionWithdraw` / `buildSettlePosition` / `buildCancelPositionOperation` | `useRunLeveragePositionOperation` | no |
 
+TypeScript enforces the rows: the first two builders return `PositionIntentCall`, the last three
+`PositionDirectCall`, and each hook accepts only its own. Position fees come from `getPositionInfo`
+for an existing position — `getEffectivePositionFee()` is what a NEW one would carry, and the two
+disagree once config changes, since a position's fee is fixed at creation.
+
 The hooks are thin over SDK methods of the same shape — `sodax.leverageYield.openLeveragePosition`,
 `submitLeveragePositionIntent`, `runLeveragePositionOperation` — so a non-React caller gets the same
 pairing. The low-level `openPosition` / `operatePosition` / `notifySolver` remain for anyone driving
@@ -251,7 +256,7 @@ if (!result.notified) showWarning(result.notifyError);
 ```
 
 Payouts have one more trap: `withdraw` pays to an address **on the hub**, which off the hub is not the
-signer. `useLeveragePositionPayoutAddress(chainKey, signerAddress, owner)` returns the one that works.
+signer. `useLeveragePositionPayoutAddress({ params: { chainKey, signerAddress, owner } })` returns the one that works.
 
 **Sizing the leg.** The hook borrows against what the solver actually paid, so the pool sees
 `deposit + solver output`, never `deposit × leverage` — size from oracle parity and the borrow reverts
@@ -268,18 +273,18 @@ const request: LeverageLegRequest = {
 
 // Quote `intentInput`, not `borrowAmount`: a debt-side open hands your contribution to the solver too.
 const { borrowAmount, intentInput } = sizeLeverageBorrow(request);
-const quote = await sodax.leverageYield.getQuote({
-  token_src: borrowReserve, token_src_blockchain_id: 'sonic', // both legs are HUB reserves; do not
-  token_dst: collateralReserve, token_dst_blockchain_id: 'sonic', // map them back to spoke originals
+// `getPositionLegQuote` names the HUB reserves the intent actually swaps and quotes gross — the two
+// details a hand-rolled `getQuote` gets wrong, and both only surface as an unfillable floor.
+const quote = await sodax.leverageYield.getPositionLegQuote({
+  inputHubToken: borrowReserve,
+  outputHubToken: collateralReserve,
   amount: intentInput,
-  quote_type: 'exact_input',
-  partnerFee: { address: feeReceiver, percentage: 0 }, // else a configured vault fee is pre-deducted
 });
 if (!quote.ok) throw quote.error;
 
 const projected = projectLeverageLeg(
   request,
-  { quotedCollateral: quote.value.quoted_amount, collateralDecimals },
+  { quotedCollateral: quote.value.quotedAmount, collateralDecimals },
   { ltv, liquidationThreshold },
   slippagePct,
 );
@@ -306,10 +311,10 @@ always your hub wallet, so `openPosition` takes no `owner`. Fund someone else wi
 `pool.supply(collateral, amount, position, 0)` into a position they already own.
 
 `addLeverage` and `decreaseLeverage` only *post* an intent — a solver fills it afterwards, so poll
-`useLeveragePositionPending` rather than treating the receipt as completion. And an intent is
-invisible to the solver until its hub transaction hash is reported: pass the returned
-`dstChainTxHash` — not `srcChainTxHash`, which off-hub is a different chain's transaction — to
-`sodax.leverageYield.notifySolver`, or the intent expires unfilled.
+`useLeveragePositionPending` rather than treating the receipt as completion. Reporting the intent is
+`useSubmitLeveragePositionIntent`'s job, so do not call `notifySolver` yourself on this path; read
+`notified` on the result instead. It reports the HUB hash, `dstChainTxHash` — off-hub the signed
+`srcChainTxHash` is a different chain's transaction and names no intent at all.
 
 **Closing.** Selling only the debt's worth of collateral and then withdrawing the rest leaves the
 owner holding collateral, and the withdrawal can pay out anywhere. Selling the *whole* collateral

@@ -2316,6 +2316,10 @@ describe('LeverageYieldService — position reads', () => {
           return POS_BORROW_TOKEN;
         case 'eModeCategory':
           return 3;
+        case 'feeBps':
+          return 50;
+        case 'feeReceiver':
+          return POSITION_OWNER;
         default:
           throw new Error(`unexpected read: ${call.functionName}`);
       }
@@ -2330,6 +2334,9 @@ describe('LeverageYieldService — position reads', () => {
       collateral: POS_COLLATERAL,
       borrowToken: POS_BORROW_TOKEN,
       eModeCategory: 3,
+      // Read from the position, not from config — it is fixed at creation.
+      feeBps: 50,
+      feeReceiver: POSITION_OWNER,
     });
   });
 

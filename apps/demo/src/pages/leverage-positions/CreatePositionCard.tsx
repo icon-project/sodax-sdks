@@ -29,7 +29,6 @@ import {
   useReservesUsdFormat,
   useEModes,
   useXBalances,
-  isNativeToken,
   EvmVaultTokenService,
   type GetWalletProviderType,
   projectLeverageLeg,
@@ -65,6 +64,7 @@ import {
   SummaryTiles,
   healthTone,
 } from './PositionSummary';
+import { MAX_LEVERAGE_SAFETY } from './constants';
 
 /**
  * Reserves that must never be offered as the debt side, keyed by hub reserve address so one entry
@@ -285,7 +285,7 @@ export function CreatePositionCard({ chain, owner }: { chain: SpokeChainKey; own
   // `undefined` is NOT a ceiling of 1.00x: reserves take ~1.7s to load, and falling back to 1 meant
   // the form advertised `max 1.00x` and clamped the thumb onto the one value it rejects.
   const maxLeverage = useMemo(
-    () => (riskParams.ltv > 0 && riskParams.ltv < 1 ? (1 / (1 - riskParams.ltv)) * 0.98 : undefined),
+    () => (riskParams.ltv > 0 && riskParams.ltv < 1 ? (1 / (1 - riskParams.ltv)) * MAX_LEVERAGE_SAFETY : undefined),
     [riskParams],
   );
 
@@ -631,7 +631,7 @@ export function CreatePositionCard({ chain, owner }: { chain: SpokeChainKey; own
     owner,
     signer,
     problem,
-    sodax,
+    walletProvider,
     chain,
     amount,
     depositDecimals,

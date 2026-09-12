@@ -50,6 +50,9 @@ export function useOpenLeveragePosition<K extends SpokeChainKey = SpokeChainKey>
     mutationFn: async vars => unwrapResult(await sodax.leverageYield.openLeveragePosition({ ...vars, raw: false })),
     onSuccess: async (data, vars, ctx) => {
       invalidateBalances(queryClient, vars.params.srcChainKey);
+      // A position write changes every position read — account, pending slot, the list itself — and a
+      // partner that has to remember this leaves the UI stale after the one action it just took.
+      queryClient.invalidateQueries({ queryKey: ['leverageYield'] });
       await mutationOptions?.onSuccess?.(data, vars, ctx);
     },
   });

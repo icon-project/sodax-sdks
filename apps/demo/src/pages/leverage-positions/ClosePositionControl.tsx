@@ -33,6 +33,7 @@ import { AlertTriangle, DoorOpen, Info } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import {
+  useLeveragePositionInfo,
   useSodaxContext,
   useReservesUsdFormat,
   useLeveragePositionCollateral,
@@ -48,9 +49,8 @@ import {
 } from './useHubWalletRoute';
 import { useLegQuote } from './useLegQuote';
 import { Notice } from './PositionSummary';
+import { DUST_BASE } from './constants';
 
-/** `getUserAccountData` reports base-currency amounts with 8 decimals on the Sodax fork. */
-const BASE_DP = 8;
 /**
  * Sell slightly more collateral than the debt is worth. Debt accrues interest between quoting and
  * filling, and the swap itself can come in under quote — repaying a hair too much just leaves the
@@ -58,8 +58,6 @@ const BASE_DP = 8;
  * blocks the withdrawal entirely. Doubles as the margin the full exit's coverage check must clear.
  */
 const REPAY_OVERSHOOT = 1.01;
-/** Below this the position is empty enough to treat as closed rather than offering another leg. */
-const DUST_BASE = 0.01;
 /**
  * Health factor to leave the position at when debt outlives the repay leg. The pool only demands
  * 1.0, but that is the liquidation line itself, and what is being kept back is worth fractions of a
@@ -70,6 +68,12 @@ const WITHDRAW_TARGET_HF = 2;
 const MAX_UINT256 = 2n ** 256n - 1n;
 
 type ExitAsset = 'collateral' | 'debt';
+
+/**
+ * `getUserAccountData` reports base-currency amounts with 8 decimals on the Sodax fork.
+ * Source of truth if that ever changes: `priceOracle.BASE_CURRENCY_UNIT()`, 1e8 today.
+ */
+const BASE_DP = 8;
 
 function toNumber(base: bigint): number {
   return Number(base) / 10 ** BASE_DP;
@@ -93,6 +97,8 @@ export function ClosePositionControl({
   pending: boolean;
 }) {
   const { sodax } = useSodaxContext();
+  // Deduped with the panel's own call by React Query; what it is here for is `feeBps`.
+  const { data: info } = useLeveragePositionInfo({ params: { position } });
   const queryClient = useQueryClient();
   const { route, signer } = useRunPositionOperation(chain);
   const submitIntent = useSubmitPositionIntent(chain);
@@ -195,15 +201,12 @@ export function ClosePositionControl({
   }, [hasResidualDebt, account.currentLiquidationThreshold, debt, collateral]);
 
   /**
-   * The position's own fee, which on an exit is collateral given up ON TOP of what the solver is
-   * paid. So the position must hold `input x (1 + fee)`, and sizing the input at the whole balance
-   * leaves nothing for the fee — the operation cannot settle. Fixed at creation; read rather than
-   * assumed, since a caller cannot tell which config layer supplied it.
+   * THIS position's fee, which on an exit is collateral given up ON TOP of what the solver is paid.
+   * So the position must hold `input x (1 + fee)`, and sizing the input at the whole balance leaves
+   * nothing for the fee — the operation cannot settle. Read from the position, not from config: it is
+   * fixed at creation, so what a new position would carry is not what this one does.
    */
-  const feeBps = useMemo(() => {
-    const fee = sodax.leverageYield.getEffectivePositionFee();
-    return fee.ok ? BigInt(fee.value.feeBps) : 0n;
-  }, [sodax]);
+  const feeBps = BigInt(info?.feeBps ?? 0);
 
   /** Collateral to sell, in collateral-token units: the whole balance for a full exit, else the debt's worth. */
   const repayInput = useMemo(() => {

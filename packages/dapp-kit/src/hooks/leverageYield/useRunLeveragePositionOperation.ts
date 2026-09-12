@@ -1,5 +1,11 @@
 import { useQueryClient } from '@tanstack/react-query';
-import type { PositionOperationParams, SpokeChainKey, SpokeExecActionParams, TxHashPair } from '@sodax/sdk';
+import type {
+  PositionDirectCall,
+  PositionOperationParams,
+  SpokeChainKey,
+  SpokeExecActionParams,
+  TxHashPair,
+} from '@sodax/sdk';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
 import { invalidateBalances } from '../shared/invalidateBalances.js';
 import type { MutationHookParams } from '../shared/types.js';
@@ -8,7 +14,7 @@ import { unwrapResult } from '../shared/unwrapResult.js';
 
 /** Mutation variables for {@link useRunLeveragePositionOperation} — the calls to run as the owner. */
 export type UseRunLeveragePositionOperationVars<K extends SpokeChainKey = SpokeChainKey> = Omit<
-  SpokeExecActionParams<K, false, PositionOperationParams<K>>,
+  SpokeExecActionParams<K, false, PositionOperationParams<K, PositionDirectCall>>,
   'raw'
 >;
 
@@ -48,6 +54,9 @@ export function useRunLeveragePositionOperation<K extends SpokeChainKey = SpokeC
       unwrapResult(await sodax.leverageYield.runLeveragePositionOperation({ ...vars, raw: false })),
     onSuccess: async (data, vars, ctx) => {
       invalidateBalances(queryClient, vars.params.srcChainKey);
+      // A position write changes every position read — account, pending slot, the list itself — and a
+      // partner that has to remember this leaves the UI stale after the one action it just took.
+      queryClient.invalidateQueries({ queryKey: ['leverageYield'] });
       await mutationOptions?.onSuccess?.(data, vars, ctx);
     },
   });

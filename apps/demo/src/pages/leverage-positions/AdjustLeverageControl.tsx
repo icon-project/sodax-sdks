@@ -25,6 +25,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import {
+  useLeveragePositionInfo,
   useSodaxContext,
   useReservesUsdFormat,
   type LeveragePositionAccount,
@@ -35,14 +36,17 @@ import { fmtHealthFactor, getReadableTxError } from '@/lib/utils';
 import { useSubmitPositionIntent } from './useHubWalletRoute';
 import { useLegQuote } from './useLegQuote';
 import { LeveragedApyPanel, apyPctFromReserve } from './LeveragedApyPanel';
+import { MAX_LEVERAGE_SAFETY } from './constants';
 
-/** `getUserAccountData` reports base-currency amounts with 8 decimals on the Sodax fork. */
-const BASE_DP = 8;
 const WAD = 10n ** 18n;
-/** Stay a touch under the pool's own limit so a borrow doesn't revert on rounding. */
-const MAX_LEVERAGE_SAFETY = 0.98;
 /** Ignore slider noise — below this the adjustment rounds to nothing worth a transaction. */
 const MIN_ADJUSTMENT = 0.01;
+
+/**
+ * `getUserAccountData` reports base-currency amounts with 8 decimals on the Sodax fork.
+ * Source of truth if that ever changes: `priceOracle.BASE_CURRENCY_UNIT()`, 1e8 today.
+ */
+const BASE_DP = 8;
 
 function toNumber(base: bigint): number {
   return Number(base) / 10 ** BASE_DP;
@@ -66,6 +70,8 @@ export function AdjustLeverageControl({
   pending: boolean;
 }) {
   const { sodax } = useSodaxContext();
+  // Deduped with the panel's own call by React Query; what it is here for is `feeBps`.
+  const { data: info } = useLeveragePositionInfo({ params: { position } });
   const queryClient = useQueryClient();
   const submitIntent = useSubmitPositionIntent(chain);
   const { data: reserves } = useReservesUsdFormat();
@@ -128,15 +134,12 @@ export function AdjustLeverageControl({
    * repay). Base currency is USD-denominated on this pool, so base ÷ price gives token units.
    */
   /**
-   * The position's own fee, borrowed ON TOP of what the solver is paid on an increase and given up as
-   * extra collateral on a decrease — so it moves LTV without buying anything. Fixed at creation, read
-   * from the SDK because a caller cannot derive which config layer supplied it.
+   * THIS position's fee, not what a new one would carry: it is fixed at creation, so a config change
+   * or a per-call override at open time makes the two disagree. Borrowed on top of what the solver is
+   * paid on an increase, given up as extra collateral on a decrease — either way it moves LTV without
+   * buying anything.
    */
-  const positionFeeBps = useMemo(() => {
-    const fee = sodax.leverageYield.getEffectivePositionFee();
-    return fee.ok ? fee.value.feeBps : 0;
-  }, [sodax]);
-  const feeRate = positionFeeBps / 10_000;
+  const feeRate = (info?.feeBps ?? 0) / 10_000;
 
   const inputAmount = useMemo(() => {
     if (!quote) return undefined;

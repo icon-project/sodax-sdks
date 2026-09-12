@@ -176,6 +176,16 @@ export type LeveragePosition = {
   borrowToken: Address;
   /** AAVE eMode category, fixed at creation. `0` means no eMode. */
   eModeCategory: number;
+  /**
+   * The position's own partner fee in basis points, FIXED AT CREATION.
+   *
+   * Read from the position, not from config: config can change and an open can pass a per-call
+   * override, so what a new position would carry is not what this one does. The fee is borrowed on
+   * top of what the solver is paid, so any projection of an adjust or exit has to charge it.
+   */
+  feeBps: number;
+  /** Who that fee is paid to. Zero address when none is charged. */
+  feeReceiver: Address;
 };
 
 /**

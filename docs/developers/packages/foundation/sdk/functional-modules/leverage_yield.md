@@ -472,9 +472,9 @@ Config merging skips `undefined`, so an absent override cannot blank the default
 |--------|---------|
 | `listPositions(owner)` | Position clones owned by `owner`, in creation order |
 | `listPositionsForUser({ srcChainKey, address })` | The same, resolved through a spoke address's hub wallet |
-| `getPositionInfo(position)` | Static descriptor — owner, both legs, fixed eMode category |
+| `getPositionInfo(position)` | Static descriptor — owner, both legs, fixed eMode category, and the position's own `feeBps` / `feeReceiver` |
 | `getPositionAccount(position)` | Live AAVE snapshot — collateral, debt, LTV, health factor |
-| `getPositionCollateralBalance(position, collateral?)` | Exact aToken balance — what a full exit sells |
+| `getPositionCollateralBalance(position, collateral?)` | Exact aToken balance — what a full exit sells, less the position's `feeBps` |
 | `getPositionPendingState(position)` | The operation slot: recorded kind, whether the intent is live, whether it needs settling |
 | `predictPosition(creator, owner, positionId?)` | Deterministic clone address; defaults to the next id |
 
@@ -498,6 +498,18 @@ methods pair the two steps for you, and which one to use is decided by the opera
 `withdraw`, `settle` and `cancel` are synchronous on the hub and need no notification. The split is
 not cosmetic: sending a leverage change through the route-only method leaves an intent nothing will
 fill, and it expires without a word. The other direction is merely noisy.
+
+**The compiler enforces it.** `buildAddLeverage` and `buildDecreaseLeverage` return
+`PositionIntentCall`, the other three return `PositionDirectCall`, and the two methods each accept
+only their own. The brands are type-only and erased at runtime. `operatePosition` still takes plain
+calls for anyone driving the relay by hand.
+
+**Fees: read them from the POSITION, not from config.** `getEffectivePositionFee()` answers what a
+position created *now* would carry, which is what an open needs. An existing position's fee was fixed
+at creation, so config changes and per-call overrides make the two disagree — `getPositionInfo`
+returns that position's own `feeBps` and `feeReceiver`, and an adjust or exit has to charge those. The
+fee is given up on top of what the solver is paid, so at a non-zero fee an exit sized at the whole
+collateral balance leaves nothing for it and cannot settle.
 
 ```ts
 const result = await sodax.leverageYield.openLeveragePosition({
@@ -564,15 +576,30 @@ const request: LeverageLegRequest = {
 };
 
 // 1. Oracle-sized, because there is nothing else yet. Quote `intentInput`, not `borrowAmount`:
-//    on a debt-side open the user's contribution goes to the solver too.
+//    on a debt-side open the user's contribution goes to the solver too. Use
+//    `getPositionLegQuote` rather than `getQuote`: it names the hub reserves the intent swaps and
+//    quotes gross, which are the two details a hand-rolled call gets wrong.
 const { borrowAmount, intentInput } = sizeLeverageBorrow(request);
-const quoted = await getSolverQuote(intentInput);
+const leg = await sodax.leverageYield.getPositionLegQuote({
+  inputHubToken: borrowReserve.underlyingAsset,   // the hub RESERVE address, not the reserve object
+  outputHubToken: collateralReserve.underlyingAsset,
+  amount: intentInput,
+});
+if (!leg.ok) throw leg.error;
+const quoted = leg.value.quotedAmount;
 
 // 2. Now the honest numbers, from the quote.
 const p = projectLeverageLeg(request, { quotedCollateral: quoted, collateralDecimals: 18 }, riskParams, 1);
 if (p.exceedsMaxLtv) throw new Error(`too high at this price; max is ~${p.usableMaxLeverage.toFixed(2)}x`);
 
-await sodax.leverageYield.openPosition({ params: { ..., borrowAmount, minCollateralOut: p.minCollateralOut } });
+// `openLeveragePosition`, not `openPosition`: the latter posts the intent and leaves reporting it
+// to you, and an unreported intent expires unfilled.
+const opened = await sodax.leverageYield.openLeveragePosition({
+  params: { ...funding, borrowToken, borrowAmount, minCollateralOut: p.minCollateralOut },
+  walletProvider,
+});
+if (!opened.ok) throw opened.error;
+if (!opened.value.notified) warn(opened.value.notifyError);
 ```
 
 Four things worth knowing about what comes back:
@@ -598,7 +625,8 @@ Four things worth knowing about what comes back:
 > `VALIDATION_FAILED` (`field: 'srcChainKey'`) for a Bitcoin source rather than funding the wrong wallet.
 
 
-Positions live on the hub, but nothing requires the user to. These carry the work there and are the normal entry points:
+Positions live on the hub, but nothing requires the user to. These carry the work there. They post the
+intent and stop, so prefer the high-level calls above unless you are driving the relay yourself:
 
 | Method | Effect |
 |--------|--------|
@@ -623,7 +651,7 @@ There are two exits, and they differ in which asset the owner ends up holding.
 
 **Into the collateral.** Sell only as much collateral as the debt is worth (`buildDecreaseLeverage`), wait for the fill, then `buildPositionWithdraw` the remainder. Two operations, and the withdrawal can pay out to any address. Overshoot the debt slightly — it accrues between quoting and filling, and dust debt left behind blocks the withdrawal entirely.
 
-**Into the debt token.** Sell the whole collateral balance in one `buildDecreaseLeverage`. The solver delivers more debt token than is owed, so the hook repays the debt and leaves the surplus — the owner's equity, now denominated in the debt asset — in the position. `buildSettlePosition` sweeps it, and it goes to the position's `owner`, not to whoever signed.
+**Into the debt token.** Sell the collateral balance in one `buildDecreaseLeverage`. Net of the position's own `feeBps`: the fee is given up on top of the input, so at a non-zero fee the input is `balance x 10_000 / (10_000 + feeBps)` and the whole balance cannot settle. The solver delivers more debt token than is owed, so the hook repays the debt and leaves the surplus — the owner's equity, now denominated in the debt asset — in the position. `buildSettlePosition` sweeps it, and it goes to the position's `owner`, not to whoever signed.
 
 A full exit cannot half-happen. The hook repays the debt and then withdraws all the collateral to pay the solver; were the delivered amount short of the debt, that withdrawal would leave debt standing against no collateral and the pool's health-factor check rejects it — the whole fill reverts and the position is untouched. So quote the full amount and check the floor would cover the debt before posting, rather than posting an intent that can only expire.
 

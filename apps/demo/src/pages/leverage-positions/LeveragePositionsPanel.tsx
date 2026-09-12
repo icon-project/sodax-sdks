@@ -31,11 +31,13 @@ import { HandCoins, Layers, ListTree, ShieldCheck, TrendingUp } from 'lucide-rea
 import { fmtBps, fmtHealthFactor } from '@/lib/utils';
 import { DetailGrid, DetailRow, Disclosure, SummaryTile, SummaryTiles, healthTone } from './PositionSummary';
 import { formatUnits, type Address } from 'viem';
+import { DUST_BASE } from './constants';
 
-/** Pool oracle base currency is 8 decimals on the Sodax fork. */
+/**
+ * Pool oracle base currency is 8 decimals on the Sodax fork.
+ * Source of truth if that ever changes: `priceOracle.BASE_CURRENCY_UNIT()`, 1e8 today.
+ */
 const BASE_CURRENCY_DECIMALS = 8;
-/** Below this a leg rounds to nothing worth showing. Matches the close control's own dust bound. */
-const DUST_BASE = 0.01;
 
 /**
  * Base-currency amounts read as bare numbers before — `0.1` next to `0` says nothing about what

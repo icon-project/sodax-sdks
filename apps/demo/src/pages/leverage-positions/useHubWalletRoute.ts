@@ -18,9 +18,10 @@ import type { Hex } from 'viem';
 import {
   useRunLeveragePositionOperation,
   useSubmitLeveragePositionIntent,
-  type EvmRawTransaction,
   type GetWalletProviderType,
   type LeveragePositionIntentResult,
+  type PositionDirectCall,
+  type PositionIntentCall,
   type SpokeChainKey,
   type TxHashPair,
 } from '@sodax/dapp-kit';
@@ -36,13 +37,13 @@ function useSigning(chain: SpokeChainKey) {
 /** Runs `withdraw` / `settle` / `cancel` as the hub wallet. No intent, so nothing to notify. */
 export function useRunPositionOperation(chain: SpokeChainKey): {
   signer: string | undefined;
-  route: (calls: readonly EvmRawTransaction[]) => Promise<TxHashPair>;
+  route: (calls: readonly PositionDirectCall[]) => Promise<TxHashPair>;
 } {
   const { walletProvider, signer } = useSigning(chain);
   const { mutateAsync } = useRunLeveragePositionOperation();
 
   const route = useCallback(
-    async (calls: readonly EvmRawTransaction[]) => {
+    async (calls: readonly PositionDirectCall[]) => {
       if (!signer) throw new Error('Connect a wallet');
       return mutateAsync({ params: { srcChainKey: chain, srcAddress: signer, calls }, walletProvider });
     },
@@ -55,7 +56,7 @@ export function useRunPositionOperation(chain: SpokeChainKey): {
 /** Posts an `increaseLeverage` / `decreaseLeverage` intent and reports it to the solver. */
 export function useSubmitPositionIntent(
   chain: SpokeChainKey,
-): (params: { calls: readonly EvmRawTransaction[] }) => Promise<{ hash: Hex; notified: boolean; error?: string }> {
+): (params: { calls: readonly PositionIntentCall[] }) => Promise<{ hash: Hex; notified: boolean; error?: string }> {
   const { walletProvider, signer } = useSigning(chain);
   const { mutateAsync } = useSubmitLeveragePositionIntent();
 

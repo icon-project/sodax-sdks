@@ -142,3 +142,38 @@ describe('runLeveragePositionOperation', () => {
     expect(result.ok && 'notified' in result.value).toBe(false);
   });
 });
+
+describe('the intent / direct split is enforced by the compiler', () => {
+  it('refuses a leverage change on the route-only path', () => {
+    const sodax = new Sodax();
+    const from = OPERATION.params.srcAddress as `0x${string}`;
+    const add = sodax.leverageYield.buildAddLeverage({
+      from,
+      position: SODA_S,
+      borrowAmount: 1n,
+      minCollateralOut: 1n,
+    });
+
+    // The damaging mistake: routed here the intent is never reported and expires unfilled. If the
+    // brand ever stops working this directive goes unused, which is itself a type error — so the
+    // guard cannot rot into a comment.
+    void sodax.leverageYield.runLeveragePositionOperation({
+      params: {
+        srcChainKey: SONIC,
+        srcAddress: from,
+        // @ts-expect-error PositionIntentCall is not a PositionDirectCall
+        calls: [add],
+      },
+      walletProvider: OPERATION.walletProvider,
+    });
+
+    // The harmless direction still compiles, and it is not hypothetical: a settle riding along in an
+    // intent batch is the settle-then-act sequence `PositionOperationParams.calls` exists for.
+    const settle = sodax.leverageYield.buildSettlePosition({ from, position: SODA_S });
+    void sodax.leverageYield.submitLeveragePositionIntent({
+      params: { srcChainKey: SONIC, srcAddress: from, calls: [settle, add] },
+      walletProvider: OPERATION.walletProvider,
+    });
+    expect(settle.to).toBe(SODA_S);
+  });
+});

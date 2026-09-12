@@ -138,6 +138,8 @@ const leveragePositionAbi = parseAbi([
   'function collateral() view returns (address)',
   'function borrowToken() view returns (address)',
   'function eModeCategory() view returns (uint8)',
+  'function feeBps() view returns (uint16)',
+  'function feeReceiver() view returns (address)',
   'function hasPendingOperation() view returns (bool)',
   'function pendingKind() view returns (uint8)',
   'function addLeverage(uint256 borrowAmount, uint256 minCollateralOut)',
@@ -234,7 +236,31 @@ export type OpenPositionFromDebtTokenParams<K extends SpokeChainKey> = PositionF
  * than a deposit — the calls execute as the user's hub wallet, which is what the position's
  * `onlyOwner` requires.
  */
-export type PositionOperationParams<K extends SpokeChainKey> = {
+declare const positionIntentCall: unique symbol;
+declare const positionDirectCall: unique symbol;
+
+/**
+ * A position call that POSTS a solver intent, so it must be reported or it expires unfilled.
+ *
+ * The brand is type-only and erased at runtime; it exists so the compiler refuses the one mistake
+ * that costs money — routing a leverage change through the path that does not report it.
+ */
+export type PositionIntentCall = EvmRawTransaction & { readonly [positionIntentCall]: true };
+
+/** A position call that completes on the hub, with nothing to report. Same brand mechanics. */
+export type PositionDirectCall = EvmRawTransaction & { readonly [positionDirectCall]: true };
+
+/**
+ * What may ride along in a batch that posts an intent.
+ *
+ * The brand guards ONE direction. An intent call on the route-only path is never reported and expires
+ * unfilled — that has to be refused. A direct call on the reporting path is noise, not damage, and
+ * refusing it would take the settle-then-act batch with it: `[buildSettlePosition, buildAddLeverage]`
+ * is exactly a direct call riding along, and it is the sequence the batch exists for.
+ */
+export type PositionBatchCall = PositionIntentCall | PositionDirectCall;
+
+export type PositionOperationParams<K extends SpokeChainKey, C extends EvmRawTransaction = EvmRawTransaction> = {
   srcChainKey: K;
   /** The user's address on `srcChainKey`; its hub wallet is what executes the calls. */
   srcAddress: string;
@@ -243,7 +269,7 @@ export type PositionOperationParams<K extends SpokeChainKey> = {
    * ({@link LeverageYieldService.buildAddLeverage} and friends). More than one is allowed and they
    * execute in order, which is how a settle-then-act sequence stays atomic.
    */
-  calls: readonly EvmRawTransaction[];
+  calls: readonly C[];
 };
 
 /**
@@ -1443,7 +1469,15 @@ export class LeverageYieldService {
     request: SolverIntentStatusRequest,
   ): Promise<Result<SolverIntentStatusResponse, LeverageYieldPostExecutionError>> {
     try {
-      const result = await SolverApiService.getStatus(request, this.config.solver, this.config.logger);
+      // The api key is the 5th argument; leaving it out let a keyed partner notify and then fail to
+      // poll. `timeoutMs` stays default.
+      const result = await SolverApiService.getStatus(
+        request,
+        this.config.solver,
+        this.config.logger,
+        undefined,
+        this.config.apiKey,
+      );
       if (result.ok) return result;
 
       const detail = result.error?.detail ?? {
@@ -1896,7 +1930,7 @@ export class LeverageYieldService {
   /** Static descriptor of a position — owner, both legs, and the fixed eMode category. */
   public async getPositionInfo(position: Address): Promise<Result<LeveragePosition, LeverageYieldLookupError>> {
     try {
-      const [owner, collateral, borrowToken, eModeCategory] = await Promise.all([
+      const [owner, collateral, borrowToken, eModeCategory, feeBps, feeReceiver] = await Promise.all([
         this.hubProvider.publicClient.readContract({
           address: position,
           abi: leveragePositionAbi,
@@ -1917,8 +1951,31 @@ export class LeverageYieldService {
           abi: leveragePositionAbi,
           functionName: 'eModeCategory',
         }),
+        this.hubProvider.publicClient.readContract({
+          address: position,
+          abi: leveragePositionAbi,
+          functionName: 'feeBps',
+        }),
+        this.hubProvider.publicClient.readContract({
+          address: position,
+          abi: leveragePositionAbi,
+          functionName: 'feeReceiver',
+        }),
       ]);
-      return { ok: true, value: { address: position, owner, collateral, borrowToken, eModeCategory } };
+      return {
+        ok: true,
+        value: {
+          address: position,
+          owner,
+          collateral,
+          borrowToken,
+          eModeCategory,
+          // From the position, not from config: config can change and an open can override it, so
+          // what a NEW position would carry is not what THIS one does.
+          feeBps: Number(feeBps),
+          feeReceiver,
+        },
+      };
     } catch (error) {
       if (isLeverageYieldLookupError(error)) return { ok: false, error };
       return { ok: false, error: lookupFailed('leverageYield', 'getPositionInfo', error) };
@@ -2205,8 +2262,11 @@ export class LeverageYieldService {
   }
 
   /** A hub transaction. Every builder below produces this shape and none of them sends value. */
-  private hubTx(from: Address, to: Address, data: Hex): EvmRawTransaction {
-    return { from, to, value: 0n, data };
+  // Generic so a builder's declared return type applies its own brand. The cast is the single one
+  // the pattern needs — a brand is type-only and erased at runtime — and keeping it here means no
+  // builder carries one of its own.
+  private hubTx<T extends EvmRawTransaction = EvmRawTransaction>(from: Address, to: Address, data: Hex): T {
+    return { from, to, value: 0n, data } as T;
   }
 
   /**
@@ -2338,7 +2398,7 @@ export class LeverageYieldService {
     position: Address;
     borrowAmount: bigint;
     minCollateralOut: bigint;
-  }): EvmRawTransaction {
+  }): PositionIntentCall {
     return this.hubTx(
       params.from,
       params.position,
@@ -2353,7 +2413,8 @@ export class LeverageYieldService {
   /**
    * Gives up `collateralIn` of collateral to repay debt. `minDebtOut` is the slippage floor.
    *
-   * CLOSING INTO THE DEBT TOKEN is this call with the position's whole collateral balance — there is
+   * CLOSING INTO THE DEBT TOKEN is this call with the position's collateral balance, less the fee a
+   * non-zero `feeBps` gives up on top of the input (`balance x 10_000 / (10_000 + feeBps)`) — there is
    * no separate close entry point, because selling everything is the same operation as selling part.
    * Size it with {@link LeverageYieldService.getPositionCollateralBalance}, never off
    * `totalCollateralBase`, and quote the full amount so `minDebtOut` reflects what the solver will
@@ -2379,7 +2440,7 @@ export class LeverageYieldService {
      * hands over the reserve rather than the token.
      */
     exitAsset?: Address;
-  }): EvmRawTransaction {
+  }): PositionIntentCall {
     return this.hubTx(
       params.from,
       params.position,
@@ -2401,7 +2462,7 @@ export class LeverageYieldService {
     position: Address;
     amount: bigint;
     to: Address;
-  }): EvmRawTransaction {
+  }): PositionDirectCall {
     return this.hubTx(
       params.from,
       params.position,
@@ -2425,7 +2486,7 @@ export class LeverageYieldService {
    * Reverts while the intent is still live — use {@link LeverageYieldService.buildCancelPositionOperation}
    * to end one that has not resolved yet.
    */
-  public buildSettlePosition(params: { from: Address; position: Address }): EvmRawTransaction {
+  public buildSettlePosition(params: { from: Address; position: Address }): PositionDirectCall {
     return this.hubTx(
       params.from,
       params.position,
@@ -2441,7 +2502,7 @@ export class LeverageYieldService {
    * is what a leveraged open whose intent never filled needs. With debt outstanding the
    * collateral stays put: the pool would reject the withdrawal on its health-factor check.
    */
-  public buildCancelPositionOperation(params: { from: Address; position: Address }): EvmRawTransaction {
+  public buildCancelPositionOperation(params: { from: Address; position: Address }): PositionDirectCall {
     return this.hubTx(
       params.from,
       params.position,
@@ -3074,7 +3135,7 @@ export class LeverageYieldService {
    * @experimental OFF-HUB (SPOKE) ORIGINS ARE UNVERIFIED ON-CHAIN — see `operatePosition`.
    */
   public async submitLeveragePositionIntent<K extends SpokeChainKey>(
-    _params: SpokeExecActionParams<K, false, PositionOperationParams<K>>,
+    _params: SpokeExecActionParams<K, false, PositionOperationParams<K, PositionBatchCall>>,
   ): Promise<Result<LeveragePositionIntentResult, LeverageYieldSwapError>> {
     return this.config.analytics.trackResult(
       'leverageYield',
@@ -3106,7 +3167,7 @@ export class LeverageYieldService {
    *              has never run on mainnet.
    */
   public async runLeveragePositionOperation<K extends SpokeChainKey>(
-    _params: SpokeExecActionParams<K, false, PositionOperationParams<K>>,
+    _params: SpokeExecActionParams<K, false, PositionOperationParams<K, PositionDirectCall>>,
   ): Promise<Result<TxHashPair, LeverageYieldSwapError>> {
     return this.operatePosition(_params);
   }
