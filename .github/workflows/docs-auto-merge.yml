@@ -106,6 +106,16 @@ jobs:
           app-id: ${{ secrets.DOCS_PUBLISH_APP_ID }}
           private-key: ${{ secrets.DOCS_PUBLISH_APP_PRIVATE_KEY }}
 
+      # Before the approval, so the edit lands while Lint PR can still re-run on it: the squash
+      # subject is the PR title, and Mintlify's default title is not a conventional commit.
+      - name: Retitle the pull request
+        if: steps.classify.outputs.marketing_only == 'true' && steps.app-token.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PR: ${{ github.event.pull_request.number }}
+          PAGES: ${{ steps.classify.outputs.pages }}
+        run: .github/scripts/retitle-docs-pr.sh "$PR"
+
       # The same HEAD_SHA the classifier read, so the approval cannot land on a commit a
       # later push put there.
       - name: Approve and queue the merge

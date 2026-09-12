@@ -283,6 +283,37 @@ test('writes the verdict to GITHUB_OUTPUT', t => {
   assert.match(readFileSync(outFile, { encoding: 'utf8' }), /marketing_only=true/);
 });
 
+const outputs = (root, base, head) => {
+  const outFile = join(root, 'gh-output');
+  execFileSync('bash', [SCRIPT, base, head], {
+    cwd: root,
+    encoding: 'utf8',
+    env: { ...process.env, GITHUB_OUTPUT: outFile },
+  });
+  return readFileSync(outFile, { encoding: 'utf8' });
+};
+
+// The list the approval titles the PR from, so a wrong one renames a page marketing did edit.
+test('lists every accepted page in GITHUB_OUTPUT', t => {
+  const { root, base } = createRepo(t);
+  write(root, 'docs/introduction.md', page('Introduction') + 'more\n');
+  write(root, 'docs/resources/blog.md', page('Blog') + 'more\n');
+  const head = commit(root, 'reword two');
+
+  assert.match(outputs(root, base, head), /pages<<CLASSIFY_PAGES\ndocs\/introduction\.md\ndocs\/resources\/blog\.md\nCLASSIFY_PAGES/);
+});
+
+test('lists no pages on a false verdict, so no title is written from a rejected diff', t => {
+  const { root, base } = createRepo(t);
+  write(root, 'docs/introduction.md', page('Introduction') + 'more\n');
+  write(root, 'packages/sdk/src/index.ts', 'export const n = 2;\n');
+  const head = commit(root, 'reword and touch source');
+
+  const written = outputs(root, base, head);
+  assert.match(written, /marketing_only=false/);
+  assert.match(written, /pages<<CLASSIFY_PAGES\nCLASSIFY_PAGES/);
+});
+
 // Against the real docs.json, because nothing else keeps the allowlist and the tabs in step:
 // a page added to a marketing tab would quietly stop auto-merging until someone noticed.
 test('the allowlist is exactly the marketing tabs in docs.json', () => {

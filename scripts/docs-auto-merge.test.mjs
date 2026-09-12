@@ -9,6 +9,7 @@ const REPO = fileURLToPath(new URL('..', import.meta.url));
 const APPROVE = join(REPO, '.github/scripts/approve-docs-pr.sh');
 const WITHDRAW = join(REPO, '.github/scripts/withdraw-docs-pr.sh');
 const APP_NEEDED = join(REPO, '.github/scripts/docs-app-needed.sh');
+const RETITLE = join(REPO, '.github/scripts/retitle-docs-pr.sh');
 const WORKFLOW = join(REPO, '.github/workflows/docs-auto-merge.yml');
 
 const BOT = 'sodax-docs-publisher[bot]';
@@ -25,6 +26,7 @@ if [ -n "\${GH_FAIL_ON:-}" ] && [[ "$*" == *"\$GH_FAIL_ON"* ]]; then
 fi
 case "$*" in
   *headRefOid*) printf '%s\\n' "\${GH_HEAD_OID:-}" ;;
+  *"--json body"*) printf '%s\\n' "\${GH_BODY:-}" ;;
   *autoMergeRequest*) printf '%s\\n' "\${GH_AUTO_MERGE_BY:-}" ;;
   *dismissals*|*"-X POST"*|*--disable-auto*|*--auto*) : ;;
   */reviews*) printf '%s\\n' "\${GH_APPROVAL_IDS:-}" ;;
@@ -214,9 +216,88 @@ test('withdraw fails when disarming the queued merge is refused', t => {
 });
 
 test('both scripts are committed executable, as the workflow invokes them directly', () => {
-  for (const script of [APPROVE, WITHDRAW]) {
+  for (const script of [APPROVE, WITHDRAW, RETITLE]) {
     assert.ok(statSync(script).mode & 0o111, `${script} is not executable`);
   }
+});
+
+// Mintlify titles a PR "Draft from <date>" whenever the publisher leaves the field blank, and
+// the squash subject is the PR title, so without this main collects titles like that one.
+test('retitle names the single page it changed', t => {
+  const gh = runner(t);
+  const { code, calls } = gh(RETITLE, ['416'], { PAGES: 'docs/resources/blog.mdx' });
+
+  assert.equal(code, 0);
+  assert.ok(has(calls, 'pr edit', '416', '--title docs(marketing): update resources/blog'));
+});
+
+test('retitle counts the pages when there is more than one', t => {
+  const gh = runner(t);
+  const { code, calls } = gh(RETITLE, ['416'], {
+    PAGES: 'docs/resources/blog.mdx\ndocs/introduction.md\ndocs/swap/index.mdx',
+  });
+
+  assert.equal(code, 0);
+  assert.ok(has(calls, '--title docs(marketing): update 3 marketing pages'));
+});
+
+// Joined, not per call: the body spans newlines, so one gh call logs as several lines.
+test('retitle lists the pages in the description', t => {
+  const gh = runner(t);
+  const { calls } = gh(RETITLE, ['416'], { PAGES: 'docs/resources/blog.mdx\ndocs/introduction.md' });
+  const log = calls.join('\n');
+
+  assert.ok(log.includes('- `resources/blog`') && log.includes('- `introduction`'));
+});
+
+// The editor link Mintlify leaves in the body is how a reviewer opens the draft.
+test('retitle keeps the body Mintlify wrote below its own summary', t => {
+  const gh = runner(t);
+  const { calls } = gh(RETITLE, ['416'], {
+    PAGES: 'docs/resources/blog.mdx',
+    GH_BODY: 'Review in Mintlify: https://app.mintlify.com/editor',
+  });
+
+  assert.ok(has(calls, 'Review in Mintlify: https://app.mintlify.com/editor'));
+});
+
+test('retitle replaces the summary of an earlier run rather than stacking another', t => {
+  const gh = runner(t);
+  const { calls } = gh(RETITLE, ['416'], {
+    PAGES: 'docs/introduction.md',
+    GH_BODY: '<!-- docs-auto-merge -->\nPublished from the Mintlify editor.\n- `resources/blog`\n<!-- docs-auto-merge -->\n\nMintlify body',
+  });
+
+  const log = calls.join('\n');
+  assert.ok(!log.includes('- `resources/blog`'), 'the stale page list survived');
+  assert.ok(log.includes('- `introduction`') && log.includes('Mintlify body'));
+});
+
+test('retitle fails closed when the classifier passed no pages', t => {
+  const gh = runner(t);
+  const { code, calls } = gh(RETITLE, ['416'], { PAGES: '' });
+
+  assert.equal(code, 1);
+  assert.ok(!has(calls, 'pr edit'));
+});
+
+// After the approval the PR is queued to merge, so a title edit landing then could be the
+// commit subject on main without Lint PR ever validating it.
+test('the workflow retitles before it approves', () => {
+  const workflow = readFileSync(WORKFLOW, 'utf8');
+
+  assert.ok(
+    workflow.indexOf('- name: Retitle the pull request') < workflow.indexOf('- name: Approve and queue the merge'),
+    'the retitle step runs after the approval',
+  );
+  assert.match(step('Retitle the pull request'), /PAGES: \$\{\{ steps\.classify\.outputs\.pages \}\}/);
+});
+
+test('the workflow retitles only a marketing-only pull request that minted a token', () => {
+  const retitle = step('Retitle the pull request');
+
+  assert.match(retitle, /steps\.classify\.outputs\.marketing_only == 'true'/);
+  assert.match(retitle, /steps\.app-token\.outcome == 'success'/);
 });
 
 // The head binding is only worth anything if the workflow hands over the SHA the classifier
