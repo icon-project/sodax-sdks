@@ -2834,7 +2834,10 @@ export class LeverageYieldService {
        * would also match any future non-EVM provider that happens to grow one.
        */
       if (params.walletProvider && isEvmWalletProviderType(params.walletProvider as IWalletProvider)) {
-        await (params.walletProvider as IEvmWalletProvider).waitForTransactionReceipt(inner.value as Hex);
+        const receipt = await (params.walletProvider as IEvmWalletProvider).waitForTransactionReceipt(inner.value as Hex);
+        if (receipt.status !== 'success') {
+          return { ok: false, error: approveFailed('leverageYield', 'transaction reverted', baseCtx) };
+        }
       } else {
         const landed = await this.spoke.verifyTxHash({ txHash: inner.value as never, chainKey: params.srcChainKey });
         if (!landed.ok) return { ok: false, error: approveFailed('leverageYield', landed.error, baseCtx) };
@@ -3101,26 +3104,15 @@ export class LeverageYieldService {
       | ({ side?: 'collateral' } & SpokeExecActionParams<K, false, OpenPositionParams<K>>)
       | ({ side: 'debt' } & SpokeExecActionParams<K, false, OpenPositionFromDebtTokenParams<K>>),
   ): Promise<Result<LeveragePositionIntentResult, LeverageYieldSwapError | LeverageYieldLookupError>> {
-    return this.config.analytics.trackResult(
-      'leverageYield',
-      'openLeveragePosition',
-      async () => {
-        const { side, ...rest } = _params;
-        const opened =
-          side === 'debt'
-            ? await this.openPositionFromDebtToken(
-                rest as SpokeExecActionParams<K, false, OpenPositionFromDebtTokenParams<K>>,
-              )
-            : await this.openPosition(rest as SpokeExecActionParams<K, false, OpenPositionParams<K>>);
-        if (!opened.ok) return opened;
-        return { ok: true, value: await reportPositionIntent(this.notifyIntent, opened.value) };
-      },
-      {
-        start: () => ({ srcChainKey: _params.params.srcChainKey, side: _params.side ?? 'collateral' }),
-        success: result => ({ ...result.txHashes, notified: result.notified }),
-        failure: error => ({ code: error.code }),
-      },
-    );
+    const { side, ...rest } = _params;
+    const opened =
+      side === 'debt'
+        ? await this.openPositionFromDebtToken(
+            rest as SpokeExecActionParams<K, false, OpenPositionFromDebtTokenParams<K>>,
+          )
+        : await this.openPosition(rest as SpokeExecActionParams<K, false, OpenPositionParams<K>>);
+    if (!opened.ok) return opened;
+    return { ok: true, value: await reportPositionIntent(this.notifyIntent, opened.value) };
   }
 
   /**

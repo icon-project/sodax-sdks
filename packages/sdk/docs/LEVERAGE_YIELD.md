@@ -467,7 +467,7 @@ Config merging skips `undefined`, so an absent override cannot blank the default
 | Method | Returns |
 |--------|---------|
 | `listPositions(owner)` | Position clones owned by `owner`, in creation order |
-| `listPositionsForUser({ srcChainKey, address })` | The same, resolved through a spoke address's hub wallet |
+| `listPositionsForUser(srcChainKey, srcAddress)` | The same, resolved through a spoke address's hub wallet |
 | `getPositionInfo(position)` | Static descriptor — owner, both legs, fixed eMode category, and the position's own `feeBps` / `feeReceiver` |
 | `getPositionAccount(position)` | Live AAVE snapshot — collateral, debt, LTV, health factor |
 | `getPositionCollateralBalance(position, collateral?)` | Exact aToken balance — what a full exit sells, less the position's `feeBps` |

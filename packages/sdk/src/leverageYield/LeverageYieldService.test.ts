@@ -2114,7 +2114,7 @@ describe('LeverageYieldService.approvePositionFunding — waiting for the approv
     vi.spyOn(sodax.spoke, 'approve').mockResolvedValue({ ok: true, value: '0xapproveTx' } as never);
     const verify = vi.spyOn(sodax.spoke, 'verifyTxHash').mockResolvedValue({ ok: true, value: true });
     const wait = mockEvmProvider.waitForTransactionReceipt as ReturnType<typeof vi.fn>;
-    wait.mockResolvedValueOnce({} as never);
+    wait.mockResolvedValueOnce({ status: 'success' } as never);
 
     const result = await sodax.leverageYield.approvePositionFunding({
       srcChainKey: 'sonic',

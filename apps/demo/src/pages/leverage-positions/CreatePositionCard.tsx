@@ -767,7 +767,8 @@ export function CreatePositionCard({ chain, owner }: { chain: SpokeChainKey; own
             disabled={sliderMax === undefined}
             onChange={e => {
               setLeverageTouched(true);
-              setLeverage(Number(e.target.value));
+              const rounded = Math.round(Number(e.target.value) * 100) / 100;
+              setLeverage(rounded);
             }}
           />
           <div className="flex justify-between text-[10px] text-muted-foreground">

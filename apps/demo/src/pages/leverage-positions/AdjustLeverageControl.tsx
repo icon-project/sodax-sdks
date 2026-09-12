@@ -292,7 +292,10 @@ export function AdjustLeverageControl({
         max={Math.max(maxLeverage, currentLeverage)}
         step={0.01}
         value={targetLeverage}
-        onChange={e => setTarget(Number(e.target.value))}
+        onChange={e => {
+          const rounded = Math.round(Number(e.target.value) * 100) / 100;
+          setTarget(rounded);
+        }}
       />
       <div className="flex justify-between text-[10px] text-muted-foreground">
         <span>1.00x (repay all)</span>
