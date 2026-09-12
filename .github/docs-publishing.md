@@ -85,14 +85,54 @@ commit that will merge.
 it and the classifier are always the copies on `main`: a PR cannot edit its own gate. It reads
 head content with `git show` and never checks out or runs it.
 
-A PR that changes any file outside `docs/` stops before the App token is minted, so an SDK PR
-is unaffected by this workflow — one that also edits `docs/` included, and while the App
-secrets are still missing, when minting is what would otherwise fail. Scoping this on
-docs-only rather than touches-docs costs nothing: a PR carrying one source file classifies as
-false on that file anyway. The one exception is a PR that already has auto-merge enabled: that
-stays in scope whatever the diff looks like, so a PR approved as marketing-only and then
-pushed with its docs edits *reverted* is still re-classified and still has its approval
-withdrawn.
+Every PR is classified before the App token is minted. A non-marketing PR finishes without
+App credentials when there is nothing to clean up, or when credentials are unset so the
+docs App cannot already have approved or queued a merge. That includes a hand-written How To
+edit or a PR mixing source and docs, even if another bot has approved it.
+
+[`docs-app-needed.sh`](scripts/docs-app-needed.sh) uses the built-in `GITHUB_TOKEN` with
+**Pull requests: read** to check live auto-merge state and paginated review history, but
+only after credentials are confirmed present. A queued merge or any active bot approval
+then requires an App token for possible cleanup, even when the PR no longer touches docs.
+Checking any bot approval is conservative: without minting, the helper does not know the
+docs App's login. When credentials are unset, that check is skipped — no docs-App action
+can exist yet, and an unrelated bot's approval or a human-queued merge must not fail the
+job. The withdrawal script still modifies only the docs App's own approval and queued
+merge, leaving a maintainer's or another bot's alone.
+
+The metadata check and token mint can run after classification fails, so an earlier approval
+can still be withdrawn; classification failure never permits a new approval. Failed metadata
+reads fail the job rather than pretending no cleanup is needed. Missing App credentials skip
+a new marketing approval with a warning and leave it to a human reviewer. A non-marketing or
+unclassified PR does not request a token while credentials are unset, so missing secrets
+cannot fail it; cleanup runs only when the App is provisioned.
+
+[`retitle-docs-pr.sh`](scripts/retitle-docs-pr.sh) runs just before the approval. The editor
+titles a PR `Draft from <date>` whenever the person publishing leaves the field blank — most
+of the time — and commits it as `Updated mintlify pages`, neither of them a conventional
+commit. It composes `docs(marketing): update resources/blog` for a single page and
+`docs(marketing): update N marketing pages` beyond that, from the list the classifier
+accepted, sets it as the PR title, and prepends that list to the description between
+`<!-- docs-auto-merge -->` markers — replacing its own earlier block on a re-run, and leaving
+Mintlify's body and editor link below it. Marketing types nothing; a title they do type is
+replaced, because the page list is what the commit on `main` has to name.
+
+It also publishes that subject as a step output, which
+[`approve-docs-pr.sh`](scripts/approve-docs-pr.sh) passes to the merge as `--subject`. That is
+what keeps this to the docs lane: the subject is named for this one merge, so the repository
+stays on `squash_merge_commit_title: COMMIT_OR_PR_TITLE`, `lint-pr.yaml` keeps its
+single-commit options, and no other pull request changes behaviour. Without it a one-commit
+PR squashes under its commit message, and every Mintlify merge would read `Updated mintlify
+pages` on `main`.
+
+Editing the title fires `edited`, which **Lint PR** listens for and **Docs auto-merge** does
+not, so there is no loop.
+
+**Known, and not worth a repository-wide change:** `Validate PR title` stays red on a Mintlify
+PR. It checks the *commit* message too, and that one is Mintlify's, which we cannot change
+without force-pushing marketing's branch. The check is advisory — it is not in the ruleset's
+required checks, so it blocks nothing, and the subject that reaches `main` is the composed one
+either way.
 
 [`approve-docs-pr.sh`](scripts/approve-docs-pr.sh) binds both privileged calls to the commit
 the classifier read: it re-reads the live head and bails if it has moved, then pins the
@@ -151,6 +191,9 @@ None of these are in the diff.
    approve merges to `main`: it belongs in secrets only, and rotates on a schedule.
 6. **Grant the Mintlify App write access** if it does not have it, so it can push the branch
    it offers to create.
+No repository merge or title-lint setting changes. `squash_merge_commit_title` stays
+`COMMIT_OR_PR_TITLE` and `lint-pr.yaml` keeps its single-commit options; the commit subject is
+named per merge instead, so an SDK pull request behaves exactly as it did before.
 
 A machine-user PAT works in place of steps 4–5, but it is a long-lived credential attached to
 a seat and tied to one person's account. The App is scoped to this repo and its tokens expire
@@ -166,8 +209,12 @@ throwaway PR:
    human involved.
 2. Push `packages/sdk/src/**` onto that same PR. Expect: the ruleset dismisses the approval on
    the push, the workflow turns auto-merge off, and the PR waits for a reviewer.
-3. Edit a page in the SDK or Protocol tab. Expect: no approval, and the PR waits.
-4. Check whether `require_extra_approval_for_unattributed_changes` (on, and a GitHub preview)
+3. Edit a page in the SDK, How To or Protocol tab on a new PR. Expect: no App token, no
+   approval, a green auto-merge job even without App secrets, and the PR waits for a human.
+4. On an SDK PR, leave an approval from a bot that is not the docs App (or enable auto-merge
+   by hand) while App secrets are still unset. Expect: a green auto-merge job, that approval
+   or human-queued merge left in place, and the PR waiting for a human.
+5. Check whether `require_extra_approval_for_unattributed_changes` (on, and a GitHub preview)
    fires on a Mintlify-authored PR. It is documented as applying to unattributed Copilot pull
    requests, so it should not — but if it demands a second approval, the single App approval
    will not be enough.

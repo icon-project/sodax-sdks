@@ -1,13 +1,15 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const REPO = fileURLToPath(new URL('..', import.meta.url));
 const APPROVE = join(REPO, '.github/scripts/approve-docs-pr.sh');
 const WITHDRAW = join(REPO, '.github/scripts/withdraw-docs-pr.sh');
+const APP_NEEDED = join(REPO, '.github/scripts/docs-app-needed.sh');
+const RETITLE = join(REPO, '.github/scripts/retitle-docs-pr.sh');
 const WORKFLOW = join(REPO, '.github/workflows/docs-auto-merge.yml');
 
 const BOT = 'sodax-docs-publisher[bot]';
@@ -24,6 +26,7 @@ if [ -n "\${GH_FAIL_ON:-}" ] && [[ "$*" == *"\$GH_FAIL_ON"* ]]; then
 fi
 case "$*" in
   *headRefOid*) printf '%s\\n' "\${GH_HEAD_OID:-}" ;;
+  *"--json body"*) printf '%s\\n' "\${GH_BODY:-}" ;;
   *autoMergeRequest*) printf '%s\\n' "\${GH_AUTO_MERGE_BY:-}" ;;
   *dismissals*|*"-X POST"*|*--disable-auto*|*--auto*) : ;;
   */reviews*) printf '%s\\n' "\${GH_APPROVAL_IDS:-}" ;;
@@ -39,6 +42,8 @@ const runner = t => {
   chmodSync(bin, 0o755);
   const log = join(root, 'gh.log');
   writeFileSync(log, '');
+  const output = join(root, 'github-output');
+  writeFileSync(output, '');
 
   return (script, args, env = {}) => {
     const options = {
@@ -49,18 +54,25 @@ const runner = t => {
         ...process.env,
         PATH: `${root}:${process.env.PATH}`,
         GH_LOG: log,
+        GITHUB_OUTPUT: output,
         GITHUB_REPOSITORY: 'icon-project/sodax-sdks',
         ...env,
       },
     };
 
     let code = 0;
+    let stdout = '';
     try {
-      execFileSync('bash', [script, ...args], options);
+      stdout = execFileSync('bash', [script, ...args], options);
     } catch (error) {
       code = error.status ?? 1;
     }
-    return { code, calls: readFileSync(log, 'utf8').trim().split('\n').filter(Boolean) };
+    return {
+      code,
+      stdout,
+      output: readFileSync(output, 'utf8').trim(),
+      calls: readFileSync(log, 'utf8').trim().split('\n').filter(Boolean),
+    };
   };
 };
 
@@ -204,9 +216,126 @@ test('withdraw fails when disarming the queued merge is refused', t => {
 });
 
 test('both scripts are committed executable, as the workflow invokes them directly', () => {
-  for (const script of [APPROVE, WITHDRAW]) {
+  for (const script of [APPROVE, WITHDRAW, RETITLE]) {
     assert.ok(statSync(script).mode & 0o111, `${script} is not executable`);
   }
+});
+
+// Mintlify titles a PR "Draft from <date>" whenever the publisher leaves the field blank, and
+// the squash subject is the PR title, so without this main collects titles like that one.
+test('retitle names the single page it changed', t => {
+  const gh = runner(t);
+  const { code, calls } = gh(RETITLE, ['416'], { PAGES: 'docs/resources/blog.mdx' });
+
+  assert.equal(code, 0);
+  assert.ok(has(calls, 'pr edit', '416', '--title docs(marketing): update resources/blog'));
+});
+
+test('retitle counts the pages when there is more than one', t => {
+  const gh = runner(t);
+  const { code, calls } = gh(RETITLE, ['416'], {
+    PAGES: 'docs/resources/blog.mdx\ndocs/introduction.md\ndocs/swap/index.mdx',
+  });
+
+  assert.equal(code, 0);
+  assert.ok(has(calls, '--title docs(marketing): update 3 marketing pages'));
+});
+
+// Joined, not per call: the body spans newlines, so one gh call logs as several lines.
+test('retitle lists the pages in the description', t => {
+  const gh = runner(t);
+  const { calls } = gh(RETITLE, ['416'], { PAGES: 'docs/resources/blog.mdx\ndocs/introduction.md' });
+  const log = calls.join('\n');
+
+  assert.ok(log.includes('- `resources/blog`') && log.includes('- `introduction`'));
+});
+
+// The editor link Mintlify leaves in the body is how a reviewer opens the draft.
+test('retitle keeps the body Mintlify wrote below its own summary', t => {
+  const gh = runner(t);
+  const { calls } = gh(RETITLE, ['416'], {
+    PAGES: 'docs/resources/blog.mdx',
+    GH_BODY: 'Review in Mintlify: https://app.mintlify.com/editor',
+  });
+
+  assert.ok(has(calls, 'Review in Mintlify: https://app.mintlify.com/editor'));
+});
+
+test('retitle replaces the summary of an earlier run rather than stacking another', t => {
+  const gh = runner(t);
+  const { calls } = gh(RETITLE, ['416'], {
+    PAGES: 'docs/introduction.md',
+    GH_BODY: '<!-- docs-auto-merge -->\nPublished from the Mintlify editor.\n- `resources/blog`\n<!-- docs-auto-merge -->\n\nMintlify body',
+  });
+
+  const log = calls.join('\n');
+  assert.ok(!log.includes('- `resources/blog`'), 'the stale page list survived');
+  assert.ok(log.includes('- `introduction`') && log.includes('Mintlify body'));
+});
+
+// --subject keeps this to the docs lane: the repository stays on COMMIT_OR_PR_TITLE, and
+// Lint PR keeps its single-commit options, so no other pull request is touched.
+test('approve names the squash commit when the retitle step composed a subject', t => {
+  const gh = runner(t);
+  const { code, calls } = gh(APPROVE, ['416', CLASSIFIED, '1 marketing page(s)'], {
+    GH_HEAD_OID: CLASSIFIED,
+    SUBJECT: 'docs(marketing): update resources/blog',
+  });
+
+  assert.equal(code, 0);
+  assert.ok(has(calls, 'pr merge', '--auto', '--squash', '--subject docs(marketing): update resources/blog'));
+});
+
+test('approve merges without a subject when none was composed', t => {
+  const gh = runner(t);
+  const { code, calls } = gh(APPROVE, ['416', CLASSIFIED, '1 marketing page(s)'], { GH_HEAD_OID: CLASSIFIED });
+
+  assert.equal(code, 0);
+  assert.ok(has(calls, 'pr merge', '--auto', '--squash'));
+  assert.ok(!has(calls, '--subject'));
+});
+
+test('retitle publishes the composed title for the approval to merge under', t => {
+  const gh = runner(t);
+  const { output } = gh(RETITLE, ['416'], { PAGES: 'docs/resources/blog.mdx' });
+
+  assert.match(output, /title=docs\(marketing\): update resources\/blog/);
+});
+
+test('retitle fails closed when the classifier passed no pages', t => {
+  const gh = runner(t);
+  const { code, calls } = gh(RETITLE, ['416'], { PAGES: '' });
+
+  assert.equal(code, 1);
+  assert.ok(!has(calls, 'pr edit'));
+});
+
+// The approval merges under the subject this step composes, so it has to run first.
+test('the workflow retitles before it approves, and merges under that subject', () => {
+  const workflow = readFileSync(WORKFLOW, 'utf8');
+
+  assert.ok(
+    workflow.indexOf('- name: Retitle the pull request') < workflow.indexOf('- name: Approve and queue the merge'),
+    'the retitle step runs after the approval',
+  );
+  assert.match(step('Retitle the pull request'), /PAGES: \$\{\{ steps\.classify\.outputs\.pages \}\}/);
+  assert.match(step('Approve and queue the merge'), /SUBJECT: \$\{\{ steps\.retitle\.outputs\.title \}\}/);
+});
+
+// Robi's title lint and the repository squash setting are deliberately untouched: the subject
+// is named per merge instead, so an SDK pull request behaves exactly as it did before.
+test('the change leaves the repository-wide title lint alone', () => {
+  const lintPr = readFileSync(join(REPO, '.github/workflows/lint-pr.yaml'), 'utf8');
+
+  assert.match(lintPr, /validateSingleCommit: true/);
+  assert.match(lintPr, /validateSingleCommitMatchesPrTitle: true/);
+});
+
+test('the workflow retitles only a marketing-only pull request that minted a token', () => {
+  const retitle = step('Retitle the pull request');
+
+  assert.match(retitle, /steps\.classify\.outputs\.marketing_only == 'true'/);
+  assert.match(retitle, /steps\.app-token\.outcome == 'success'/);
 });
 
 // The head binding is only worth anything if the workflow hands over the SHA the classifier
@@ -236,76 +365,210 @@ test('the workflow withdraws only on a run that minted a token', () => {
   assert.match(withdraw, /steps\.app-token\.outcome == 'success'/);
 });
 
-// The scope gate is inline shell, so the test runs the workflow's own copy of it against a
-// throwaway repo rather than a transcription of it.
-const scopeGate = () => {
-  const lines = step('Check the pull request is in scope')
-    .split(/^        run: \|\n/m)[1]
-    .split('\n');
-  const end = lines.findIndex(line => line !== '' && !line.startsWith(' '.repeat(10)));
-  return lines
-    .slice(0, end === -1 ? lines.length : end)
+test('marketing-only changes require an App token for approval', t => {
+  const gh = runner(t);
+  const { code, stdout, output, calls } = gh(APP_NEEDED, ['433', 'true', 'false']);
+  assert.equal(code, 0);
+  assert.equal(stdout.trim(), 'token_required=true');
+  assert.equal(output, 'token_required=true');
+  assert.deepEqual(calls, []);
+});
+
+test('non-marketing changes with no queued merge or bot approval need no App token', t => {
+  const gh = runner(t);
+  const { code, stdout, output, calls } = gh(APP_NEEDED, ['433', 'false', 'true'], {
+    GH_AUTO_MERGE_BY: 'false',
+  });
+  assert.equal(code, 0);
+  assert.equal(stdout.trim(), 'token_required=false');
+  assert.equal(output, 'token_required=false');
+  assert.ok(has(calls, 'pr view', 'autoMergeRequest'));
+  assert.ok(has(calls, '--paginate', '/reviews', 'APPROVED', 'Bot'));
+  assert.ok(!has(calls, '-X'));
+});
+
+test('unset credentials skip metadata so an unrelated bot approval does not fail the job', t => {
+  const gh = runner(t);
+  const { code, stdout, output, calls } = gh(APP_NEEDED, ['433', 'false', 'false'], {
+    GH_AUTO_MERGE_BY: 'true',
+    GH_APPROVAL_IDS: '901',
+  });
+  assert.equal(code, 0);
+  assert.equal(stdout.trim(), 'token_required=false');
+  assert.equal(output, 'token_required=false');
+  assert.deepEqual(calls, []);
+});
+
+test('a queued merge requires cleanup even when its approval was already dismissed', t => {
+  const gh = runner(t);
+  const { code, stdout } = gh(APP_NEEDED, ['433', 'false', 'true'], {
+    GH_AUTO_MERGE_BY: 'true',
+    GH_APPROVAL_IDS: '',
+  });
+  assert.equal(code, 0);
+  assert.equal(stdout.trim(), 'token_required=true');
+});
+
+test('a bot approval requires cleanup even if queuing auto-merge never succeeded', t => {
+  const gh = runner(t);
+  const { code, stdout } = gh(APP_NEEDED, ['433', 'false', 'true'], {
+    GH_AUTO_MERGE_BY: 'false',
+    GH_APPROVAL_IDS: '901\n902',
+  });
+  assert.equal(code, 0);
+  assert.equal(stdout.trim(), 'token_required=true');
+});
+
+for (const failedRead of ['autoMergeRequest', '/reviews']) {
+  test(`a failed ${failedRead} read does not declare a PR safe to skip`, t => {
+    const gh = runner(t);
+    const { code, stdout } = gh(APP_NEEDED, ['433', 'false', 'true'], {
+      GH_AUTO_MERGE_BY: 'false',
+      GH_FAIL_ON: failedRead,
+    });
+    assert.notEqual(code, 0);
+    assert.equal(stdout, '');
+  });
+}
+
+test('an unexpected auto-merge response fails closed', t => {
+  const gh = runner(t);
+  const { code, stdout } = gh(APP_NEEDED, ['433', 'false', 'true'], { GH_AUTO_MERGE_BY: '' });
+  assert.notEqual(code, 0);
+  assert.equal(stdout, '');
+});
+
+test('an invalid eligibility input fails closed', t => {
+  const gh = runner(t);
+  const { code, stdout } = gh(APP_NEEDED, ['433', 'unknown', 'true']);
+  assert.notEqual(code, 0);
+  assert.equal(stdout, '');
+});
+
+test('an invalid credentials-present input fails closed', t => {
+  const gh = runner(t);
+  const { code, stdout } = gh(APP_NEEDED, ['433', 'false', 'unknown']);
+  assert.notEqual(code, 0);
+  assert.equal(stdout, '');
+});
+
+test('classification precedes token selection and cannot be skipped by a docs-only scope gate', () => {
+  const workflow = readFileSync(WORKFLOW, 'utf8');
+  assert.ok(workflow.indexOf('name: Classify the pull request diff') < workflow.indexOf('name: Mint an App token'));
+  assert.ok(
+    workflow.indexOf('name: Record whether App credentials exist') <
+      workflow.indexOf('name: Check whether an App token is needed'),
+  );
+  assert.doesNotMatch(step('Classify the pull request diff'), /\n        if:/);
+  assert.match(step('Check whether an App token is needed'), /GH_TOKEN: \$\{\{ github\.token \}\}/);
+  assert.match(step('Check whether an App token is needed'), /CREDS_PRESENT/);
+  assert.match(workflow, /docs-app-needed\.sh "\$PR" "\$MARKETING_ONLY" "\$CREDS_PRESENT"/);
+  assert.match(workflow, /pull-requests: read/);
+  assert.doesNotMatch(workflow, /steps\.scope/);
+});
+
+test('credential presence is recorded without failing the job', () => {
+  const probe = step('Record whether App credentials exist');
+  assert.match(probe, /!cancelled\(\)/);
+  assert.doesNotMatch(probe, /exit 1/);
+  assert.match(probe, /present=true/);
+  assert.match(probe, /present=false/);
+});
+
+test('classification failures still allow token selection and cleanup, but never approval', () => {
+  const check = step('Check whether an App token is needed');
+  const mint = step('Mint an App token');
+  const withdraw = step('Withdraw a stale approval');
+  assert.match(check, /!cancelled\(\)/);
+  assert.match(check, /steps\.creds-present\.outcome == 'success'/);
+  assert.match(check, /steps\.classify\.outcome == 'success' && steps\.classify\.outputs\.marketing_only == 'true'/);
+  assert.match(mint, /!cancelled\(\)/);
+  assert.match(mint, /steps\.app-needed\.outcome == 'success' && steps\.app-needed\.outputs\.token_required == 'true'/);
+  assert.match(withdraw, /!cancelled\(\)/);
+  assert.match(
+    withdraw,
+    /steps\.classify\.outcome != 'success' \|\| steps\.classify\.outputs\.marketing_only != 'true'/,
+  );
+  assert.doesNotMatch(step('Approve and queue the merge'), /!cancelled\(\)|always\(\)|continue-on-error/);
+});
+
+const credentialsGate = () =>
+  step('Check the App credentials are provisioned')
+    .split('        run: |\n')[1]
+    .split('\n')
+    .filter(line => line.startsWith('          '))
     .map(line => line.slice(10))
     .join('\n');
-};
 
-const inScope = (t, files, { autoMerge = false } = {}) => {
-  const root = mkdtempSync(join(REPO, '.tmp-docs-scope-'));
-  t.after(() => rmSync(root, { recursive: true, force: true }));
+for (const marketing of [true, false]) {
+  for (const credentials of ['both', 'neither', 'id-only', 'key-only']) {
+    test(`credentials gate: marketing=${marketing}, credentials=${credentials}`, t => {
+      const root = mkdtempSync(join(REPO, '.tmp-docs-creds-'));
+      t.after(() => rmSync(root, { recursive: true, force: true }));
+      const output = join(root, 'output');
+      writeFileSync(output, '');
+      const present = credentials === 'both';
+      let code = 0;
+      let stdout = '';
+      try {
+        stdout = execFileSync('bash', ['-c', credentialsGate()], {
+          encoding: 'utf8',
+          env: {
+            ...process.env,
+            GITHUB_OUTPUT: output,
+            MARKETING_ONLY: String(marketing),
+            APP_ID: ['both', 'id-only'].includes(credentials) ? 'test-id' : '',
+            APP_KEY: ['both', 'key-only'].includes(credentials) ? 'test-key' : '',
+          },
+        });
+      } catch (error) {
+        code = error.status;
+        stdout = error.stdout;
+      }
+      assert.equal(code, present || marketing ? 0 : 1);
+      assert.equal(readFileSync(output, 'utf8').trim(), `present=${present}`);
+      if (!present) assert.match(stdout, marketing ? /::warning::/ : /::error::/);
+      assert.doesNotMatch(stdout, /test-id|test-key/);
+    });
+  }
+}
 
-  const template = join(root, '.git-template');
-  mkdirSync(join(template, 'hooks'), { recursive: true });
-  const git = (...args) =>
-    execFileSync(
-      'git',
-      ['-c', 'commit.gpgsign=false', '-c', 'user.email=test@example.com', '-c', 'user.name=test', ...args],
-      { cwd: root, encoding: 'utf8', env: { ...process.env, GIT_CONFIG_NOSYSTEM: '1', HUSKY: '0' } },
-    ).trim();
-  const write = (path, content) => {
-    mkdirSync(join(root, dirname(path)), { recursive: true });
-    writeFileSync(join(root, path), content);
-  };
-  const commit = (content, message) => {
-    for (const path of files) write(path, content);
-    git('add', '-A');
-    git('commit', '-m', message);
-    return git('rev-parse', 'HEAD');
-  };
+test('token mint requires credentials and credential checks still run for cleanup after failure', () => {
+  assert.match(step('Check the App credentials are provisioned'), /!cancelled\(\)/);
+  assert.match(
+    step('Check the App credentials are provisioned'),
+    /steps\.app-needed\.outputs\.token_required == 'true'/,
+  );
+  assert.match(
+    step('Mint an App token'),
+    /steps\.creds\.outcome == 'success' && steps\.creds\.outputs\.present == 'true'/,
+  );
+});
 
-  git('init', '-b', 'main', `--template=${template}`);
-  write('README.md', '# scope\n');
-  const base = commit('base', 'base');
-  const head = commit('head', 'head');
+const presenceProbe = () =>
+  step('Record whether App credentials exist')
+    .split('        run: |\n')[1]
+    .split('\n')
+    .filter(line => line.startsWith('          '))
+    .map(line => line.slice(10))
+    .join('\n');
 
-  const script = join(root, 'scope.sh');
-  writeFileSync(script, scopeGate());
-  const output = join(root, 'github-output');
-  writeFileSync(output, '');
-  execFileSync('bash', [script], {
-    cwd: root,
-    encoding: 'utf8',
-    env: { ...process.env, BASE_SHA: base, HEAD_SHA: head, AUTO_MERGE: String(autoMerge), GITHUB_OUTPUT: output },
+for (const credentials of ['both', 'neither', 'id-only', 'key-only']) {
+  test(`credential probe: credentials=${credentials}`, t => {
+    const root = mkdtempSync(join(REPO, '.tmp-docs-creds-probe-'));
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    const output = join(root, 'output');
+    writeFileSync(output, '');
+    const present = credentials === 'both';
+    execFileSync('bash', ['-c', presenceProbe()], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        GITHUB_OUTPUT: output,
+        APP_ID: ['both', 'id-only'].includes(credentials) ? 'test-id' : '',
+        APP_KEY: ['both', 'key-only'].includes(credentials) ? 'test-key' : '',
+      },
+    });
+    assert.equal(readFileSync(output, 'utf8').trim(), `present=${present}`);
   });
-
-  return readFileSync(output, 'utf8').trim();
-};
-
-test('a docs-only pull request is in scope', t => {
-  assert.equal(inScope(t, ['docs/index.mdx', 'docs/swap/index.mdx']), 'in_scope=true');
-});
-
-// The case that failed on PR #264: docs/ edits shipped with SDK source. Minting on it costs a
-// failed run for nothing, since the classifier answers false on the source file anyway.
-test('a pull request mixing docs with source is out of scope', t => {
-  assert.equal(inScope(t, ['docs/index.mdx', 'packages/sdk/src/index.ts']), 'in_scope=false');
-});
-
-test('a source-only pull request is out of scope', t => {
-  assert.equal(inScope(t, ['packages/sdk/src/index.ts']), 'in_scope=false');
-});
-
-// Whatever the diff: a marketing PR the App approved, then pushed with its docs edits
-// reverted, still has to reach the classifier so the approval can be withdrawn.
-test('a pull request with auto-merge enabled stays in scope without a docs change', t => {
-  assert.equal(inScope(t, ['packages/sdk/src/index.ts'], { autoMerge: true }), 'in_scope=true');
-});
+}

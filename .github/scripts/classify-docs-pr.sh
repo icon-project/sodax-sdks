@@ -17,13 +17,24 @@ MARKETING_PAGE='^docs/((index|quickstart|contact|builders-mcp)\.mdx|(introductio
 # A copy edit is a handful of pages; a diff this size is not what this path is for.
 MAX_FILES=200
 
+# The pages a true verdict accepted, newline-separated, for the title the approval writes.
+PAGES=''
+
 verdict() {
   local answer="$1" reason="$2"
   echo "marketing_only=${answer}"
   echo "reason=${reason}"
   if [ -n "${GITHUB_OUTPUT:-}" ]; then
-    echo "marketing_only=${answer}" >>"$GITHUB_OUTPUT"
-    echo "reason=${reason}" >>"$GITHUB_OUTPUT"
+    {
+      echo "marketing_only=${answer}"
+      echo "reason=${reason}"
+      # Heredoc form, as a page path may hold anything but a newline.
+      echo 'pages<<CLASSIFY_PAGES'
+      if [ "$answer" = 'true' ] && [ -n "$PAGES" ]; then
+        printf '%s\n' "$PAGES"
+      fi
+      echo 'CLASSIFY_PAGES'
+    } >>"$GITHUB_OUTPUT"
   fi
   exit 0
 }
@@ -74,6 +85,8 @@ while IFS=$'\t' read -r status path; do
   if is_generated "$BASE_REF" "$path"; then
     verdict false "${path} is generated on ${BASE_REF}"
   fi
+
+  PAGES="${PAGES}${PAGES:+$'\n'}${path}"
 done <<<"$STATUSES"
 
 verdict true "${COUNT} marketing page(s)"
