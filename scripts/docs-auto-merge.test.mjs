@@ -273,6 +273,35 @@ test('retitle replaces the summary of an earlier run rather than stacking anothe
   assert.ok(log.includes('- `introduction`') && log.includes('Mintlify body'));
 });
 
+// --subject keeps this to the docs lane: the repository stays on COMMIT_OR_PR_TITLE, and
+// Lint PR keeps its single-commit options, so no other pull request is touched.
+test('approve names the squash commit when the retitle step composed a subject', t => {
+  const gh = runner(t);
+  const { code, calls } = gh(APPROVE, ['416', CLASSIFIED, '1 marketing page(s)'], {
+    GH_HEAD_OID: CLASSIFIED,
+    SUBJECT: 'docs(marketing): update resources/blog',
+  });
+
+  assert.equal(code, 0);
+  assert.ok(has(calls, 'pr merge', '--auto', '--squash', '--subject docs(marketing): update resources/blog'));
+});
+
+test('approve merges without a subject when none was composed', t => {
+  const gh = runner(t);
+  const { code, calls } = gh(APPROVE, ['416', CLASSIFIED, '1 marketing page(s)'], { GH_HEAD_OID: CLASSIFIED });
+
+  assert.equal(code, 0);
+  assert.ok(has(calls, 'pr merge', '--auto', '--squash'));
+  assert.ok(!has(calls, '--subject'));
+});
+
+test('retitle publishes the composed title for the approval to merge under', t => {
+  const gh = runner(t);
+  const { output } = gh(RETITLE, ['416'], { PAGES: 'docs/resources/blog.mdx' });
+
+  assert.match(output, /title=docs\(marketing\): update resources\/blog/);
+});
+
 test('retitle fails closed when the classifier passed no pages', t => {
   const gh = runner(t);
   const { code, calls } = gh(RETITLE, ['416'], { PAGES: '' });
@@ -281,9 +310,8 @@ test('retitle fails closed when the classifier passed no pages', t => {
   assert.ok(!has(calls, 'pr edit'));
 });
 
-// After the approval the PR is queued to merge, so a title edit landing then could be the
-// commit subject on main without Lint PR ever validating it.
-test('the workflow retitles before it approves', () => {
+// The approval merges under the subject this step composes, so it has to run first.
+test('the workflow retitles before it approves, and merges under that subject', () => {
   const workflow = readFileSync(WORKFLOW, 'utf8');
 
   assert.ok(
@@ -291,6 +319,16 @@ test('the workflow retitles before it approves', () => {
     'the retitle step runs after the approval',
   );
   assert.match(step('Retitle the pull request'), /PAGES: \$\{\{ steps\.classify\.outputs\.pages \}\}/);
+  assert.match(step('Approve and queue the merge'), /SUBJECT: \$\{\{ steps\.retitle\.outputs\.title \}\}/);
+});
+
+// Robi's title lint and the repository squash setting are deliberately untouched: the subject
+// is named per merge instead, so an SDK pull request behaves exactly as it did before.
+test('the change leaves the repository-wide title lint alone', () => {
+  const lintPr = readFileSync(join(REPO, '.github/workflows/lint-pr.yaml'), 'utf8');
+
+  assert.match(lintPr, /validateSingleCommit: true/);
+  assert.match(lintPr, /validateSingleCommitMatchesPrTitle: true/);
 });
 
 test('the workflow retitles only a marketing-only pull request that minted a token', () => {

@@ -23,6 +23,15 @@ gh api -X POST "repos/${GITHUB_REPOSITORY}/pulls/${PR}/reviews" \
   -f commit_id="$HEAD_SHA" \
   -f body="Marketing pages only (${REASON}). Merging on a green Docs site check."
 
+# --subject names the squash commit for this merge alone, so the repository keeps
+# `squash_merge_commit_title: COMMIT_OR_PR_TITLE` and every other PR is unaffected. Without it
+# a one-commit PR squashes under its commit message, which Mintlify writes as "Updated
+# mintlify pages".
+SUBJECT_ARGS=()
+if [ -n "${SUBJECT:-}" ]; then
+  SUBJECT_ARGS=(--subject "$SUBJECT")
+fi
+
 # Auto-merge, not a direct merge: GitHub holds it until the required Docs site check is
 # green, drops it if the check fails, and --match-head-commit refuses a head that has moved.
-gh pr merge "$PR" --auto --squash --match-head-commit "$HEAD_SHA"
+gh pr merge "$PR" --auto --squash --match-head-commit "$HEAD_SHA" "${SUBJECT_ARGS[@]+"${SUBJECT_ARGS[@]}"}"

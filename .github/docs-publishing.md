@@ -107,20 +107,32 @@ a new marketing approval with a warning and leave it to a human reviewer. A non-
 unclassified PR does not request a token while credentials are unset, so missing secrets
 cannot fail it; cleanup runs only when the App is provisioned.
 
-[`retitle-docs-pr.sh`](scripts/retitle-docs-pr.sh) runs just before the approval, because the
-squash subject is the PR title and Mintlify's default one is not a conventional commit: the
-editor titles a PR `Draft from <date>` whenever the person publishing leaves the field blank,
-which is most of the time. It writes `docs(marketing): update resources/blog` for a single
-page and `docs(marketing): update N marketing pages` beyond that, from the list the classifier
-accepted, and prepends that list to the description between `<!-- docs-auto-merge -->` markers
-— replacing its own earlier block on a re-run, and leaving Mintlify's body and editor link
-below it. Marketing types nothing; a title they do type is replaced, because the page list is
-what the commit on `main` has to name.
+[`retitle-docs-pr.sh`](scripts/retitle-docs-pr.sh) runs just before the approval. The editor
+titles a PR `Draft from <date>` whenever the person publishing leaves the field blank — most
+of the time — and commits it as `Updated mintlify pages`, neither of them a conventional
+commit. It composes `docs(marketing): update resources/blog` for a single page and
+`docs(marketing): update N marketing pages` beyond that, from the list the classifier
+accepted, sets it as the PR title, and prepends that list to the description between
+`<!-- docs-auto-merge -->` markers — replacing its own earlier block on a re-run, and leaving
+Mintlify's body and editor link below it. Marketing types nothing; a title they do type is
+replaced, because the page list is what the commit on `main` has to name.
+
+It also publishes that subject as a step output, which
+[`approve-docs-pr.sh`](scripts/approve-docs-pr.sh) passes to the merge as `--subject`. That is
+what keeps this to the docs lane: the subject is named for this one merge, so the repository
+stays on `squash_merge_commit_title: COMMIT_OR_PR_TITLE`, `lint-pr.yaml` keeps its
+single-commit options, and no other pull request changes behaviour. Without it a one-commit
+PR squashes under its commit message, and every Mintlify merge would read `Updated mintlify
+pages` on `main`.
 
 Editing the title fires `edited`, which **Lint PR** listens for and **Docs auto-merge** does
-not, so the title check re-runs against the new title and there is no loop. Retitling before
-the approval matters: after it the PR is queued, so a later edit could reach `main` as the
-subject without that check ever seeing it.
+not, so there is no loop.
+
+**Known, and not worth a repository-wide change:** `Validate PR title` stays red on a Mintlify
+PR. It checks the *commit* message too, and that one is Mintlify's, which we cannot change
+without force-pushing marketing's branch. The check is advisory — it is not in the ruleset's
+required checks, so it blocks nothing, and the subject that reaches `main` is the composed one
+either way.
 
 [`approve-docs-pr.sh`](scripts/approve-docs-pr.sh) binds both privileged calls to the commit
 the classifier read: it re-reads the live head and bails if it has moved, then pins the
@@ -179,17 +191,9 @@ None of these are in the diff.
    approve merges to `main`: it belongs in secrets only, and rotates on a schedule.
 6. **Grant the Mintlify App write access** if it does not have it, so it can push the branch
    it offers to create.
-7. **Set the squash subject to the PR title**, which is what makes the commit titles below
-   hold. Requires repo admin:
-
-   ```bash
-   gh api -X PATCH repos/icon-project/sodax-sdks -f squash_merge_commit_title=PR_TITLE
-   ```
-
-   Do this **before** merging the `lint-pr.yaml` change that drops `validateSingleCommit`:
-   under the previous `COMMIT_OR_PR_TITLE`, a PR carrying one commit squashed under that
-   commit's message, and those options were what kept it conventional. In the gap between the
-   two, a single-commit PR could land an unchecked subject on `main`.
+No repository merge or title-lint setting changes. `squash_merge_commit_title` stays
+`COMMIT_OR_PR_TITLE` and `lint-pr.yaml` keeps its single-commit options; the commit subject is
+named per merge instead, so an SDK pull request behaves exactly as it did before.
 
 A machine-user PAT works in place of steps 4–5, but it is a long-lived credential attached to
 a seat and tied to one person's account. The App is scoped to this repo and its tokens expire

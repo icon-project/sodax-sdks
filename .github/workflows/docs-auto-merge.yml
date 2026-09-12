@@ -106,9 +106,11 @@ jobs:
           app-id: ${{ secrets.DOCS_PUBLISH_APP_ID }}
           private-key: ${{ secrets.DOCS_PUBLISH_APP_PRIVATE_KEY }}
 
-      # Before the approval, so the edit lands while Lint PR can still re-run on it: the squash
-      # subject is the PR title, and Mintlify's default title is not a conventional commit.
+      # Mintlify titles a PR "Draft from <date>" and commits it as "Updated mintlify pages",
+      # neither of them a conventional commit. Composes the subject the approval then merges
+      # under, so nothing here depends on a repository-wide squash or title-lint setting.
       - name: Retitle the pull request
+        id: retitle
         if: steps.classify.outputs.marketing_only == 'true' && steps.app-token.outcome == 'success'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -125,6 +127,7 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           REASON: ${{ steps.classify.outputs.reason }}
+          SUBJECT: ${{ steps.retitle.outputs.title }}
         run: .github/scripts/approve-docs-pr.sh "$PR" "$HEAD_SHA" "$REASON"
 
       # Second line to the ruleset's dismiss-on-push: also turns auto-merge off, and covers a

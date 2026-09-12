@@ -34,6 +34,12 @@ else
   TITLE="docs(marketing): update ${#PAGE_LIST[@]} marketing pages"
 fi
 
+# The approval passes this to the merge as --subject, rather than composing it a second time.
+echo "title=${TITLE}"
+if [ -n "${GITHUB_OUTPUT:-}" ]; then
+  echo "title=${TITLE}" >>"$GITHUB_OUTPUT"
+fi
+
 MARKER='<!-- docs-auto-merge -->'
 SUMMARY="${MARKER}"$'\n''Published from the Mintlify editor.'$'\n'
 for page in "${PAGE_LIST[@]}"; do
