@@ -119,6 +119,10 @@ The full guide lives in [`docs/`](https://github.com/icon-project/sodax-sdks/tre
 | [Architecture](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/ARCHITECTURE.md) | Zustand store, Provider/Hydrator/Actions trio, persist hydration caveat |
 | [Adding a New Chain](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/ADDING_A_NEW_CHAIN.md) | `ChainMeta` extension, chain registry, sub-path export wiring |
 
+### Chain-not-enabled warnings
+
+`useWalletProvider` and `useXConnectors` warn once per chain type when you ask for a chain that is not in `SodaxWalletProvider` `config.chains`, then return `undefined` / `[]`. The warning is a misconfiguration signal, so it is suppressed until `SodaxWalletProvider` has initialized its chain services — on the very first render `enabledChains` is still empty for every app, correctly configured or not. If you relied on seeing that warning during mount, it now arrives only once services are up, and only when the chain is genuinely absent from your config.
+
 ## AI agent docs
 
 AI-readable docs for `@sodax/wallet-sdk-react` (and the other `@sodax/*` packages) are shipped via [`@sodax/skills`](https://github.com/icon-project/sodax-sdks/tree/main/packages/skills) — a separate npm package bundling Claude-Code SKILL.md files and a long-form knowledge tree.
