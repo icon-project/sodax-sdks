@@ -55,7 +55,11 @@ import { buildOrderSummary, type Order } from '@/components/swaps/OrderStatus';
 import { appendOrder } from '@/lib/orderHistory';
 import { loadSwapsApiSelection, saveSwapsApiSelection } from '@/components/swaps-api/lib/lastSelection';
 import { toIntentRequest, toXToken } from '@/components/swaps-api/lib/mappers';
-import { formatSwapsApiError, useSwapsApiClient } from '@/components/swaps-api/lib/swapsApi';
+import {
+  formatSwapsApiError,
+  retryUnlessSwapsApiAuthFailure,
+  useSwapsApiClient,
+} from '@/components/swaps-api/lib/swapsApi';
 import { isSignableSwapsApiChain, signAndBroadcastSwapsApiTx } from '@/components/swaps-api/lib/signAndBroadcast';
 import { useDebouncedValue } from '@/components/swaps-api/lib/useDebouncedValue';
 import { useAppStore } from '@/zustand/useAppStore';
@@ -119,9 +123,9 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
 
   // Supported chains + tokens straight from the Swaps API.
   const { data: tokensByChain } = useQuery({
-    queryKey: ['swapsApi', 'tokens'],
+    queryKey: ['demo', 'swapsApi', 'tokens'],
     queryFn: () => swapsApi.getTokens(),
-    retry: 3,
+    retry: retryUnlessSwapsApiAuthFailure,
   });
   const chainList = useMemo(() => Object.keys(tokensByChain ?? {}), [tokensByChain]);
 
@@ -222,10 +226,10 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   // The whole request body is the cache key so every quote input is a cache dimension
   // (QuoteRequestV2 is bigint-free, so React Query's default key hashing handles it).
   const quoteQuery = useQuery({
-    queryKey: ['swapsApi', 'quote', quoteBody],
+    queryKey: ['demo', 'swapsApi', 'quote', quoteBody],
     queryFn: () => (quoteBody ? swapsApi.getQuote(quoteBody) : undefined),
     enabled: !!quoteBody,
-    retry: 3,
+    retry: retryUnlessSwapsApiAuthFailure,
   });
   const quote = quoteQuery.data;
 
@@ -279,7 +283,10 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
     const deadline = await swapsApi
       .getDeadline({ offsetSeconds: 300 })
       .then(response => response.deadline)
-      .catch(() => String(Math.floor(Date.now() / 1000) + 300));
+      .catch(error => {
+        console.warn('Hub deadline unavailable, falling back to client clock:', error);
+        return String(Math.floor(Date.now() / 1000) + 300);
+      });
 
     // Source-chain swap extras the Swaps API only needs for specific chain families:
     //  - Stacks:  the signer public key, which a Stacks address can't derive on its own.
@@ -317,6 +324,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
     refetch: refetchAllowance,
   } = useQuery({
     queryKey: [
+      'demo',
       'swapsApi',
       'allowance',
       intentParams?.srcChainKey,
@@ -326,7 +334,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
     ],
     queryFn: () => (intentParams ? swapsApi.checkAllowance(intentParams) : undefined),
     enabled: !!intentParams,
-    retry: 3,
+    retry: retryUnlessSwapsApiAuthFailure,
   });
   const hasAllowed = allowance?.valid === true;
 

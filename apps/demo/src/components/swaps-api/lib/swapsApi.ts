@@ -1,5 +1,5 @@
 import { SwapsApi, SwapsApiError } from '@sodax/swaps-api';
-import { DEFAULT_BACKEND_API_TIMEOUT } from '@sodax/dapp-kit';
+import { DEFAULT_BACKEND_API_TIMEOUT, isAuthStatus } from '@sodax/dapp-kit';
 import { useMemo } from 'react';
 import { effectiveSodaxApiKey, effectiveSwapsApiBaseUrl } from '@/lib/sodaxSettings';
 import { formatMutationFailureMessage } from '@/lib/utils';
@@ -53,3 +53,15 @@ export function formatSwapsApiError(error: unknown, fallback: string): string {
   const fromBackend = error instanceof SwapsApiError ? backendMessage(error.context.body) : undefined;
   return fromBackend ?? formatMutationFailureMessage(error, fallback);
 }
+
+/**
+ * React Query `retry` for the direct client, mirroring dapp-kit's `retryUnlessAuthFailure`: replay a
+ * transport blip, never a terminal API-key rejection. It cannot reuse that helper — `isAuthFailure`
+ * is gated on `isSodaxError`, and a `SwapsApiError` only becomes one after passing through
+ * `SwapsApiService`, which this page bypasses by design.
+ *
+ * `error` is typed `Error` rather than `unknown` because React Query infers a query's `TError` from
+ * this signature, and `unknown` there would make every `query.error` unrenderable.
+ */
+export const retryUnlessSwapsApiAuthFailure = (failureCount: number, error: Error): boolean =>
+  !(error instanceof SwapsApiError && isAuthStatus(error.context.status)) && failureCount < 3;
