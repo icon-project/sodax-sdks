@@ -31,7 +31,7 @@ Leveraged-yield ERC-4626 vaults on Sonic. Deposit any token → `lsoda*` shares,
 | `useLeveragePositionInfo` | Static descriptor for one position (owner, both legs, eMode category) |
 | `useLeveragePositionAccount` | Live AAVE account for one position (collateral, debt, LTV, health factor) |
 | `useOpenLeveragePosition` | Open a position and report its intent — `side: 'collateral' \| 'debt'` |
-| `useSubmitLeveragePositionIntent` | `increaseLeverage` / `decreaseLeverage`, then report the intent |
+| `useSubmitLeveragePositionIntent` | `addLeverage` / `decreaseLeverage`, then report the intent |
 | `useRunLeveragePositionOperation` | `withdraw` / `settle` / `cancel` — no intent, nothing to report |
 | `useLeveragePositionPayoutAddress` | Where a withdrawal can be paid; off the hub, not the signer |
 | `useLeveragePositionFundingAllowance` | Is the funding token approved? The spender differs per chain |
@@ -209,7 +209,7 @@ Every position call is `onlyOwner` against the user's **hub wallet**, so a build
 from the signer reverts `NotOwner`. Three mutation hooks run the calls as that wallet — locally
 through the wallet router on Sonic, relayed from anywhere else.
 
-**Which hook is decided by the operation, not by preference.** `increaseLeverage` and
+**Which hook is decided by the operation, not by preference.** `addLeverage` and
 `decreaseLeverage` only *post* a solver intent, and an intent the solver was never told about expires
 unfilled — leaving the owner funded with leverage that never arrives. `withdraw`, `settle` and
 `cancel` are synchronous on the hub and need no notification.
@@ -276,8 +276,8 @@ const { borrowAmount, intentInput } = sizeLeverageBorrow(request);
 // `getPositionLegQuote` names the HUB reserves the intent actually swaps and quotes gross — the two
 // details a hand-rolled `getQuote` gets wrong, and both only surface as an unfillable floor.
 const quote = await sodax.leverageYield.getPositionLegQuote({
-  inputHubToken: borrowReserve,
-  outputHubToken: collateralReserve,
+  inputHubToken: borrowReserve.underlyingAsset,     // the hub reserve ADDRESS, not the reserve object
+  outputHubToken: collateralReserve.underlyingAsset,
   amount: intentInput,
 });
 if (!quote.ok) throw quote.error;
