@@ -22,6 +22,7 @@ import type {
   XrpChainKey,
   MonadChainKey,
   TonChainKey,
+  ZcashChainKey,
   MpcRelayChainKey,
   HubChainKey,
   PartnerFeeAmount,
@@ -50,6 +51,7 @@ import {
   isXrpChainKey,
   isMonadChainKey,
   isTonChainKey,
+  isZcashChainKey,
   isMpcRelayChainKey,
   isHubChainKey,
   isEvmChainKey,
@@ -198,6 +200,10 @@ export function isMonadChainKeyType(value: SpokeChainKey): value is MonadChainKe
 
 export function isTonChainKeyType(value: SpokeChainKey): value is TonChainKey {
   return isTonChainKey(value);
+}
+
+export function isZcashChainKeyType(value: SpokeChainKey): value is ZcashChainKey {
+  return isZcashChainKey(value);
 }
 
 /**

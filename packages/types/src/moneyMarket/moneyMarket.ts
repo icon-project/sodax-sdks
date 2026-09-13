@@ -207,6 +207,8 @@ export const moneyMarketSupportedTokens = {
   ] as const satisfies XToken[],
   // USDT only: TON has no vault, so it cannot be a lending-pool reserve.
   [ChainKeys.TON_MAINNET]: [spokeChainConfig[ChainKeys.TON_MAINNET].supportedTokens.USDT] as const satisfies XToken[],
+  // None: the sodaZEC vault is not a lending-pool reserve.
+  [ChainKeys.ZCASH_MAINNET]: [],
 } as const satisfies Record<SpokeChainKey, readonly XToken[]>;
 
 export const moneyMarketReserveAssets = [

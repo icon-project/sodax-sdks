@@ -1840,6 +1840,19 @@ export const xrpSupportedTokens = {
   },
 } as const satisfies Record<string, XToken>;
 
+export const zcashSupportedTokens = {
+  // Native transparent ZEC (8 decimals), deposited into the sodaZEC vault. It is not a lending-pool reserve.
+  ZEC: {
+    symbol: 'ZEC',
+    name: 'Zcash',
+    decimals: 8,
+    address: '0x0000000000000000000000000000000000000000',
+    chainKey: ChainKeys.ZCASH_MAINNET,
+    hubAsset: '0x24312b2Cc7A56ADdD3a849Db5e9B81704D6B20af',
+    vault: '0xF4AF0aA80F079D5bff230c5B12109FA19B24f558',
+  },
+} as const satisfies Record<string, XToken>;
+
 export const tonSupportedTokens = {
   // Native TON (9 decimals). There is no TON vault, so `vault` is the wrapped hub asset itself.
   TON: {
@@ -2629,4 +2642,5 @@ export const supportedTokensByChain = {
   [ChainKeys.XRP_MAINNET]: xrpSupportedTokens,
   [ChainKeys.MONAD_MAINNET]: monadSupportedTokens,
   [ChainKeys.TON_MAINNET]: tonSupportedTokens,
+  [ChainKeys.ZCASH_MAINNET]: zcashSupportedTokens,
 } as const satisfies Record<ChainKey, Record<string, XToken>>;

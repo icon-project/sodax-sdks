@@ -917,6 +917,9 @@ importers:
       '@mysten/wallet-standard':
         specifier: 'catalog:'
         version: 0.15.6(typescript@5.5.4)
+      '@noble/hashes':
+        specifier: ^1.8.0
+        version: 1.8.0
       '@sodax/libs':
         specifier: workspace:*
         version: link:../libs

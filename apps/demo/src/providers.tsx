@@ -151,6 +151,8 @@ export default function Providers({ children }: { children: ReactNode }) {
           [ChainKeys.TON_MAINNET]: { rpcUrl: rpcConfig[ChainKeys.TON_MAINNET] },
         },
       },
+      // Zcash rides the MPC relay in address mode; Noir Wallet is its connector.
+      ZCASH: {},
     };
   }, []);
 
