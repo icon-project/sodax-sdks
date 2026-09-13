@@ -3116,7 +3116,7 @@ export class LeverageYieldService {
   }
 
   /**
-   * Runs position calls that POST A SOLVER INTENT — `increaseLeverage` and `decreaseLeverage` — and
+   * Runs position calls that POST A SOLVER INTENT — `addLeverage` and `decreaseLeverage` — and
    * reports it. Prefer this to {@link LeverageYieldService.operatePosition} for those two.
    *
    * USE {@link LeverageYieldService.runLeveragePositionOperation} FOR `withdraw`, `settle` AND
@@ -3151,7 +3151,7 @@ export class LeverageYieldService {
    *
    * Still routed, never sent directly: the position's `onlyOwner` is the hub wallet, so a builder's
    * transaction sent from the signer reverts `NotOwner`. Use
-   * {@link LeverageYieldService.submitLeveragePositionIntent} for `increaseLeverage` and
+   * {@link LeverageYieldService.submitLeveragePositionIntent} for `addLeverage` and
    * `decreaseLeverage`, which this deliberately does not report.
    *
    * @experimental OFF-HUB (SPOKE) ORIGINS ARE UNVERIFIED ON-CHAIN, and this path carries the worst of

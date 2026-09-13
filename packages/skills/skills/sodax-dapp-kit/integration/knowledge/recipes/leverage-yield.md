@@ -193,7 +193,9 @@ and read health with `useLeveragePositionAccount({ params: { position } })`. Hea
 (1e18) and comes from the pool's `getUserAccountData`, not the position contract — surface it
 prominently, because there is no keeper deleveraging on the owner's behalf.
 
-```typescript
+```ts
+// @ai-snippets-skip — two-line excerpt; `owner` is the caller's. Exact per-hook shapes are in
+// features/leverage-yield.md.
 const { data: positions } = useLeveragePositions({ params: { owner } });
 const { data: account } = useLeveragePositionAccount({ params: { position: positions?.[0] } });
 ```
@@ -230,7 +232,9 @@ The hooks are thin over SDK methods of the same shape — `sodax.leverageYield.o
 pairing. The low-level `openPosition` / `operatePosition` / `notifySolver` remain for anyone driving
 the relay by hand.
 
-```typescript
+```ts
+// @ai-snippets-skip — illustrative open flow; the funding and sizing values are the caller's.
+// Exact per-hook shapes are in features/leverage-yield.md.
 import { useOpenLeveragePosition, useSodaxContext } from '@sodax/dapp-kit';
 
 const { sodax } = useSodaxContext();
@@ -262,7 +266,9 @@ signer. `useLeveragePositionPayoutAddress({ params: { chainKey, signerAddress, o
 `deposit + solver output`, never `deposit × leverage` — size from oracle parity and the borrow reverts
 at fill with Aave `'36'`. Two SDK helpers size it, with the solver quote taken between them:
 
-```typescript
+```ts
+// @ai-snippets-skip — illustrative sizing flow; the reserves, prices and risk params are the
+// caller's. Exact shapes are in features/leverage-yield.md.
 import { sizeLeverageBorrow, projectLeverageLeg, type LeverageLegRequest } from '@sodax/sdk';
 
 const request: LeverageLegRequest = {
