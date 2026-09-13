@@ -40,23 +40,35 @@ const XRP_RPC_TIMEOUT_MS = 15_000;
 /**
  * Floor for an MPC-relay settlement wait, applied over the caller's own timeout.
  *
- * XRPL itself is fast — the relay attests at 0 confirmations because a validated ledger is already
- * final — but the wait is not bounded by XRPL. Aggregation, the NEAR submit and the hub transaction
- * still have to clear, and for a withdrawal the release has to be MPC-signed and land back on XRPL.
- * A caller's generic cross-chain timeout is not sized for that, so this floor prevents giving up on
- * a settlement that is merely mid-flight.
+ * XRPL is fast, but aggregation, the NEAR submit and the hub tx still have to clear (and for a
+ * withdrawal, the MPC-signed release), so the generic cross-chain timeout would give up mid-flight.
  */
 const XRP_SETTLEMENT_FLOOR_MS = 300_000;
 
+/** How often to re-notify the relay while waiting for a deposit — a couple of ledger closes. */
+const RENOTIFY_INTERVAL_MS = 6_000;
+
 /**
- * Withdraw-auth nonce: any u64 the sender has not used before — NEAR rejects a repeat, it does not
- * require an increasing value. A random draw is what that calls for; a clock reading is not, since
- * two withdrawals in the same millisecond collide and a backwards clock adjustment reuses a spent
- * value, both of which surface as an opaque replay rejection.
+ * Withdraw-auth nonce: any value the sender has not used before — NEAR rejects a repeat, it does not
+ * require an increasing value, so a random draw avoids same-millisecond and clock-skew collisions.
+ *
+ * Capped at 53 bits: the relay passes the nonce through a JavaScript `number` before the NEAR call,
+ * so a larger value arrives rounded and the contract verifies a message that was never signed.
  */
+const MAX_SAFE_NONCE = (1n << 53n) - 1n;
+
 function randomNonce(): bigint {
-  return bytesToBigInt(crypto.getRandomValues(new Uint8Array(8)));
+  return bytesToBigInt(crypto.getRandomValues(new Uint8Array(8))) & MAX_SAFE_NONCE;
 }
+
+/**
+ * Whether an XRPL account can receive a release, and if not, why. The relay treats a destination it
+ * cannot pay as a TERMINAL failure — the funds are already burned on the hub by then — so a caller
+ * must check this before withdrawing or borrowing to an XRPL address.
+ */
+export type XrpDestinationReadiness =
+  | { ready: true }
+  | { ready: false; reason: 'account_not_found' | 'no_trustline' | 'trustline_limit' };
 
 /**
  * Spoke service for the XRP Ledger. Like Tron, XRPL deposits ride the **MPC relay** in memo mode: a
@@ -186,19 +198,7 @@ export class XrpSpokeService {
     // rejects a transaction that pins them, and a raw-key provider has xrpl.js do the same. Filling
     // them here would mean racing the wallet for the account's Sequence.
     const signed = await walletProvider.signTransaction(unsigned);
-    if (!signed.tx_blob) throw new Error('[XrpSpokeService.deposit] wallet returned no signed blob');
-
-    const submitted = await this.rpc<{ engine_result?: string; tx_json?: { hash?: string } }>('submit', {
-      tx_blob: signed.tx_blob,
-    });
-    // tesSUCCESS is the only unambiguous accept; tec* codes are applied-but-failed and ter*/tem* are
-    // rejections. Treating anything else as success would notify the relay about a tx that never
-    // moved funds.
-    if (submitted.engine_result !== 'tesSUCCESS') {
-      throw new Error(`[XrpSpokeService.deposit] submit failed: ${submitted.engine_result ?? 'unknown'}`);
-    }
-    const rawHash = signed.hash ?? submitted.tx_json?.hash;
-    if (!rawHash) throw new Error('[XrpSpokeService.deposit] submitted but no transaction hash returned');
+    const rawHash = await this.submitSigned(signed);
     // XRPL reports hashes as bare uppercase hex; the relay's API takes the 0x-prefixed form (the
     // Tron path normalises identically, and its hashes are natively unprefixed too).
     const hash = `0x${rawHash.replace(/^0x/, '').toLowerCase()}` as Hex;
@@ -221,6 +221,31 @@ export class XrpSpokeService {
     }
 
     return hash satisfies string as TxReturnType<XrpChainKey, R>;
+  }
+
+  /**
+   * Submit a signed Payment and return its hash.
+   *
+   * A browser wallet (GemWallet) submits as part of signing and returns a hash with no blob, so the
+   * funds have already moved — submitting again is impossible and throwing would strand them unnotified.
+   */
+  private async submitSigned(signed: { tx_blob?: string; hash?: string }): Promise<string> {
+    if (!signed.tx_blob) {
+      if (!signed.hash) throw new Error('[XrpSpokeService.deposit] wallet returned neither a signed blob nor a hash');
+      return signed.hash;
+    }
+
+    const submitted = await this.rpc<{ engine_result?: string; tx_json?: { hash?: string } }>('submit', {
+      tx_blob: signed.tx_blob,
+    });
+    // tesSUCCESS is the only unambiguous accept; tec* codes are applied-but-failed and ter*/tem* are
+    // rejections, so anything else would notify the relay about a tx that never moved funds.
+    if (submitted.engine_result !== 'tesSUCCESS') {
+      throw new Error(`[XrpSpokeService.deposit] submit failed: ${submitted.engine_result ?? 'unknown'}`);
+    }
+    const hash = signed.hash ?? submitted.tx_json?.hash;
+    if (!hash) throw new Error('[XrpSpokeService.deposit] submitted but no transaction hash returned');
+    return hash;
   }
 
   /**
@@ -268,10 +293,20 @@ export class XrpSpokeService {
    * `txHash` is the source XRPL tx hash returned by {@link deposit}.
    */
   public async waitForDeposit(txHash: string, timeout?: number): Promise<Result<DepositRecord>> {
-    return waitForDeposit(this.relayApiUrl, toDepositId(this.chainId, txHash), {
-      timeout: Math.max(timeout ?? 0, XRP_SETTLEMENT_FLOOR_MS),
-      pollIntervalMs: this.chainConfig.pollingConfig.pollingIntervalMs,
-    });
+    // `/notify` accepts a tx before its ledger is validated and never re-checks, so a notification
+    // sent right after submit can land too early. Re-notifying is idempotent.
+    const renotify = setInterval(() => {
+      void notify(this.relayApiUrl, this.chainId, txHash);
+    }, RENOTIFY_INTERVAL_MS);
+
+    try {
+      return await waitForDeposit(this.relayApiUrl, toDepositId(this.chainId, txHash), {
+        timeout: Math.max(timeout ?? 0, XRP_SETTLEMENT_FLOOR_MS),
+        pollIntervalMs: this.chainConfig.pollingConfig.pollingIntervalMs,
+      });
+    } finally {
+      clearInterval(renotify);
+    }
   }
 
   /**
@@ -298,9 +333,46 @@ export class XrpSpokeService {
     );
     const line = lines.lines?.find(l => l.currency === currency && l.account === entry.address);
     if (!line) return 0n;
-    // IOU balances are decimal strings; scale back to base units for a uniform SDK return type.
-    const [whole = '0', frac = ''] = line.balance.split('.');
-    return BigInt(whole + frac.padEnd(entry.decimals, '0').slice(0, entry.decimals));
+    return toBaseUnits(line.balance, entry.decimals);
+  }
+
+  /**
+   * Whether `address` can receive `amount` of `token` from a release.
+   *
+   * The account must exist: a native release to a missing account fails below the base reserve, and
+   * an IOU release can never create one. An IOU also needs a trustline to its issuer with room for
+   * the amount. Every one of these the relay treats as terminal, so check before submitting.
+   */
+  public async checkDestination(params: {
+    address: string;
+    token: string;
+    amount: bigint;
+  }): Promise<XrpDestinationReadiness> {
+    const { address, token, amount } = params;
+    try {
+      await this.rpc('account_info', { account: address, ledger_index: 'validated' });
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('actNotFound')) {
+        return { ready: false, reason: 'account_not_found' };
+      }
+      throw error;
+    }
+
+    if (token === this.chainConfig.nativeToken) return { ready: true };
+
+    const entry = Object.values(this.chainConfig.supportedTokens).find(t => t.address === token);
+    if (!entry) throw new Error(`[XrpSpokeService.checkDestination] unknown XRPL token ${token}`);
+    const currency = xrpCurrencyCode(entry.symbol);
+    const lines = await this.rpc<{ lines?: { currency: string; account: string; balance: string; limit: string }[] }>(
+      'account_lines',
+      { account: address, peer: entry.address, ledger_index: 'validated' },
+    );
+    const line = lines.lines?.find(l => l.currency === currency && l.account === entry.address);
+    if (!line) return { ready: false, reason: 'no_trustline' };
+    if (toBaseUnits(line.balance, entry.decimals) + amount > toBaseUnits(line.limit, entry.decimals)) {
+      return { ready: false, reason: 'trustline_limit' };
+    }
+    return { ready: true };
   }
 
   /**
@@ -345,13 +417,6 @@ export class XrpSpokeService {
       chainId: BigInt(this.chainId), // the relay's source-chain id, not the hub's
       sender,
     };
-
-    // The tracking id is derived from the nonce, so log it before signing: if the submit response is
-    // lost in flight the withdrawal is still recoverable, and a rejected replay is diagnosable.
-    this.config.logger.debug('[XrpSpokeService.sendMessage] withdraw nonce', {
-      sender,
-      nonce: message.nonce.toString(),
-    });
 
     // Scheme 3 signs the RAW 32-byte hash — no prefix, no envelope, unlike scheme 1's TIP-191
     // wrapping. The public key rides along because an ed25519 signature cannot recover its signer:
@@ -415,4 +480,10 @@ export class XrpSpokeService {
     }
     return { ok: true, value: { status: 'timeout', error: new Error(`xrpl tx ${txHash} not validated in time`) } };
   }
+}
+
+/** An XRPL decimal IOU amount in base units, truncated to `decimals`. */
+function toBaseUnits(value: string, decimals: number): bigint {
+  const [whole = '0', frac = ''] = value.split('.');
+  return BigInt(whole + frac.padEnd(decimals, '0').slice(0, decimals));
 }

@@ -494,6 +494,8 @@ export const BITCOIN_CHAIN_KEYS = filterChainKeysByType('BITCOIN');
 export const BITCOIN_CHAIN_KEYS_SET = new Set(BITCOIN_CHAIN_KEYS);
 export const TRON_CHAIN_KEYS = filterChainKeysByType('TRON');
 export const TRON_CHAIN_KEYS_SET = new Set(TRON_CHAIN_KEYS);
+export const XRP_CHAIN_KEYS = filterChainKeysByType('XRP');
+export const XRP_CHAIN_KEYS_SET = new Set(XRP_CHAIN_KEYS);
 
 export type HubChainKey = typeof HUB_CHAIN_KEY;
 export type HubChainType = 'EVM';

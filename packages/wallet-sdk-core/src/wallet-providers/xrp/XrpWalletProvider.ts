@@ -92,12 +92,7 @@ export class XrpWalletProvider extends BaseWalletProvider<XrpWalletDefaults> imp
     return `0x${hex.toLowerCase()}`;
   }
 
-  /**
-   * Sign the 32-byte withdraw-auth hash as a RAW ed25519 signature.
-   *
-   * No prefix and no envelope — the bytes signed ARE the hash. GemWallet's `signMessage` over the
-   * hex string produces exactly this, which is what the relay's own scheme-3 path documents.
-   */
+  /** Sign the 32-byte withdraw-auth hash as a raw ed25519 signature — the bytes signed are the hash. */
   public async signMessage(hash: `0x${string}`): Promise<`0x${string}`> {
     const hex = hash.replace(/^0x/, '').toUpperCase();
     if (this.wallet) {
@@ -105,7 +100,8 @@ export class XrpWalletProvider extends BaseWalletProvider<XrpWalletDefaults> imp
       const { sign } = await import('ripple-keypairs');
       return `0x${sign(hex, this.wallet.privateKey).toLowerCase()}`;
     }
-    const res = await this.gemWallet?.signMessage(hex);
+    // `isHex`: sign the 32 decoded bytes, not the 64-character string.
+    const res = await this.gemWallet?.signMessage(hex, true);
     const sig = res?.result?.signedMessage;
     if (!sig) throw new Error('XRPL wallet returned no signature');
     return `0x${sig.replace(/^0x/, '').toLowerCase()}`;

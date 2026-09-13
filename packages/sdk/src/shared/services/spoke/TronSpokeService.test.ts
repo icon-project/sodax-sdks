@@ -257,10 +257,15 @@ describe('TronSpokeService.deposit — hub wallet assertion', () => {
 
 describe('TronSpokeService.deposit — notify failure', () => {
   it('keeps the broadcast tx hash in the error so the stranded deposit can be re-notified', async () => {
+    // The retry waits between attempts; on real timers that is seconds and times out under load.
+    vi.useFakeTimers();
     stubTronGrid();
     vi.mocked(MpcRelayApiService.notify).mockResolvedValue({ ok: false, error: new Error('relay 503') });
 
-    const failure = await tron.deposit(depositParams(NATIVE_TRX)).catch((error: Error) => error);
+    const pending = tron.deposit(depositParams(NATIVE_TRX)).catch((error: Error) => error);
+    await vi.runAllTimersAsync();
+    const failure = await pending;
+    vi.useRealTimers();
 
     // The funds are already in the reserve at this point: an error without the hash would lose them.
     expect(failure).toBeInstanceOf(Error);

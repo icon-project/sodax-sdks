@@ -18,13 +18,10 @@ export interface GemWalletLike {
    */
   getPublicKey: () => Promise<{ result?: { publicKey?: string; address?: string } } | undefined>;
   /**
-   * `signMessage(message)` → a signature over the message.
-   *
-   * Scheme 3 needs a RAW ed25519 signature over the 32-byte hash — no prefix and no envelope —
-   * so the hash is passed as hex and GemWallet signs those bytes directly. This is the detail
-   * that differs from Tron's scheme 1, where the wallet wraps the payload TIP-191 style.
+   * `signMessage(message, isHex)` → a signature over the message. With `isHex` GemWallet signs the
+   * decoded bytes; without it, it signs the UTF-8 text of the string, which scheme 3 rejects.
    */
-  signMessage: (message: string) => Promise<{ result?: { signedMessage?: string } } | undefined>;
+  signMessage: (message: string, isHex?: boolean) => Promise<{ result?: { signedMessage?: string } } | undefined>;
   /** `submitTransaction({ transaction })` → submits a Payment and returns its hash. */
   submitTransaction: (payload: {
     transaction: Record<string, unknown>;

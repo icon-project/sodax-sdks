@@ -11,12 +11,14 @@ Like Tron, XRPL settles through the **MPC relay** rather than the intent relay: 
 
 New public surface:
 
-- `@sodax/types` — `XrpChainKey`, `XrpSpokeChainConfig`, `XrpRawTransaction`, `XrpReturnType`, `XrpRawTransactionReceipt`, `XrpGasEstimate`, `XrpUnsignedTransaction`, `XrpSignedTransaction` and the `IXrpWalletProvider` interface, plus the `xrp` entries in `spokeChainConfig` and `supportedTokensByChain` (native XRP, RLUSD, USDC).
-- `@sodax/sdk` — `sodax.spoke.xrp` (`XrpSpokeService`: `deposit`, `getDeposit`, `estimateGas`, `sendMessage`, `waitForDeposit`, `waitForWithdrawal`, `waitForTransactionReceipt`) and the XRPL encoding helpers `xrpIdentityBytes`, `xrpAccountIdFromPublicKey`, `xrpCurrencyCode`, `xrpHashToClassicAddress`.
+- `@sodax/types` — `isXrpChainKey`, `XRP_CHAIN_KEYS`, `XrpChainKey`, `XrpSpokeChainConfig`, `XrpRawTransaction`, `XrpReturnType`, `XrpRawTransactionReceipt`, `XrpGasEstimate`, `XrpUnsignedTransaction`, `XrpSignedTransaction` and the `IXrpWalletProvider` interface, plus the `xrp` entries in `spokeChainConfig` and `supportedTokensByChain` (native XRP, RLUSD, USDC).
+- `@sodax/sdk` — `sodax.spoke.xrp` (`XrpSpokeService`: `deposit`, `getDeposit`, `estimateGas`, `checkDestination`, `sendMessage`, `waitForDeposit`, `waitForWithdrawal`, `waitForTransactionReceipt`), `isXrpChainKeyType` and the XRPL encoding helpers `xrpIdentityBytes`, `xrpAccountIdFromPublicKey`, `xrpCurrencyCode`, `xrpHashToClassicAddress`.
 - `@sodax/wallet-sdk-core` — `XrpWalletProvider` in both raw-key and GemWallet modes.
 - `@sodax/wallet-sdk-react` — `XrpXService` and the GemWallet `XrpXConnector`, wired into `chainRegistry` and `SodaxWalletConfig`.
 
-Feature support: all three assets are **swap**-supported (`XRP_XRP_ASSET`, `XRP_USDC_ASSET` and `XRP_RLUSD_ASSET` are on the production solver oracle, and quotes were verified live in both directions). **Money market** lists XRP and USDC; RLUSD is swap-only, since `sodaRLUSD` is not a lending-pool reserve. Bridge, partner-fee and recovery include XRPL automatically.
+Feature support: all three assets are **swap**-supported (`XRP_XRP_ASSET`, `XRP_USDC_ASSET` and `XRP_RLUSD_ASSET` are on the production solver oracle, and quotes were verified live in both directions). **Money market** lists XRP and USDC; RLUSD is swap-only, since `sodaRLUSD` is not a lending-pool reserve. The XRP vault is added to `moneyMarketReserveAssets`, matching the pool. Bridge, partner-fee and recovery include XRPL automatically.
+
+Money-market `withdraw` and `borrow` to an XRPL destination fail with `VALIDATION_FAILED` before anything is signed when the destination cannot receive the release: the account does not exist, or has no trustline (or no limit headroom) for the IOU. The relay treats those as terminal after the hub has burned the funds. Call `sodax.spoke.xrp.checkDestination` to check ahead of time.
 
 Also routes `xrp` in `SpokeService.settle` — `getMpcRelayService` recognised only Tron, so every XRPL feature flow (bridge, and money-market supply/borrow/withdraw/repay) threw at settlement, after the Payment had already landed on ledger.
 

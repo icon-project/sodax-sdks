@@ -206,6 +206,8 @@ export const moneyMarketSupportedTokens = {
 export const moneyMarketReserveAssets = [
   ...Object.values(SodaTokens).map(vault => vault.address),
   hubConfig.bnUSD,
+  // A pool reserve with its own vault rather than a SodaTokens entry.
+  spokeChainConfig[ChainKeys.XRP_MAINNET].supportedTokens.XRP.vault,
 ] as const satisfies Address[];
 
 export const moneyMarketConfig = {

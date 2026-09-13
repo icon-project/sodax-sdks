@@ -97,14 +97,14 @@ describe('XrpXConnector.getGemWallet', () => {
     expect(Object.keys(gem).sort()).toEqual(['getAddress', 'getPublicKey', 'signMessage', 'submitTransaction']);
   });
 
-  it('passes the hash straight through to signMessage with no prefix or envelope', async () => {
+  it('forwards the hash and its hex flag to signMessage unchanged', async () => {
     const hash = 'AB'.repeat(32);
     signMessage.mockResolvedValue({ result: { signedMessage: 'CD'.repeat(64) } });
 
-    await connector().getGemWallet().signMessage(hash);
+    await connector().getGemWallet().signMessage(hash, true);
 
-    // Scheme 3 verifies a RAW ed25519 signature over the 32-byte hash — wrapping it breaks verification.
-    expect(signMessage).toHaveBeenCalledWith(hash);
+    // Dropping `isHex` would make GemWallet sign the text of the hash instead of its bytes.
+    expect(signMessage).toHaveBeenCalledWith(hash, true);
   });
 
   it('forwards a transaction payload unchanged to submitTransaction', async () => {

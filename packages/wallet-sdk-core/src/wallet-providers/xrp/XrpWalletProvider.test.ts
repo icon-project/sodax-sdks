@@ -156,13 +156,14 @@ describe('XrpWalletProvider.signMessage', () => {
     expect(await rawKeyProvider().signMessage(HASH)).toBe(await rawKeyProvider().signMessage(HASH));
   });
 
-  it('hands GemWallet the bare uppercase hash and lowercases what comes back', async () => {
+  it('hands GemWallet the bare hash flagged as hex and lowercases what comes back', async () => {
     const gem = gemWallet();
     const provider = new XrpWalletProvider({ gemWallet: gem, address: GEM_ADDRESS });
 
     const signature = await provider.signMessage(HASH);
 
-    expect(gem.signMessage).toHaveBeenCalledWith(HASH.slice(2).toUpperCase());
+    // Without `isHex` GemWallet signs the 64-character text, which scheme 3 does not verify.
+    expect(gem.signMessage).toHaveBeenCalledWith(HASH.slice(2).toUpperCase(), true);
     expect(signature).toBe(`0x${'cd'.repeat(64)}`);
   });
 

@@ -64,9 +64,7 @@ export class XrpXConnector extends XConnector {
     return {
       getAddress: () => getAddress(),
       getPublicKey: () => getPublicKey(),
-      // Scheme 3 signs the RAW 32-byte hash — the hex string is passed straight through, with no
-      // prefix or envelope, which is what the relay's scheme-3 verification expects.
-      signMessage: (message: string) => signMessage(message),
+      signMessage: (message: string, isHex?: boolean) => signMessage(message, isHex),
       submitTransaction: (payload: { transaction: Record<string, unknown> }) => submitTransaction(payload as never),
     } as GemWalletLike;
   }
