@@ -12,7 +12,7 @@ chain/<chainKey>.png   # one logo per chain, filename === the ChainKeys value
 token/<slug>.png       # one logo per token, filename === tokenLogoSlug(symbol)
 ```
 
-All files are PNG, sourced from CoinGecko's CDN.
+All files are PNG, sourced from CoinGecko or approved issuer artwork.
 
 ## How it wires up
 

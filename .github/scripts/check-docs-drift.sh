@@ -224,7 +224,7 @@ fi
 if [ -n "$UNPUBLISHED_RENAME" ]; then
   echo "::error::Renamed SDK doc(s) dropped off $MAP_FILE:$UNPUBLISHED_RENAME"
   echo "Point the src entry at the new path so the page keeps publishing."
-  echo "Renaming a page on the \"unpublished\" list (DEX.md, LOGGING.md, …) needs no map entry."
+  echo "Renaming a page on the \"unpublished\" list (DEX.md, ORACLE.md, …) needs no map entry."
   echo "See CONTRIBUTING.md#documentation."
   exit 1
 fi
@@ -266,7 +266,7 @@ if [ -n "$MISSING" ]; then
   echo "a packages/sdk/docs/ page on the map, a mapped root docs/ guide whose"
   echo "pkgs entry lists the package, the package README, or"
   echo "packages/<pkg>/docs/ (non-sdk packages)."
-  echo "JSDoc, packages/skills, and \"unpublished\" sdk/docs pages (DEX.md, LOGGING.md, …) do not count."
+  echo "JSDoc, packages/skills, and \"unpublished\" sdk/docs pages (DEX.md, ORACLE.md, …) do not count."
   echo "An unrelated mapped file (e.g. packages/skills/README.md) does not satisfy another package."
   echo "Deleting a README, mapped page, or packages/<pkg>/docs/ file does not count."
   echo "If this PR truly has no user-facing change, ask a maintainer for the 'docs-not-needed' label."

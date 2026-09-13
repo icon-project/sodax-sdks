@@ -336,11 +336,10 @@ export type StellarRpcConfig = {
   sorobanRpcUrl?: string;
 };
 
-// Type for Bitcoin RPC configuration with Bound Exchange API endpoints
+// Type for Bitcoin RPC configuration. Bound Exchange hosts are NOT set here — nothing reads
+// them off this shape. They live on `chains[BITCOIN_MAINNET].radfi` in the SDK config.
 export type BitcoinRpcConfig = {
   rpcUrl?: string;
-  radfiApiUrl?: string;
-  radfiUmsUrl?: string;
 };
 
 // Type for Injective RPC configuration — covers indexer and gRPC endpoints.
@@ -376,7 +375,7 @@ export type StacksNetworkLike = {
 
 // Mapped type that uses ChainKey as keys and assigns appropriate value types per chain:
 // - Stellar    → StellarRpcConfig                   (horizon + soroban URLs)
-// - Bitcoin    → BitcoinRpcConfig                   (rpcUrl + radfi endpoints)
+// - Bitcoin    → BitcoinRpcConfig                   (rpcUrl only; Bound hosts live on chains.radfi)
 // - Injective  → InjectiveRpcConfig                 (indexer + grpc endpoints)
 // - Stacks     → StacksNetworkName | StacksNetworkLike (preset name or full network)
 // - All others → string                             (single RPC URL)

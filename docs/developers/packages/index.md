@@ -5,7 +5,9 @@ description: Software development kits available to the integrators.
 icon: screwdriver-wrench
 ---
 
-The SODAX developer suite is architected as a dependency stack. Builders can choose to integrate at the foundational level for maximum control or use opinionated layers for speed.
+Use these package references to look up TypeScript methods, types, and configuration.
+For a first integration, start with [Your first swap](/quickstart); for a specific task, use
+[How To](/developers/how-to). Choose a [product](/) before selecting packages if you are still exploring.
 
 <Note>
   **Building with an AI coding agent?** Install [`@sodax/skills`](/ai-integration-guide) so it writes

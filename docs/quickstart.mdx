@@ -31,7 +31,7 @@ Prefer HTTP? Same flow over REST: [Swap API](/developers/http-api/swaps). Prefer
 
   <Step title="Initialize">
     ```typescript
-    import { Sodax, ChainKeys, spokeChainConfig, type CreateIntentParams, type Hex } from '@sodax/sdk';
+    import { Sodax, ChainKeys, type CreateIntentParams, type Hex } from '@sodax/sdk';
     import { EvmWalletProvider } from '@sodax/wallet-sdk-core';
 
     const sodax = new Sodax(); // mainnet defaults
@@ -61,9 +61,9 @@ Prefer HTTP? Same flow over REST: [Swap API](/developers/http-api/swaps). Prefer
     const srcChainKey = ChainKeys.ARBITRUM_MAINNET;
     const dstChainKey = ChainKeys.BSC_MAINNET;
 
-    // Read token addresses from config rather than hardcoding them.
-    const inputToken = spokeChainConfig[srcChainKey].nativeToken; // ETH on Arbitrum
-    const outputToken = spokeChainConfig[dstChainKey].nativeToken; // BNB on BNB Chain
+    // Instance configuration includes constructor overrides.
+    const inputToken = sodax.config.spokeChainConfig[srcChainKey].nativeToken; // ETH on Arbitrum
+    const outputToken = sodax.config.spokeChainConfig[dstChainKey].nativeToken; // BNB on BNB Chain
 
     const inputAmount = 100_000_000_000_000n; // 0.0001 ETH
 

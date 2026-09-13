@@ -46,6 +46,8 @@ Intent Canceller: [0x7Ec046CEB0C01A2Ef16C77d2e6bB56E3AF3464cf](https://sonicscan
 
 ## SodaTokens (Vault tokens)
 
+The `Symbol` column is the vault contract's on-chain `symbol()`, which is also `SodaTokens[...].symbol` in `@sodax/types`. The `SodaTokens` object keys (`sodaBTC`, `sodaWEETH`, …) and `HubVaultSymbols` keep the `soda` prefix regardless of the on-chain symbol.
+
 | Symbol | Address | Assets |
 |--------|---------|--------|
 | BNB | [0x40Cd41b35DB9e5109ae7E54b44De8625dB320E6b](https://sonicscan.org/address/0x40Cd41b35DB9e5109ae7E54b44De8625dB320E6b) | BNB |

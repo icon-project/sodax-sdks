@@ -137,9 +137,7 @@ export class BitcoinSpokeService {
   public async getWalletBalances(params: GetBalancesParams<BitcoinChainKey>): Promise<WalletBalanceMap> {
     const { srcChainKey, srcAddress, tokens } = params;
     const collector = createBalanceCollector({ logger: this.config.logger, chainKey: srcChainKey });
-    await settleWalletBalances(collector, tokens, token =>
-      this.getWalletBalance({ srcChainKey, srcAddress, token }),
-    );
+    await settleWalletBalances(collector, tokens, token => this.getWalletBalance({ srcChainKey, srcAddress, token }));
     return collector.finish();
   }
 

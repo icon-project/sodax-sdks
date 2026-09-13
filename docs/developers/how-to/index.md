@@ -27,6 +27,9 @@ Task guides for common integration work. For product pickers, start from a [solu
   <Card title="Configure the SDK" icon="sliders" href="/developers/how-to/configure_sdk">
     Networks, RPCs, and partner settings.
   </Card>
+  <Card title="Logging" icon="file-lines" href="/developers/how-to/logging">
+    Silence SDK diagnostics or forward them to Sentry, Datadog or a JSON sink.
+  </Card>
   <Card title="Install with Next.js" icon="box" href="/developers/packages/sdk/docs/installation/nextjs">
     Create a Next.js app and install `@sodax/sdk`.
   </Card>

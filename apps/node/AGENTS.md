@@ -25,6 +25,8 @@ PRIVATE_KEY=0x…   # used by every script
 
 Some scripts also expect chain-specific RPC URLs or extra keys — check the imports in the script you're running. Public RPCs are used as fallback where possible.
 
+`logging.ts` is the exception: it needs no key, no RPC and no network.
+
 `stellar-sponsor.ts` is the exception whose extra vars are not inferable from its imports:
 
 ```
@@ -43,6 +45,7 @@ src/
 ├── soda-staking.ts
 ├── bitcoin-radfi.ts                        # Bitcoin trading-wallet provider
 ├── stellar-sponsor.ts                      # sponsored Stellar account activation (tsx; headless)
+├── logging.ts                              # custom SodaxLogger example (tsx; no key, RPC or network)
 ├── config.ts                               # shared config (RPC URLs, addresses)
 └── tests/                                  # focused regression scripts
     ├── bnusd-migration.test.ts
