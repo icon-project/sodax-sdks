@@ -139,21 +139,23 @@ async function main() {
       return;
     }
 
-    // ---- read-only solver quote (intent-data build is the remaining feature-flow wiring) ----
+    // ---- read-only solver quote ----
     case 'swap': {
-      const outputToken = arg('--output-token', NATIVE_TRX) as string;
+      // Quotes are keyed by the SPOKE-side address (what `swapSupportedTokens` lists), not the hub
+      // asset — passing wTRX here is rejected as an unsupported token_src for the chain.
+      const outputToken = arg('--output-token', TOKEN) as string;
       const dstChain = arg('--dst-chain', TRON) as 'tron';
       const quote = await sodax.swaps.getQuote({
-        token_src: W_TRX,
+        token_src: TOKEN,
         token_src_blockchain_id: TRON,
         token_dst: outputToken,
         token_dst_blockchain_id: dstChain,
         amount: amountUnits,
         quote_type: 'exact_input',
       });
-      log('quote:', quote.ok ? JSON.stringify(quote.value) : `failed: ${quote.error?.detail ?? quote.error}`);
-      log('note: the swap-intent `data` is then Tron-deposited like `intent` — building it end-to-end');
-      log('      needs the feature-flow MPC branch (Tron is not yet in swapSupportedTokens).');
+      // The solver returns bigint amounts, which JSON.stringify refuses outright.
+      const j = (v: unknown) => JSON.stringify(v, (_k, x) => (typeof x === 'bigint' ? x.toString() : x));
+      log('quote:', quote.ok ? j(quote.value) : `failed: ${j(quote.error?.detail ?? quote.error)}`);
       return;
     }
 

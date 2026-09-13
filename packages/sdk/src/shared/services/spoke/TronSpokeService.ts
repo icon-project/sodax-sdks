@@ -6,9 +6,11 @@ import {
   type TronChainKey,
   type TronGasEstimate,
   type TronRawTransaction,
+  type TronRawTransactionReceipt,
   type TronSpokeChainConfig,
   type TronUnsignedTransaction,
   type TxReturnType,
+  type ITronWalletProvider,
 } from '@sodax/types';
 import type { ConfigService } from '../../config/ConfigService.js';
 import { retry } from '../../utils/shared-utils.js';
@@ -48,20 +50,31 @@ import {
  */
 const TRC20_DEPOSIT_FEE_LIMIT_SUN = 100_000_000;
 
+/** The decoded transaction body TronGrid returns beside `raw_data_hex`. */
+type TronRawData = Record<string, unknown>;
+
+/** A built transfer: the hex body the memo is spliced into, plus the node's decoded form. */
+type BuiltTransfer = { rawDataHex: string; rawData?: TronRawData };
+
 /** Per-request budget for a TronGrid call, mirroring the intent relay's own request cap. */
 const TRON_RPC_TIMEOUT_MS = 15_000;
 
 /**
  * Floor for an MPC-relay settlement wait, applied over the caller's own timeout.
  *
- * The relay's Tron verifier requires 19 solidified confirmations before it will attest a deposit —
- * roughly 57s of block time on its own — and the hub mint still has to clear aggregation, the NEAR
- * submit and the hub transaction after that. A caller's generic cross-chain timeout
- * (`DEFAULT_RELAY_TX_TIMEOUT`, 120s) is not sized for that, and the chain's own `pollingConfig`
- * (tuned for receipt polling) is smaller still, so either would routinely give up on a deposit that
- * is simply mid-flight. Matches the relay's own documented deposit timeout.
+ * A deposit waits on relay-side confirmations, then aggregation, the NEAR submit and the hub tx, so
+ * the generic cross-chain timeout would give up mid-flight. Matches the relay's documented deposit timeout.
  */
 const TRON_SETTLEMENT_FLOOR_MS = 300_000;
+
+/**
+ * How often to re-notify the relay while waiting for a deposit — roughly two Tron blocks.
+ *
+ * Sized to the block interval rather than to the verifier's confirmation depth, so the deposit is
+ * re-notified soon after it becomes findable whatever that depth is set to. Notifying repeatedly is
+ * harmless: `/notify` is idempotent.
+ */
+const RENOTIFY_INTERVAL_MS = 6_000;
 
 /** A 65-byte `r‖s‖v` placeholder — only its length matters when sizing a transaction. */
 const SIGNATURE_PLACEHOLDER = '00'.repeat(65);
@@ -70,13 +83,21 @@ const SIGNATURE_PLACEHOLDER = '00'.repeat(65);
 const MEMO_PLACEHOLDER = `0x${'00'.repeat(32)}` as Hex;
 
 /**
- * Withdraw-auth nonce: any u64 the sender has not used before — NEAR rejects a repeat, it does not
+ * Withdraw-auth nonce: any value the sender has not used before — NEAR rejects a repeat, it does not
  * require an increasing value. A random draw is what that calls for; a clock reading is not, since
  * two withdrawals in the same millisecond collide and a backwards clock adjustment reuses a spent
  * value, both of which surface as an opaque replay rejection.
+ *
+ * Capped at 53 bits rather than the field's full u64 range: the relay round-trips the nonce through
+ * a JavaScript `number` before it reaches the NEAR contract, so anything above `Number.MAX_SAFE_INTEGER`
+ * arrives rounded. The contract then hashes a nonce we did not sign and the withdrawal dies at
+ * `submit_withdraw_message` with "Recovered address does not match sender" — after the nonce is
+ * already spent. 2^53 draws leave collision odds negligible.
  */
+const MAX_SAFE_NONCE = (1n << 53n) - 1n;
+
 function randomNonce(): bigint {
-  return bytesToBigInt(crypto.getRandomValues(new Uint8Array(8)));
+  return bytesToBigInt(crypto.getRandomValues(new Uint8Array(8))) & MAX_SAFE_NONCE;
 }
 
 /**
@@ -190,23 +211,18 @@ export class TronSpokeService {
 
     const walletProvider = params.walletProvider;
 
-    // Build the transfer to the reserve, then splice the memo in as protobuf field 10.
-    const rawData = isNative
-      ? await this.buildNativeTransfer(srcAddress, reserveAddress, amount)
-      : await this.buildTrc20Transfer(srcAddress, reserveAddress, token, amount);
-
-    const rawWithMemo = spliceMemo(rawData, memo);
-    const txID = sha256(`0x${rawWithMemo}`).slice(2);
-
-    const unsigned: TronUnsignedTransaction = { txID, raw_data_hex: rawWithMemo, visible: true };
-    const signed = await walletProvider.signTransaction(unsigned);
-    const signature = signed.signature[0];
-    if (!signature) throw new Error('[TronSpokeService.deposit] wallet returned no signature');
-
-    const broadcast = await this.rpc<{ result?: boolean; message?: string }>('/wallet/broadcasthex', {
-      transaction: assembleBroadcastHex(rawWithMemo, signature),
-    });
-    if (!broadcast.result) throw new Error(`[TronSpokeService.deposit] broadcast failed: ${broadcast.message ?? ''}`);
+    // The transfer is built here rather than in the wallet: a browser wallet's injected TronWeb
+    // points at its own full node, which answers 401 for an unauthenticated `createTransaction`,
+    // so delegating construction to it fails before the user is ever prompted.
+    const txID = await this.buildSignAndBroadcast(
+      walletProvider,
+      srcAddress,
+      reserveAddress,
+      token,
+      amount,
+      memo,
+      isNative,
+    );
 
     // Tell the relay a deposit tx exists so verifiers begin attesting it. The funds are already on
     // chain by now, so this is retried (notifying twice is harmless) and, if it still fails, the tx
@@ -215,17 +231,51 @@ export class TronSpokeService {
     try {
       // `retry` reacts to a throw, and `notify` reports failure in its Result — so rethrow to arm it.
       await retry(async () => {
-        const res = await notify(this.relayApiUrl, this.chainId, `0x${txID}`);
+        const res = await notify(this.relayApiUrl, this.chainId, txID);
         if (!res.ok) throw res.error;
       });
     } catch (error) {
       throw new Error(
-        `[TronSpokeService.deposit] deposit 0x${txID} broadcast but the relay was not notified — re-notify this tx hash to settle it`,
+        `[TronSpokeService.deposit] deposit ${txID} broadcast but the relay was not notified — re-notify this tx hash to settle it`,
         { cause: error },
       );
     }
 
-    return `0x${txID}` satisfies string as TxReturnType<TronChainKey, R>;
+    return txID satisfies string as TxReturnType<TronChainKey, R>;
+  }
+
+  /** Build the transfer over the node, splice the memo in as protobuf field 10, then sign and broadcast. */
+  private async buildSignAndBroadcast(
+    walletProvider: ITronWalletProvider,
+    srcAddress: string,
+    reserveAddress: string,
+    token: string,
+    amount: bigint,
+    memo: Hex,
+    isNative: boolean,
+  ): Promise<string> {
+    const built = isNative
+      ? await this.buildNativeTransfer(srcAddress, reserveAddress, amount)
+      : await this.buildTrc20Transfer(srcAddress, reserveAddress, token, amount);
+
+    const rawWithMemo = spliceMemo(built.rawDataHex, memo);
+    const txID = sha256(`0x${rawWithMemo}`).slice(2);
+
+    const unsigned: TronUnsignedTransaction = {
+      txID,
+      raw_data_hex: rawWithMemo,
+      visible: false,
+      ...(built.rawData ? { raw_data: { ...built.rawData, data: memo.replace(/^0x/, '') } } : {}),
+    };
+    const signed = await walletProvider.signTransaction(unsigned);
+    const signature = signed.signature[0];
+    if (!signature) throw new Error('[TronSpokeService.deposit] wallet returned no signature');
+
+    const broadcast = await this.rpc<{ result?: boolean; message?: string }>('/wallet/broadcasthex', {
+      transaction: assembleBroadcastHex(rawWithMemo, signature),
+    });
+    if (!broadcast.result) throw new Error(`[TronSpokeService.deposit] broadcast failed: ${broadcast.message ?? ''}`);
+    return txID;
   }
 
   /**
@@ -246,41 +296,44 @@ export class TronSpokeService {
     }
   }
 
-  /** Unsigned native TRX transfer to the reserve, as `raw_data_hex`. */
-  private async buildNativeTransfer(from: string, to: string, amount: bigint): Promise<string> {
-    const created = await this.rpc<{ raw_data_hex?: string; Error?: string }>('/wallet/createtransaction', {
-      owner_address: from,
-      to_address: to,
-      amount: Number(amount),
-      visible: true,
-    });
+  /** Unsigned native TRX transfer to the reserve: the node's hex body plus its decoded form. */
+  private async buildNativeTransfer(from: string, to: string, amount: bigint): Promise<BuiltTransfer> {
+    // Hex addresses, not `visible: true`: the wallet compares `owner_address` to its account in hex.
+    const created = await this.rpc<{ raw_data_hex?: string; raw_data?: TronRawData; Error?: string }>(
+      '/wallet/createtransaction',
+      {
+        owner_address: tronBase58ToHex(from),
+        to_address: tronBase58ToHex(to),
+        amount: Number(amount),
+      },
+    );
     if (!created.raw_data_hex) throw new Error(`[TronSpokeService.deposit] createtransaction failed: ${created.Error}`);
-    return created.raw_data_hex;
+    return { rawDataHex: created.raw_data_hex, rawData: created.raw_data };
   }
 
-  /** Unsigned TRC-20 `transfer(reserve, amount)` on `token`, as `raw_data_hex`. */
-  private async buildTrc20Transfer(from: string, to: string, token: string, amount: bigint): Promise<string> {
+  /** Unsigned TRC-20 `transfer(reserve, amount)` on `token`: the node's hex body plus its decoded form. */
+  private async buildTrc20Transfer(from: string, to: string, token: string, amount: bigint): Promise<BuiltTransfer> {
     const built = await this.rpc<{
       result?: { result?: boolean; message?: string };
-      transaction?: { raw_data_hex?: string };
+      transaction?: { raw_data_hex?: string; raw_data?: TronRawData };
     }>('/wallet/triggersmartcontract', {
-      owner_address: from,
-      contract_address: token,
+      // Hex addresses for the same reason as the native builder above.
+      owner_address: tronBase58ToHex(from),
+      contract_address: tronBase58ToHex(token),
       function_selector: 'transfer(address,uint256)',
       parameter: encodeTrc20TransferParams(to, amount),
       fee_limit: TRC20_DEPOSIT_FEE_LIMIT_SUN,
       call_value: 0,
-      visible: true,
     });
 
-    const rawData = built.transaction?.raw_data_hex;
-    if (!rawData) {
+    const rawDataHex = built.transaction?.raw_data_hex;
+    if (!rawDataHex) {
       // `message` is hex-encoded ASCII on this endpoint; surface it raw rather than half-decoded.
       throw new Error(
         `[TronSpokeService.deposit] triggersmartcontract failed: ${built.result?.message ?? 'no transaction returned'}`,
       );
     }
-    return rawData;
+    return { rawDataHex, rawData: built.transaction?.raw_data };
   }
 
   /**
@@ -288,11 +341,21 @@ export class TronSpokeService {
    * `txHash` is the source Tron tx hash returned by {@link deposit}.
    */
   public async waitForDeposit(txHash: string, timeout?: number): Promise<Result<DepositRecord>> {
-    return waitForDeposit(this.relayApiUrl, toDepositId(this.chainId, txHash), {
-      // Never below what the chain physically needs — see TRON_SETTLEMENT_FLOOR_MS.
-      timeout: Math.max(timeout ?? 0, TRON_SETTLEMENT_FLOOR_MS),
-      pollIntervalMs: this.chainConfig.pollingConfig.pollingIntervalMs,
-    });
+    // `/notify` accepts a tx before it is confirmed and never re-checks, so a notification sent right
+    // after broadcast can land too early. Re-notifying is idempotent.
+    const renotify = setInterval(() => {
+      void notify(this.relayApiUrl, this.chainId, txHash);
+    }, RENOTIFY_INTERVAL_MS);
+
+    try {
+      return await waitForDeposit(this.relayApiUrl, toDepositId(this.chainId, txHash), {
+        // Never below what the chain physically needs — see TRON_SETTLEMENT_FLOOR_MS.
+        timeout: Math.max(timeout ?? 0, TRON_SETTLEMENT_FLOOR_MS),
+        pollIntervalMs: this.chainConfig.pollingConfig.pollingIntervalMs,
+      });
+    } finally {
+      clearInterval(renotify);
+    }
   }
 
   /**
@@ -337,11 +400,11 @@ export class TronSpokeService {
 
     // Bandwidth is charged on the serialized signed transaction, so size the real thing: the built
     // raw body, the memo it carries, and a signature of the fixed 65-byte length.
-    const rawData = isNative
+    const built = isNative
       ? await this.buildNativeTransfer(from, to, value)
       : await this.buildTrc20Transfer(from, to, token, value);
     const memo = isHex(data) && data.length === MEMO_PLACEHOLDER.length ? data : MEMO_PLACEHOLDER;
-    const signed = assembleBroadcastHex(spliceMemo(rawData, memo), SIGNATURE_PLACEHOLDER);
+    const signed = assembleBroadcastHex(spliceMemo(built.rawDataHex, memo), SIGNATURE_PLACEHOLDER);
 
     return { energy, bandwidth: BigInt(signed.length / 2) } satisfies TronGasEstimate;
   }
@@ -383,20 +446,14 @@ export class TronSpokeService {
       sender,
     };
 
-    // The tracking id is derived from the nonce, so log it before signing: if the submit response is
-    // lost in flight the withdrawal is still recoverable, and a rejected replay is diagnosable.
-    this.config.logger.debug('[TronSpokeService.sendMessage] withdraw nonce', {
-      sender,
-      nonce: message.nonce.toString(),
-    });
-
     const signature = await params.walletProvider.signMessage(computeSignedMessageHash(message));
 
-    const res = await submitWithdraw(this.relayApiUrl, {
+    const request = {
       message: { ...message, nonce: message.nonce.toString(), chainId: message.chainId.toString() },
       signature,
       scheme: getMpcRelayChainInfo(ChainKeys.TRON_MAINNET).withdrawScheme,
-    });
+    };
+    const res = await submitWithdraw(this.relayApiUrl, request);
     if (!res.ok) throw res.error;
 
     return res.value.trackingId satisfies string as TxReturnType<TronChainKey, Raw>;
@@ -426,11 +483,7 @@ export class TronSpokeService {
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
-        const info = await this.rpc<{
-          id?: string;
-          blockNumber?: number;
-          receipt?: { result?: string };
-        }>('/wallet/gettransactioninfobyid', { value });
+        const info = await this.rpc<TronRawTransactionReceipt>('/wallet/gettransactioninfobyid', { value });
         if (info.blockNumber) {
           const reverted = info.receipt?.result && info.receipt.result !== 'SUCCESS';
           if (reverted) {

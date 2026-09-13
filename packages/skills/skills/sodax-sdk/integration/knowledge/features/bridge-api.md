@@ -108,10 +108,12 @@ if (status.ok && status.value.data.status === 'executed') {
 Every method accepts a trailing `RequestOverrideConfig` to redirect a single call or attach headers:
 
 ```ts
-await sodax.api.bridge.getTokens({ baseURL: 'https://staging.example/v1/be', headers: { 'X-Trace': 'abc' } });
+// `baseURL` is the gateway ROOT — the SDK appends `/bridge/*` itself. Never include a service segment.
+await sodax.api.bridge.getTokens({ baseURL: 'https://staging.example/v1', headers: { 'X-Trace': 'abc' } });
 ```
 
-The Bridge API has no dedicated config slice — it always shares the base backend host (`/bridge/*`). To
+The Bridge API has no dedicated config slice — it always shares the base backend host, reached as
+`/bridge/*` on the gateway root (a sibling of the data API's `/be` mount, not a child of it). To
 move the whole backend (including bridge) to a custom host, use the `CustomApiConfig` `baseApiConfig` slice
 (see [`backend-api.md`](backend-api.md) § "Custom backend").
 

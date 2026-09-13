@@ -35,7 +35,7 @@ import {
   EvmAssetManagerService,
   EvmVaultTokenService,
   encodeContractCalls,
-  encodeAddress,
+  encodeRecipient,
   calculateFeeAmount,
   wrappedSonicAbi,
   isHubChainKeyType,
@@ -224,17 +224,28 @@ export class MoneyMarketService {
   readonly spoke: SpokeService;
 
   // money market config (hoisted from config for ergonomics, mirrors SwapService)
-  readonly partnerFee: PartnerFee | undefined;
   readonly relayerApiEndpoint: HttpUrl;
 
   // sub-service
   readonly data: MoneyMarketDataService;
 
+  /**
+   * Effective money-market partner fee (`moneyMarket.partnerFee`, else the global `fee`). Read live
+   * off `ConfigService` rather than snapshotted in the constructor, so it cannot diverge from
+   * `config.moneyMarketPartnerFee` if the config object is ever replaced. Mirrors
+   * {@link SwapService.partnerFee}.
+   *
+   * Money market has no per-action override: unlike swap / bridge / leverage-yield, every flow here
+   * charges this configured fee.
+   */
+  get partnerFee(): PartnerFee | undefined {
+    return this.config.moneyMarketPartnerFee;
+  }
+
   public constructor({ config, hubProvider, spoke }: MoneyMarketServiceConstructorParams) {
     this.config = config;
     this.hubProvider = hubProvider;
     this.spoke = spoke;
-    this.partnerFee = config.moneyMarketPartnerFee;
     this.relayerApiEndpoint = config.relay.relayerApiEndpoint;
     this.data = new MoneyMarketDataService({ hubProvider, config: config });
   }
@@ -823,7 +834,7 @@ export class MoneyMarketService {
         field: 'token',
       });
 
-      const encodedDstAddress = encodeAddress(dstChainKey, dstAddress);
+      const encodedDstAddress = encodeRecipient(dstChainKey, dstAddress);
       // Only the hub wallet needs the effective (Bitcoin trading) address — that's where the
       // collateral/debt lives. srcAddress stays the personal address because `SpokeService.sendMessage`
       // resolves the effective address itself (unlike the deposit path used by supply/repay, which
@@ -1006,7 +1017,7 @@ export class MoneyMarketService {
         { ...baseCtx, field: 'token' },
       );
 
-      const encodedDstAddress = encodeAddress(dstChainKey, dstAddress);
+      const encodedDstAddress = encodeRecipient(dstChainKey, dstAddress);
       // Only the hub wallet needs the effective (Bitcoin trading) address — that's where the
       // collateral/debt lives. srcAddress stays the personal address because `SpokeService.sendMessage`
       // resolves the effective address itself (unlike the deposit path used by supply/repay, which

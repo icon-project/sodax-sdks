@@ -8,7 +8,7 @@ import {
   encodeContractCalls,
   calculateFeeAmount,
   isNativeBitcoinTransfer,
-  encodeAddress,
+  encodeRecipient,
   wrappedSonicAbi,
   isHubChainKeyType,
   isStacksChainKeyType,
@@ -844,7 +844,7 @@ export class BridgeService {
       calls.push(EvmVaultTokenService.encodeWithdraw(dstToken.vault, dstToken.hubAsset, withdrawAmount));
     }
 
-    const encodedRecipientAddress = encodeAddress(params.dstChainKey, params.recipient);
+    const encodedRecipientAddress = encodeRecipient(params.dstChainKey, params.recipient);
     // If the destination chain is Sonic, we can directly transfer the tokens to the recipient
     if (isHubChainKey(params.dstChainKey)) {
       // If destination token is S, then unwrap and send S to the recipient

@@ -192,14 +192,29 @@ export async function getDepositAddress(
   });
 }
 
-/** Notify the relay that a deposit tx exists so verifiers start attesting it. */
-export async function notify(apiUrl: HttpUrl, chainId: string, txHash: Hex): Promise<Result<NotifyResponse>> {
+/**
+ * Notify the relay that a tx exists so verifiers start attesting it.
+ *
+ * `type` is OMITTED for a deposit — it is what routes ingest to the hub verifier, so sending
+ * `'deposit'` sends the deposit to the wrong one and it is never attested. Only a hub withdrawal
+ * burn passes `'withdrawal'`.
+ *
+ * `txHash` is used VERBATIM, exactly as the source chain reports it: `0x`-prefixed on EVM, bare hex
+ * on Tron. It must be the same string {@link toDepositId} is later given, or the record is written
+ * under one id and polled under another.
+ */
+export async function notify(
+  apiUrl: HttpUrl,
+  chainId: string,
+  txHash: string,
+  type?: 'withdrawal',
+): Promise<Result<NotifyResponse>> {
   invariant(chainId.length > 0, 'Invalid input parameters. chainId empty');
   invariant(txHash.length > 0, 'Invalid input parameters. txHash empty');
   const res = await getJson<NotifyResponse>(`${apiUrl}/notify`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chain_id: chainId, tx_hash: txHash, type: 'deposit' }),
+    body: JSON.stringify({ chain_id: chainId, tx_hash: txHash, ...(type ? { type } : {}) }),
   });
   if (res.ok && !res.value.accepted) {
     return { ok: false, error: new Error(`mpc-relay: notify rejected: ${res.value.error ?? 'unknown'}`) };
@@ -207,9 +222,14 @@ export async function notify(apiUrl: HttpUrl, chainId: string, txHash: Hex): Pro
   return res;
 }
 
-/** depositId = `${chainId}-${rawTxHashWithout0x}-${logIndex}` (logIndex 0 for a memo transfer). */
+/**
+ * depositId = `${chainId}-${txid}-${logIndex}` (logIndex 0 for a memo transfer).
+ *
+ * The txid is used VERBATIM — no lowercasing and no `0x` stripping, so an EVM hash keeps its `0x`
+ * and a Tron txid stays bare. It must match the hash passed to {@link notify} exactly.
+ */
 export function toDepositId(chainId: string, txHash: string, logIndex = 0): string {
-  return `${chainId}-${txHash.replace(/^0x/, '')}-${logIndex}`;
+  return `${chainId}-${txHash}-${logIndex}`;
 }
 
 export async function getDeposit(apiUrl: HttpUrl, depositId: string): Promise<Result<DepositRecord>> {

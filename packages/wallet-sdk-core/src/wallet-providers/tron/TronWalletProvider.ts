@@ -13,6 +13,7 @@ import type {
   TronWalletConfig,
   TronWalletDefaults,
   TronWebLike,
+  TronProviderLike,
 } from './types.js';
 
 const DEFAULT_RPC = 'https://api.trongrid.io';
@@ -76,6 +77,10 @@ export class TronWalletProvider extends BaseWalletProvider<TronWalletDefaults> i
   private readonly rpcUrl: string;
   private readonly privateKey?: `0x${string}`;
   private readonly tronWeb?: TronWebLike;
+  /** The announced provider — signing goes here, never through the injected `tronWeb`. */
+  private readonly provider?: TronProviderLike;
+  /** Re-resolves the connected provider at call time; see `getProvider` on the config. */
+  private readonly getProvider?: () => TronProviderLike | undefined;
   private readonly browserAddress?: string;
 
   constructor(config: TronWalletConfig) {
@@ -88,6 +93,8 @@ export class TronWalletProvider extends BaseWalletProvider<TronWalletDefaults> i
     }
     if (isBrowserExtensionTronWalletConfig(config)) {
       this.tronWeb = config.tronWeb;
+      this.provider = config.provider;
+      this.getProvider = config.getProvider;
       this.browserAddress = config.address;
       return;
     }
@@ -101,14 +108,30 @@ export class TronWalletProvider extends BaseWalletProvider<TronWalletDefaults> i
     return address;
   }
 
+  /**
+   * The connected TronWeb to sign through. A wallet injects several instances and only the one with
+   * an account can sign, so refuse rather than sign with an unconnected one.
+   */
+  private signer(): TronWebLike {
+    const connected = [this.getProvider?.()?.tronWeb, this.provider?.tronWeb, this.tronWeb].find(
+      tw => typeof tw?.defaultAddress?.base58 === 'string' && tw.defaultAddress.base58.length > 0,
+    );
+    if (connected) return connected;
+    if (this.provider?.tronWeb ?? this.tronWeb) {
+      throw new Error(
+        '[TronWalletProvider] the injected Tron wallet is not connected (no account on its TronWeb). Reconnect the wallet and retry.',
+      );
+    }
+    throw new Error('[TronWalletProvider] no connected Tron wallet to sign with');
+  }
+
   public async signTransaction(tx: TronUnsignedTransaction): Promise<TronSignedTransaction> {
     if (this.privateKey) {
       const s = await sign({ hash: `0x${tx.txID}`, privateKey: this.privateKey });
       const signature = `${s.r.slice(2)}${s.s.slice(2)}${Number(s.yParity).toString(16).padStart(2, '0')}`;
       return { ...tx, signature: [signature] };
     }
-    // TronLink signs `tx.txID` and attaches `signature`.
-    return this.tronWeb!.trx.sign(tx);
+    return this.signer().trx.sign(tx);
   }
 
   public async signMessage(hash: `0x${string}`): Promise<`0x${string}`> {
@@ -123,8 +146,16 @@ export class TronWalletProvider extends BaseWalletProvider<TronWalletDefaults> i
       const s = await sign({ hash: digest, privateKey: this.privateKey });
       return `0x${s.r.slice(2)}${s.s.slice(2)}${Number(s.yParity).toString(16).padStart(2, '0')}`;
     }
-    const sig = await this.tronWeb!.trx.signMessageV2(hash);
+    const sig = await this.signMessageViaWallet(hash);
     return (sig.startsWith('0x') ? sig : `0x${sig}`) as Hex;
+  }
+
+  /**
+   * Must be `trx.signMessageV2`, not the provider's `request` API: only this prefix matches the
+   * bridge's `tron_signmessagev2_digest`, and a mismatch is rejected only after the nonce is spent.
+   */
+  private async signMessageViaWallet(hash: `0x${string}`): Promise<string> {
+    return this.signer().trx.signMessageV2(hash);
   }
 
   public async waitForTransactionReceipt(txHash: string): Promise<TronRawTransactionReceipt> {

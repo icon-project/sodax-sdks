@@ -105,8 +105,9 @@ if (status.ok && status.value.data.status === 'executed') {
 
 ## Configuration
 
-`sodax.api.bridge` shares the backend API config: the bridge endpoints are `/bridge/*` sub-paths under the
-same base URL as `sodax.backendApi` and `sodax.api.swaps`. There is no dedicated bridge config slice — to
+`sodax.api.bridge` shares the backend API config: `baseURL` is the gateway root and the bridge client
+appends `/bridge/*` below it — a sibling of the data API's `/be` mount, not a child of it, so a `baseURL`
+must never carry a service segment. There is no dedicated bridge config slice — to
 move the whole backend (bridge included) to a custom host, set the `baseApiConfig` of the `CustomApiConfig`
 variant of `SodaxConfig.api` (see [`SWAPS_API.md`](SWAPS_API.md) § Configuration and
 [`BACKEND_API.md`](BACKEND_API.md)).

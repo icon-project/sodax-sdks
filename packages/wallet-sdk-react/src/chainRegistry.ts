@@ -407,9 +407,20 @@ export const chainRegistry: Record<string, ChainServiceFactory> = {
       const connector = connection?.xConnectorId ? service.getXConnectorById(connection.xConnectorId) : undefined;
       const tronWeb = connector instanceof TronXConnector ? connector.getTronWeb() : undefined;
       if (!tronWeb) return undefined;
+      // Signing goes through the announced provider; `tronWeb` alone can only read.
+      const provider = connector instanceof TronXConnector ? connector.getProvider() : undefined;
       const entry = store.walletConfig?.TRON?.chains?.[ChainKeys.TRON_MAINNET];
       const defaults = getEntryDefaults<typeof ChainKeys.TRON_MAINNET>(entry);
-      return new TronWalletProvider({ tronWeb, address, endpoint: entry?.rpcUrl, defaults });
+      return new TronWalletProvider({
+        tronWeb,
+        provider,
+        // Re-resolved per call: which injected instance is connected is only known once TIP-6963
+        // discovery resolves, which is after this runs on a page reload.
+        getProvider: () => (connector instanceof TronXConnector ? connector.getProvider() : undefined),
+        address,
+        endpoint: entry?.rpcUrl,
+        defaults,
+      });
     },
   }),
   XRP: defineChain({

@@ -1363,6 +1363,28 @@ describe('SwapService.cancelIntent', () => {
 // Batch 1: simple getters — pure/thin wrappers with little-to-no I/O.
 // =========================================================================
 
+describe('SwapService.partnerFee', () => {
+  // Read live off ConfigService, not snapshotted in the constructor: a snapshot could diverge from
+  // `config.swapPartnerFee` if the config object is ever replaced. Mutating the config here is the
+  // only way to distinguish the two — a fresh instance would pass either way.
+  it('reflects a config change rather than a constructor snapshot', () => {
+    const s = new Sodax();
+    expect(s.swaps.partnerFee).toBeUndefined();
+
+    const fee = { address: '0x3333333333333333333333333333333333333333', percentage: 100 } as const;
+    vi.spyOn(s.config, 'swapPartnerFee', 'get').mockReturnValue(fee);
+
+    expect(s.swaps.partnerFee).toEqual(fee);
+  });
+
+  it('resolves the effective fee, so the global `fee` applies when `swaps.partnerFee` is unset', () => {
+    const globalFee = { address: '0x5555555555555555555555555555555555555555', percentage: 25 } as const;
+    const s = new Sodax({ fee: globalFee });
+
+    expect(s.swaps.partnerFee).toEqual(globalFee);
+  });
+});
+
 describe('SwapService.getPartnerFee', () => {
   it('returns 0n when no partnerFee is configured', () => {
     // Default `new Sodax()` has no partnerFee in config, so the early-return branch fires.
@@ -3166,9 +3188,7 @@ describe('SwapService.buildApproveTxs', () => {
 
     await svc.buildApproveTxs({ params: intentInput(ChainKeys.STELLAR_MAINNET), raw: true });
 
-    expect(svc.spoke.buildApproveTxs).toHaveBeenCalledWith(
-      expect.not.objectContaining({ spender: expect.anything() }),
-    );
+    expect(svc.spoke.buildApproveTxs).toHaveBeenCalledWith(expect.not.objectContaining({ spender: expect.anything() }));
   });
 
   it('wraps a spoke failure as SodaxError(APPROVE_FAILED) with the cause preserved', async () => {

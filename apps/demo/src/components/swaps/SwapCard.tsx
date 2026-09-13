@@ -27,7 +27,6 @@ import {
   useSodaxContext,
   loadRadfiSession,
   useTradingWalletBalance,
-  useSwapsApiSubmitTx,
   useXBalances,
   useNearStorageGate,
   getSupportedSolverTokens,
@@ -35,7 +34,6 @@ import {
   type CreateIntentParams,
   type SolverIntentQuoteRequest,
   type GetWalletProviderType,
-  type SubmitTxRequestV2,
   type SpokeChainKey,
   type XToken,
   type ChainType,
@@ -79,7 +77,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
 
   // Persist the latest chain/token picks (symbol only) so they restore on reload.
   useEffect(() => {
-    saveLastSelection(src, dst);
+    if (src.token && dst.token) saveLastSelection(src, dst);
   }, [src, dst]);
   const sourceAccount = useXAccount({ xChainId: src.chain });
   const sourceWalletProvider = useWalletProvider({ xChainId: src.chain });
@@ -104,6 +102,31 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   });
   const { mutateAsyncSafe: approve, isPending: isApproving } = useSwapApprove();
   const supportedSpokeChains = sodax.config.getSupportedSpokeChains();
+  // Only chains the selected environment can actually swap. A chain listed in one environment but
+  // not the other (Tron and Hedera are staging-only) otherwise resolves to an undefined token.
+  const swappableChains = useMemo(
+    () => supportedSpokeChains.filter(chain => getSolverTokens(chain).length > 0),
+    [supportedSpokeChains, getSolverTokens],
+  );
+
+  // Switching environment can strand a selection on a chain the new one cannot swap, so re-seed
+  // both legs from the tokens that environment actually offers.
+  useEffect(() => {
+    for (const [leg, set] of [
+      [src, setSrc],
+      [dst, setDst],
+    ] as const) {
+      const tokens = getSolverTokens(leg.chain);
+      const fallbackChain = swappableChains[0];
+      if (tokens.length === 0 && fallbackChain) {
+        const token = getSolverTokens(fallbackChain)[0];
+        if (token) set({ chain: fallbackChain, token });
+      } else if (tokens.length > 0 && !tokens.some(t => t.symbol === leg.token?.symbol)) {
+        const token = tokens[0];
+        if (token) set(prev => ({ ...prev, token }));
+      }
+    }
+  }, [getSolverTokens, swappableChains, src, dst]);
   // Keep amount undefined until the payload exists; 0n disables the trustline query.
   const stellar = useStellarGate({
     dstChainKey: dst.chain,
@@ -124,9 +147,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   const [nearStorageError, setNearStorageError] = useState<string | null>(null);
   const [stellarError, setStellarError] = useState<string | null>(null);
   const [slippage, setSlippage] = useState<string>('0.5');
-  const [useSubmitTxApi, setUseSubmitTxApi] = useState(false);
   const [hyperCoreDeposit, setHyperCoreDeposit] = useState(false);
-  const { mutateAsyncSafe: submitSwapTx, isPending: isSubmitting } = useSwapsApiSubmitTx();
   const [isBitcoinReady, setIsBitcoinReady] = useState(false);
   const [isDestBitcoinReady, setIsDestBitcoinReady] = useState(false);
 
@@ -141,11 +162,13 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   };
 
   const onSrcChainChange = (chainId: SpokeChainKey) => {
-    setSrc({ chain: chainId, token: getSolverTokens(chainId)[0] });
+    const token = getSolverTokens(chainId)[0];
+    if (token) setSrc({ chain: chainId, token });
   };
 
   const onDestChainChange = (chainId: SpokeChainKey) => {
-    setDst({ chain: chainId, token: getSolverTokens(chainId)[0] });
+    const token = getSolverTokens(chainId)[0];
+    if (token) setDst({ chain: chainId, token });
   };
 
   // Balance fetching- Fetch source token balance for the connected wallet
@@ -311,60 +334,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
 
   const { isWrongChain, handleSwitchChain } = useEvmSwitchChain({ xChainId: src.chain });
 
-  const handleSubmitTxSwap = async (intentOrderPayload: CreateIntentParams) => {
-    if (!sourceWalletProvider) {
-      console.error('sourceWalletProvider undefined');
-      return;
-    }
-
-    setOpen(false);
-
-    const createIntentResult = await sodax.swaps.createIntent({
-      params: intentOrderPayload,
-      raw: false,
-      walletProvider: sourceWalletProvider,
-    });
-
-    if (!createIntentResult.ok) {
-      console.error('Error creating intent:', createIntentResult.error);
-      return;
-    }
-
-    const { tx: spokeTxHash, intent, relayData } = createIntentResult.value;
-    console.log('Intent created. Spoke tx hash:', spokeTxHash);
-
-    const request: SubmitTxRequestV2 = {
-      txHash: spokeTxHash as string,
-      srcChainKey: src.chain,
-      walletAddress: sourceAccount.address ?? '',
-      intent,
-      relayData: relayData.payload,
-    };
-
-    const submitResult = await submitSwapTx({ request });
-    if (!submitResult.ok) {
-      console.error('Submit swap tx failed:', submitResult.error);
-      return;
-    }
-    console.log('Submit swap tx result:', submitResult.value);
-
-    setOrders(prev =>
-      appendOrder(prev, {
-        mode: 'submit-tx',
-        txHash: spokeTxHash as string,
-        srcChainKey: src.chain,
-        createdAt: Date.now(),
-        summary: buildOrderSummary(src, dst, sourceAmount, quote?.quoted_amount),
-      }),
-    );
-  };
-
   const handleSwap = async (intentOrderPayload: CreateIntentParams) => {
-    if (useSubmitTxApi) {
-      await handleSubmitTxSwap(intentOrderPayload);
-      return;
-    }
-
     setOpen(false);
     console.log('intentOrderPayload', intentOrderPayload);
     console.log('wallet provider', sourceWalletProvider);
@@ -450,7 +420,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
       <CardContent className="space-y-4">
         <div className="space-y-2">
           <SelectChain
-            chainList={supportedSpokeChains}
+            chainList={swappableChains}
             value={src.chain}
             setChain={onSrcChainChange}
             placeholder={'Select source chain'}
@@ -511,7 +481,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
         </div>
         <div className="space-y-2">
           <SelectChain
-            chainList={supportedSpokeChains}
+            chainList={swappableChains}
             value={dst.chain}
             setChain={onDestChainChange}
             placeholder={'Select destination chain'}
@@ -603,19 +573,6 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
 
         <div className="">
           {quoteQuery.data?.ok === false && <div className="text-red-500">{quoteQuery.data.error.detail.message}</div>}
-        </div>
-
-        <div className="flex items-center gap-2 w-full">
-          <label htmlFor="submit-tx-toggle" className="text-sm font-medium cursor-pointer">
-            Submit tx to API
-          </label>
-          <input
-            id="submit-tx-toggle"
-            type="checkbox"
-            checked={useSubmitTxApi}
-            onChange={e => setUseSubmitTxApi(e.target.checked)}
-            className="h-4 w-4 cursor-pointer"
-          />
         </div>
 
         {canHyperCoreDeposit && (
@@ -730,7 +687,6 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
                     onClick={() => handleSwap(intentOrderPayload)}
                     disabled={
                       (src.chain !== ChainKeys.BITCOIN_MAINNET && !hasAllowed) ||
-                      isSubmitting ||
                       (src.chain === ChainKeys.BITCOIN_MAINNET && !isBitcoinReady) ||
                       (dst.chain === ChainKeys.BITCOIN_MAINNET && !isDestBitcoinReady) ||
                       stellar.blocksAction ||

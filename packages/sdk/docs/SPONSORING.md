@@ -228,17 +228,20 @@ inline it.
 
 Two deliberate differences from `swapsApiConfig`:
 
-- **`baseURL` does not inherit from `baseApiConfig`.** The swaps endpoints are sub-paths of the base
-  API, so inheriting is right there; sponsoring is routed independently, and the base API default ends
-  in `/v1/be`, so inheriting it would silently produce 404s that look like config bugs. Only an
-  explicit `sponsoringApiConfig.baseURL` (or `DEFAULT_SPONSORING_API_ENDPOINT`) is used.
+- **`baseURL` does not inherit from `baseApiConfig`.** Every service resolves the same gateway root by
+  default, sponsoring included — but it reaches that default independently rather than by inheritance,
+  so pointing the base API at a private proxy or a staging host never silently drags the sponsoring
+  calls along with it. Only an explicit `sponsoringApiConfig.baseURL` (or
+  `DEFAULT_SPONSORING_API_ENDPOINT`) is used.
 - **Headers do not inherit either.** Forwarding a consumer's `Authorization` — scoped to their own
   backend — to a different host would be a credential leak. Put a cross-cutting sponsoring header on
   `sponsoringApiConfig.headers`, or pass it per call.
 
 `baseURL` is the service base URL **including any version or gateway prefix** — the SDK appends only
 `SPONSORING_API_STELLAR_BASE_PATH` (`/sponsorships/stellar`), because where the service is mounted is
-the deployment's business. The packaged default is `https://api.sodax.com/v1`; point `baseURL` at
+the deployment's business. This is the same rule every backend service now follows; see
+[CONFIGURE_SDK.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/CONFIGURE_SDK.md)
+for the shared URL model. The packaged default is `https://api.sodax.com/v1`; point `baseURL` at
 `http://localhost:3011` to run against a local `sponsoring-api`, which serves the routes at the bare
 origin.
 

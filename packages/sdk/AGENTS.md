@@ -130,6 +130,22 @@ pnpm checkTs
 
 The package builds dual ESM/CJS output with `tsup`. Relative imports in source use `.js` extensions.
 
+### Backend API URLs
+
+`api.baseURL` is the **gateway root** — origin plus the deployment's version prefix. Each service appends
+its own path below it, so a base URL must never contain a service segment; folding one in relocates every
+sibling service too. The composed model is documented in
+[`docs/CONFIGURE_SDK.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/CONFIGURE_SDK.md)
+§ "How a request URL is composed".
+
+`basePath` (`BackendApiConfig`) is the only configurable mount, because the data API's is the only one that
+varies by deployment — it disappears when that service is addressed directly rather than through the
+gateway. A new service puts its segment in its route strings, like `BridgeApiService` and
+`SponsoringApiService` do; it does not get a config knob it has no deployment variance to justify.
+Sponsoring is the one service that does **not** inherit the configured root — see `resolveSponsoringApiConfig`.
+`src/backendApi/defaultApiUrls.test.ts` pins one full request URL per service from a no-config
+`new Sodax()` and is the gate for all of this.
+
 ### Sponsoring Contract Gate
 
 Where the service is mounted belongs to the deployment, not to the SDK: `SPONSORING_API_STELLAR_BASE_PATH`

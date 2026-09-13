@@ -26,6 +26,7 @@ import type {
 } from '@sodax/types';
 
 import { makeRequest, toJsonBody, type RequestConfig, type RequestOverrideConfig } from './api-utils.js';
+import { normalizeOverrideBaseURL } from './apiConfig.js';
 import * as schemas from './bridgeApiSchemas.js';
 import { rawTxSchemaForChainKey } from './rawTxSchemas.js';
 import { SodaxError } from '../errors/SodaxError.js';
@@ -97,24 +98,38 @@ export function toCreateBridgeIntentParamsV2(
  * Per-call request overrides (base URL, timeout, headers) can be passed as the
  * optional last argument to any method via `RequestOverrideConfig`.
  *
- * The Bridge API is served on the base backend host (`/bridge/*` sub-paths) — its config is resolved by
- * `resolveBridgeApiConfig` (an alias of `resolveBaseApiConfig`), so it is typed as a flat
- * {@link BaseApiConfig}. It defaults to the same host as the swaps client but is not configured with it:
+ * The Bridge API hangs off the shared gateway root as `/bridge/*` — a sibling of the data API's `/be`
+ * mount, not a child of it, so `resolveBridgeApiConfig` returns a flat {@link BaseApiConfig} with no
+ * `basePath`. It defaults to the same host as the swaps client but is not configured with it:
  * a `swapsApiConfig` slice does not move the bridge routes; set `baseURL` / `baseApiConfig` instead.
  *
  * Reachable on the Sodax facade as `sodax.api.bridge`.
  */
+/** Construction options for {@link BridgeApiService}. */
+export type BridgeApiServiceOptions = {
+  /**
+   * Whether a legacy `/be` suffix is trimmed off a per-call `baseURL` override. Defaults to `true`, the
+   * migration behaviour. `BackendApiService` passes `false` when the `ApiConfig` states a `basePath`
+   * explicitly: that marks a config written against the current contract, whose base URLs are deliberate
+   * roots, so a trailing `/be` is a real path segment rather than the data API's mount.
+   */
+  trimLegacyOverrides?: boolean;
+};
+
 export class BridgeApiService implements ResultifiedBridgeApiV2 {
   // Fully-resolved bridge-API config supplied by the caller (BackendApiService resolves the
   // `ApiConfig` union via `resolveBridgeApiConfig`); this service does not resolve the union.
   private readonly config: BaseApiConfig;
   private readonly headers: Record<string, string>;
   private readonly logger: SodaxLogger;
+  /** See {@link BridgeApiServiceOptions.trimLegacyOverrides}. */
+  private readonly trimsLegacyOverrides: boolean;
 
-  constructor(config: BaseApiConfig, logger: SodaxLogger = consoleLogger) {
+  constructor(config: BaseApiConfig, logger: SodaxLogger = consoleLogger, options: BridgeApiServiceOptions = {}) {
     this.config = config;
     this.headers = { ...config.headers };
     this.logger = logger;
+    this.trimsLegacyOverrides = options.trimLegacyOverrides ?? true;
   }
 
   /**
@@ -133,7 +148,10 @@ export class BridgeApiService implements ResultifiedBridgeApiV2 {
       const raw = await makeRequest<unknown>({
         endpoint,
         config: { baseURL: this.config.baseURL, timeout: this.config.timeout, headers: this.headers, ...config },
-        overrideConfig,
+        // Normalized like a configured base URL: the override is the gateway root, so a legacy
+        // `/be`-suffixed value must not nest `/bridge/*` under the data API's mount — unless the config
+        // opted out of the legacy trim, in which case the per-call value is left exactly as given.
+        overrideConfig: this.trimsLegacyOverrides ? normalizeOverrideBaseURL(overrideConfig) : overrideConfig,
         logger: this.logger,
         serviceLabel: 'BridgeApiService',
       });

@@ -251,6 +251,7 @@ export const swapSupportedTokens = {
   ] as const satisfies XToken[],
   // Hedera is currently staging-only — see stagingSwapSupportedTokens
   [ChainKeys.HEDERA_MAINNET]: [],
+  // Tron is currently staging-only — see stagingSwapSupportedTokens
   [ChainKeys.TRON_MAINNET]: [],
   [ChainKeys.XRP_MAINNET]: [
     spokeChainConfig[ChainKeys.XRP_MAINNET].supportedTokens.XRP,
@@ -303,7 +304,10 @@ export const stagingSwapSupportedTokens = {
     spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.USDC,
     spokeChainConfig[ChainKeys.HEDERA_MAINNET].supportedTokens.SODA,
   ] as const satisfies XToken[],
-  [ChainKeys.TRON_MAINNET]: [],
+  [ChainKeys.TRON_MAINNET]: [
+    spokeChainConfig[ChainKeys.TRON_MAINNET].supportedTokens.TRX,
+    spokeChainConfig[ChainKeys.TRON_MAINNET].supportedTokens.USDT,
+  ] as const satisfies XToken[],
   // Production-only: the three XRPL assets are on the production solver oracle.
   [ChainKeys.XRP_MAINNET]: [],
 } as const satisfies Record<SpokeChainKey, readonly XToken[]>;

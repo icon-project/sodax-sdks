@@ -12,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Hex } from '@sodax/types';
 import { Sodax } from '../../entities/Sodax.js';
 import * as MpcRelayApiService from '../mpcRelay/MpcRelayApiService.js';
-import { assembleBroadcastHex, encodeTrc20TransferParams, spliceMemo } from './tron-utils.js';
+import { assembleBroadcastHex, encodeTrc20TransferParams, spliceMemo, tronBase58ToHex } from './tron-utils.js';
 
 const sodax = new Sodax();
 const tron = sodax.spoke.tron;
@@ -108,16 +108,49 @@ describe('TronSpokeService.deposit — TRC-20', () => {
     await tron.deposit(depositParams(USDT));
 
     expect(callTo('/wallet/createtransaction')).toBeUndefined();
+    // Hex addresses, and no `visible` flag — `visible: true` echoes base58 into `raw_data`, which a
+    // browser wallet rejects as an owner mismatch when it compares against its own hex account.
     expect(callTo('/wallet/triggersmartcontract')?.body).toMatchObject({
-      owner_address: SENDER,
-      contract_address: USDT,
+      owner_address: tronBase58ToHex(SENDER),
+      contract_address: tronBase58ToHex(USDT),
       function_selector: 'transfer(address,uint256)',
       parameter: encodeTrc20TransferParams(RESERVE, AMOUNT),
       call_value: 0,
-      visible: true,
     });
+    expect(callTo('/wallet/triggersmartcontract')?.body).not.toHaveProperty('visible', true);
     // A contract call is rejected outright without a fee limit.
     expect(callTo('/wallet/triggersmartcontract')?.body.fee_limit).toBeGreaterThan(0);
+  });
+
+  it('hands the wallet the decoded raw_data carrying the same memo', async () => {
+    // A browser wallet renders the prompt from `raw_data` (TronWeb's `sign` dereferences it), while
+    // a raw-key signer only needs `txID` — omitting it throws before the user sees anything.
+    stubTronGrid({
+      '/wallet/triggersmartcontract': {
+        result: { result: true },
+        transaction: { raw_data_hex: TRC20_RAW, raw_data: { contract: [{ type: 'TriggerSmartContract' }] } },
+      },
+    });
+
+    await tron.deposit(depositParams(USDT));
+
+    const signed = vi.mocked(walletProvider.signTransaction).mock.calls[0]?.[0] as {
+      raw_data?: { contract?: unknown[]; data?: string };
+      raw_data_hex: string;
+    };
+    expect(signed.raw_data?.contract).toBeDefined();
+    // The decoded body must carry the memo the hex body was spliced with, or the two disagree.
+    expect(signed.raw_data?.data).toBe(MEMO.slice(2));
+    expect(signed.raw_data_hex).toBe(spliceMemo(TRC20_RAW, MEMO));
+  });
+
+  it('omits raw_data when the node does not return it, rather than inventing one', async () => {
+    stubTronGrid();
+
+    await tron.deposit(depositParams(USDT));
+
+    const signed = vi.mocked(walletProvider.signTransaction).mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(signed).not.toHaveProperty('raw_data');
   });
 
   it('carries the memo, signs the spliced raw, broadcasts it and notifies the relay', async () => {
@@ -128,7 +161,10 @@ describe('TronSpokeService.deposit — TRC-20', () => {
 
     expect(walletProvider.signTransaction).toHaveBeenCalledWith(expect.objectContaining({ raw_data_hex: rawWithMemo }));
     expect(callTo('/wallet/broadcasthex')?.body.transaction).toContain(rawWithMemo);
+    // The relay keys the deposit on the txid VERBATIM, so notify must get exactly what `deposit`
+    // returns — bare hex for Tron. A `0x` prefix here is notified under one id and polled under another.
     expect(MpcRelayApiService.notify).toHaveBeenCalledWith(expect.anything(), '728126428', txHash);
+    expect(txHash).toMatch(/^[0-9a-f]{64}$/);
   });
 
   it('surfaces a node-side build failure instead of broadcasting', async () => {
@@ -156,10 +192,11 @@ describe('TronSpokeService.deposit — native TRX', () => {
 
     expect(callTo('/wallet/triggersmartcontract')).toBeUndefined();
     expect(callTo('/wallet/createtransaction')?.body).toMatchObject({
-      owner_address: SENDER,
-      to_address: RESERVE,
+      owner_address: tronBase58ToHex(SENDER),
+      to_address: tronBase58ToHex(RESERVE),
       amount: Number(AMOUNT),
     });
+    expect(callTo('/wallet/createtransaction')?.body).not.toHaveProperty('visible', true);
     expect(callTo('/wallet/broadcasthex')?.body.transaction).toContain(spliceMemo(NATIVE_RAW, MEMO));
   });
 
@@ -193,7 +230,7 @@ describe('TronSpokeService.deposit — rotated reserve', () => {
 
     await tron.deposit(depositParams(NATIVE_TRX));
 
-    expect(callTo('/wallet/createtransaction')?.body.to_address).toBe(rotated);
+    expect(callTo('/wallet/createtransaction')?.body.to_address).toBe(tronBase58ToHex(rotated));
     expect(warn).toHaveBeenCalledWith(expect.stringContaining(rotated));
   });
 });
@@ -227,10 +264,49 @@ describe('TronSpokeService.deposit — notify failure', () => {
 
     // The funds are already in the reserve at this point: an error without the hash would lose them.
     expect(failure).toBeInstanceOf(Error);
-    expect((failure as Error).message).toMatch(/0x[0-9a-f]{64} broadcast but the relay was not notified/);
+    expect((failure as Error).message).toMatch(/\b[0-9a-f]{64} broadcast but the relay was not notified/);
     expect(callTo('/wallet/broadcasthex')).toBeDefined();
     // Notifying twice is harmless, so the transient failure is retried before giving up.
     expect(vi.mocked(MpcRelayApiService.notify).mock.calls.length).toBeGreaterThan(1);
+  });
+});
+
+describe('TronSpokeService.waitForDeposit', () => {
+  const TX_HASH = 'a'.repeat(64);
+
+  it('re-notifies the relay while waiting, since the first notify can precede confirmation', async () => {
+    vi.useFakeTimers();
+    stubTronGrid();
+    const notifySpy = vi.mocked(MpcRelayApiService.notify);
+    notifySpy.mockClear();
+    // Never resolves — the wait is what we are observing, not its outcome.
+    vi.spyOn(MpcRelayApiService, 'waitForDeposit').mockReturnValue(new Promise(() => undefined));
+
+    void tron.waitForDeposit(TX_HASH);
+    await vi.advanceTimersByTimeAsync(46_000);
+
+    // `/notify` reports `accepted` without checking the tx exists and the relay does not re-check,
+    // so a single notification sent before Tron confirmed the deposit strands it.
+    expect(notifySpy.mock.calls.length).toBeGreaterThanOrEqual(3);
+    expect(notifySpy).toHaveBeenCalledWith(expect.anything(), '728126428', TX_HASH);
+    vi.useRealTimers();
+  });
+
+  it('stops re-notifying once the wait settles', async () => {
+    vi.useFakeTimers();
+    stubTronGrid();
+    const notifySpy = vi.mocked(MpcRelayApiService.notify);
+    vi.spyOn(MpcRelayApiService, 'waitForDeposit').mockResolvedValue({
+      ok: true,
+      value: { depositId: 'id', status: 'minted', createdAt: 0, txs: {} },
+    } as never);
+
+    await tron.waitForDeposit(TX_HASH);
+    notifySpy.mockClear();
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(notifySpy).not.toHaveBeenCalled();
+    vi.useRealTimers();
   });
 });
 
@@ -285,6 +361,23 @@ describe('TronSpokeService.sendMessage', () => {
     for (const nonce of [nonceOf(0), nonceOf(1)]) {
       expect(nonce).toBeGreaterThan(0n);
       expect(nonce).toBeLessThan(2n ** 64n);
+    }
+  });
+
+  it('keeps the nonce inside the safe-integer range the relay round-trips it through', async () => {
+    stubTronGrid();
+    vi.spyOn(MpcRelayApiService, 'submitWithdraw').mockResolvedValue({
+      ok: true,
+      value: { accepted: true, trackingId: MEMO },
+    });
+
+    // The relay converts the nonce to a JS number before the NEAR call, so a value above
+    // MAX_SAFE_INTEGER reaches the contract rounded and the signature recovers a different address.
+    for (let i = 0; i < 32; i++) {
+      await tron.sendMessage(sendParams);
+      const nonce = nonceOf(i);
+      expect(nonce).toBeLessThanOrEqual(BigInt(Number.MAX_SAFE_INTEGER));
+      expect(BigInt(Number(nonce))).toBe(nonce);
     }
   });
 });

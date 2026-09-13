@@ -33,7 +33,9 @@ Granular skill for `LeverageYieldService` — `sodax.leverageYield`. Feature tag
 - **Using `getApr` as the headline number.** For LSD-backed vaults the AAVE-only spread is often negative; `getEffectiveApr` folds in the LSD staking yield (the real source of return).
 - **Passing a spoke address to `getShareBalance` / `getMaxWithdraw`.** Those take a hub address. Use the `*ForUser(vault, srcChainKey, srcAddress)` variants to resolve the hub wallet first.
 - **Gating withdraw on `approve` / `isAllowanceValid`.** Those are Sonic-direct allowance helpers for the vault's underlying asset; the swap-style withdraw authorises the share spend via a hub-wallet `Connection.sendMessage` (`hubWalletSwap: true`).
-- **Quoting on the pre-fee amount.** A deposit's per-intent `partnerFee` is deducted from `inputAmount` before the swap — quote (via the swap solver, `token_dst` = vault) on the post-fee amount.
+- **Quoting a vault flow through `sodax.swaps.getQuote`.** It deducts the effective *swap* fee, while the vault intent charges the effective *leverage-yield* fee (`leverageYield.partnerFee ?? fee`) — the two disagree whenever the feature fees differ. It can be made to agree by passing the leverage-yield fee explicitly (with a zero fee — `{ address, percentage: 0 }` — where that fee is `undefined`, since an explicit `undefined` falls back to the swap fee), but prefer `sodax.leverageYield.getQuote` (`token_dst` = vault for a deposit, `token_src` = vault for a withdraw).
+- **Quoting with a different `partnerFee` than the intent charges.** The fee is deducted from the input before the swap, so the quote is sized on a different net input; when the intent's fee is the larger one, the `minOutputAmount` derived from that quote can't be met and the intent never fills. Pass the same `partnerFee` to `getQuote` and to `deposit()` / `vaultSwap()`, or omit it on both.
+- **Assuming `swaps.partnerFee` monetizes vault flows.** It does not — configure `leverageYield.partnerFee` (or the global `fee`).
 
 ## Verification
 

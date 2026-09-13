@@ -64,7 +64,7 @@ source token rejects a non-zero to non-zero allowance change (Ethereum USDT is t
 today) **and** the wallet already holds a stale allowance — broadcast it first, wait for it to be
 mined, then broadcast `tx`. Absent for every other token, so a client that ignores it keeps working.
 
-`CreateIntentParamsV2` is the shared wire-level request body behind the typed `/swaps/allowance/check`, `/swaps/approve`, and `/swaps/intents` calls (the `IBackendApiV2` methods the SDK drives internally). It inherits the swap extras — `partnerFee`, `srcPublicKey`, and `bound` — from `SwapExtrasV2`, the JSON-safe mirror of the SDK `SwapExtras` (`QuoteRequestV2` inherits the same trio for its `includeTxData=true` path). For Bitcoin **TRADING**-mode `raw` intents the Bound Exchange (Radfi) token is carried as `bound.accessToken` — passed in the request body instead of an `x-bound-access-token` header so it stays inside the typed DTO. Required only when the source chain is Bitcoin in TRADING mode; ignored otherwise.
+`CreateIntentParamsV2` is the shared wire-level request body behind the typed `/swaps/allowance/check`, `/swaps/approve`, and `/swaps/intents` calls (the `IBackendApiV2` methods the SDK drives internally). It inherits the swap extras — `partnerFee`, `srcPublicKey`, and `bound` — from `SwapExtrasV2`, the JSON-safe mirror of the SDK `SwapExtras` (`QuoteRequestV2` inherits the same trio for its `includeTxData=true` path). `partnerFee` has no default on this path — see [`swaps-api.md`](swaps-api.md) § `partnerFee`. For Bitcoin **TRADING**-mode `raw` intents the Bound Exchange (Radfi) token is carried as `bound.accessToken` — passed in the request body instead of an `x-bound-access-token` header so it stays inside the typed DTO. Required only when the source chain is Bitcoin in TRADING mode; ignored otherwise.
 
 You rarely build this DTO yourself: `sodax.swaps.createIntent` takes the token via the chain-key-gated `extras.bound.accessToken` slot and maps it onto `CreateIntentParamsV2.bound.accessToken`. See [`swap.md`](swap.md) § `SwapExtras` and [`../chain-specifics.md`](../chain-specifics.md) § "Bitcoin PSBT and Bound Exchange" for the consumer-facing flow and token-injection points.
 
@@ -76,12 +76,16 @@ You rarely build this DTO yourself: `sodax.swaps.createIntent` takes the token v
 
    ```ts
    const sodax = new Sodax({
-     api: { baseURL: 'http://localhost:4000' },
+     // `basePath: ''` because a local mock serves `/config/*` at its origin, with no `/be` mount.
+     api: { baseApiConfig: { baseURL: 'http://localhost:4000', basePath: '' } },
    });
    await sodax.config.initialize();
+   // → http://localhost:4000/config/all
    ```
 
-   `SodaxConfig.api` is `ApiConfig` — either the flat `BaseApiConfig` (`{ baseURL, timeout, headers }`, shared by the base API and the swaps client) or the nested `CustomApiConfig` (`{ baseApiConfig?, swapsApiConfig? }`) to point the swaps API at its own endpoint. Pass any subset via `DeepPartial`. See [`./swaps-api.md`](swaps-api.md) § "Custom endpoint for the swaps API".
+   `SodaxConfig.api` is `ApiConfig` — either the flat `BackendApiConfig` (`{ baseURL, basePath?, timeout, headers }`, shared by the base API and the swaps client) or the nested `CustomApiConfig` (`{ baseApiConfig?, swapsApiConfig? }`) to point the swaps API at its own endpoint. Pass any subset via `DeepPartial`. See [`./swaps-api.md`](swaps-api.md) § "Custom endpoint for the swaps API".
+
+   `baseURL` is the **gateway root** — each service appends its own path below it, so the backend data API requests `<baseURL>/be/config/all` by default. `basePath` is that mount, and the only reason to set it is a deployment that does not use the gateway. Never put a service segment (`/be`, `/swaps`, `/bridge`) in `baseURL` itself — it would also relocate the sibling services. A `baseURL` ending in `/be` is trimmed with a deprecation warning; do not rely on that.
 
 2. **Inject your own `BackendApiService`-compatible mock at the app layer** (dependency-injected where you control the `Sodax` instance), rather than via the constructor.
 

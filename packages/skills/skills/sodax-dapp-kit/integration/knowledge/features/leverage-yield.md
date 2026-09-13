@@ -13,6 +13,7 @@ useLeverageYieldVaultSwap({ mutationOptions });  // EXECUTE the built payload en
 useLeverageYieldNotifySolver({ mutationOptions }); // manual-flow: notify the solver after a self-driven relay
 
 // Reads
+useLeverageYieldQuote({ params, queryOptions });          // vault deposit/withdraw quote (3s) — NOT useQuote
 useLeverageYieldEffectiveApr({ params, queryOptions });  // AAVE + LSD effective net APR (60s)
 useLeverageYieldPosition({ params, queryOptions });      // collateral/debt/ltv/healthFactor/idle (30s)
 useLeverageYieldTotalAssets({ params, queryOptions });   // vault TVL, 18-dp bigint (60s)
@@ -88,10 +89,11 @@ Leverage-yield has **no dedicated approve hook**. A deposit is a swap-style inte
 
 ## Return shapes
 
-All read hooks here are **already unwrapped** — they throw on SDK `!ok` so `isError` / `error` / `retry` engage. Read `data` directly; do NOT branch on `data.ok`.
+Read hooks here are **already unwrapped** — they throw on SDK `!ok` so `isError` / `error` / `retry` engage. Read `data` directly; do NOT branch on `data.ok`. **`useLeverageYieldQuote` is the one exception**: it returns the SDK `Result` as `data`, matching `useQuote` on the swap side, because a quote failure ("no path", thin liquidity) is an expected UI branch and the `Result` preserves the solver's `detail.code`. Branch on `data?.ok` for that one hook only.
 
 | Hook | Returns |
 |---|---|
+| `useLeverageYieldQuote` | `UseQueryResult<Result<SolverIntentQuoteResponse, SolverErrorResponse \| LeverageYieldLookupError> \| undefined, Error>` (Result **not** unwrapped; `undefined` while `payload` is undefined). Guard the error with `isSodaxError` — the `SolverErrorResponse` arm has `detail.code`, the `SodaxError` arm has `.code` (`VALIDATION_FAILED` / `LOOKUP_FAILED` / `UNKNOWN`) |
 | `useLeverageYieldDeposit` / `useLeverageYieldWithdraw` | `SafeUseMutationResult<LeverageYieldSwapPayload, Error, …>` (builder — `data` is the payload to spread into `useLeverageYieldVaultSwap`) |
 | `useLeverageYieldVaultSwap` | `SafeUseMutationResult<VaultSwapResponse, Error, …>` (`{ solverExecutionResponse, intent, intentDeliveryInfo }`) |
 | `useLeverageYieldNotifySolver` | `SafeUseMutationResult<SolverExecutionResponse, Error, …>` (`{ answer: 'OK', intent_hash }`) |
@@ -107,7 +109,7 @@ All read hooks here are **already unwrapped** — they throw on SDK `!ok` so `is
 2. **`useLeverageYieldShareBalances` returns an ARRAY, not a single query.** It fans out one `useQueries` row per holder. Aggregate yourself: `balances.reduce((acc, q) => acc + (q.data?.shares ?? 0n), 0n)`. `queryOptions` is spread into every per-holder query (no top-level options slot on `useQueries`).
 3. **The share-balance key segment is singular: `shareBalance`** (`['leverageYield', 'shareBalance', vault, chainKey, address]`) — one per holder, even though the hook name is plural.
 4. **Withdraw needs no spoke approval.** Don't gate it on `useSwapAllowance` — the hub-wallet `sendMessage` path approves the share spend internally. Only `deposit` needs the swap-domain allowance/approve pair.
-5. **Deposit's per-intent `partnerFee` must be reflected in the quote.** If you charge a deposit-only fee (e.g. 1%), `vaultSwap`'s underlying `createVaultIntent` deducts it from `inputAmount` before the swap — quote on the post-fee amount, or `minOutputAmount` becomes unfillable and the intent never settles.
+5. **Quote vault flows with `useLeverageYieldQuote`, never `useQuote`.** `useQuote` deducts the effective *swap* fee (`swaps.partnerFee ?? fee`) while a vault intent charges the effective *leverage-yield* fee (`leverageYield.partnerFee ?? fee`) — they disagree whenever the two feature fees differ, and when the leverage-yield one is larger the `minOutputAmount` you derive is unfillable and the intent never settles. Pass the same per-intent `partnerFee` to `useLeverageYieldQuote` and to `useLeverageYieldDeposit` / `useLeverageYieldVaultSwap`, or omit it on both — either way the two sides resolve the same fee.
 6. **`useLeverageYieldVaultSwap` invalidates xBalances on both chains** (`['shared', 'xBalances', srcChainKey]` and `dstChainKey`) on success. Compose your own `onSuccess` after the hook's — it runs first.
 7. **`useLeverageYieldNotifySolver` is for the manual flow only.** `useLeverageYieldVaultSwap` already notifies the solver internally — only reach for the standalone notify hook when you built the intent with `sodax.leverageYield.createVaultIntent` and relayed it yourself. It does NOT invalidate any queries: its only var is `{ intent_tx_hash }` (no chain context), and the fill lands asynchronously afterward.
 

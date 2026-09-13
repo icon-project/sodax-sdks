@@ -78,6 +78,12 @@ const SAMPLE_EVM_TOKEN = '0x2170Ed0880ac9A755fd29B2688956BD959F933F8' as Address
 const SAMPLE_USER_ADDRESS = '0x4444444444444444444444444444444444444444' as Address;
 const SAMPLE_DST_ADDRESS = '0x5555555555555555555555555555555555555555' as Address;
 
+// A Tron account and the two encodings it has on the hub. `encodeAddress` yields the bare 20-byte
+// identity (what derives the hub wallet); `encodeRecipient` left-pads it to a 32-byte word, which is
+// what AssetManager.transfer expects as the delivery address.
+const TRON_ADDRESS = 'TGLeueT1EauJN1AupKBPmkSE76Brm1v4ow';
+const TRON_RECIPIENT_WORD = `0x${'00'.repeat(12)}45df1d9f0d472080e5272946e4444f885473245d` as Address;
+
 // Wallet provider fakes — shape-only; the bodies are never invoked at runtime because
 // every spoke method that would touch them is stubbed.
 const mockEvmProvider = {
@@ -1490,6 +1496,27 @@ describe('MoneyMarketService.createBorrowIntent', () => {
       expect(call?.walletProvider).toBe(mockEvmProvider);
     });
 
+    it('on a Tron destination: pads the recipient to 32 bytes for the asset-manager transfer', async () => {
+      const buildSpy = vi.spyOn(sodax.moneyMarket, 'buildBorrowData').mockReturnValueOnce('0xborrow-data');
+      vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xsend-hash' });
+
+      const result = await sodax.moneyMarket.createBorrowIntent({
+        raw: false,
+        params: {
+          ...borrowParams(ChainKeys.BSC_MAINNET),
+          dstChainKey: ChainKeys.TRON_MAINNET,
+          dstAddress: TRON_ADDRESS,
+        },
+        walletProvider: mockEvmProvider,
+      });
+
+      expect(result.ok).toBe(true);
+      // An MPC-relay recipient reaches AssetManager.transfer as a 32-byte word (12 zero bytes then
+      // the 20-byte account), not the bare identity form used to derive the hub wallet. The bare
+      // form is still accepted on-chain, so getting this wrong delivers funds to a dead address.
+      expect(buildSpy.mock.calls[0]?.[1]).toBe(TRON_RECIPIENT_WORD);
+    });
+
     it('on Bitcoin source: derives the hub wallet from the trading address but passes the personal srcAddress', async () => {
       const TRADING = 'bc1p-trading-wallet';
       const getEffSpy = vi.spyOn(sodax.spoke.bitcoin, 'getEffectiveWalletAddress').mockResolvedValue(TRADING);
@@ -1920,6 +1947,27 @@ describe('MoneyMarketService.createWithdrawIntent', () => {
       const call = sendSpy.mock.calls[0]?.[0];
       expect(call?.payload).toBe('0xwithdraw-data');
       expect(call?.raw).toBe(false);
+    });
+
+    it('on a Tron destination: pads the recipient to 32 bytes for the asset-manager transfer', async () => {
+      const buildSpy = vi.spyOn(sodax.moneyMarket, 'buildWithdrawData').mockReturnValueOnce('0xwithdraw-data');
+      vi.spyOn(sodax.spoke, 'sendMessage').mockResolvedValueOnce({ ok: true, value: '0xsend-hash' });
+
+      const result = await sodax.moneyMarket.createWithdrawIntent({
+        raw: false,
+        params: {
+          ...withdrawParams(ChainKeys.BSC_MAINNET),
+          dstChainKey: ChainKeys.TRON_MAINNET,
+          dstAddress: TRON_ADDRESS,
+        },
+        walletProvider: mockEvmProvider,
+      });
+
+      expect(result.ok).toBe(true);
+      // An MPC-relay recipient reaches AssetManager.transfer as a 32-byte word (12 zero bytes then
+      // the 20-byte account), not the bare identity form used to derive the hub wallet. The bare
+      // form is still accepted on-chain, so getting this wrong delivers funds to a dead address.
+      expect(buildSpy.mock.calls[0]?.[1]).toBe(TRON_RECIPIENT_WORD);
     });
 
     it('on Bitcoin source: derives the hub wallet from the trading address but passes the personal srcAddress', async () => {

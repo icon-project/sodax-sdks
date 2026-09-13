@@ -12,6 +12,7 @@ import {
   FEE_PERCENTAGE_SCALE,
   type PartnerFee,
   type QuoteType,
+  isMpcRelayChainKey,
 } from '@sodax/types';
 import { hexToBytes, toHex } from 'viem';
 import { tronHashToBase58, tronIdentityBytes } from '../services/spoke/tron-utils.js';
@@ -142,6 +143,24 @@ export function adjustAmountByFee(amount: bigint, fee: PartnerFee | undefined, q
 
 export function BigIntToHex(value: bigint): Hex {
   return `0x${value.toString(16)}`;
+}
+
+/**
+ * Recipient bytes for a hub release — the `to` an `AssetManager.transfer` pays out to.
+ *
+ * This is NOT {@link encodeAddress}, which produces the withdrawal-auth identity / hub-wallet salt.
+ * For an MPC-relay chain the release contract reads `data[0..32]` as `12 zero bytes ‖ 20-byte hash`,
+ * so the 20-byte identity has to be left-padded into a full word; passing the bare identity
+ * mis-decodes the recipient. Intent-relay chains keep their own encoding unchanged.
+ */
+export function encodeRecipient(spokeChainId: SpokeChainKey, address: string): Hex {
+  const encoded = encodeAddress(spokeChainId, address);
+  if (!isMpcRelayChainKey(spokeChainId)) return encoded;
+  const hash = encoded.replace(/^0x/, '');
+  if (hash.length !== 40) {
+    throw new Error(`[encodeRecipient] expected a 20-byte identity for ${spokeChainId}, got ${hash.length / 2} bytes`);
+  }
+  return `0x${'00'.repeat(12)}${hash}`;
 }
 
 export function encodeAddress(spokeChainId: SpokeChainKey, address: string): Hex {
