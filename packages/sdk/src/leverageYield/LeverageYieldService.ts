@@ -3104,8 +3104,7 @@ export class LeverageYieldService {
       | ({ side?: 'collateral' } & SpokeExecActionParams<K, false, OpenPositionParams<K>>)
       | ({ side: 'debt' } & SpokeExecActionParams<K, false, OpenPositionFromDebtTokenParams<K>>),
   ): Promise<Result<LeveragePositionIntentResult, LeverageYieldSwapError | LeverageYieldLookupError>> {
-    // Wrapped even though `openPosition` tracks itself: `notified` is invisible to that inner call,
-    // and it is the outcome that decides whether the leverage ever arrives.
+    // Wraps an already-tracked call on purpose: only this layer sees `notified`.
     return this.config.analytics.trackResult(
       'leverageYield',
       'openLeveragePosition',
@@ -3142,9 +3141,7 @@ export class LeverageYieldService {
   public async submitLeveragePositionIntent<K extends SpokeChainKey>(
     _params: SpokeExecActionParams<K, false, PositionOperationParams<K, PositionBatchCall>>,
   ): Promise<Result<LeveragePositionIntentResult, LeverageYieldSwapError>> {
-    // Same reason as `openLeveragePosition`: the wrapper exists to record `notified`, which the
-    // already-tracked `operatePosition` cannot see. `runLeveragePositionOperation` notifies nothing,
-    // so it deliberately has no wrapper — that is the rule, not an inconsistency.
+    // Same as `openLeveragePosition`: only this layer sees `notified`.
     return this.config.analytics.trackResult(
       'leverageYield',
       'submitLeveragePositionIntent',
