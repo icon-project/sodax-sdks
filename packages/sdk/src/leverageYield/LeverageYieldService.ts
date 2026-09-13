@@ -3104,15 +3104,28 @@ export class LeverageYieldService {
       | ({ side?: 'collateral' } & SpokeExecActionParams<K, false, OpenPositionParams<K>>)
       | ({ side: 'debt' } & SpokeExecActionParams<K, false, OpenPositionFromDebtTokenParams<K>>),
   ): Promise<Result<LeveragePositionIntentResult, LeverageYieldSwapError | LeverageYieldLookupError>> {
-    const { side, ...rest } = _params;
-    const opened =
-      side === 'debt'
-        ? await this.openPositionFromDebtToken(
-            rest as SpokeExecActionParams<K, false, OpenPositionFromDebtTokenParams<K>>,
-          )
-        : await this.openPosition(rest as SpokeExecActionParams<K, false, OpenPositionParams<K>>);
-    if (!opened.ok) return opened;
-    return { ok: true, value: await reportPositionIntent(this.notifyIntent, opened.value) };
+    // Wrapped even though `openPosition` tracks itself: `notified` is invisible to that inner call,
+    // and it is the outcome that decides whether the leverage ever arrives.
+    return this.config.analytics.trackResult(
+      'leverageYield',
+      'openLeveragePosition',
+      async () => {
+        const { side, ...rest } = _params;
+        const opened =
+          side === 'debt'
+            ? await this.openPositionFromDebtToken(
+                rest as SpokeExecActionParams<K, false, OpenPositionFromDebtTokenParams<K>>,
+              )
+            : await this.openPosition(rest as SpokeExecActionParams<K, false, OpenPositionParams<K>>);
+        if (!opened.ok) return opened;
+        return { ok: true, value: await reportPositionIntent(this.notifyIntent, opened.value) };
+      },
+      {
+        start: () => ({ srcChainKey: _params.params.srcChainKey, side: _params.side ?? 'collateral' }),
+        success: result => ({ ...result.txHashes, notified: result.notified }),
+        failure: error => ({ code: error.code }),
+      },
+    );
   }
 
   /**
@@ -3129,6 +3142,9 @@ export class LeverageYieldService {
   public async submitLeveragePositionIntent<K extends SpokeChainKey>(
     _params: SpokeExecActionParams<K, false, PositionOperationParams<K, PositionBatchCall>>,
   ): Promise<Result<LeveragePositionIntentResult, LeverageYieldSwapError>> {
+    // Same reason as `openLeveragePosition`: the wrapper exists to record `notified`, which the
+    // already-tracked `operatePosition` cannot see. `runLeveragePositionOperation` notifies nothing,
+    // so it deliberately has no wrapper — that is the rule, not an inconsistency.
     return this.config.analytics.trackResult(
       'leverageYield',
       'submitLeveragePositionIntent',
