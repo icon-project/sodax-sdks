@@ -57,6 +57,10 @@ export const xChainTypes: WalletItemProps[] = [
     name: 'XRP Ledger',
     xChainType: 'XRP',
   },
+  {
+    name: 'TON',
+    xChainType: 'TON',
+  },
 ];
 
 export const WalletModal = ({ isOpen, onDismiss }: WalletModalProps) => {

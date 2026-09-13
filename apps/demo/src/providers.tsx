@@ -32,6 +32,7 @@ const rpcConfig: RpcConfig = {
   [ChainKeys.NEAR_MAINNET]: process.env.NEAR_RPC_URL ?? 'https://free.rpc.fastnear.com',
   [ChainKeys.TRON_MAINNET]: process.env.TRON_RPC_URL ?? 'https://api.trongrid.io',
   [ChainKeys.XRP_MAINNET]: process.env.XRP_RPC_URL ?? 'https://xrplcluster.com',
+  [ChainKeys.TON_MAINNET]: process.env.TON_RPC_URL ?? 'https://toncenter.com/api/v2/jsonRPC',
   [ChainKeys.STELLAR_MAINNET]: {
     horizonRpcUrl: process.env.STELLAR_HORIZON_RPC_URL ?? 'https://horizon.stellar.org',
     sorobanRpcUrl: process.env.STELLAR_SOROBAN_RPC_URL ?? 'https://rpc.ankr.com/stellar_soroban',
@@ -143,6 +144,13 @@ export default function Providers({ children }: { children: ReactNode }) {
           [ChainKeys.XRP_MAINNET]: { rpcUrl: rpcConfig[ChainKeys.XRP_MAINNET] },
         },
       },
+      // TON rides the MPC relay too; TonConnect is its connector and needs the app's manifest.
+      TON: {
+        manifestUrl: `${window.location.origin}/tonconnect-manifest.json`,
+        chains: {
+          [ChainKeys.TON_MAINNET]: { rpcUrl: rpcConfig[ChainKeys.TON_MAINNET] },
+        },
+      },
     };
   }, []);
 
@@ -181,6 +189,7 @@ export default function Providers({ children }: { children: ReactNode }) {
         [ChainKeys.BITCOIN_MAINNET]: rpcConfig[ChainKeys.BITCOIN_MAINNET],
         [ChainKeys.TRON_MAINNET]: { rpcUrl: rpcConfig[ChainKeys.TRON_MAINNET] },
         [ChainKeys.XRP_MAINNET]: { rpcUrl: rpcConfig[ChainKeys.XRP_MAINNET] },
+        [ChainKeys.TON_MAINNET]: { rpcUrl: rpcConfig[ChainKeys.TON_MAINNET] },
       },
     };
   }, [solverEnvironment]);

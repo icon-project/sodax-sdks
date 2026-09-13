@@ -17,6 +17,7 @@ import {
 import { hexToBytes, toHex } from 'viem';
 import { tronHashToBase58, tronIdentityBytes } from '../services/spoke/tron-utils.js';
 import { xrpHashToClassicAddress, xrpIdentityBytes } from '../services/spoke/xrp-utils.js';
+import { tonAddressHash, tonIdentityBytes, tonWalletAddress } from '../services/spoke/ton-utils.js';
 import { bcs } from '@mysten/sui/bcs';
 import { PublicKey } from '@solana/web3.js';
 import { Address as StellarAddress, xdr } from '@stellar/stellar-sdk';
@@ -152,8 +153,12 @@ export function BigIntToHex(value: bigint): Hex {
  * For an MPC-relay chain the release contract reads `data[0..32]` as `12 zero bytes ‖ 20-byte hash`,
  * so the 20-byte identity has to be left-padded into a full word; passing the bare identity
  * mis-decodes the recipient. Intent-relay chains keep their own encoding unchanged.
+ *
+ * TON is the exception: its identity is a public key, and a release pays the 32-byte account hash of
+ * that key's wallet-v4R2 address, which already fills the word.
  */
 export function encodeRecipient(spokeChainId: SpokeChainKey, address: string): Hex {
+  if (getChainType(spokeChainId) === 'TON') return tonAddressHash(tonWalletAddress(address));
   const encoded = encodeAddress(spokeChainId, address);
   if (!isMpcRelayChainKey(spokeChainId)) return encoded;
   const hash = encoded.replace(/^0x/, '');
@@ -198,6 +203,10 @@ export function encodeAddress(spokeChainId: SpokeChainKey, address: string): Hex
       // `r…` address encodes. NOT the public key: the two are distinct and the contract derives
       // one from the other.
       return xrpIdentityBytes(address);
+    case 'TON':
+      // TON's identity is the 32-byte ed25519 public key itself: a TON address is a hash of the
+      // wallet's StateInit and cannot be inverted, so the key is what the relay identifies users by.
+      return tonIdentityBytes(address);
     default: {
       const exhaustiveCheck: never = chainType;
       throw new Error(`Invalid spoke chain id: ${exhaustiveCheck}`);
@@ -254,6 +263,9 @@ export function reverseEncodeAddress(spokeChainId: SpokeChainKey, encoded: Hex):
     case 'XRP':
       // Inverse of the identity encoding: 20-byte AccountID → classic `r…` address.
       return xrpHashToClassicAddress(encoded);
+    case 'TON':
+      // The identity encoding is the public key verbatim.
+      return tonIdentityBytes(encoded);
     default: {
       const exhaustiveCheck: never = chainType;
       throw new Error(`Invalid spoke chain id: ${exhaustiveCheck}`);

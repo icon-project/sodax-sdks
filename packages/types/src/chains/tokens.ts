@@ -1840,6 +1840,29 @@ export const xrpSupportedTokens = {
   },
 } as const satisfies Record<string, XToken>;
 
+export const tonSupportedTokens = {
+  // Native TON (9 decimals). There is no TON vault, so `vault` is the wrapped hub asset itself.
+  TON: {
+    symbol: 'TON',
+    name: 'Toncoin',
+    decimals: 9,
+    address: '0x0000000000000000000000000000000000000000',
+    chainKey: ChainKeys.TON_MAINNET,
+    hubAsset: '0x40ccbaf7FeE4Af5d15E2356c9Cc8fE0d93b3D76e',
+    vault: '0x40ccbaf7FeE4Af5d15E2356c9Cc8fE0d93b3D76e',
+  },
+  // A jetton is identified by its master contract; `address` is that master.
+  USDT: {
+    symbol: 'USDT',
+    name: 'Tether USD',
+    decimals: 6,
+    address: 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs',
+    chainKey: ChainKeys.TON_MAINNET,
+    hubAsset: '0xdA885Fda1cADb42A6ECF6dC4F68263737E7ac0E5',
+    vault: SodaTokens.sodaUSDT.address,
+  },
+} as const satisfies Record<string, XToken>;
+
 export const monadSupportedTokens = {
   // Native MON. There is no MON vault, so `vault` is the wrapped hub asset itself (the no-vault convention).
   MON: {
@@ -2605,4 +2628,5 @@ export const supportedTokensByChain = {
   [ChainKeys.TRON_MAINNET]: tronSupportedTokens,
   [ChainKeys.XRP_MAINNET]: xrpSupportedTokens,
   [ChainKeys.MONAD_MAINNET]: monadSupportedTokens,
+  [ChainKeys.TON_MAINNET]: tonSupportedTokens,
 } as const satisfies Record<ChainKey, Record<string, XToken>>;
