@@ -30,6 +30,7 @@ import {
   useEModes,
   useXBalances,
   EvmVaultTokenService,
+  getReservesEModes,
   type GetWalletProviderType,
   projectLeverageLeg,
   sizeLeverageBorrow,
@@ -263,16 +264,68 @@ export function CreatePositionCard({ chain, owner }: { chain: SpokeChainKey; own
   const depositBalance = startingDebtSide ? borrowBalance : collateralBalance;
   const depositSymbol = (startingDebtSide ? borrowTokenSel : collateralToken)?.symbol ?? '';
 
+  /**
+   * Which categories the pool will actually apply to THIS pair. A category lends its LTV only to a
+   * reserve set in its `collateralBitmap` and permits a borrow only of one set in its
+   * `borrowableBitmap`, so opting into a category that omits either side sizes the position against
+   * limits the pool never applies and reverts the leverage operation at fill time. Membership comes
+   * from the SDK's own bitmap reader rather than from a hand-kept list of which pairs work.
+   *
+   * Eligibility is unknown while a reserve is still loading, which reads as eligible — `riskParams`
+   * has already fallen back to the reserve's base params for as long as that is true.
+   */
+  const eModeOptions = useMemo(() => {
+    if (!eModes) return [];
+    const takesCollateral = collateralReserve
+      ? new Set(
+          getReservesEModes(collateralReserve.originalId, eModes)
+            .filter(e => e.collateralEnabled)
+            .map(e => e.id),
+        )
+      : undefined;
+    const permitsBorrow = borrowReserve
+      ? new Set(
+          getReservesEModes(borrowReserve.originalId, eModes)
+            .filter(e => e.borrowingEnabled)
+            .map(e => e.id),
+        )
+      : undefined;
+    return eModes.map(c => {
+      const collateralOk = takesCollateral?.has(c.id) !== false;
+      const borrowOk = permitsBorrow?.has(c.id) !== false;
+      const reason = collateralOk
+        ? `does not allow borrowing ${borrowReserve?.symbol}`
+        : borrowOk
+          ? `does not accept ${collateralReserve?.symbol} as collateral`
+          : `covers neither ${collateralReserve?.symbol} nor ${borrowReserve?.symbol}`;
+      return { ...c, eligible: collateralOk && borrowOk, reason: collateralOk && borrowOk ? undefined : reason };
+    });
+  }, [eModes, collateralReserve, borrowReserve]);
+
+  const selectedEMode = useMemo(
+    () => eModeOptions.find(c => String(c.id) === eModeCategory),
+    [eModeOptions, eModeCategory],
+  );
+
+  // The selection survives an asset change, so a category that stops covering the pair has to be
+  // dropped rather than carried onto a pair the pool would not apply it to.
+  useEffect(() => {
+    if (eModeOptions.length === 0) return;
+    setEModeCategory(prev =>
+      prev === '0' || eModeOptions.some(c => String(c.id) === prev && c.eligible) ? prev : '0',
+    );
+  }, [eModeOptions]);
+
   // Opting into an eMode category replaces the reserve's own LTV and liquidation threshold, so
   // the projection has to follow the selected category rather than the reserve. Category 0 means
-  // no eMode, and then the reserve's base params apply.
+  // no eMode, and then the reserve's base params apply — as does a category this pair is not in,
+  // which the pool would ignore and which the form blocks below.
   const riskParams = useMemo(() => {
-    const selected = eModes?.find(c => Number(c.id) === Number(eModeCategory));
-    if (Number(eModeCategory) !== 0 && selected) {
+    if (Number(eModeCategory) !== 0 && selectedEMode?.eligible) {
       return {
-        ltv: Number(selected.eMode.ltv) / 10_000,
-        liquidationThreshold: Number(selected.eMode.liquidationThreshold) / 10_000,
-        source: selected.eMode.label || `category ${eModeCategory}`,
+        ltv: Number(selectedEMode.eMode.ltv) / 10_000,
+        liquidationThreshold: Number(selectedEMode.eMode.liquidationThreshold) / 10_000,
+        source: selectedEMode.eMode.label || `category ${eModeCategory}`,
       };
     }
     return {
@@ -280,7 +333,7 @@ export function CreatePositionCard({ chain, owner }: { chain: SpokeChainKey; own
       liquidationThreshold: Number(collateralReserve?.formattedReserveLiquidationThreshold ?? 0),
       source: 'reserve base params',
     };
-  }, [eModes, eModeCategory, collateralReserve]);
+  }, [selectedEMode, eModeCategory, collateralReserve]);
 
   // `undefined` is NOT a ceiling of 1.00x: reserves take ~1.7s to load, and falling back to 1 meant
   // the form advertised `max 1.00x` and clamped the thumb onto the one value it rejects.
@@ -467,6 +520,12 @@ export function CreatePositionCard({ chain, owner }: { chain: SpokeChainKey; own
     if (collateral.toLowerCase() === borrowToken.toLowerCase())
       return { field: 'pair', message: 'Collateral and borrow token must differ' };
     if (!/^\d+$/.test(eModeCategory)) return { message: 'eMode category must be a whole number' };
+    // Fieldless on purpose: the control is inside the collapsed Advanced disclosure, so a message
+    // tagged to it would leave the button disabled with nothing on screen explaining why.
+    if (selectedEMode && !selectedEMode.eligible)
+      return {
+        message: `eMode ${selectedEMode.eMode.label || `category ${selectedEMode.id}`} ${selectedEMode.reason}. Choose another category, or None.`,
+      };
     try {
       const parsed = parseUnits(amount, depositDecimals);
       if (parsed <= 0n) return { field: 'amount', message: 'Enter an amount above 0' };
@@ -514,6 +573,7 @@ export function CreatePositionCard({ chain, owner }: { chain: SpokeChainKey; own
     collateral,
     borrowToken,
     eModeCategory,
+    selectedEMode,
     amount,
     depositDecimals,
     depositBalance,
@@ -657,10 +717,7 @@ export function CreatePositionCard({ chain, owner }: { chain: SpokeChainKey; own
   const costPct =
     projection && projection.depositUsd > 0 ? (projection.costUsd / projection.depositUsd) * 100 : undefined;
   const health = outcome ? healthTone(outcome.hf) : undefined;
-  const eModeLabel =
-    eModeCategory === '0'
-      ? 'no eMode'
-      : (eModes?.find(c => String(c.id) === eModeCategory)?.eMode.label ?? `category ${eModeCategory}`);
+  const eModeLabel = eModeCategory === '0' ? 'no eMode' : (selectedEMode?.eMode.label ?? `category ${eModeCategory}`);
   const cappedByPrice =
     maxLeverage !== undefined && pricedMax !== undefined && Number.isFinite(pricedMax) && pricedMax < maxLeverage;
 
@@ -882,8 +939,13 @@ export function CreatePositionCard({ chain, owner }: { chain: SpokeChainKey; own
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="0">None (reserve defaults)</SelectItem>
-                {(eModes ?? []).map(c => (
-                  <SelectItem key={c.id} value={String(c.id)}>
+                {eModeOptions.map(c => (
+                  <SelectItem
+                    key={c.id}
+                    value={String(c.id)}
+                    disabled={!c.eligible}
+                    description={c.reason && `Not for this pair — ${c.reason}`}
+                  >
                     {c.eMode.label || `Category ${c.id}`} — LTV {(Number(c.eMode.ltv) / 100).toFixed(0)}%
                   </SelectItem>
                 ))}
@@ -995,8 +1057,7 @@ export function CreatePositionCard({ chain, owner }: { chain: SpokeChainKey; own
         )}
 
         <Notice>
-          eMode is fixed after opening. Category 3 only works for sUSDS collateral against sodaUSSD; use None for other
-          pairs.
+          eMode is fixed after opening. Categories the pool would not apply to this pair are disabled in Advanced.
         </Notice>
       </CardContent>
     </Card>
