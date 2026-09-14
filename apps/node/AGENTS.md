@@ -28,8 +28,6 @@ Non-EVM chains take their own (`ICON_PRIVATE_KEY`, `SOLANA_PRIVATE_KEY`, `STELLA
 
 `logging.ts` is the exception: it needs no key, no RPC and no network.
 
-`logging.ts` is the exception: it needs no key, no RPC and no network.
-
 `stellar-sponsor.ts` is the exception whose extra vars are not inferable from its imports:
 
 ```
