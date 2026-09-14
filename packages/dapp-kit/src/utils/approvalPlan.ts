@@ -9,6 +9,7 @@ import type {
   StellarRawTransaction,
 } from '@sodax/sdk';
 import {
+  getEvmViemChain,
   isApprovalSupportedChainKeyType,
   isEvmSpokeOnlyChainKeyType,
   isHubChainKeyType,
@@ -91,7 +92,9 @@ function resolveChainSender(
     const evm = walletProvider as IEvmWalletProvider;
 
     return {
-      send: raw => evm.sendTransaction(raw as EvmRawTransaction),
+      // Chain-bind the send: the wallet broadcasts on ITS active chain, so refuse when that differs
+      // from the srcChainKey the user asked for. (Verifying the tx CONTENT is a separate concern.)
+      send: raw => evm.sendTransaction(raw as EvmRawTransaction, { expectedChainId: getEvmViemChain(srcChainKey).id }),
       confirm: async (hash, step) => {
         const receipt = await evm.waitForTransactionReceipt(hash as Hex);
         // Mined is not succeeded: a revert here would let the approve go out over an unmoved allowance.

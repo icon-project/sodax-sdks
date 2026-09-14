@@ -111,6 +111,11 @@ export type BridgeExtras<K extends SpokeChainKey = SpokeChainKey> = (GetChainTyp
      * Omit to use the configured fee. Chain-agnostic (unlike `srcPublicKey`/`bound`).
      */
     partnerFee?: PartnerFee;
+    /**
+     * Overrides the configured backend API key for this action's backend submit-tx leg; sent as the
+     * `x-api-key` header. Falls back to config when omitted. Chain-agnostic.
+     */
+    apiKey?: string;
   };
 
 export type BridgeParams<ChainKey extends SpokeChainKey, Raw extends boolean> = SpokeExecActionParams<
@@ -634,6 +639,9 @@ export class BridgeService {
       const outcome = await runBackendSubmitTx({
         attempt,
         api: this.backendApi.bridge,
+        // The configured key is already baked into the BridgeApiService headers, so only this
+        // per-action override (mirroring `extras.partnerFee`) travels per call.
+        overrideConfig: { apiKey: _params.extras?.apiKey },
         body: {
           txHash: spokeTxHash,
           srcChainKey,

@@ -15,7 +15,7 @@ export type SuiWaitForTransactionParams = {
  */
 export interface SuiTransport {
   readonly endpoint: string;
-  getCoins(owner: string, coinType: string, limit?: number): Promise<SuiPaginatedCoins>;
+  getCoins(owner: string, coinType: string, limit?: number, cursor?: string | null): Promise<SuiPaginatedCoins>;
   /**
    * The sender is applied to the transaction the node simulates, which may be a rebuilt copy of the
    * one passed in — do not rely on your instance coming back mutated.

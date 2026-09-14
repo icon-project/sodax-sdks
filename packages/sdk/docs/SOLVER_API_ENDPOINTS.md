@@ -6,11 +6,8 @@
 
 URL: [https://api.sodax.com/v1/intent](https://api.sodax.com/v1/intent)
 
-### Mainnet staging
-
-URL: [https://staging-new-world.iconblockchain.xyz](https://staging-new-world.iconblockchain.xyz/)
-
-**Note** Staging endpoint contains features to be potentially released and is subject to frequent change!
+This is the only solver host integrators should target. It is the packaged default, so no
+configuration is needed unless you are deliberately overriding the endpoint.
 
 ---
 
@@ -25,6 +22,8 @@ Three endpoints are exposed:
 | `/quote` | `POST` | Get a price quote for a token pair and amount |
 | `/execute` | `POST` | Notify the solver that an intent is live on the hub chain |
 | `/status` | `POST` | Poll the execution status of a submitted intent |
+
+All three carry the configured backend API key as the `x-api-key` header when `new Sodax({ apiKey })` is set — the same instance-wide key every other backend service uses. This is a config-level tier only: these requests take no per-call override. Solver auth failures come back through the `SolverErrorResponse` contract below rather than as an `EXTERNAL_API_ERROR`. See [CONFIGURE_SDK.md § API key](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/CONFIGURE_SDK.md#api-key).
 
 ---
 
@@ -71,7 +70,7 @@ Called via `SwapService.getQuote(payload)`.
 | `token_src_blockchain_id` | `string` | Source spoke chain relay ID (e.g. `'0x38.bsc'`) |
 | `token_dst_blockchain_id` | `string` | Destination spoke chain relay ID (e.g. `'0xa4b1.arbitrum'`) |
 | `amount` | `bigint` | Input amount in the source token's smallest unit |
-| `quote_type` | `string` | `'exact_input'` or `'exact_output'` |
+| `quote_type` | `string` | Always `'exact_input'` — the only value the API accepts |
 
 `SwapService.getQuote` automatically adjusts `amount` by the configured partner fee before forwarding to the solver, so the returned `quoted_amount` reflects the net output the user receives.
 
@@ -222,6 +221,12 @@ Polling intent status and waiting for fill delivery are separate steps the calle
 import { ChainKeys, SolverIntentStatusCode } from '@sodax/sdk';
 
 // 1. Execute the swap (steps 1–4 above)
+const deadline = await sodax.swaps.getSwapDeadline();
+if (!deadline.ok) {
+  console.error(deadline.error);
+  return;
+}
+
 const swapResult = await sodax.swaps.swap({
   params: {
     srcChainKey: ChainKeys.BSC_MAINNET,
@@ -232,16 +237,19 @@ const swapResult = await sodax.swaps.swap({
     minOutputAmount: 900_000_000_000_000n,
     srcAddress: '0xYourAddress',
     dstAddress: '0xYourAddress',
-    deadline: await sodax.swaps.getSwapDeadline(),
+    deadline: deadline.value,
     allowPartialFill: false,
   },
   walletProvider: evmWalletProvider,  // IEvmWalletProvider — narrows from srcChainKey
 });
 
 if (!swapResult.ok) {
-  // result.error.message is a phase tag: 'POST_EXECUTION_FAILED' | 'RELAY_TIMEOUT'
+  // Branch on result.error.code, never on the message. swap() returns one of:
+  //   USER_REJECTED | VALIDATION_FAILED | INTENT_CREATION_FAILED | TX_VERIFICATION_FAILED
+  //   TX_SUBMIT_FAILED | RELAY_TIMEOUT | RELAY_FAILED | EXECUTION_FAILED
+  //   EXTERNAL_API_ERROR | UNKNOWN
   // result.error.cause holds the underlying error
-  console.error(swapResult.error);
+  console.error(swapResult.error.code, swapResult.error);
   return;
 }
 

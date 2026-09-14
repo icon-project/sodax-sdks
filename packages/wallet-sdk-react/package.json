@@ -59,7 +59,7 @@
     "prepublishOnly": "pnpm run build",
     "clean": "rm -rf dist && rm -rf node_modules && rm -rf .turbo",
     "pretty": "biome format . --write",
-    "checkTs": "tsc --noEmit",
+    "checkTs": "tsc --noEmit && node ../../scripts/check-tests-typechecked.mjs",
     "check-exports": "attw --pack --profile esm-only",
     "test": "vitest run",
     "check:knip": "knip",

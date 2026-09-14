@@ -64,6 +64,15 @@ useBackendMoneyMarketAssetBorrowers({ params, queryOptions });
 useBackendAllMoneyMarketBorrowers({ params: { pagination: { offset, limit } }, queryOptions });
 ```
 
+### Oracle data
+
+```ts
+// @ai-snippets-skip
+useBackendOracleMarkets({ queryOptions });   // staleTime 60s; discovery: quote, intervals, symbols
+// from/to are UNIX seconds over the half-open range [from, to), at most 5000 buckets; staleTime 10s
+useBackendOracleCandles({ params: { symbol, interval, from, to }, queryOptions });
+```
+
 ### Swaps API (`sodax.api.swaps`)
 
 Typed React Query wrappers over the backend **Swaps API v2** — one `useSwapsApi*` hook per endpoint of `sodax.api.swaps.*` (21 total: tokens, quote, deadline, allowance, approve, create / submit / cancel intent, status, intent hash / packet / extra-data, intent lookups, limit orders, gas estimate, fees, submit-tx + status). They call the backend HTTP API and are distinct from the on-chain `swap/` hooks (`useQuote`/`useStatus`/`useSwap`/…), which drive `sodax.swaps` (the on-chain `SwapService`). Reads take `{ params, queryOptions }`; the six actions (`approve`, `createIntent`, `submitIntent`, `cancelIntent`, `createLimitOrder`, `submitTx`) are mutations taking `{ mutationOptions }`, with domain inputs flowing through `mutate(vars)`.
@@ -86,6 +95,43 @@ await createIntent({ body: { ...intentBody, partnerFee } });
 ```
 
 See the `sodax-sdk` skill (integration mode), `swaps-api.md` § `partnerFee`.
+
+### API key (`x-api-key`)
+
+The backend guards `POST /swaps/*` with an API-key check. There is ONE instance-wide key: configure it
+once on the provider config — `<SodaxProvider config={{ apiKey }}>` — and every `sodax.api.*` call these
+hooks make carries it. Override per request via the hooks' existing `apiConfig` param
+(`RequestOverrideConfig`), which also accepts `apiKey`:
+
+```ts
+// @ai-snippets-skip
+const { data: quote } = useSwapsApiQuote({
+  params: { body: quoteBody, apiConfig: { apiKey: 'partner-api-key' } },
+});
+```
+
+Never put the key in a `queryKey` (the hooks already exclude `apiConfig` from their keys). Auth failures
+surface with `context.status` `401`/`403` — nothing but a corrected key fixes them, so treat them as
+terminal in your UI; the transient verification `503` is retried by the wire client. See the
+`sodax-sdk` skill (integration mode), `swaps-api.md` § API key, for the precedence order.
+
+Every retrying `useSwapsApi*` hook already handles this: its default `retry` is `retryUnlessAuthFailure`
+(exported from `@sodax/dapp-kit`), which retries transport blips up to 3 times but never replays a
+401/403. `useSwapsApiStatus` and `useSwapsApiSubmitTxStatus` additionally stop their 1s poll on a
+rejected key, instead of re-requesting forever. So an invalid key surfaces once, fast, on `error`.
+
+Override or compose it through `queryOptions` / `mutationOptions` when you want different behaviour:
+
+```ts
+// @ai-snippets-skip
+const { data: quote } = useSwapsApiQuote({
+  params: { body: quoteBody },
+  queryOptions: { retry: (count, error) => !isAuthFailure(error) && count < 5 },
+});
+```
+
+`isAuthFailure` (re-exported from `@sodax/sdk`) is the same guard the default uses — prefer it over
+re-deriving `context.status`, so your UI and the hooks agree on what counts as terminal.
 
 `useSwapsApiSubmitTx` is a mutation hook — per-call config (e.g. backend base URL) flows through `mutate(vars)`. The `request` is a `SubmitTxRequestV2` (`{ txHash, srcChainKey, walletAddress, intent, relayData }`):
 
@@ -130,6 +176,36 @@ await submitBridgeTx({ request, apiConfig: { baseURL: 'https://...' } });
 
 > Full list in [hooks-index.md](../reference/hooks-index.md); key shapes in [querykey-conventions.md](../reference/querykey-conventions.md). For non-React callers, `sodax.api.bridge` is documented in the `sodax-sdk` skill (integration mode).
 
+### Leverage Yield API (`sodax.api.leverageYield`)
+
+Typed React Query wrappers over the backend **Leverage Yield API v2** — `useLeverageYieldApi*` hooks over `sodax.api.leverageYield.*` (vault registry, vault reads, split deposit/withdraw quote + create-intent, deadline, allowance/approve, the intent lifecycle, gas/fees, submit-tx + status). They are the HTTP-API parallel of the on-chain `leverageYield/` hooks (`useLeverageYieldDeposit`/`useLeverageYieldWithdraw`/…, which drive `sodax.leverageYield`). A vault deposit/withdraw IS an intent-based swap, so the intent / gas / fee / submit-tx hooks mirror the swaps family; reads take `{ params, queryOptions }` and the actions are mutations taking `{ mutationOptions }`.
+
+```ts
+// @ai-snippets-skip
+useLeverageYieldApiVaults({ params, queryOptions });          // query    → sodax.api.leverageYield.getVaults
+useLeverageYieldApiEffectiveApr({ params, queryOptions });    // query    → sodax.api.leverageYield.getEffectiveApr
+useLeverageYieldApiCreateDepositIntent({ mutationOptions });  // mutation → sodax.api.leverageYield.createDepositIntent
+useLeverageYieldApiSubmitTxStatus({ params, queryOptions });  // query    → sodax.api.leverageYield.getSubmitTxStatus
+```
+
+Four deltas worth knowing:
+
+- **Create-intent is split.** `useLeverageYieldApiCreateDepositIntent` (any token → `lsoda*`) vs `useLeverageYieldApiCreateWithdrawIntent` (`lsoda*` → any token), each with its own quote hook. Only the deposit path has an allowance step — a withdraw spends `lsoda*` from the hub wallet — so `useLeverageYieldApiAllowance` / `useLeverageYieldApiApprove` take the **deposit** body.
+- **`useLeverageYieldApiSubmitTx`'s `request` carries `operation`.** `LeverageYieldSubmitTxRequestV2` is the swaps `SubmitTxRequestV2` plus a required `operation: 'deposit' | 'withdraw'`; `relayData` is the payload **string**, as for swaps.
+- **Terminal submit-tx status is `solved`**, not the bridge API's `executed` — a vault swap is filled by the solver, so `posting_execution` applies too. `useLeverageYieldApiSubmitTxStatus` polls (1s) while both `txHash` and `srcChainKey` are supplied and stops on `solved` / `failed`, on a set `abandonedAt`, or once the backend rejects the API key.
+- **`lsoda*` shares live in the derived HUB wallet, not the EOA.** Resolve it with `useGetUserHubWalletAddress` before reading `useLeverageYieldApiShareBalance` / `useLeverageYieldApiMaxWithdraw`, or the balance reads as zero.
+
+```ts
+// @ai-snippets-skip
+const { mutateAsync: submitVaultTx } = useLeverageYieldApiSubmitTx();
+// request: LeverageYieldSubmitTxRequestV2 — { txHash, srcChainKey, walletAddress, intent, relayData, operation }
+await submitVaultTx({ request, apiConfig: { baseURL: 'https://...' } });
+```
+
+Prefer `useLeverageYieldApiApproveAndBroadcast` over `useLeverageYieldApiApprove`: a guarded deposit token can need its stale allowance cleared first, and the approve-and-broadcast hook owns plan → sign → broadcast → wait in that order (reporting each step through `onProgress`) and invalidates `['leverageYieldApi','allowance']` itself.
+
+> Full list in [hooks-index.md](../reference/hooks-index.md); key shapes in [querykey-conventions.md](../reference/querykey-conventions.md). For non-React callers, `sodax.api.leverageYield` is documented in the `sodax-sdk` skill (integration mode).
+
 ## Shared utilities
 
 Cross-cutting hooks used by other features.
@@ -138,7 +214,8 @@ Cross-cutting hooks used by other features.
 // @ai-snippets-skip
 useSodaxContext();                                  // Access the Sodax SDK instance
 useHubProvider();                                   // Hub chain (Sonic) provider
-useXBalances({ params, queryOptions });             // Cross-chain token balances
+useBalances({ params, queryOptions });              // SDK-backed wallet balances (no xService)
+useXBalances({ params, queryOptions });             // Cross-chain token balances (needs xService)
 useDeriveUserWalletAddress({ params, queryOptions }); // Hub wallet address (CREATE3)
 useGetUserHubWalletAddress({ params, queryOptions }); // Hub wallet via wallet router
 useEstimateGas({ mutationOptions });                // Gas estimation for raw tx
@@ -172,6 +249,36 @@ import { useXService, getXChainType } from '@sodax/wallet-sdk-react';
 const xService = useXService({ xChainType: getXChainType(xChainId) });
 const { data: balances } = useXBalances({ params: { xService, xChainId, xTokens, address } });
 ```
+
+### `useBalances` shape (SDK-backed, no `xService`)
+
+`useBalances` is the SDK-backed successor to `useXBalances`: it reads wallet balances straight from the core SDK (`sodax.spoke.getWalletBalances`) via the `SodaxProvider` context, so it needs **no** `xService` from `@sodax/wallet-sdk-react`. Both hooks still exist — prefer `useBalances` when the app already has a `SodaxProvider`; keep `useXBalances` when you're wiring balances through the wallet layer.
+
+```ts
+// @ai-snippets-skip
+type UseBalancesParams = ReadHookParams<Record<string, bigint>, {
+  chainKey: SpokeChainKey | undefined;       // the chain the read executes against
+  tokens: readonly XToken[];                 // tokens to fetch balances for
+  address: string | undefined;
+}>;
+```
+
+The query runs only when `chainKey`, `address`, and `tokens.length > 0` are all present, refetching every 5s (same interval as `useXBalances`). `data` is a `Record<string, bigint>` mapping each token address to its balance in smallest units. queryKey: `['shared', 'balances', chainKey, tokens.map(t => [t.symbol, t.address]), address]`.
+
+**`chainKey` decides the chain that is read.** The SDK ignores `token.chainKey`, so a token that does not live on `chainKey` reads as `0n` rather than erroring — commit the chain and the token list in the same state update. (`useXBalances` is the opposite: it derives the chain from `xTokens[0].chainKey` and ignores the `xChainId` you pass.)
+
+**Failure model.** A token that could not be read is logged by the SDK and reported as `0n` — a flaky RPC and an empty wallet look the same, always in the conservative direction (under-reporting blocks a spend, never permits one). The query errors only when the whole batch is unusable: a mismatched `token.chainKey`, an RPC every token depends on, or a batch in which no token could be read at all.
+
+**Chain-specific values.** Stellar XLM reports the *spendable* amount — total minus the minimum reserve and selling liabilities, not the raw balance. Bitcoin returns `0n` for Rune tokens, whose amounts the UTXO endpoint does not carry.
+
+```tsx
+// @ai-snippets-skip
+// No `xService` — just the SodaxProvider context the hook reads internally.
+const { data: balances } = useBalances({ params: { chainKey, address, tokens } });
+const usdcBalance = balances?.[usdc.address] ?? 0n;
+```
+
+After a mutation, invalidate with the `invalidateBalances(queryClient, chainKey)` helper exported from `@sodax/dapp-kit` — it covers both `['shared','balances']` and `['shared','xBalances']`, which never match each other. Every dapp-kit mutation hook already calls it.
 
 ### Stellar prerequisites — use `useStellarGate`
 
@@ -321,7 +428,10 @@ rather than on the HTTP status.
 When the server rate-limits a key it also supplies `error.context.retryAfterSeconds`; render "try again
 in Ns" instead of a generic "try later". The SDK never auto-retries a rate limit.
 
-Requires `api.sponsoringApiConfig` (at minimum `apiKey`) on the `SodaxProvider` config. An api key
+On the packaged gateway no sponsoring-specific credential is needed: the instance-wide key from
+`<SodaxProvider config={{ apiKey }}>` (`new Sodax({ apiKey })`) is inherited by sponsoring.
+`api.sponsoringApiConfig.apiKey` is the credential for an independently hosted sponsoring service, and
+wins wherever the slice points. An api key
 in a browser bundle is public by nature; the service's per-key quotas, fleet cap, per-IP throttle,
 and origin gating are the real controls. Proxy through your own backend if that is not acceptable.
 
@@ -333,12 +443,16 @@ and origin gating are the real controls. Proxy through your own backend if that 
 | `useSwapsApiSubmitTxStatus` | 1s | requires `txHash` + `srcChainKey`; stops on `solved` / `failed` |
 | `useSwapsApiStatus` | 1s | solver intent status; stops on status `3` / `4` |
 | `useBackendOrderbook` | none | `staleTime: 30s` — fresh-window, no background refetch |
+| `useBackendOracleMarkets` | none | `staleTime: 60s` |
+| `useBackendOracleCandles` | none | `staleTime: 10s` — matches the ~10s server-side cache |
 | `useExpiredUtxos` (bitcoin) | 60s | refetchInterval |
 | `useQuote` (swap) | 3s | refetchInterval |
 | `useStatus` (swap) | 3s | stops on status `3`/`4`, and after 40 consecutive NOT_FOUND fetches |
 | `useSwapAllowance` (swap) | 2s | refetchInterval |
 | `useMMAllowance` (mm) | 5s | refetchInterval; `enabled: false` for borrow/withdraw actions |
 | Reserves data (mm) | 5s | `useReservesData` / `useReservesHumanized` / user position hooks |
+| `useBalances` | 5s | refetchInterval |
+| `useXBalances` | 5s | refetchInterval |
 | Most others | None | |
 
 All overridable via `queryOptions.refetchInterval`.
@@ -346,6 +460,6 @@ All overridable via `queryOptions.refetchInterval`.
 ## Cross-references
 
 - [`../recipes/backend-queries.md`](../recipes/backend-queries.md) — worked examples for intent tracking, orderbook, MM data.
-- [`../recipes/wallet-connectivity.md`](../recipes/wallet-connectivity.md) — `useXBalances` worked example.
+- [`../recipes/wallet-connectivity.md`](../recipes/wallet-connectivity.md) — `useBalances` / `useXBalances` worked examples.
 - [`features/auxiliary-services.md`](../../../migration-v1-to-v2/knowledge/features/auxiliary-services.md) — v1 → v2 porting.
 - `sodax-sdk`: `integration/knowledge/features/auxiliary-services.md` — underlying SDK auxiliary surfaces (partner, recovery, backendApi).

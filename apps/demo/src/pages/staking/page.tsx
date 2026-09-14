@@ -280,7 +280,7 @@ export default function StakingPage() {
   };
 
   return (
-    <div className="flex flex-col items-center content-center justify-center min-h-screen p-4">
+    <div className="flex flex-col items-center content-center p-4 pt-8 pb-12">
       <Card className="w-full max-w-4xl mx-auto">
         <CardHeader>
           <CardTitle className="text-2xl font-bold text-center flex items-center gap-2">

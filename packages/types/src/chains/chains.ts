@@ -537,6 +537,27 @@ export type StellarSpokeChainConfig = BaseSpokeChainConfig<'STELLAR'> & {
   baseFee: string;
 };
 
+export const BOUND_API_HOST = 'https://svc.bound.exchange/api';
+
+/**
+ * Which auth/transactions hosts accompany a given Bound api host. Kept OUT of `spokeChainConfig`
+ * below: `deepMerge` merges `radfi` key by key, so inlining them would let an `apiUrl`-only
+ * override inherit them and straddle environments. A key absent here falls back to the api host.
+ */
+export const BOUND_COMPANION_HOSTS: Record<string, { auth?: string; transactions?: string }> = {
+  [BOUND_API_HOST]: {
+    auth: 'https://auth.bound.exchange/api',
+    transactions: 'https://api.radfi.co/api',
+  },
+};
+
+/**
+ * Hosts Bound has announced it will retire. `RadfiProvider` refuses to construct when one is
+ * configured. No replacement is stored: it depends on which family the retired host was
+ * configured for, not on the host.
+ */
+export const DEPRECATED_BOUND_HOSTS: readonly string[] = ['https://api.bound.exchange/api'];
+
 export type BitcoinSpokeChainConfig = BaseSpokeChainConfig<'BITCOIN'> & {
   addresses: {
     assetManager: string;
@@ -545,6 +566,10 @@ export type BitcoinSpokeChainConfig = BaseSpokeChainConfig<'BITCOIN'> & {
   network: string;
   radfi: {
     apiUrl: string;
+    /** `/auth/*` + `/wallets/*`. Unset resolves via {@link BOUND_COMPANION_HOSTS}[`apiUrl`], then `apiUrl`. */
+    authUrl?: string;
+    /** `/transactions/*`. Unset resolves via {@link BOUND_COMPANION_HOSTS}[`apiUrl`], then `apiUrl`. */
+    transactionsUrl?: string;
     umsUrl: string;
     apiKey: string;
     accessToken: string;
@@ -856,11 +881,14 @@ export const spokeChainConfig = {
     },
     chain: baseChainInfo[ChainKeys.BITCOIN_MAINNET] satisfies BaseChainInfo<'BITCOIN'>,
     bnUSD: 'no',
-    nativeToken: 'BTC' as const,
+    // Must equal bitcoinSupportedTokens.BTC.address: isNativeToken compares a token's `address`
+    // against this value, so a symbol here classifies native BTC as a contract token.
+    nativeToken: '0:0' as const,
     supportedTokens: bitcoinSupportedTokens,
     radfi: {
       walletMode: 'TRADING',
-      apiUrl: 'https://api.bound.exchange/api',
+      // authUrl / transactionsUrl are intentionally absent: see BOUND_COMPANION_HOSTS.
+      apiUrl: BOUND_API_HOST,
       apiKey: '',
       umsUrl: 'https://api.ums.bound.exchange/api',
       accessToken: '',
@@ -972,6 +1000,71 @@ export const spokeChainConfig = {
         contractId: 'CC552JLYIJROE24VZFSMO7GBKQOOIQ6R52E3VQSQYC7NMFYAVMC7GQHS',
         assetIssuer: 'GDYUTHY75A7WUZJQDPOP66FB32BOYGZRXHWTWO4Q6LQTANT5X3V5HNFA',
       },
+      {
+        assetCode: 'SPCX',
+        contractId: 'CAI4HHAYO57QICZOZ4JF7R66RLGJRD7BGTX7H6MILCITVEYYEFRYFISK',
+        assetIssuer: 'GDYUTHY75A7WUZJQDPOP66FB32BOYGZRXHWTWO4Q6LQTANT5X3V5HNFA',
+      },
+      {
+        assetCode: 'NVDA',
+        contractId: 'CCQFCT4FHJURUQ4RQA4NHYW5GQRHCBDXF33ADXZRTDTDVGKOJO3ZPEMY',
+        assetIssuer: 'GDYUTHY75A7WUZJQDPOP66FB32BOYGZRXHWTWO4Q6LQTANT5X3V5HNFA',
+      },
+      {
+        assetCode: 'GME',
+        contractId: 'CAPSLSLCTFOZM22SUIPQENMM54T24GTDRHZ5STYAO6EYMK5GGGYVKWBX',
+        assetIssuer: 'GDYUTHY75A7WUZJQDPOP66FB32BOYGZRXHWTWO4Q6LQTANT5X3V5HNFA',
+      },
+      {
+        assetCode: 'MSTR',
+        contractId: 'CAFQQXZSECLJNU76OS2OKLJQJBQHYJCVAYZJ4KGEN7VHXH5BTGNLVQND',
+        assetIssuer: 'GDYUTHY75A7WUZJQDPOP66FB32BOYGZRXHWTWO4Q6LQTANT5X3V5HNFA',
+      },
+      {
+        assetCode: 'AAPL',
+        contractId: 'CAZSFDNSSR2RKJ2LIIB2Y4G4WOSYYKC4646EUJ63PQLDDHOVQYZ4HDTK',
+        assetIssuer: 'GDYUTHY75A7WUZJQDPOP66FB32BOYGZRXHWTWO4Q6LQTANT5X3V5HNFA',
+      },
+      {
+        assetCode: 'TSLA',
+        contractId: 'CARLFQDI2S2FSYFB47AZLKGUFZVGBEUVNW77SCJHHHGL2KPGT3TN5PAB',
+        assetIssuer: 'GDYUTHY75A7WUZJQDPOP66FB32BOYGZRXHWTWO4Q6LQTANT5X3V5HNFA',
+      },
+      {
+        assetCode: 'MU',
+        contractId: 'CBPTKA32BTUEX4VFAER6AUFWQZCWJKQAMLV2PMFFN7EHLGLJN4JWIZ3F',
+        assetIssuer: 'GDYUTHY75A7WUZJQDPOP66FB32BOYGZRXHWTWO4Q6LQTANT5X3V5HNFA',
+      },
+      {
+        assetCode: 'SNDK',
+        contractId: 'CDXNTHFMGQM33UGQBSLZI3BV5UWW62QGZLCEKOXJKMFN2W3KQZKE3LTQ',
+        assetIssuer: 'GDYUTHY75A7WUZJQDPOP66FB32BOYGZRXHWTWO4Q6LQTANT5X3V5HNFA',
+      },
+      {
+        assetCode: 'SPY',
+        contractId: 'CD3ZMWOS4PZS2RQITEHBOTS27DTDP4QKOK7IEO5IB64GQKHRJYTVL3SW',
+        assetIssuer: 'GDYUTHY75A7WUZJQDPOP66FB32BOYGZRXHWTWO4Q6LQTANT5X3V5HNFA',
+      },
+      {
+        assetCode: 'QQQ',
+        contractId: 'CC7DQX43J2KBK5MJACQWTNHENIYB5GUVCFXGDKQWDLUWA4VKLOOU5PWB',
+        assetIssuer: 'GDYUTHY75A7WUZJQDPOP66FB32BOYGZRXHWTWO4Q6LQTANT5X3V5HNFA',
+      },
+      {
+        assetCode: 'SGOV',
+        contractId: 'CBQMRO2JTUJ6NXVBQ3XGJV34PDTXR34DD74TLLRCW5SV2CV2NN2VDMLH',
+        assetIssuer: 'GDYUTHY75A7WUZJQDPOP66FB32BOYGZRXHWTWO4Q6LQTANT5X3V5HNFA',
+      },
+      {
+        assetCode: 'USO',
+        contractId: 'CCFRCTIW5EK2OK626V6C4YRTJCKACIRDI2GHOKWM57ZXACK2ZTWWWLC7',
+        assetIssuer: 'GDYUTHY75A7WUZJQDPOP66FB32BOYGZRXHWTWO4Q6LQTANT5X3V5HNFA',
+      },
+      {
+        assetCode: 'SLV',
+        contractId: 'CBY3U32O5T2B555HNJLX6C6HW3O2FLRSJGH472UOOHT6H6ZMGMSSZTLW',
+        assetIssuer: 'GDYUTHY75A7WUZJQDPOP66FB32BOYGZRXHWTWO4Q6LQTANT5X3V5HNFA',
+      },
     ],
     supportedTokens: stellarSupportedTokens,
     nativeToken: 'CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA' as const,
@@ -1026,7 +1119,7 @@ export const spokeChainConfig = {
     },
   } as const satisfies IconSpokeChainConfig,
   [ChainKeys.NEAR_MAINNET]: {
-    rpcUrl: 'https://1rpc.io/near',
+    rpcUrl: 'https://free.rpc.fastnear.com',
     chain: baseChainInfo[ChainKeys.NEAR_MAINNET] as BaseChainInfo<'NEAR'>,
     nativeToken: 'NEAR',
     addresses: {

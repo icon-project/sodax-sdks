@@ -20,4 +20,4 @@ export * from './swap/index.js';
 export * from './utils/index.js';
 export * from './wallet/index.js';
 
-export const CONFIG_VERSION = 100; // this value should be incremented (inside release/sdk branch) each time @sodax/types package is updated
+export const CONFIG_VERSION = 100; // bumped once per release by scripts/bump-versions.sh, on the release branch

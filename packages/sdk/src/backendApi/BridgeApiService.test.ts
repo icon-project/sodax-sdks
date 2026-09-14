@@ -19,6 +19,7 @@ import { DEFAULT_API_BASE_URL, type BridgeSubmitTxRequestV2, type CreateBridgeIn
 import { Sodax } from '../shared/entities/Sodax.js';
 import { BridgeApiService, toCreateBridgeIntentParamsV2 } from './BridgeApiService.js';
 import { SodaxError } from '../errors/SodaxError.js';
+import { isAuthFailure, isSodaxError } from '../errors/guards.js';
 
 // --- fetch stub -----------------------------------------------------------
 const mockFetch = vi.fn();
@@ -420,6 +421,18 @@ describe('BridgeApiService error propagation', () => {
       expect(err.message).toBe('Network down');
     }
   });
+
+  it.each([401, 403])('lifts a %d onto error.context so isAuthFailure recognizes it', async status => {
+    // Without the lifted status a rejected key is indistinguishable from a transient failure, and a
+    // keyed bridge submit-tx burns its whole attempt budget re-sending it.
+    mockFetch.mockResolvedValueOnce(httpErrorResponse(status, 'Unauthorized'));
+    const result = await sodax.api.bridge.getTokens();
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(isSodaxError(result.error) && result.error.context?.status).toBe(status);
+      expect(isAuthFailure(result.error)).toBe(true);
+    }
+  });
 });
 
 // =========================================================================
@@ -488,5 +501,21 @@ describe('BridgeApiService utilities', () => {
       expect.any(String),
       expect.objectContaining({ headers: expect.objectContaining({ 'X-API-Key': 'api-key-123' }) }),
     );
+  });
+
+  it('a repeated mixed-casing update sends the newest value, not a stale case variant', async () => {
+    // Updating an existing object key does NOT move it in insertion order, so a raw
+    // `headers[name] = value` would leave the older casing last and let it win the merge.
+    const service = new BridgeApiService({ baseURL: BASE, timeout: 30_000, headers: {} });
+    service.setHeaders({ 'x-trace': 'v1' });
+    service.setHeaders({ 'X-Trace': 'v2' });
+    service.setHeaders({ 'x-trace': 'v3' });
+    mockFetch.mockResolvedValueOnce(okResponse(tokensResponse));
+
+    await service.getTokens();
+
+    const headers = mockFetch.mock.calls[0]?.[1]?.headers as Record<string, string>;
+    expect(Object.keys(headers).filter(h => h.toLowerCase() === 'x-trace')).toHaveLength(1);
+    expect(new Headers(headers).get('x-trace')).toBe('v3');
   });
 });
