@@ -22,6 +22,7 @@ pnpm check:ai-dev-files
 - `hooks/useSwapFlow.ts`: API assets, quote state, allowed networks and form state.
 - `hooks/useExecution.ts`: accounts, balances, review, approvals, signing and activity tracking.
 - `lib/execution.ts`: testable execution sequencing and validated wallet-family dispatch.
+- `lib/destinationGate.ts`: Stellar/NEAR receiving-account prerequisites reduced to one UI state.
 - `lib/activity.ts`: validated local recovery record and reconstruction of relay submissions.
 - `lib/analytics.ts`: GA4 event vocabulary and the tag policy that keeps partner frames opt-in.
 - `lib/widgetSettings.ts`, `lib/urlState.ts`: validated public embed configuration.
@@ -49,6 +50,13 @@ pnpm check:ai-dev-files
   The same fee must reach the quote and intent exactly once. Invalid configuration blocks execution.
 - Adding a wallet family requires its signing path, destination preparation, balance behavior and
   recovery tests. Bitcoin trading wallets and destination account preparation are distinct flows.
+- Dispatch signing on the wallet's chain type, never on the payload shape: EVM, Solana, Sui, Stellar
+  and Bitcoin raw transactions are all `{ from, to, value, data }` and cannot be told apart.
+- Check the payload's sender against the connected account wherever the family states one — `from`,
+  or NEAR's `signerId`. Injective states a hex sender while its wallet reports bech32; comparing
+  those rejects every valid swap, so it is exempt by design.
+- A destination whose receiving account is not ready blocks execution before signing, including
+  while the check is still in flight. Never let a swap leave the source chain to strand.
 
 ## Embed and UI
 
@@ -69,7 +77,8 @@ pnpm check:ai-dev-files
   that same state; it must not name a real third-party brand or load a font outside `FONT_STACKS`.
 - No UI framework or icon-library dependency. Import SDK/types through `@sodax/dapp-kit`.
 - `polyfill.ts` must remain the first entry import; the SDK graph needs `Buffer` during evaluation.
-- The bridge view remains unmounted; do not turn the swap widget into a multi-product dashboard.
+- Swap is the only flow. Do not turn the swap widget into a multi-product dashboard; another product
+  is another widget.
 
 Run mocked execution tests, the production build, and browser checks for both the playground and
 embed. Mainnet signing must be validated by a funded wallet owner before calling a release production

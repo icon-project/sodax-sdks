@@ -4,7 +4,9 @@ import {
   spokeChainConfig,
   isNativeToken,
   useBalances,
+  useNearStorageGate,
   useSodaxContext,
+  useStellarGate,
   useSwapsApiApproveAndBroadcast,
   useSwapsApiSubmitTxStatus,
   type ChainKey,
@@ -32,6 +34,7 @@ import {
   trackSwapSubmitted,
   type SwapFailureReason,
 } from '../lib/analytics';
+import { resolveDestinationGate } from '../lib/destinationGate';
 import {
   broadcast,
   canExecute,
@@ -69,7 +72,11 @@ export function useExecution(input: ExecutionInput) {
   const source = accounts[sourceType];
   const destination = accounts[destinationType];
   const wallet = useWalletProvider({ xChainType: canExecute(input.srcChain) ? sourceType : undefined });
+  const destinationWallet = useWalletProvider({
+    xChainType: canExecute(input.dstChain) ? destinationType : undefined,
+  });
   const srcKey = spokeKey(input.srcChain);
+  const dstKey = spokeKey(input.dstChain);
   const { isWrongChain, handleSwitchChain } = useEvmSwitchChain({ xChainId: srcKey ?? ChainKeys.SONIC_MAINNET });
   const [connectType, setConnectType] = useState<ChainType>();
   const connectors = useXConnectors({ xChainType: connectType ?? sourceType });
@@ -87,6 +94,23 @@ export function useExecution(input: ExecutionInput) {
     balance !== undefined && input.srcToken ? formatUnits(balance, input.srcToken.decimals) : undefined;
   const canMax = !!srcKey && !!input.srcToken && !isNativeToken(srcKey, input.srcToken) && balance !== undefined;
   const insufficientBalance = balance !== undefined && input.inputAmount !== undefined && input.inputAmount > balance;
+
+  // Stellar and NEAR can accept a swap the recipient cannot receive: an unactivated account, a
+  // missing trustline, or unregistered NEP-141 storage. Both gates go inert off their own chain.
+  const stellarGate = useStellarGate({
+    dstChainKey: dstKey,
+    token: input.dstToken?.address,
+    amount: input.minOutputAmount,
+    address: destination?.address,
+    walletProvider: destinationWallet,
+  });
+  const nearGate = useNearStorageGate({
+    dstChainKey: dstKey ?? ChainKeys.SONIC_MAINNET,
+    token: input.dstToken?.address,
+    accountId: destination?.address,
+    walletProvider: destinationWallet,
+  });
+  const destinationGate = resolveDestinationGate(stellarGate, nearGate);
   const [activity, setActivity] = useState<Activity | undefined>(loadActivity);
   const [storageAvailable, setStorageAvailable] = useState(true);
   const [phase, setPhase] = useState<ExecutionPhase>();
@@ -146,6 +170,7 @@ export function useExecution(input: ExecutionInput) {
       input.minOutputAmount <= 0n ||
       insufficientBalance ||
       isWrongChain ||
+      destinationGate.blocked ||
       activity ||
       busyRef.current
     )
@@ -263,6 +288,7 @@ export function useExecution(input: ExecutionInput) {
     balanceError: balanceQuery.isError,
     isWrongChain,
     handleSwitchChain,
+    destinationGate,
     review,
     openReview,
     confirm,

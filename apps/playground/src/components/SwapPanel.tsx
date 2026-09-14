@@ -54,6 +54,16 @@ function PrimaryAction({ flow }: { flow: SwapFlow }) {
       </button>
     );
   if (e.insufficientBalance) return disabled('Insufficient balance');
+  // The receiving account cannot hold the asset yet; the notice beneath says why.
+  if (e.destinationGate.blocked) {
+    const { action, busy } = e.destinationGate;
+    if (!action) return disabled('Receiving account not ready');
+    return (
+      <button type="button" className="btn btn-primary" onClick={() => void action.run()} disabled={busy}>
+        {busy ? 'Working…' : action.label}
+      </button>
+    );
+  }
   if (flow.quoteError)
     return (
       <button type="button" className="btn btn-primary" onClick={flow.refreshQuote}>
@@ -114,7 +124,7 @@ export function SwapPanel({ flow }: { flow: SwapFlow }) {
 
   // One slot, so a fee error and a quote error cannot stack and resize the card between them.
   // The tail stays short enough to hold one line: "this pair" already says to try another.
-  const message = flow.partnerFeeError ?? flow.quoteError;
+  const message = flow.partnerFeeError ?? flow.quoteError ?? flow.execution.destinationGate.notice;
 
   return (
     <>

@@ -1,24 +1,42 @@
 import {
   baseChainInfo,
   type ChainKey,
+  type ChainType,
   type CreateIntentParamsV2,
   type IntentResponseV2,
   type IntentRequestV2,
+  type InjectiveRawTransaction,
   type IWalletProvider,
+  type NearRawTransaction,
   type RawTxReturnType,
   type SolanaRawTransaction,
+  type StacksRawTransaction,
   type SubmitTxRequestV2,
   type Sodax,
   type EvmRawTransaction,
 } from '@sodax/dapp-kit';
 import { isAddress, isHex } from 'viem';
 
-export function canExecute(chain: ChainKey | undefined): boolean {
-  if (!chain) return false;
-  const type = baseChainInfo[chain].type;
-  return type === 'EVM' || type === 'SOLANA' || type === 'SUI';
+/**
+ * Wallet families this widget can sign for. Bitcoin is deliberately absent: it settles through a
+ * funded Bound trading wallet rather than a signed swaps-API payload, so it is a separate flow.
+ */
+export const EXECUTABLE_CHAIN_TYPES = ['EVM', 'SOLANA', 'SUI', 'STELLAR', 'NEAR', 'STACKS', 'INJECTIVE'] as const;
+
+export type ExecutableChainType = (typeof EXECUTABLE_CHAIN_TYPES)[number];
+
+export function isExecutableChainType(type: ChainType): type is ExecutableChainType {
+  return (EXECUTABLE_CHAIN_TYPES as readonly ChainType[]).includes(type);
 }
 
+export function canExecute(chain: ChainKey | undefined): boolean {
+  return chain ? isExecutableChainType(baseChainInfo[chain].type) : false;
+}
+
+/**
+ * The `{ from, to, value, data }` payload EVM, Solana, Sui, Stellar and Bitcoin all share. The
+ * chain type — never the shape — decides which wallet signs it; these members are indistinguishable.
+ */
 function isTransfer(tx: RawTxReturnType): tx is SolanaRawTransaction {
   return (
     'from' in tx &&
@@ -36,14 +54,45 @@ function isEvmTransfer(tx: RawTxReturnType): tx is EvmRawTransaction {
   return isTransfer(tx) && isAddress(tx.from) && isAddress(tx.to) && isHex(tx.data);
 }
 
+function isNearCall(tx: RawTxReturnType): tx is NearRawTransaction {
+  if (!('signerId' in tx) || typeof tx.signerId !== 'string' || !('params' in tx)) return false;
+  const params = tx.params as NearRawTransaction['params'] | undefined;
+  return !!params && typeof params.contractId === 'string' && typeof params.method === 'string';
+}
+
+function isStacksPayload(tx: RawTxReturnType): tx is StacksRawTransaction {
+  return 'payload' in tx && typeof tx.payload === 'string' && tx.payload.length > 0;
+}
+
+function isInjectiveDoc(tx: RawTxReturnType): tx is InjectiveRawTransaction {
+  if (!('signedDoc' in tx)) return false;
+  const doc = tx.signedDoc as InjectiveRawTransaction['signedDoc'] | undefined;
+  return (
+    !!doc &&
+    doc.bodyBytes instanceof Uint8Array &&
+    doc.authInfoBytes instanceof Uint8Array &&
+    typeof doc.chainId === 'string'
+  );
+}
+
+/**
+ * The sender field the payload carries, or `undefined` when the family has none to check against
+ * the connected account. Injective is deliberately absent: its raw tx reports a hex `from` while the
+ * wallet reports bech32, so comparing them rejects every valid swap.
+ */
+async function senderMismatch(tx: RawTxReturnType, wallet: IWalletProvider): Promise<boolean> {
+  if (wallet.chainType === 'INJECTIVE') return false;
+  const claimed = isNearCall(tx) ? tx.signerId : isTransfer(tx) ? tx.from : undefined;
+  if (claimed === undefined) return false;
+  const account = await wallet.getWalletAddress();
+  return wallet.chainType === 'EVM' ? claimed.toLowerCase() !== account.toLowerCase() : claimed !== account;
+}
+
 export async function broadcast(chain: ChainKey, tx: RawTxReturnType, wallet: IWalletProvider): Promise<string> {
   const network = baseChainInfo[chain];
   if (network.type !== wallet.chainType) throw new Error('Reconnect the wallet for the source network.');
-  if (isTransfer(tx)) {
-    const account = await wallet.getWalletAddress();
-    const matches = wallet.chainType === 'EVM' ? tx.from.toLowerCase() === account.toLowerCase() : tx.from === account;
-    if (!matches) throw new Error('The signing account changed. Review the swap again.');
-  }
+  if (await senderMismatch(tx, wallet)) throw new Error('The signing account changed. Review the swap again.');
+
   if (wallet.chainType === 'EVM' && typeof network.chainId === 'number' && isEvmTransfer(tx)) {
     return wallet.sendTransaction(tx, { expectedChainId: network.chainId });
   }
@@ -52,6 +101,18 @@ export async function broadcast(chain: ChainKey, tx: RawTxReturnType, wallet: IW
   }
   if (wallet.chainType === 'SUI' && isTransfer(tx)) {
     return wallet.signAndExecuteTxn({ toJSON: async () => tx.data });
+  }
+  if (wallet.chainType === 'STELLAR' && isTransfer(tx) && wallet.signAndSendTransaction) {
+    return wallet.signAndSendTransaction(tx);
+  }
+  if (wallet.chainType === 'NEAR' && isNearCall(tx)) {
+    return wallet.signAndSubmitTxn(tx);
+  }
+  if (wallet.chainType === 'STACKS' && isStacksPayload(tx) && wallet.signAndSendTransaction) {
+    return wallet.signAndSendTransaction(tx);
+  }
+  if (wallet.chainType === 'INJECTIVE' && isInjectiveDoc(tx) && wallet.signAndSendTransaction) {
+    return wallet.signAndSendTransaction(tx);
   }
   throw new Error('This wallet cannot sign this transaction. Try another wallet.');
 }
