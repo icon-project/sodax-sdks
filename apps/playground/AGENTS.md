@@ -25,6 +25,7 @@ pnpm check:ai-dev-files
 - `lib/activity.ts`: validated local recovery record and reconstruction of relay submissions.
 - `lib/widgetSettings.ts`, `lib/urlState.ts`: validated public embed configuration.
 - `lib/brand.ts`, `hooks/useBrand.ts`: theme validation and derived semantic styles.
+- `lib/presets.ts`: named starting brands, declared as query strings and parsed by `readBrand`.
 - `views/SwapView.tsx`: standalone widget plus separate builder controls; code starts collapsed.
 - `lib/snippet.ts`: HTML and React iframe integration, plus an optional quote example.
 - `hooks/useEmbedSize.ts`: height-only messages to the host; exports check origin and frame identity.
@@ -61,7 +62,8 @@ pnpm check:ai-dev-files
 - Use native dialogs, keyboard-operable controls, readable errors and responsive layouts. Keep partner
   controls and technical setup in the builder, not inside the user's swap form.
 - Preserve the SODAX B2B palette and semantic CSS roles. Brand overrides validate values and derive
-  contrast. Theme resolves pre-paint in `index.html` and must agree with `useBrand`.
+  contrast. Theme resolves pre-paint in `index.html` and must agree with `useBrand`. A preset seeds
+  that same state; it must not name a real third-party brand or load a font outside `FONT_STACKS`.
 - No UI framework or icon-library dependency. Import SDK/types through `@sodax/dapp-kit`.
 - `polyfill.ts` must remain the first entry import; the SDK graph needs `Buffer` during evaluation.
 - The bridge view remains unmounted; do not turn the swap widget into a multi-product dashboard.

@@ -48,6 +48,18 @@ export function applyBrandStyles(css: string): void {
   if (!existing) document.head.append(element);
 }
 
+/**
+ * A theme the visitor picked is also this page's own preference, so it survives a reload with no
+ * parameters. `auto` and a reset clear it again — otherwise "follow the visitor" would keep
+ * answering with a choice they had already taken back.
+ */
+function pinTheme(theme: ThemeChoice | undefined): void {
+  try {
+    if (theme === 'light' || theme === 'dark') localStorage.setItem(THEME_STORAGE_KEY, theme);
+    else localStorage.removeItem(THEME_STORAGE_KEY);
+  } catch {}
+}
+
 export type BrandControls = ReturnType<typeof useBrand>;
 
 /**
@@ -78,16 +90,22 @@ export function useBrand() {
   }, [theme]);
 
   const update = useCallback(<K extends keyof Brand>(key: K, value: Brand[K]) => {
-    // A pinned theme is also this page's own preference, so it survives a reload with no parameters.
-    if (key === 'theme' && (value === 'light' || value === 'dark')) {
-      try {
-        localStorage.setItem(THEME_STORAGE_KEY, value);
-      } catch {}
-    }
+    if (key === 'theme') pinTheme(value as ThemeChoice | undefined);
     setBrand(previous => ({ ...previous, [key]: value }));
   }, []);
 
-  const reset = useCallback(() => setBrand(NO_BRAND), []);
+  /**
+   * Every field at once, for a preset. The controls then edit it like any other brand.
+   *
+   * Deliberately does not pin the theme: trying on a dark preset is a preview, not the visitor
+   * saying they want this page dark. Pinning it here left every later reset stuck on dark.
+   */
+  const apply = useCallback((next: Brand) => setBrand(next), []);
 
-  return { brand, theme, notes, isBranded: isBranded(brand), update, reset };
+  const reset = useCallback(() => {
+    pinTheme(undefined);
+    setBrand(NO_BRAND);
+  }, []);
+
+  return { brand, theme, notes, isBranded: isBranded(brand), update, apply, reset };
 }

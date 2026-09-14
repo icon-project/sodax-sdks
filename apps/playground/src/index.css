@@ -70,6 +70,9 @@
 
   /* Typography */
   --font-body: "Inter", system-ui, sans-serif;
+  /* The app's own face, never rewritten by a brand — for the few controls that must not reflow
+     while a visitor is switching between type choices. `--font-body` is theirs to replace. */
+  --font-ui: "Inter", system-ui, sans-serif;
   --font-display: "Inria Serif", Georgia, serif;
   --font-accent: "Shrikhand", "Inria Serif", Georgia, serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -92,6 +95,8 @@
   --radius-regular: 16px;
   --radius-inset: 12px;
   --radius-small: 8px;
+  /* Buttons, badges and the search field. A round image keeps its own 9999px — see RADIUS_SCALES. */
+  --radius-pill: 9999px;
 }
 
 @media (width < 640px) {
@@ -480,27 +485,34 @@ code,
 }
 .network-settings {
   border: 0;
-  padding: 12px 0;
+  padding: 8px 0 0;
   margin: 0;
   min-width: 0;
 }
 .network-settings legend {
   font-weight: 600;
 }
+/* Every supported network, listed twice on one panel. A single scrolling column pushed the rest of
+   the tab past the fold, so they wrap into as many columns as the panel is wide. */
 .network-checks {
-  max-height: 160px;
-  overflow-y: auto;
-  margin-top: 8px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(164px, 1fr));
+  gap: 0 var(--space-16);
+  margin-top: 6px;
 }
 .network-checks label {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 7px 0;
+  min-width: 0;
+  padding: 3px 0;
   font-size: 13px;
 }
-.network-checks label span:last-child {
+/* Only the "Quote only" tag is pushed right. Keyed on the tag, not `:last-child` — a network with
+   no tag is its own last child, which right-aligned the name and made the rows look unrelated. */
+.network-checks label .muted {
   margin-left: auto;
+  white-space: nowrap;
 }
 .swap-fields {
   border: 0;
@@ -1073,7 +1085,7 @@ code,
   width: min(264px, 100%);
   height: 48px;
   padding: 0 var(--space-16) 0 var(--space-24);
-  border-radius: 9999px;
+  border-radius: var(--radius-pill);
   outline: 4px solid var(--panel-halo);
   outline-offset: -4px;
   color: var(--text-muted);
@@ -1111,7 +1123,7 @@ code,
   flex: none;
   padding: 4px 0 4px var(--space-8);
   border: 0;
-  border-radius: 9999px;
+  border-radius: var(--radius-pill);
   background: none;
   color: var(--text-muted);
   font-family: var(--font-body);
@@ -1465,7 +1477,7 @@ code,
   gap: var(--space-8);
   height: 36px;
   border: 1px solid var(--ghost-border);
-  border-radius: 9999px;
+  border-radius: var(--radius-pill);
   background: var(--ghost-bg);
   color: var(--ghost-fg);
   font-family: var(--font-body);
@@ -1589,7 +1601,7 @@ code,
 .pill {
   display: inline-flex;
   align-items: center;
-  border-radius: 9999px;
+  border-radius: var(--radius-pill);
   padding: 7px 14px;
   background: var(--bubble-bg);
   color: var(--bubble-fg);
@@ -1803,7 +1815,7 @@ code,
   z-index: 5;
   width: max-content;
   padding: var(--space-8) var(--space-16);
-  border-radius: 9999px;
+  border-radius: var(--radius-pill);
   background: var(--tooltip-bg);
   box-shadow:
     0 10px 15px -3px rgb(0 0 0 / 10%),
@@ -1938,6 +1950,50 @@ code,
   color: var(--code-inline-fg);
 }
 
+/* One wrapping row against this card's height budget: a chip is the swatch trio plus its name, and
+   the register it suits is the `title`, the way the per-field hints below are. */
+.preset-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+/* A chooser that reflows as you choose with it is a bug, so a chip's size is fixed against all
+   three shape axes a preset carries: its own font rather than the brand's, and literal spacing
+   rather than the density scale. Only the swatches move. */
+.preset-chip {
+  gap: 6px;
+  height: 30px;
+  padding: 4px 10px;
+  font-family: var(--font-ui);
+  font-size: var(--text-caption);
+}
+
+.preset-chip[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--text-heading);
+}
+
+/* Surface, accent and button, overlapped so three colours read as one mark at 14px. */
+.preset-swatch {
+  display: flex;
+  flex: none;
+}
+
+.preset-swatch span {
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 9999px;
+}
+
+.preset-swatch span + span {
+  margin-left: -5px;
+}
+
 /* Four across on the demo's right column, so eight controls are two rows rather than four. */
 .brand-grid {
   display: grid;
@@ -2002,13 +2058,6 @@ code,
 .brand-clear {
   height: 22px;
   padding: 0 8px;
-  font-size: var(--text-caption);
-}
-
-.brand-reset {
-  flex: none;
-  height: 28px;
-  padding: 0 12px;
   font-size: var(--text-caption);
 }
 

@@ -21,12 +21,17 @@
 const THEME_CHOICES = { light: null, dark: null, auto: null } as const;
 export type ThemeChoice = keyof typeof THEME_CHOICES;
 
-/** Only cards, panels and insets — every pill and disc in the sheet is a hardcoded 9999px. */
+/**
+ * Cards, panels, insets — and `pill`, which is what buttons, badges and the search field take.
+ * A disc stays a hardcoded 9999px: a token logo and a chain badge are round images, not shapes a
+ * brand gets to restyle. Without `pill` a squared-off brand still rendered pill buttons, which is
+ * the single loudest shape in the widget and made every palette read as the same product.
+ */
 export const RADIUS_SCALES = {
-  square: { large: '0px', regular: '0px', inset: '0px', small: '0px' },
-  sharp: { large: '8px', regular: '6px', inset: '4px', small: '3px' },
-  soft: { large: '24px', regular: '16px', inset: '12px', small: '8px' },
-  round: { large: '32px', regular: '24px', inset: '18px', small: '12px' },
+  square: { large: '0px', regular: '0px', inset: '0px', small: '0px', pill: '0px' },
+  sharp: { large: '8px', regular: '6px', inset: '4px', small: '3px', pill: '4px' },
+  soft: { large: '24px', regular: '16px', inset: '12px', small: '8px', pill: '9999px' },
+  round: { large: '32px', regular: '24px', inset: '18px', small: '12px', pill: '9999px' },
 } as const;
 export type RadiusChoice = keyof typeof RADIUS_SCALES;
 
@@ -36,6 +41,9 @@ export type RadiusChoice = keyof typeof RADIUS_SCALES;
  */
 export const FONT_STACKS = {
   inter: '"Inter", system-ui, sans-serif',
+  manrope: '"Manrope", system-ui, sans-serif',
+  grotesk: '"Space Grotesk", system-ui, sans-serif',
+  archivo: '"Archivo", system-ui, sans-serif',
   system: 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
   helvetica: '"Helvetica Neue", Helvetica, Arial, sans-serif',
   serif: '"Inria Serif", Georgia, "Times New Roman", serif',
@@ -218,6 +226,11 @@ function lift(hex: string, weight: number): string {
   return mix(hex, ink(hex) === INK_DARK ? INK_LIGHT : INK_DARK, weight);
 }
 
+/** Both themes frame the app in something darker than the card, so this one goes to black either way. */
+function darken(hex: string, weight: number): string {
+  return mix(hex, '#000000', weight);
+}
+
 /** Nudges a colour toward the surface's ink until it clears `target`, so brand text stays readable. */
 function readable(color: string, surface: string, target: number): { value: string; corrected: boolean } {
   if (contrast(color, surface) >= target) return { value: color, corrected: false };
@@ -249,6 +262,11 @@ function colorRoles(brand: Brand, theme: 'light' | 'dark'): { decls: Declaration
       '--surface-page': surface,
       '--surface-embed': surface,
       '--form-surface': surface,
+      // The demo page's own frame and stage. Left alone, a partner's palette sat in a cherry
+      // surround on our gradient, which read as our page holding their widget.
+      '--surface-ground': darken(surface, onSurface === INK_DARK ? 0.26 : 0.45),
+      '--stage-bg': surface,
+      '--stage-border': step(surface, 0.04),
       '--surface-inset': step(surface, 0.04),
       '--surface-note': step(surface, 0.04),
       '--panel-halo': step(surface, 0.09),
@@ -315,6 +333,7 @@ function shapeRoles(brand: Brand): Declarations {
     decls['--radius-regular'] = scale.regular;
     decls['--radius-inset'] = scale.inset;
     decls['--radius-small'] = scale.small;
+    decls['--radius-pill'] = scale.pill;
   }
 
   if (brand.font) {

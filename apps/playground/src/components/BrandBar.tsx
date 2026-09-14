@@ -8,6 +8,7 @@ import {
   RADIUS_SCALES,
   readBrandField,
 } from '../lib/brand';
+import { PRESETS, SODAX_SWATCH, activePreset } from '../lib/presets';
 
 /** Hints are `title` tooltips, not a line under each cell: eight of those cost ~90px of height. */
 const COLOR_FIELDS: readonly { key: ColorField; label: string; hint: string }[] = [
@@ -31,7 +32,7 @@ const CHOICE_FIELDS = [
     label: 'Radius',
     choices: RADIUS_SCALES,
     fallback: 'soft',
-    hint: 'Cards and panels; pills stay round',
+    hint: 'Cards, panels and buttons; round images stay round',
   },
   {
     key: 'font',
@@ -55,22 +56,60 @@ const CHOICE_FIELDS = [
   hint: string;
 }[];
 
+const ROLES = ['surface', 'accent', 'button'] as const;
+
+/** Surface, accent and button, overlapped so a preset reads as one mark at chip size. */
+function Swatch({ colors }: { colors: readonly (string | undefined)[] }) {
+  return (
+    <span className="preset-swatch" aria-hidden="true">
+      {/* Fixed three roles, not a reorderable list, so the position is the identity. */}
+      {ROLES.map((role, index) => (
+        <span key={role} style={{ background: colors[index] }} />
+      ))}
+    </span>
+  );
+}
+
 /** Edits the same validated brand state carried by the exported embed. */
 export function BrandBar({ controls }: { controls: BrandControls }) {
-  const { brand, notes, isBranded, update, reset } = controls;
+  const { brand, notes, isBranded, update, apply, reset } = controls;
+  const active = activePreset(brand);
 
   return (
     <section className="brand-card card">
       <header className="brand-head">
         <h3 className="brand-title">Theme &amp; brand</h3>
-        <button type="button" className="btn brand-reset" onClick={reset} disabled={!isBranded}>
-          Reset to SODAX
-        </button>
       </header>
 
-      <p className="brand-lead small">
-        Match the widget to your app. Changes appear instantly and carry into your embed.
-      </p>
+      <p className="brand-lead small">Pick a preset or set your own. It all carries into your embed.</p>
+
+      {/* SODAX sits in the shelf rather than beside it: it is the default look, a peer of the other
+          five, and as a chip it can show itself selected — which a "Reset" button never could. */}
+      <fieldset className="preset-row" aria-label="Style presets">
+        <button
+          type="button"
+          className="btn preset-chip"
+          title="The widget's own look — follows your light or dark setting"
+          aria-pressed={!isBranded}
+          onClick={reset}
+        >
+          <Swatch colors={SODAX_SWATCH} />
+          SODAX
+        </button>
+        {PRESETS.map(preset => (
+          <button
+            type="button"
+            className="btn preset-chip"
+            key={preset.id}
+            title={preset.blurb}
+            aria-pressed={active?.id === preset.id}
+            onClick={() => apply(preset.brand)}
+          >
+            <Swatch colors={[preset.brand.surface, preset.brand.accent, preset.brand.cta]} />
+            {preset.label}
+          </button>
+        ))}
+      </fieldset>
 
       <div className="brand-grid">
         {COLOR_FIELDS.map(field => (
