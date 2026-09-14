@@ -27,9 +27,13 @@ cp .env.example .env   # adjust VITE_SWAPS_API_BASE_URL if needed (defaults to c
 pnpm --filter swap-api-example dev
 ```
 
+`VITE_SWAPS_API_BASE_URL` is the gateway root including its version prefix. A
+legacy `/be` suffix is trimmed with a console warning; an unset or non-HTTP(S)
+value falls back to `https://canary-api.sodax.com/v1`.
+
 Optional: set `VITE_SODAX_API_KEY` to send a partner API key as `x-api-key` on every
-swaps API call (`new SwapsApi({ baseUrl, apiKey })`). Browser-bundled keys are public;
-unset is fine until the backend enforces the key.
+swaps API call (`new SwapsApi({ baseUrl, timeout, apiKey })`). Browser-bundled keys
+are public; unset is fine until the backend enforces the key.
 
 Open http://localhost:3001, connect an EVM wallet, pick a source/destination
 token, enter an amount, and Swap. Quotes work for any chain; on-chain execution

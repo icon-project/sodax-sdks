@@ -1,4 +1,4 @@
-import type { Address, HttpUrl } from '@sodax/dapp-kit';
+import { DEFAULT_API_BASE_URL, type Address, type HttpUrl } from '@sodax/dapp-kit';
 import { readJson, writeJson } from './storage';
 
 // Persisted "Sodax Settings" overrides (the header modal). `null` = unset — the effective
@@ -163,3 +163,17 @@ export const envBridgeApiBaseUrl: HttpUrl | undefined = isHttpUrl(bridgeApiBaseU
 // targets the packaged gateway (VITE_SPONSORING_API_KEY is only for an independently hosted one).
 const sodaxApiKeyEnv: unknown = import.meta.env.VITE_SODAX_API_KEY;
 export const envSodaxApiKey: string | undefined = nonEmptyEnv(sodaxApiKeyEnv) ? sodaxApiKeyEnv : undefined;
+
+/**
+ * The swaps base URL the SDK actually resolves for the demo, mirroring `layerConfigs` precedence:
+ * `swapsApiConfig` > `baseApiConfig` > packaged default. Shared by the provider and the Swaps API
+ * page's direct client so submission and status polling cannot target different deployments.
+ */
+export function effectiveSwapsApiBaseUrl(settings: SodaxSettings): HttpUrl {
+  return settings.swapsApiBaseUrl ?? envSwapsApiBaseUrl ?? settings.apiBaseUrl ?? DEFAULT_API_BASE_URL;
+}
+
+/** The `x-api-key` the SDK sends, so a direct client authenticates with the same credential. */
+export function effectiveSodaxApiKey(settings: SodaxSettings): string | undefined {
+  return settings.apiKey ?? envSodaxApiKey;
+}
