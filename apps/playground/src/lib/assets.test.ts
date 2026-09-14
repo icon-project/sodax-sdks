@@ -7,7 +7,7 @@ import {
   getSupportedSolverTokens,
 } from '@sodax/dapp-kit';
 import { describe, expect, it } from 'vitest';
-import { pickChain, pickToken, readSwapAssets, tokensOn } from './assets';
+import { EXCLUDED_CHAINS, pickChain, pickToken, readSwapAssets, tokensOn } from './assets';
 
 function apiToken(symbol: string, address: string, decimals = 18): SwapTokenV2 {
   return {
@@ -34,6 +34,22 @@ const RESPONSE: GetSwapTokensResponseV2 = {
 describe('readSwapAssets', () => {
   it('is empty before the list arrives', () => {
     expect(readSwapAssets(undefined)).toEqual({ chains: [], choices: [], assetCount: 0 });
+  });
+
+  // The API still lists Icon; the widget must not offer it, quote it, or resolve a link to it.
+  it('drops an excluded chain the API still lists', () => {
+    const assets = readSwapAssets({
+      ...RESPONSE,
+      [ChainKeys.ICON_MAINNET]: [apiToken('ICX', 'cx0000000000000000000000000000000000000000')],
+    });
+    expect(assets.chains).not.toContain(ChainKeys.ICON_MAINNET);
+    expect(assets.choices.some(({ token }) => token.symbol === 'ICX')).toBe(false);
+    expect(tokensOn(assets, ChainKeys.ICON_MAINNET)).toEqual([]);
+    expect(pickChain(assets, ChainKeys.ICON_MAINNET, 0)).not.toBe(ChainKeys.ICON_MAINNET);
+  });
+
+  it('excludes Icon', () => {
+    expect(EXCLUDED_CHAINS.has(ChainKeys.ICON_MAINNET)).toBe(true);
   });
 
   it('reaches non-EVM chains, which is the whole reason the list comes from the API', () => {

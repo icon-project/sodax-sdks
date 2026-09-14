@@ -16,14 +16,37 @@ The dev server uses port 3005. Copy `example.env` to `.env` for deployment setti
 
 ## Execution coverage
 
-The widget currently implements EVM, Solana and Sui source and destination wallet connections.
-Both sides of a route must be executable to use the in-widget signing flow. The destination is the
-connected account for its chain family; same-family swaps use that family's connected account.
+The widget implements EVM, Solana, Sui, Stellar, NEAR, Stacks and Injective source and destination
+wallet connections — the list is `EXECUTABLE_CHAIN_TYPES` in `src/lib/execution.ts`. Both sides of a
+route must be executable to use the in-widget signing flow. The destination is the connected account
+for its chain family; same-family swaps use that family's connected account.
+
+**Bitcoin** is deliberately excluded: it settles through a funded Bound trading wallet rather than a
+signed swaps-API payload, so it is a separate flow rather than another connector.
 
 The swaps API supplies the wider network/token list. Other routes remain available for quotes, with
 an explicit **Continue on SODAX** handoff. That handoff opens the exchange; it does not prefill the
-trade. Bitcoin's Bound trading-wallet setup and Stellar/NEAR destination account preparation are not
-implemented here. Do not advertise the quote network count as executable coverage.
+trade. Do not advertise the quote network count as executable coverage.
+
+`EXCLUDED_CHAINS` in `src/lib/assets.ts` drops a chain from the widget entirely — not offered, not
+quoted, not resolvable from a link — for networks the product no longer routes even while the API
+still lists them. Removing a chain from the widget means adding it there, not filtering in the UI.
+
+### Destination prerequisites
+
+Stellar and NEAR can accept a swap the recipient cannot receive, which would strand the funds after
+they leave the source chain. `src/lib/destinationGate.ts` reduces the dapp-kit gates to one state the
+form renders, and execution stays blocked while a gate is unmet **or still resolving**:
+
+| Destination | Prerequisite | In-widget remedy |
+| --- | --- | --- |
+| Stellar | Account activated | **Activate account** |
+| Stellar | Trustline for the asset | **Add trustline** |
+| Stellar | Spendable XLM to add that trustline | None — the recipient must fund it |
+| NEAR | NEP-141 storage registered for the token | **Register storage** |
+
+Activation is checked before the trustline: an unactivated account also reports a missing trustline,
+and offering the trustline first would fail.
 
 The hosted iframe has its own wallet session. Its React export wraps that iframe; it does not accept
 the host application's wallet provider. Wallet detection in iframes varies by browser/extension.
