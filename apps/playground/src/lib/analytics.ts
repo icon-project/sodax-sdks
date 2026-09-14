@@ -20,7 +20,24 @@ export type EventName =
   | 'quote_failed'
   | 'exchange_handoff_clicked'
   | 'embed_snippet_copied'
-  | 'partner_fee_set';
+  | 'partner_fee_set'
+  | 'swap_submitted'
+  | 'swap_completed'
+  | 'swap_failed';
+
+/**
+ * Why a swap stopped: the phase it broke in, or how settlement ended. A closed set, so the GA4
+ * dimension stays groupable — never a raw error message, which would leak internals into a report.
+ */
+export type SwapFailureReason =
+  | 'rejected'
+  | 'checking'
+  | 'approving'
+  | 'building'
+  | 'signing'
+  | 'submitting'
+  | 'settlement_failed'
+  | 'abandoned';
 
 export type PairDimensions = {
   source_chain: string;
@@ -123,4 +140,22 @@ export function trackSnippetCopied(snippetId: string): void {
 /** Basis points only — the recipient address is the partner's. */
 export function trackPartnerFeeSet(feeBps: number): void {
   track('partner_fee_set', { fee_bps: feeBps });
+}
+
+/**
+ * The execution funnel, under the frontend's `swap_completed` name so widget swaps land in the
+ * same GA4 report as sodax.com's. Two of the frontend's parameters are deliberately absent:
+ * `transaction_hash`, because a framed widget must not emit hashes, and `input_amount_usd`,
+ * because nothing here prices the input — `input_amount` carries token units instead.
+ */
+export function trackSwapSubmitted(pair: PairDimensions): void {
+  track('swap_submitted', { ...pair });
+}
+
+export function trackSwapCompleted(pair: PairDimensions): void {
+  track('swap_completed', { ...pair });
+}
+
+export function trackSwapFailed(pair: PairDimensions, reason: SwapFailureReason): void {
+  track('swap_failed', { ...pair, reason });
 }

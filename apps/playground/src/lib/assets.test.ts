@@ -93,7 +93,10 @@ describe('readSwapAssets', () => {
   it('drops a hub share by address even when the API adopts its on-chain symbol', () => {
     const onChainSymbols = {
       ...RESPONSE,
-      [ChainKeys.SONIC_MAINNET]: [apiToken('BTC', SodaTokens.sodaBTC.address, 8), apiToken('TSLA', SodaTokens.TSLA.address)],
+      [ChainKeys.SONIC_MAINNET]: [
+        apiToken('BTC', SodaTokens.sodaBTC.address, 8),
+        apiToken('TSLA', SodaTokens.TSLA.address),
+      ],
     };
     const choices = readSwapAssets(onChainSymbols).choices;
 

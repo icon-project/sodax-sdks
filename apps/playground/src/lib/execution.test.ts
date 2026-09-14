@@ -6,7 +6,14 @@ import {
   type ISuiWalletProvider,
 } from '@sodax/dapp-kit';
 import { describe, expect, it, vi } from 'vitest';
-import { executeSwap, canExecute, toIntentRequest, broadcast, type ExecutionDependencies } from './execution';
+import {
+  executeSwap,
+  canExecute,
+  toIntentRequest,
+  broadcast,
+  isUserRejection,
+  type ExecutionDependencies,
+} from './execution';
 import { readActivity, submissionFor, type Activity } from './activity';
 
 const address = '0x1234567890abcdef1234567890abcdef12345678';
@@ -215,5 +222,14 @@ describe('activity recovery', () => {
     expect(readActivity(JSON.stringify({ ...activity, srcChainKey: 'toString' }))).toBeUndefined();
     expect(readActivity(JSON.stringify({ ...activity, intent: { ...intent, inputAmount: '1.5' } }))).toBeUndefined();
     expect(readActivity(JSON.stringify({ ...activity, txHash: '<script>' }))).toBeUndefined();
+  });
+});
+
+describe('isUserRejection', () => {
+  it('separates a declined signature from a real failure, so the two do not share a reason', () => {
+    expect(isUserRejection(new Error('User rejected the request'))).toBe(true);
+    expect(isUserRejection(new Error('MetaMask Tx Signature: User denied transaction signature'))).toBe(true);
+    expect(isUserRejection(new Error('insufficient funds for gas'))).toBe(false);
+    expect(isUserRejection('not an error')).toBe(false);
   });
 });

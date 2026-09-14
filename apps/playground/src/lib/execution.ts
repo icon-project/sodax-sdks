@@ -126,9 +126,13 @@ export async function executeSwap(body: CreateIntentParamsV2, deps: ExecutionDep
   if (!submitted.value.success) throw new Error('The relay has not accepted this swap yet. Retry tracking.');
 }
 
+export function isUserRejection(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : '';
+  return /reject|denied|cancelled by user|canceled by user/i.test(message);
+}
+
 export function executionError(error: unknown): string {
   const message = error instanceof Error ? error.message : 'Could not complete this step. Please try again.';
-  if (/reject|denied|cancelled by user|canceled by user/i.test(message))
-    return 'Request declined in your wallet. You can try again.';
+  if (isUserRejection(error)) return 'Request declined in your wallet. You can try again.';
   return message;
 }

@@ -246,6 +246,7 @@ export function useSwapFlow({ brand }: SwapFlowOptions) {
     inputAmount,
     minOutputAmount,
     partnerFee,
+    pair,
     ready:
       !!srcChain &&
       sourceNetworks.includes(srcChain) &&

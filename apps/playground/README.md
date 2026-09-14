@@ -56,6 +56,41 @@ the recipient or rate. There are no fee fields that silently disappear when an e
 All Vite variables are public browser configuration. The wallet providers use their SDK defaults for
 RPCs; production deployments should validate those endpoints against their expected traffic.
 
+## Analytics
+
+Events go to the GTM dataLayer under GA4 naming, using the same parameter names as sodax.com, so a
+widget swap lands in the reports the frontend's dimensions are already registered against.
+
+| Event | Fires when |
+| --- | --- |
+| `widget_viewed` | The widget loads and the container is allowed to run. |
+| `quote_received` / `quote_failed` | A configured pair settles on a quote — once per pair, not per refetch. |
+| `exchange_handoff_clicked` | A quote-only route hands off to the exchange. |
+| `embed_snippet_copied`, `partner_fee_set` | Builder actions. Fee events carry basis points, never the recipient. |
+| `swap_submitted` | The deposit is signed and broadcast. |
+| `swap_completed` | Settlement reports `solved`. |
+| `swap_failed` | The flow threw, or settlement ended `failed` / abandoned. |
+
+Two of the frontend's `swap_completed` parameters are deliberately **absent** here: `transaction_hash`,
+because a widget running in a partner's frame must not emit hashes, and `input_amount_usd`, because
+nothing in this app prices the input — `input_amount` carries token units instead. Reports that join
+widget and site swaps must account for that. `swap_failed` carries a closed `reason` set (the phase it
+broke in, `rejected`, `settlement_failed` or `abandoned`), never a raw error string.
+
+Swap dimensions are captured at signing, so editing the form while a swap settles cannot relabel it.
+The trade-off: an activity restored from local storage after a page reload has no captured
+dimensions, so its settlement reports nothing — `swap_completed` undercounts reloads.
+
+## Not yet
+
+- **Docs.** The widget is not yet on docs.sodax.com: it has no `docs/` page, no
+  `scripts/docs-pages-map.json` entry and no `docs.json` nav entry. Planned, not done.
+- **CI.** `Build Apps` in `.github/workflows/ci.yml` does not build this app, so a broken
+  production build is not caught before deploy.
+- **Bundle.** The entry chunk is a single ~10.6 MB (~2.5 MB gzipped) file with no code splitting,
+  and it includes wallet code for families this widget cannot execute.
+- **`swap_completed` after a reload.** See the analytics trade-off above.
+
 ## Embed parameters
 
 `?embed=1` removes the builder and page header. Use **Copy embed** for the full integration, including

@@ -23,6 +23,7 @@ pnpm check:ai-dev-files
 - `hooks/useExecution.ts`: accounts, balances, review, approvals, signing and activity tracking.
 - `lib/execution.ts`: testable execution sequencing and validated wallet-family dispatch.
 - `lib/activity.ts`: validated local recovery record and reconstruction of relay submissions.
+- `lib/analytics.ts`: GA4 event vocabulary and the tag policy that keeps partner frames opt-in.
 - `lib/widgetSettings.ts`, `lib/urlState.ts`: validated public embed configuration.
 - `lib/brand.ts`, `hooks/useBrand.ts`: theme validation and derived semantic styles.
 - `lib/presets.ts`: named starting brands, declared as query strings and parsed by `readBrand`.
@@ -59,6 +60,8 @@ pnpm check:ai-dev-files
 - The hosted iframe owns its wallet session. Do not describe its React wrapper as a native component
   sharing the host wallet. Keep the standalone-opening fallback for wallets unavailable in frames.
 - Analytics in partner frames remains opt-in through `VITE_GTM_IN_EMBED`; no wallet addresses or hashes.
+  Swap events reuse sodax.com's GA4 parameter names but must keep omitting `transaction_hash`, and
+  `input_amount_usd` while nothing here prices the input. Failure reasons stay a closed set.
 - Use native dialogs, keyboard-operable controls, readable errors and responsive layouts. Keep partner
   controls and technical setup in the builder, not inside the user's swap form.
 - Preserve the SODAX B2B palette and semantic CSS roles. Brand overrides validate values and derive

@@ -25,7 +25,21 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import { formatUnits } from 'viem';
 import { loadActivity, saveActivity, submissionFor, type Activity } from '../lib/activity';
-import { broadcast, canExecute, executeSwap, executionError, type ExecutionPhase } from '../lib/execution';
+import {
+  type PairDimensions,
+  trackSwapCompleted,
+  trackSwapFailed,
+  trackSwapSubmitted,
+  type SwapFailureReason,
+} from '../lib/analytics';
+import {
+  broadcast,
+  canExecute,
+  executeSwap,
+  executionError,
+  isUserRejection,
+  type ExecutionPhase,
+} from '../lib/execution';
 
 function spokeKey(chain: ChainKey | undefined): SpokeChainKey | undefined {
   return chain && isSpoke(chain) ? chain : undefined;
@@ -43,6 +57,7 @@ type ExecutionInput = {
   inputAmount: bigint | undefined;
   minOutputAmount: bigint | undefined;
   partnerFee: PartnerFeePercentage | undefined;
+  pair: PairDimensions | undefined;
   ready: boolean;
 };
 
@@ -78,6 +93,10 @@ export function useExecution(input: ExecutionInput) {
   const [error, setError] = useState<string>();
   const [review, setReview] = useState<CreateIntentParamsV2>();
   const busyRef = useRef(false);
+  const phaseRef = useRef<ExecutionPhase>('checking');
+  // Dimensions as they were at signing, so a form edited while the swap settles cannot relabel it.
+  const submittedPair = useRef<PairDimensions | undefined>(undefined);
+  const settledTx = useRef<string | undefined>(undefined);
   const { mutateAsync: approve } = useSwapsApiApproveAndBroadcast();
   const statusQuery = useSwapsApiSubmitTxStatus({
     params: { txHash: activity?.txHash, srcChainKey: activity?.srcChainKey },
@@ -89,6 +108,17 @@ export function useExecution(input: ExecutionInput) {
   useEffect(() => {
     if (connection.status === 'success') setConnectType(undefined);
   }, [connection.status]);
+
+  // Settlement, not signing, is where a swap is done. Once per transaction; an activity restored
+  // from storage after a reload carries no captured dimensions and so reports nothing.
+  useEffect(() => {
+    const pair = submittedPair.current;
+    const txHash = activity?.txHash;
+    if (!terminal || !txHash || !pair || settledTx.current === txHash) return;
+    settledTx.current = txHash;
+    if (status?.status === 'solved') trackSwapCompleted(pair);
+    else trackSwapFailed(pair, status?.abandonedAt ? 'abandoned' : 'settlement_failed');
+  }, [terminal, status, activity?.txHash]);
 
   const fingerprint = `${input.srcChain}|${input.dstChain}|${input.srcToken?.address}|${input.dstToken?.address}|${input.amount}|${input.partnerFee?.address}|${input.partnerFee?.percentage}|${source?.address}|${destination?.address}`;
   useEffect(() => {
@@ -138,6 +168,7 @@ export function useExecution(input: ExecutionInput) {
   const confirm = async () => {
     if (!review || !wallet || !input.srcChain || !input.dstChain || busyRef.current || activity) return;
     busyRef.current = true;
+    phaseRef.current = 'checking';
     setPhase('checking');
     setError(undefined);
     try {
@@ -157,7 +188,10 @@ export function useExecution(input: ExecutionInput) {
           await approve({ body, walletProvider: wallet });
         },
         sign: tx => broadcast(srcChainKey, tx, wallet),
-        onPhase: setPhase,
+        onPhase: next => {
+          phaseRef.current = next;
+          setPhase(next);
+        },
         onBroadcast: (request, intent) => {
           const next: Activity = {
             txHash: request.txHash,
@@ -173,11 +207,19 @@ export function useExecution(input: ExecutionInput) {
           setStorageAvailable(saveActivity(next));
           setActivity(next);
           setReview(undefined);
+          if (input.pair) {
+            submittedPair.current = input.pair;
+            trackSwapSubmitted(input.pair);
+          }
         },
       });
       void balanceQuery.refetch();
     } catch (cause) {
       setError(executionError(cause));
+      if (input.pair) {
+        const reason: SwapFailureReason = isUserRejection(cause) ? 'rejected' : phaseRef.current;
+        trackSwapFailed(input.pair, reason);
+      }
     } finally {
       busyRef.current = false;
       setPhase(undefined);
