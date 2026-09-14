@@ -91,6 +91,8 @@ Each vault registers a DefiLlama `poolId` in `@sodax/types`:
 |---|---|---|---|
 | `lsodaWEETH` | weETH | `ether.fi-stake` | `46bd2bdf-6d92-4066-b482-e885ee172264` |
 | `lsodaWSTETH` | wstETH | `lido` (via stETH) | `747c1d2a-c668-4682-b9f9-296708a3dd90` |
+| `lsodaJITOSOL` | JitoSOL | `jito-liquid-staking` | `0e7d0722-9054-4907-8593-567b353c0900` |
+| `lsodaSUSDS` | sUSDS | `sky-lending` (SSR) | `d8c4eff5-c8a9-46fc-a888-057c4c668e72` |
 
 The endpoint is CORS-enabled (`access-control-allow-origin: *`) so a browser-side dApp can hit it directly — no backend required.
 
