@@ -60,8 +60,8 @@ export function formatSwapsApiError(error: unknown, fallback: string): string {
  * is gated on `isSodaxError`, and a `SwapsApiError` only becomes one after passing through
  * `SwapsApiService`, which this page bypasses by design.
  *
- * `error` is typed `Error` rather than `unknown` because React Query infers a query's `TError` from
- * this signature, and `unknown` there would make every `query.error` unrenderable.
+ * `error` is typed `Error` rather than `unknown` to match React Query's default `TError` (`Error`),
+ * so `query.error` stays a renderable `Error`; `unknown` here would only widen it needlessly.
  */
 export const retryUnlessSwapsApiAuthFailure = (failureCount: number, error: Error): boolean =>
   !(error instanceof SwapsApiError && isAuthStatus(error.context.status)) && failureCount < 3;
