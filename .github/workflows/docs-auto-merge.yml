@@ -115,8 +115,9 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           PR: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PAGES: ${{ steps.classify.outputs.pages }}
-        run: .github/scripts/retitle-docs-pr.sh "$PR"
+        run: .github/scripts/retitle-docs-pr.sh "$PR" "$HEAD_SHA"
 
       # The same HEAD_SHA the classifier read, so the approval cannot land on a commit a
       # later push put there.

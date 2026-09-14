@@ -34,6 +34,12 @@ case "$AUTO_MERGE" in
   *) echo 'could not determine auto-merge state' >&2; exit 1 ;;
 esac
 
+# A generated title and page list are App state too, and need reverting even once the approval
+# and queued merge behind them are gone.
+case "$(gh pr view "$PR" --json body --jq '.body')" in
+  *'<!-- docs-auto-merge:title'*) verdict true; exit 0 ;;
+esac
+
 # Without minting, the App login is unknown; conservatively check any active bot approval.
 APPROVALS=$(gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR}/reviews" \
   --jq '.[] | select(.state == "APPROVED" and .user.type == "Bot") | .id')

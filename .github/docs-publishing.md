@@ -117,6 +117,14 @@ accepted, sets it as the PR title, and prepends that list to the description bet
 Mintlify's body and editor link below it. Marketing types nothing; a title they do type is
 replaced, because the page list is what the commit on `main` has to name.
 
+It takes the same head pin the approval does, so a push landing after classification is titled
+by its own run rather than this one. The block banks the title it replaced in a
+`<!-- docs-auto-merge:title … -->` line, which is what lets withdrawal put it back. Only a
+complete marker pair is stripped, and with the blank line that followed it: a re-run therefore
+leaves the description byte-identical rather than growing the gap above it, and a body carrying
+one unmatched marker is left alone instead of truncated there. The block-handling itself lives
+in [`docs-pr-body.sh`](scripts/docs-pr-body.sh), sourced by the two scripts that need it.
+
 It also publishes that subject as a step output, which
 [`approve-docs-pr.sh`](scripts/approve-docs-pr.sh) passes to the merge as `--subject`. That is
 what keeps this to the docs lane: the subject is named for this one merge, so the repository
@@ -146,8 +154,14 @@ the one that queued it, and dismisses the App's approval separately. The two are
 on purpose: `dismiss_stale_reviews_on_push` usually flips the approval to `DISMISSED` before
 the workflow runs, so a guard looking for a live approval would leave the queued merge armed
 for the next human one. Both are scoped to the App, so a maintainer who approves or enables
-auto-merge by hand on an SDK PR keeps both. The step is also gated on the token mint: a run
-that minted none approved nothing, and `gh` without `GH_TOKEN` can only fail the job.
+auto-merge by hand on an SDK PR keeps both. It then puts back the title the retitle step
+banked and drops the block it wrote, so a PR that stopped qualifying does not keep a
+`docs(marketing):` title that `COMMIT_OR_PR_TITLE` would squash a later human merge under. A
+description with no banked title is one this workflow never generated, and is left untouched.
+The step is also gated on the token mint: a run that minted none approved nothing, and `gh`
+without `GH_TOKEN` can only fail the job. That is why `docs-app-needed.sh` counts a generated
+block as App state too — otherwise metadata outliving its approval and queued merge would have
+no run able to revert it.
 
 [`classify-docs-pr.sh`](scripts/classify-docs-pr.sh) answers true only when **every** changed
 file is a modification to an allowlisted marketing page carrying no `generatedFrom`
@@ -214,7 +228,9 @@ throwaway PR:
 4. On an SDK PR, leave an approval from a bot that is not the docs App (or enable auto-merge
    by hand) while App secrets are still unset. Expect: a green auto-merge job, that approval
    or human-queued merge left in place, and the PR waiting for a human.
-5. Check whether `require_extra_approval_for_unattributed_changes` (on, and a GitHub preview)
+5. On the PR from step 2, confirm the title went back to the one Mintlify wrote and the
+   generated page list is gone from the description.
+6. Check whether `require_extra_approval_for_unattributed_changes` (on, and a GitHub preview)
    fires on a Mintlify-authored PR. It is documented as applying to unattributed Copilot pull
    requests, so it should not — but if it demands a second approval, the single App approval
    will not be enough.

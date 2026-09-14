@@ -27,6 +27,7 @@ fi
 case "$*" in
   *headRefOid*) printf '%s\\n' "\${GH_HEAD_OID:-}" ;;
   *"--json body"*) printf '%s\\n' "\${GH_BODY:-}" ;;
+  *"--json title"*) printf '%s\\n' "\${GH_TITLE:-}" ;;
   *autoMergeRequest*) printf '%s\\n' "\${GH_AUTO_MERGE_BY:-}" ;;
   *dismissals*|*"-X POST"*|*--disable-auto*|*--auto*) : ;;
   */reviews*) printf '%s\\n' "\${GH_APPROVAL_IDS:-}" ;;
@@ -67,10 +68,12 @@ const runner = t => {
     } catch (error) {
       code = error.status ?? 1;
     }
+    // raw keeps the blank lines calls drops, which is where a drifting body shows up.
     return {
       code,
       stdout,
       output: readFileSync(output, 'utf8').trim(),
+      raw: readFileSync(log, 'utf8'),
       calls: readFileSync(log, 'utf8').trim().split('\n').filter(Boolean),
     };
   };
@@ -225,7 +228,10 @@ test('both scripts are committed executable, as the workflow invokes them direct
 // the squash subject is the PR title, so without this main collects titles like that one.
 test('retitle names the single page it changed', t => {
   const gh = runner(t);
-  const { code, calls } = gh(RETITLE, ['416'], { PAGES: 'docs/resources/blog.mdx' });
+  const { code, calls } = gh(RETITLE, ['416', CLASSIFIED], {
+    GH_HEAD_OID: CLASSIFIED,
+    PAGES: 'docs/resources/blog.mdx',
+  });
 
   assert.equal(code, 0);
   assert.ok(has(calls, 'pr edit', '416', '--title docs(marketing): update resources/blog'));
@@ -233,7 +239,8 @@ test('retitle names the single page it changed', t => {
 
 test('retitle counts the pages when there is more than one', t => {
   const gh = runner(t);
-  const { code, calls } = gh(RETITLE, ['416'], {
+  const { code, calls } = gh(RETITLE, ['416', CLASSIFIED], {
+    GH_HEAD_OID: CLASSIFIED,
     PAGES: 'docs/resources/blog.mdx\ndocs/introduction.md\ndocs/swap/index.mdx',
   });
 
@@ -244,7 +251,10 @@ test('retitle counts the pages when there is more than one', t => {
 // Joined, not per call: the body spans newlines, so one gh call logs as several lines.
 test('retitle lists the pages in the description', t => {
   const gh = runner(t);
-  const { calls } = gh(RETITLE, ['416'], { PAGES: 'docs/resources/blog.mdx\ndocs/introduction.md' });
+  const { calls } = gh(RETITLE, ['416', CLASSIFIED], {
+    GH_HEAD_OID: CLASSIFIED,
+    PAGES: 'docs/resources/blog.mdx\ndocs/introduction.md',
+  });
   const log = calls.join('\n');
 
   assert.ok(log.includes('- `resources/blog`') && log.includes('- `introduction`'));
@@ -253,7 +263,8 @@ test('retitle lists the pages in the description', t => {
 // The editor link Mintlify leaves in the body is how a reviewer opens the draft.
 test('retitle keeps the body Mintlify wrote below its own summary', t => {
   const gh = runner(t);
-  const { calls } = gh(RETITLE, ['416'], {
+  const { calls } = gh(RETITLE, ['416', CLASSIFIED], {
+    GH_HEAD_OID: CLASSIFIED,
     PAGES: 'docs/resources/blog.mdx',
     GH_BODY: 'Review in Mintlify: https://app.mintlify.com/editor',
   });
@@ -263,9 +274,11 @@ test('retitle keeps the body Mintlify wrote below its own summary', t => {
 
 test('retitle replaces the summary of an earlier run rather than stacking another', t => {
   const gh = runner(t);
-  const { calls } = gh(RETITLE, ['416'], {
+  const { calls } = gh(RETITLE, ['416', CLASSIFIED], {
+    GH_HEAD_OID: CLASSIFIED,
     PAGES: 'docs/introduction.md',
-    GH_BODY: '<!-- docs-auto-merge -->\nPublished from the Mintlify editor.\n- `resources/blog`\n<!-- docs-auto-merge -->\n\nMintlify body',
+    GH_BODY:
+      '<!-- docs-auto-merge -->\nPublished from the Mintlify editor.\n- `resources/blog`\n<!-- docs-auto-merge -->\n\nMintlify body',
   });
 
   const log = calls.join('\n');
@@ -297,17 +310,141 @@ test('approve merges without a subject when none was composed', t => {
 
 test('retitle publishes the composed title for the approval to merge under', t => {
   const gh = runner(t);
-  const { output } = gh(RETITLE, ['416'], { PAGES: 'docs/resources/blog.mdx' });
+  const { output } = gh(RETITLE, ['416', CLASSIFIED], { GH_HEAD_OID: CLASSIFIED, PAGES: 'docs/resources/blog.mdx' });
 
   assert.match(output, /title=docs\(marketing\): update resources\/blog/);
 });
 
 test('retitle fails closed when the classifier passed no pages', t => {
   const gh = runner(t);
-  const { code, calls } = gh(RETITLE, ['416'], { PAGES: '' });
+  const { code, calls } = gh(RETITLE, ['416', CLASSIFIED], { GH_HEAD_OID: CLASSIFIED, PAGES: '' });
 
   assert.equal(code, 1);
   assert.ok(!has(calls, 'pr edit'));
+});
+
+// Without the pin the title names a page list the pushed head may not carry, and the run for
+// that push only withdraws an approval — it would leave the metadata standing.
+test('retitle does nothing once the head has moved past the classified commit', t => {
+  const gh = runner(t);
+  const { code, calls } = gh(RETITLE, ['416', CLASSIFIED], {
+    GH_HEAD_OID: PUSHED,
+    PAGES: 'docs/resources/blog.mdx',
+  });
+
+  assert.equal(code, 0);
+  assert.ok(!has(calls, 'pr edit'));
+});
+
+// Marketing publishes twice onto the same branch often enough that a body drifting on every
+// push is a real outcome, not a theoretical one.
+test('retitle leaves the same gap above the body however often it re-runs', t => {
+  const gh = runner(t);
+  const generated = [
+    '<!-- docs-auto-merge -->',
+    'Published from the Mintlify editor.',
+    '- `resources/blog`',
+    '<!-- docs-auto-merge:title Draft from Sep 10 -->',
+    '<!-- docs-auto-merge -->',
+    '',
+    'Mintlify body',
+  ].join('\n');
+  const { raw } = gh(RETITLE, ['416', CLASSIFIED], {
+    GH_HEAD_OID: CLASSIFIED,
+    PAGES: 'docs/introduction.md',
+    GH_BODY: generated,
+  });
+
+  assert.ok(raw.includes('-->\n\nMintlify body'), 'the separator above the body was lost');
+  assert.ok(!raw.includes('-->\n\n\nMintlify body'), 'the gap above the body grew on a re-run');
+});
+
+// A marker left by a hand-edited description used to toggle the filter on and swallow every
+// line below it, which on a marketing PR is the description someone wrote.
+test('retitle keeps a body carrying one unmatched marker', t => {
+  const gh = runner(t);
+  const { calls } = gh(RETITLE, ['416', CLASSIFIED], {
+    GH_HEAD_OID: CLASSIFIED,
+    PAGES: 'docs/introduction.md',
+    GH_BODY: 'Notes above.\n<!-- docs-auto-merge -->\nNotes below that must survive.',
+  });
+
+  assert.ok(has(calls, 'Notes below that must survive.'));
+});
+
+test('retitle banks the title Mintlify wrote so withdrawal can put it back', t => {
+  const gh = runner(t);
+  const { calls } = gh(RETITLE, ['416', CLASSIFIED], {
+    GH_HEAD_OID: CLASSIFIED,
+    PAGES: 'docs/resources/blog.mdx',
+    GH_TITLE: 'Draft from Sep 10',
+  });
+
+  assert.ok(has(calls, '<!-- docs-auto-merge:title Draft from Sep 10 -->'));
+});
+
+// The second run's live title is the first run's replacement, so re-reading it would bank
+// docs(marketing) over the only record of what Mintlify called the pull request.
+test('retitle keeps the first banked title rather than the one it already replaced', t => {
+  const gh = runner(t);
+  const { calls } = gh(RETITLE, ['416', CLASSIFIED], {
+    GH_HEAD_OID: CLASSIFIED,
+    PAGES: 'docs/introduction.md',
+    GH_TITLE: 'docs(marketing): update resources/blog',
+    GH_BODY:
+      '<!-- docs-auto-merge -->\n- `resources/blog`\n<!-- docs-auto-merge:title Draft from Sep 10 -->\n<!-- docs-auto-merge -->\n\nMintlify body',
+  });
+
+  assert.ok(has(calls, '<!-- docs-auto-merge:title Draft from Sep 10 -->'));
+  assert.ok(!has(calls, '--json title'));
+});
+
+// COMMIT_OR_PR_TITLE squashes a multi-commit pull request under its title, so a stale
+// docs(marketing) one would name the commit a human merges after code lands on the branch.
+test('withdraw puts back the title and drops the summary it generated', t => {
+  const gh = runner(t);
+  const { code, calls } = gh(WITHDRAW, ['416', BOT, 'packages/sdk/src/index.ts is not a marketing-tab page'], {
+    GH_AUTO_MERGE_BY: BOT,
+    GH_APPROVAL_IDS: '901',
+    GH_BODY:
+      '<!-- docs-auto-merge -->\n- `resources/blog`\n<!-- docs-auto-merge:title Draft from Sep 10 -->\n<!-- docs-auto-merge -->\n\nMintlify body',
+  });
+
+  assert.equal(code, 0);
+  assert.ok(has(calls, 'pr edit', '416', '--title Draft from Sep 10'));
+  assert.ok(!has(calls, 'pr edit', '- `resources/blog`'));
+  assert.ok(has(calls, 'pr edit', 'Mintlify body'));
+});
+
+test('withdraw leaves a description it never generated alone', t => {
+  const gh = runner(t);
+  const { code, calls } = gh(WITHDRAW, ['416', BOT, 'not a marketing page'], {
+    GH_AUTO_MERGE_BY: '',
+    GH_APPROVAL_IDS: '',
+    GH_BODY: 'A description a maintainer wrote.',
+  });
+
+  assert.equal(code, 0);
+  assert.ok(!has(calls, 'pr edit'));
+});
+
+// Withdrawal is gated on a token, so the metadata is only reverted if wanting it reverted is
+// itself a reason to mint one.
+test('generated metadata requires an App token even once the approval and merge are gone', t => {
+  const gh = runner(t);
+  const { code, stdout } = gh(APP_NEEDED, ['433', 'false', 'true'], {
+    GH_AUTO_MERGE_BY: 'false',
+    GH_APPROVAL_IDS: '',
+    GH_BODY: '<!-- docs-auto-merge -->\n<!-- docs-auto-merge:title Draft from Sep 10 -->\n<!-- docs-auto-merge -->',
+  });
+
+  assert.equal(code, 0);
+  assert.equal(stdout.trim(), 'token_required=true');
+});
+
+test('the workflow hands the retitle script the SHA the classifier read', () => {
+  assert.match(step('Retitle the pull request'), /HEAD_SHA: \$\{\{ github\.event\.pull_request\.head\.sha \}\}/);
+  assert.match(step('Retitle the pull request'), /retitle-docs-pr\.sh "\$PR" "\$HEAD_SHA"/);
 });
 
 // The approval merges under the subject this step composes, so it has to run first.
