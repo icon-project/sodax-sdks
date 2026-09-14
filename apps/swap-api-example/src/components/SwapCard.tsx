@@ -60,10 +60,15 @@ async function sendAndConfirm(
   return hash;
 }
 
+function backendMessage(body: unknown): string | undefined {
+  if (typeof body !== 'object' || body === null || !('message' in body)) return undefined;
+  const { message } = body;
+  return typeof message === 'string' && message.trim().length > 0 ? message : undefined;
+}
+
 function errorText(e: unknown): string {
   if (e instanceof SwapsApiError) {
-    const body = e.context.body as { message?: string } | undefined;
-    return body?.message ?? e.message;
+    return backendMessage(e.context.body) ?? e.message;
   }
   return e instanceof Error ? e.message : String(e);
 }
