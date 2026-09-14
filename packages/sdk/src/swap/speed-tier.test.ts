@@ -69,14 +69,34 @@ describe('estimateSwapSpeedTier', () => {
 
     // Both legs Ethereum — penalty still applied only once.
     const bothEth = estimateSwapSpeedTier(
-      { srcToken: token(ChainKeys.ETHEREUM_MAINNET, SODA_VAULT), dstToken: token(ChainKeys.ETHEREUM_MAINNET, SODA_VAULT) },
+      {
+        srcToken: token(ChainKeys.ETHEREUM_MAINNET, SODA_VAULT),
+        dstToken: token(ChainKeys.ETHEREUM_MAINNET, SODA_VAULT),
+      },
       isSodaAsset,
     );
     expect(bothEth.estimatedSeconds).toBe(SPEED_TIER_SECONDS.sodaAsset + SPEED_TIER_SECONDS.ethereumPenalty);
   });
 
-  // TODO: once the spec doc pins the exact seconds and tier thresholds, tighten these into
-  // exact-value assertions (e.g. slow-tier boundary at 45s for non-soda + ETH).
+  // The two rules are independent booleans, so these four rows are the complete output space.
+  // Exact values, not arithmetic on the constants: a change to either constant must fail here and
+  // be re-confirmed against the spec rather than silently recomputing the expectation.
+  it.each([
+    { sodaAsset: true, ethereum: false, estimatedSeconds: 15, tier: 'fast' },
+    { sodaAsset: true, ethereum: true, estimatedSeconds: 25, tier: 'normal' },
+    { sodaAsset: false, ethereum: false, estimatedSeconds: 35, tier: 'slow' },
+    { sodaAsset: false, ethereum: true, estimatedSeconds: 45, tier: 'slow' },
+  ])('sodaAsset=$sodaAsset ethereum=$ethereum → $estimatedSeconds s / $tier', params => {
+    const vault = params.sodaAsset ? SODA_VAULT : PLAIN_VAULT;
+    const srcChain = params.ethereum ? ChainKeys.ETHEREUM_MAINNET : ChainKeys.SONIC_MAINNET;
+
+    expect(
+      estimateSwapSpeedTier(
+        { srcToken: token(srcChain, vault), dstToken: token(ChainKeys.BSC_MAINNET, vault) },
+        isSodaAsset,
+      ),
+    ).toEqual({ tier: params.tier, estimatedSeconds: params.estimatedSeconds });
+  });
 });
 
 describe('estimateSwapSpeedTier against packaged config', () => {
