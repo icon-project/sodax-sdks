@@ -243,6 +243,12 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
       : undefined;
   }, [quote, slippage]);
 
+  const speedTier = useMemo(
+    () =>
+      src.token && dst.token ? sodax.swaps.getSwapSpeedTier({ srcToken: src.token, dstToken: dst.token }) : undefined,
+    [sodax, src.token, dst.token],
+  );
+
   const onSourceAmountChange = (value: string) => {
     setSourceAmount(value);
   };
@@ -550,6 +556,11 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
               {minOutputAmount ? formatUnits(BigInt(minOutputAmount.toFixed(0)), dst.token?.decimals ?? 0) : '0'}{' '}
               {dst.token?.symbol}
             </span>
+          </div>
+
+          <div className="flex justify-between items-center">
+            <span>Estimated Settlement</span>
+            <span>{speedTier ? `~${speedTier.estimatedSeconds}s (${speedTier.tier})` : '—'}</span>
           </div>
         </div>
 
