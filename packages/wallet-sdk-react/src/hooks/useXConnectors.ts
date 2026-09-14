@@ -1,7 +1,6 @@
 import type { ChainType } from '@sodax/types';
 import { useXWalletStore } from '@/useXWalletStore.js';
 import type { IXConnector } from '@/types/interfaces.js';
-import { shouldWarnChainDisabled } from './warnChainDisabled.js';
 
 export type UseXConnectorsOptions = {
   xChainType?: ChainType;
@@ -30,7 +29,8 @@ const warnedChains = new Set<ChainType>();
 export function useXConnectors({ xChainType }: UseXConnectorsOptions = {}): IXConnector[] {
   return useXWalletStore(state => {
     if (!xChainType) return [];
-    if (shouldWarnChainDisabled(xChainType, state, warnedChains)) {
+    if (!state.enabledChains.includes(xChainType) && !warnedChains.has(xChainType)) {
+      warnedChains.add(xChainType);
       console.warn(
         `[useXConnectors] chain "${xChainType}" is not enabled in SodaxWalletProvider config.chains — returning empty list`,
       );
