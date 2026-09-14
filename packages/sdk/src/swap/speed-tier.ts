@@ -35,7 +35,7 @@ export type SwapSpeedTierParams = {
  * TODO: confirm the exact numbers against the referenced spec doc.
  */
 export const SPEED_TIER_SECONDS = {
-  /** Either token maps to a money-market-reserve (sodaAsset) hub asset. */
+  /** Either token's vault is a money-market-reserve (sodaAsset). */
   sodaAsset: 15,
   /** Anything else / default. */
   default: 35,
@@ -67,17 +67,20 @@ const secondsToTier = (seconds: number): SwapSpeedTier => {
  * network or on-chain call — it classifies the pair from SDK config alone.
  *
  * @param params `{ srcToken, dstToken }` spoke token pair to classify
- * @param isSodaAssetRelated predicate answering "is this hub asset a money-market-reserve
- *   (sodaAsset)?". In the service this is wired to `config.isMoneyMarketReserveHubAsset`; the
- *   predicate is injected so this function stays pure and unit-testable without a ConfigService.
+ * @param isSodaAssetRelated predicate answering "is this vault a money-market-reserve
+ *   (sodaAsset)?". It is queried with `XToken.vault`, not `XToken.hubAsset`: the reserve set is
+ *   built from `moneyMarketHubVaults` addresses, so a hub asset only matches for the Sonic vault
+ *   shares themselves, where `hubAsset === vault`. In the service this is wired to
+ *   `config.isMoneyMarketReserveHubAsset`, whose name predates that distinction. The predicate is
+ *   injected so this function stays pure and unit-testable without a ConfigService.
  *
  * The fast 15s base applies when either token is sodaAsset-related; otherwise the base is 35s.
  */
 export function estimateSwapSpeedTier(
   { srcToken, dstToken }: SwapSpeedTierParams,
-  isSodaAssetRelated: (hubAsset: Address) => boolean,
+  isSodaAssetRelated: (vault: Address) => boolean,
 ): SwapSpeedTierResult {
-  const eitherSodaAsset = isSodaAssetRelated(srcToken.hubAsset) || isSodaAssetRelated(dstToken.hubAsset);
+  const eitherSodaAsset = isSodaAssetRelated(srcToken.vault) || isSodaAssetRelated(dstToken.vault);
 
   let estimatedSeconds = eitherSodaAsset ? SPEED_TIER_SECONDS.sodaAsset : SPEED_TIER_SECONDS.default;
 

@@ -1517,6 +1517,20 @@ describe('SwapService.getSwapSpeedTier', () => {
 
     expect(result).toEqual({ tier: 'fast', estimatedSeconds: SPEED_TIER_SECONDS.sodaAsset });
   });
+
+  it('reports fast for a real user-facing pair whose hubAsset differs from its vault', () => {
+    // Regression test for the estimator reading `hubAsset` instead of `vault`: the reserve set is
+    // built from vault addresses, so reading hubAsset made 'fast' unreachable for every real pair.
+    const srcToken = spokeChainConfig[ChainKeys.SONIC_MAINNET].supportedTokens.SODA;
+    const dstToken = spokeChainConfig[ChainKeys.SOLANA_MAINNET].supportedTokens.SOL;
+    expect(srcToken.hubAsset.toLowerCase()).not.toBe(srcToken.vault.toLowerCase());
+    expect(sodax.config.isMoneyMarketReserveHubAsset(srcToken.hubAsset)).toBe(false);
+
+    expect(sodax.swaps.getSwapSpeedTier({ srcToken, dstToken })).toEqual({
+      tier: 'fast',
+      estimatedSeconds: SPEED_TIER_SECONDS.sodaAsset,
+    });
+  });
 });
 
 describe('SwapService.getSupportedSwapTokens', () => {
