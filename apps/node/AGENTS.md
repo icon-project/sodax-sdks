@@ -20,7 +20,7 @@ Or in one shot per script (each `pnpm run <x>` does `pnpm run build && node dist
 Create `.env` in `apps/node/`. There is no single key that covers every script — each reads the variables for the chain it drives:
 
 ```
-EVM_PRIVATE_KEY=0x…   # swap, moneyMarket, moneymarket-ops, staking, evm
+EVM_PRIVATE_KEY=0x…   # swap, moneyMarket, moneymarket-ops, staking, evm, flint-deposit
 PRIVATE_KEY=0x…       # sonic, btc, stacks, injective, leverage-yield, evm
 ```
 

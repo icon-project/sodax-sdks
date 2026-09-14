@@ -44,7 +44,7 @@ everything — each script reads the variables for the chain it drives:
 
 | Variable | Used by |
 | --- | --- |
-| `EVM_PRIVATE_KEY` | `swap`, `moneyMarket`, `moneymarket-ops`, `staking`, `evm` |
+| `EVM_PRIVATE_KEY` | `swap`, `moneyMarket`, `moneymarket-ops`, `staking`, `evm`, `flint-deposit` |
 | `PRIVATE_KEY` | `sonic`, `btc`, `stacks`, `injective`, `leverage-yield`, `evm` |
 | `ICON_PRIVATE_KEY` | `icon` |
 | `SOLANA_PRIVATE_KEY` | `solana` |
