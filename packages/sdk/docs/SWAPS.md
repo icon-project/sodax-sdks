@@ -227,11 +227,11 @@ All swap-module errors are instances of `SodaxError`, exported from `@sodax/sdk`
 ```typescript
 import { SodaxError, isSodaxError } from '@sodax/sdk';
 
-class SodaxError<C extends string = string> extends Error {
+class SodaxError<C extends SodaxErrorCode = SodaxErrorCode> extends Error {
   readonly code: C;                  // string-literal discriminator
   readonly cause?: unknown;          // ES2022 cause chain
   readonly context?: Record<string, unknown>;
-  toJSON(): { name, code, message, stack, context, cause };
+  toJSON(): { name, code, feature, message, stack, context, cause };
 }
 
 function isSodaxError(e: unknown): e is SodaxError;
@@ -262,7 +262,7 @@ function isSodaxError(e: unknown): e is SodaxError;
 {
   srcChainKey?: SpokeChainKey;
   dstChainKey?: SpokeChainKey;
-  phase?: 'validate' | 'intentCreation' | 'verify' | 'submit' | 'relay' | 'postExecution';
+  phase?: 'validate' | 'intentCreation' | 'verify' | 'submit' | 'relay' | 'approve' | 'lookup' | 'execution' | 'postExecution';
   // Only on EXTERNAL_API_ERROR:
   api?: 'solver';                // discriminator for upstream API errors (used as Sentry/Datadog tag)
   solverCode?: SolverIntentErrorCode;
@@ -339,7 +339,7 @@ if (!result.ok) {
 
 #### Relay-layer contract
 
-The lower-level relay helpers `relayTxAndWaitPacket` and `submitTransaction` (in `packages/sdk/src/shared/services/intentRelay/IntentRelayApiService.ts`) emit three stable error message strings on failure: `'SUBMIT_TX_FAILED'`, `'RELAY_TIMEOUT'` and `'RELAY_POLLING_FAILED'`. These are exported as `RELAY_ERROR_CODES` and form a public contract that other modules (moneyMarket, bridge, dex, migration, staking) still rely on directly.
+The lower-level relay helpers `relayTxAndWaitPacket` and `submitTransaction` (in `packages/sdk/src/shared/services/intentRelay/IntentRelayApiService.ts`) emit three stable error message strings on failure: `'SUBMIT_TX_FAILED'`, `'RELAY_TIMEOUT'` and `'RELAY_POLLING_FAILED'`. These are exported as `RELAY_ERROR_CODES` and form a public contract. Only `dex` consumes them directly; every other feature module maps them into a typed `SodaxError` via `mapRelayFailure`.
 
 The swap module wraps these via the unified `mapRelayFailure`, surfacing the original code on `error.context.relayCode` so swap callers don't need to inspect `error.cause.message`.
 

@@ -189,7 +189,7 @@ All config types include an optional `defaults` field for per-method behavioral 
 
 | Chain | Provider class | Native SDK | `chainType` |
 |---|---|---|---|
-| EVM (12 chains) | `EvmWalletProvider` | viem | `'EVM'` |
+| EVM | `EvmWalletProvider` | viem | `'EVM'` |
 | Solana | `SolanaWalletProvider` | @solana/web3.js | `'SOLANA'` |
 | Sui | `SuiWalletProvider` | @mysten/sui | `'SUI'` |
 | ICON | `IconWalletProvider` | icon-sdk-js | `'ICON'` |

@@ -229,7 +229,7 @@ Use `isSodaxError` rather than `instanceof SodaxError`, which is not bundle-safe
 
 ## Concept 6: Error convention
 
-Every public failure is a `SodaxError<C>`: a string-literal `code`, the originating `feature`, a structured `context`, and an ES2022 `cause` chain. Discriminate on `error.code`, never on `error.message` — the message is human-readable and may change.
+Most public failures are a `SodaxError<C>` (the exceptions are called out on each module's page — DEX relay legs and the Recovery spoke leg return the underlying error unchanged): a string-literal `code`, the originating `feature`, a structured `context`, and an ES2022 `cause` chain. Check `isSodaxError(error)` before reading `error.code`, and never discriminate on `error.message` — the message is human-readable and may change.
 
 ```ts
 new SodaxError('INTENT_CREATION_FAILED', 'Intent creation failed', {
@@ -334,14 +334,14 @@ Supported values: `'EVM'`, `'BITCOIN'`, `'SOLANA'`, `'STELLAR'`, `'SUI'`, `'ICON
 
 | Chain | Provider class | Native SDK |
 |-------|----------------|------------|
-| EVM (12 chains) | `EvmWalletProvider` | viem |
+| EVM | `EvmWalletProvider` | viem |
 | Solana | `SolanaWalletProvider` | @solana/web3.js |
 | Sui | `SuiWalletProvider` | @mysten/sui |
 | ICON | `IconWalletProvider` | icon-sdk-js |
 | Injective | `InjectiveWalletProvider` | @injectivelabs/sdk-ts |
 | Stellar | `StellarWalletProvider` | @stellar/stellar-sdk |
 | Stacks | `StacksWalletProvider` | @stacks/transactions |
-| Bitcoin | `BTCWalletProvider` | bitcoinjs-lib (PSBT) |
+| Bitcoin | `BitcoinWalletProvider` | bitcoinjs-lib (PSBT) |
 | NEAR | `NearWalletProvider` | near-api-js |
 
 ---
@@ -419,7 +419,7 @@ Integrators upgrading from v1 will encounter these breaking changes:
 - **`AddressType` renamed to `BtcAddressType`** — Bitcoin-specific address-type union (`'P2PKH' | 'P2SH' | 'P2WPKH' | 'P2TR'`). Bitcoin wallet-provider implementations must import the new name.
 - **Wallet-provider `chainType` discriminants** — every `I*WalletProvider` now declares `readonly chainType: '<CHAIN>'` as a literal field. Custom implementations must add the field.
 - **`RpcConfig` shape** — now a mapped type keyed by `ChainKey` **values** (`rpcConfig[ChainKeys.SONIC_MAINNET]`), with `BitcoinRpcConfig` for Bitcoin, `StellarRpcConfig` for Stellar, and `string` (the RPC URL) for every other chain.
-- **`IConfigApi` now returns `Promise<Result<T>>`** — every method on the backend-API contract (`getChains`, `getSwapTokens`, `getSwapTokensByChainId`, `getMoneyMarketTokens`, `getMoneyMarketTokensByChainId`). External implementers must update method signatures.
+- **`IConfigApiV1` now returns `Promise<Result<T>>`** — every method on the backend-API contract (`getChains`, `getSwapTokens`, `getSwapTokensByChainId`, `getMoneyMarketTokens`, `getMoneyMarketTokensByChainId`). External implementers must update method signatures.
 - **Module error types deleted** — `MoneyMarketError<Code>`, `IntentError<Code>`, `StakingError<Code>`, `BridgeError<Code>`, `MigrationError<Code>`, `AssetServiceError<Code>`, `ConcentratedLiquidityError<Code>`, `RelayError`, plus five Partner error types and their type-guard helpers. See [Concept 5](#concept-5-resultt) for the `Result<T>` replacement and [Concept 6](#concept-6-error-convention) for the `SodaxError<C>` shape that replaced them.
 
 If you maintain wrappers/enums around chain identifiers, they should now accept/emit the **string keys from `ChainKeys`**.

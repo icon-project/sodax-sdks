@@ -123,7 +123,7 @@ function SwapButton({ intentParams }: { intentParams: CreateIntentParams }) {
 
 ## Requirements
 
-- Node.js >= 20.12.0
+- Node.js >= 22.12.0
 - React >= 18
 - TypeScript
 

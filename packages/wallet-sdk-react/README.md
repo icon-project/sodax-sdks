@@ -155,7 +155,7 @@ See [Connectors](https://github.com/icon-project/sodax-sdks/blob/main/packages/w
 
 ## Requirements
 
-- Node.js >= 20.12.0
+- Node.js >= 22.12.0
 - React >= 19
 - TypeScript
 

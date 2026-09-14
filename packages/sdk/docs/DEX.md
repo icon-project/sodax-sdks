@@ -713,7 +713,7 @@ These helpers throw rather than returning a `Result`, so wrap them in `try`/`cat
 ### `context` fields
 
 DEX populates `phase` (`validate` | `intentCreation` | `approve` | `lookup`), `method` (on
-`LOOKUP_FAILED`), and `action` (set by the analytics boundary). It does **not** set `relayCode` —
+`LOOKUP_FAILED`), and `method` (on lookup failures). It does **not** set `relayCode` —
 that field only exists on modules whose relay failures go through `mapRelayFailure`.
 
 ## Usage Flow
