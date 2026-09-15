@@ -59,8 +59,8 @@ export function apiKeyHeader(apiKey: string | undefined): Record<string, string>
  * of letting the later one win — so a plain spread of `{'x-api-key'}` under a caller's `{'X-Api-Key'}`
  * would send both, which is neither key. The last source to set a name supplies its casing and value.
  *
- * Kept in step with the identical helper in `@sodax/swaps-api`'s `http.ts` — that package cannot
- * import from the SDK, and this copy also serves the non-swaps services here.
+ * Kept in step with the identical helper in `@sodax/swaps-api`'s and `@sodax/bridge-api`'s `http.ts` —
+ * neither package can import from the SDK, and this copy also serves the non-swaps services here.
  */
 export function mergeHeaders(...sources: Array<Record<string, string> | undefined>): Record<string, string> {
   const byName = new Map<string, [name: string, value: string]>();

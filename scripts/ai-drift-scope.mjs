@@ -22,6 +22,7 @@ export const SKILL_BY_PACKAGE = {
   // No skill of their own; their public surface is documented inside the SDK skill.
   'packages/types': 'sodax-sdk',
   'packages/swaps-api': 'sodax-sdk',
+  'packages/bridge-api': 'sodax-sdk',
 };
 
 // Packages with source but deliberately no skill: their guidance is their own AGENTS.md. Listed
@@ -43,6 +44,7 @@ const FEATURE_ROOT = {
 // that feature, even when the file sits directly in src/.
 export const PACKAGE_SEGMENT = {
   'packages/swaps-api': 'swaps-api',
+  'packages/bridge-api': 'bridge-api',
 };
 
 export const SEGMENT_ALIASES = {

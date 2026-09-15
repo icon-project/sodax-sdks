@@ -4,7 +4,7 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
-PACKAGES=(types libs swaps-api skills wallet-sdk-core sdk wallet-sdk-react dapp-kit )
+PACKAGES=(types libs swaps-api bridge-api skills wallet-sdk-core sdk wallet-sdk-react dapp-kit )
 TYPES_INDEX="packages/types/src/index.ts"
 
 NEW_VERSION="${1:-}"

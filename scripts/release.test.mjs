@@ -30,7 +30,17 @@ const REPO_ROOT = join(import.meta.dirname, '..');
 const MAIN = 'a'.repeat(40);
 const RELEASE = 'e'.repeat(40);
 const ROOT_COMMIT = 'r'.repeat(40);
-const ALL_DIRS = ['types', 'libs', 'swaps-api', 'skills', 'wallet-sdk-core', 'sdk', 'wallet-sdk-react', 'dapp-kit'];
+const ALL_DIRS = [
+  'types',
+  'libs',
+  'swaps-api',
+  'bridge-api',
+  'skills',
+  'wallet-sdk-core',
+  'sdk',
+  'wallet-sdk-react',
+  'dapp-kit',
+];
 const writeJson = (path, value) => writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
 
 const createWorkspace = (t, directories = ALL_DIRS, version = '2.1.0') => {

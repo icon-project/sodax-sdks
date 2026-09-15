@@ -127,7 +127,8 @@
                   "developers/packages/foundation/sdk/tooling-modules/intent_relay_api"
                 ]
               },
-              "developers/packages/foundation/swaps-api"
+              "developers/packages/foundation/swaps-api",
+              "developers/packages/foundation/bridge-api"
             ]
           },
           {
