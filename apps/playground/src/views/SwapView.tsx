@@ -219,10 +219,10 @@ export function SwapView({ flow, brandControls }: { flow: SwapFlow; brandControl
           <span className="eyebrow">Live preview</span>
           <fieldset className="segmented" aria-label="Preview width">
             <button type="button" className="btn" aria-pressed={!mobile} onClick={() => setMobile(false)}>
-              Desktop · 480
+              Desktop
             </button>
             <button type="button" className="btn" aria-pressed={mobile} onClick={() => setMobile(true)}>
-              Mobile · 375
+              Mobile
             </button>
           </fieldset>
         </div>
