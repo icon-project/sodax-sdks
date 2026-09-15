@@ -35,6 +35,7 @@ import {
   trackSwapSubmitted,
   type SwapFailureReason,
 } from '../lib/analytics';
+import { postEmbedEvent } from '../lib/embedMessages';
 import { resolveDestinationGate } from '../lib/destinationGate';
 import {
   broadcast,
@@ -53,6 +54,7 @@ function isSpoke(chain: ChainKey): chain is SpokeChainKey {
 }
 
 type ExecutionInput = {
+  enabled: boolean;
   srcChain: ChainKey | undefined;
   dstChain: ChainKey | undefined;
   srcToken: XToken | undefined;
@@ -116,14 +118,14 @@ export function useExecution(input: ExecutionInput) {
   });
   const [preparation, setPreparation] = useState<Result<unknown>>();
   const destinationGate = resolveDestinationGate(stellarGate, nearGate, preparation);
-  const [activity, setActivity] = useState<Activity | undefined>(loadActivity);
+  const [activity, setActivity] = useState<Activity | undefined>(() => (input.enabled ? loadActivity() : undefined));
   const [storageAvailable, setStorageAvailable] = useState(true);
   const [phase, setPhase] = useState<ExecutionPhase>();
   const [error, setError] = useState<string>();
   const busyRef = useRef(false);
   const phaseRef = useRef<ExecutionPhase>('checking');
   // Dimensions as they were at signing, so a form edited while the swap settles cannot relabel it.
-  const submittedPair = useRef<PairDimensions | undefined>(undefined);
+  const submittedPair = useRef<PairDimensions | undefined>(activity?.pair);
   const settledTx = useRef<string | undefined>(undefined);
   const { mutateAsync: approve } = useSwapsApiApproveAndBroadcast();
   const statusQuery = useSwapsApiSubmitTxStatus({
@@ -137,16 +139,21 @@ export function useExecution(input: ExecutionInput) {
     if (connection.status === 'success') setConnectType(undefined);
   }, [connection.status]);
 
-  // Settlement, not signing, is where a swap is done. Once per transaction; an activity restored
-  // from storage after a reload carries no captured dimensions and so reports nothing.
   useEffect(() => {
-    const pair = submittedPair.current;
-    const txHash = activity?.txHash;
-    if (!terminal || !txHash || !pair || settledTx.current === txHash) return;
-    settledTx.current = txHash;
-    if (status?.status === 'solved') trackSwapCompleted(pair);
-    else trackSwapFailed(pair, status?.abandonedAt ? 'abandoned' : 'settlement_failed');
-  }, [terminal, status, activity?.txHash]);
+    if (!terminal || !activity || activity.settlementReported || settledTx.current === activity.txHash) return;
+    settledTx.current = activity.txHash;
+    const pair = submittedPair.current ?? activity.pair;
+    if (status?.status === 'solved') {
+      if (pair) trackSwapCompleted(pair);
+      postEmbedEvent({ type: 'sodax:swap', status: 'completed' });
+    } else {
+      if (pair) trackSwapFailed(pair, status?.abandonedAt ? 'abandoned' : 'settlement_failed');
+      postEmbedEvent({ type: 'sodax:swap', status: 'failed' });
+    }
+    const reported = { ...activity, settlementReported: true };
+    setStorageAvailable(saveActivity(reported));
+    setActivity(reported);
+  }, [terminal, status, activity]);
 
   const fingerprint = `${input.srcChain}|${input.dstChain}|${input.srcToken?.address}|${input.dstToken?.address}|${input.amount}|${input.partnerFee?.address}|${input.partnerFee?.percentage}|${source?.address}|${destination?.address}`;
   useEffect(() => {
@@ -168,6 +175,7 @@ export function useExecution(input: ExecutionInput) {
   const openReview = () => {
     setError(undefined);
     if (
+      !input.enabled ||
       !input.ready ||
       !signable ||
       !input.srcChain ||
@@ -202,11 +210,14 @@ export function useExecution(input: ExecutionInput) {
   };
 
   const confirm = async () => {
-    if (!review || !wallet || !input.srcChain || !input.dstChain || busyRef.current || activity) return;
+    if (!input.enabled || !review || !wallet || !input.srcChain || !input.dstChain || busyRef.current || activity)
+      return;
     busyRef.current = true;
     phaseRef.current = 'checking';
     setPhase('checking');
     setError(undefined);
+    let broadcasted = false;
+    postEmbedEvent({ type: 'sodax:swap', status: 'started' });
     try {
       const currentAddress = await wallet.getWalletAddress();
       if (
@@ -230,6 +241,7 @@ export function useExecution(input: ExecutionInput) {
           setPhase(next);
         },
         onBroadcast: (request, intent) => {
+          broadcasted = true;
           const next: Activity = {
             txHash: request.txHash,
             srcChainKey,
@@ -240,9 +252,11 @@ export function useExecution(input: ExecutionInput) {
             createdAt: Date.now(),
             intent,
             relayData: request.relayData,
+            pair: input.pair,
           };
           setStorageAvailable(saveActivity(next));
           setActivity(next);
+          postEmbedEvent({ type: 'sodax:swap', status: 'submitted' });
           setReview(undefined);
           if (input.pair) {
             submittedPair.current = input.pair;
@@ -253,6 +267,7 @@ export function useExecution(input: ExecutionInput) {
       void balanceQuery.refetch();
     } catch (cause) {
       setError(executionError(cause));
+      if (!broadcasted) postEmbedEvent({ type: 'sodax:swap', status: 'failed' });
       if (input.pair) {
         const reason: SwapFailureReason = isUserRejection(cause) ? 'rejected' : phaseRef.current;
         trackSwapFailed(input.pair, reason);

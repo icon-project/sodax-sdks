@@ -255,11 +255,11 @@
   --accent: var(--yellow-soda);
   --accent-hover: var(--yellow-dark);
 
-  /* Brand rule: on a dark or cherry surface the primary CTA is yellow with a cherry-dark label. */
+  /* Dark ink keeps the yellow CTA readable at normal text sizes. */
   --cta-bg: var(--yellow-dark);
   --cta-bg-hover: var(--yellow-soda);
   --cta-bg-active: var(--clicked-soda-on-soda);
-  --cta-fg: var(--cherry-dark);
+  --cta-fg: var(--charcoal);
   --cta-ring: var(--focused-soda-on-soda);
   --cta-disabled-bg: var(--night-600);
   --cta-disabled-fg: var(--clay);
@@ -621,7 +621,7 @@ code,
 .standalone-link {
   display: block;
   text-align: center;
-  margin-top: 12px;
+  margin-top: 8px;
   font-size: 12px;
 }
 .studio-heading p {
@@ -703,10 +703,12 @@ code,
   margin-top: auto;
 }
 
-/* Reserve message space so quote refreshes do not move the action. */
 .action-message {
-  min-height: calc(1.5 * var(--text-caption) + 2 * var(--space-8) + 2px);
-  margin-top: var(--space-8);
+  margin: var(--space-8) 0;
+}
+
+.action-message:empty {
+  margin: 6px 0;
 }
 
 .action-message .alert {
@@ -2074,4 +2076,402 @@ code,
 
 body:has(.app-embed) {
   background: var(--surface-embed);
+}
+
+/* The builder keeps its own palette; the iframe alone receives brand overrides. */
+.stage {
+  padding: 20px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 24px;
+  margin-bottom: 12px;
+  gap: 12px;
+}
+.app-main {
+  grid-template-columns: minmax(340px, 430px) minmax(0, 1fr);
+  gap: 20px;
+}
+.studio-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.studio-heading h2 {
+  font-size: clamp(26px, 3vw, 34px);
+  line-height: 1.2;
+  margin: 0;
+}
+.studio-heading p {
+  margin: 4px 0;
+}
+.studio-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.studio-actions .btn-primary {
+  width: auto;
+  height: 40px;
+  padding: 0 20px;
+}
+.studio-status {
+  flex-basis: 100%;
+  min-height: 18px;
+  margin: 0;
+}
+.share-link {
+  width: 100%;
+}
+.builder-controls,
+.setup-side {
+  padding: 0;
+  border: 0;
+  min-width: 0;
+  margin: 0;
+}
+.build-column {
+  gap: 16px;
+}
+.builder-tabs {
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--surface-inset);
+}
+.builder-tabs .btn {
+  flex: 1;
+}
+.segmented .btn[aria-pressed="true"] {
+  background: var(--surface-card);
+  color: var(--text-heading);
+  border-color: var(--border-strong);
+  box-shadow: 0 2px 6px var(--logo-shadow);
+}
+.setup-card,
+.integration-card,
+.brand-card {
+  padding: 16px;
+}
+.setup-card h3,
+.integration-card h3,
+.asset-picker-list h3 {
+  margin: 0;
+}
+.setup-side {
+  margin: 16px 0;
+}
+.setup-side legend {
+  color: var(--text-heading);
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+.setup-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.setup-pair .select,
+.setup-pair .input {
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+}
+.setup-pair .brand-cell {
+  font-size: 12px;
+  gap: 6px;
+}
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  margin: 10px 0;
+}
+.check-row input,
+.network-checks input {
+  accent-color: var(--accent);
+  flex: none;
+}
+.setup-networks,
+.token-checks {
+  max-height: 190px;
+  overflow-y: auto;
+  margin: 12px 0;
+  padding: 0 4px;
+}
+.token-search {
+  width: 100%;
+  min-height: 40px;
+}
+.brand-hex {
+  font-family: var(--font-mono);
+  width: 92px;
+  min-width: 0;
+  font-size: 12px;
+  padding: 6px;
+}
+.advanced-toggle {
+  margin-top: 16px;
+  align-self: flex-start;
+}
+.preview-column {
+  position: sticky;
+  top: 20px;
+}
+.preview-toolbar {
+  min-height: 44px;
+  margin-bottom: 12px;
+}
+.preview-toolbar .btn {
+  padding: 8px 12px;
+}
+.preview-canvas {
+  padding: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 20px;
+  background: radial-gradient(var(--border-strong) 1px, transparent 1px) 0 0 / 12px 12px;
+  min-height: 540px;
+}
+.preview-frame {
+  width: 100%;
+  max-width: 480px;
+  margin: auto;
+  overflow: hidden;
+  border-radius: 24px;
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 12px 36px var(--logo-shadow);
+}
+.preview-frame-mobile {
+  max-width: 375px;
+}
+.preview-frame iframe {
+  display: block;
+  width: 100%;
+  border: 0;
+}
+.preview-caption {
+  text-align: center;
+  margin: 12px 0;
+}
+.integration-card .code-card {
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.integration-card .code-header {
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.integration-card .code {
+  max-height: 400px;
+  font-size: 11px;
+}
+.integration-card .tabs {
+  flex-wrap: wrap;
+}
+.widget-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0;
+}
+.widget-heading h2 {
+  margin: 0;
+  font-size: 24px;
+  color: var(--text-heading);
+}
+.network-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-small);
+  padding: 4px 8px;
+}
+.wallet-inline {
+  font-size: 11px;
+  padding: 4px 8px;
+  height: auto;
+}
+.asset-caption {
+  min-height: 20px;
+  margin: 4px 8px 6px;
+  flex-wrap: wrap;
+}
+.quote-summary {
+  padding: 10px 0 4px;
+}
+.app-embed .flow-column {
+  gap: 8px;
+}
+.app-embed .swap-details {
+  margin-bottom: 12px;
+}
+.app-embed .btn-primary {
+  height: 52px;
+}
+.quote-summary .row-between {
+  font-size: 12px;
+  align-items: baseline;
+}
+.quote-summary .row-between > :last-child {
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.asset-id:disabled {
+  opacity: 1;
+  cursor: default;
+}
+.asset-picker-list .picker-body {
+  padding: 16px;
+  gap: 12px;
+}
+.asset-picker-list .picker-close {
+  width: 36px;
+  height: 36px;
+  align-self: center;
+}
+.asset-results {
+  overflow-y: auto;
+  min-height: 0;
+}
+.asset-result {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 4px;
+  border: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-heading);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.asset-result:hover,
+.asset-result[aria-pressed="true"] {
+  background: var(--surface-inset);
+}
+.asset-result-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+.asset-result-network {
+  display: flex;
+  flex-direction: column;
+  font-size: 12px;
+  text-align: right;
+  max-width: 90px;
+}
+.asset-result .asset-logo {
+  width: 36px;
+  height: 36px;
+}
+@media (min-width: 981px) and (min-height: 720px) {
+  .app-studio {
+    height: 100dvh;
+    min-height: 0;
+  }
+  .app-studio .app-header {
+    flex: none;
+  }
+  .app-studio .stage {
+    min-height: 0;
+    padding: 16px;
+  }
+  .app-studio .app-main {
+    flex: 1;
+    min-height: 0;
+    grid-template-rows: auto minmax(0, 1fr);
+    align-items: stretch;
+    row-gap: 12px;
+  }
+  .build-column {
+    min-height: 0;
+  }
+  .builder-tabs {
+    flex: none;
+  }
+  .builder-controls {
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-width: thin;
+  }
+  .preview-column {
+    display: flex;
+    flex-direction: column;
+    position: static;
+    min-height: 0;
+  }
+  .preview-toolbar,
+  .preview-caption {
+    flex: none;
+  }
+  .preview-canvas {
+    flex: 1;
+    min-height: 0;
+    padding-block: 8px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+  }
+  .preview-caption {
+    margin: 8px 0 0;
+  }
+}
+@media (max-width: 980px) {
+  .app-main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .preview-column {
+    position: static;
+  }
+  .preview-canvas {
+    min-height: 0;
+  }
+}
+@media (max-width: 480px) {
+  .stage {
+    padding: 16px 12px;
+  }
+  .studio-actions {
+    flex-wrap: wrap;
+  }
+  .preview-canvas {
+    padding: 12px 0;
+  }
+  .preview-toolbar {
+    flex-wrap: wrap;
+  }
+  .app-embed {
+    padding: 16px;
+  }
+  .asset-panel {
+    padding: 16px 12px;
+  }
+  .asset-row {
+    gap: 10px;
+  }
+  .asset-id {
+    gap: 8px;
+    max-width: 52%;
+  }
+  .asset-symbol {
+    font-size: 19px;
+    overflow-wrap: anywhere;
+  }
+  .asset-amount .amount {
+    font-size: 26px;
+    width: 100%;
+  }
+  .asset-logo {
+    width: 36px;
+    height: 36px;
+  }
+  .asset-logo-img {
+    width: 24px;
+    height: 24px;
+  }
 }

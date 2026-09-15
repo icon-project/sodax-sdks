@@ -20,14 +20,16 @@ function feeExpression(fee: PartnerFeePercentage): string {
 
 /** The takeaway: the widget on the visitor's own page, opened on the pair they just configured. */
 function embedSnippet(embedUrl: string): string {
-  return `<!-- Live mainnet swaps. Visitors connect and approve transactions in their wallet. -->
+  return `<!-- Live mainnet swaps. Visitors connect and approve transactions in their wallet.
+     Brave shows wallets to a third-party frame only when the host allows them: keep the allow attribute. -->
 <iframe
   src="${embedUrl}"
   title="SODAX swap"
   width="480"
   height="760"
   loading="lazy"
-  referrerpolicy="no-referrer"
+  referrerpolicy="origin"
+  allow="ethereum; solana; clipboard-write"
   style="border: 0; border-radius: 24px; max-width: 100%"
 ></iframe>
 <script>
@@ -36,8 +38,13 @@ function embedSnippet(embedUrl: string): string {
     const origin = new URL(frame.src).origin;
     window.addEventListener('message', event => {
       if (event.source !== frame.contentWindow || event.origin !== origin) return;
-      if (event.data?.type === 'sodax:resize' && Number.isFinite(event.data.height)) {
-        frame.height = String(Math.max(360, Math.min(1600, event.data.height)));
+      const data = event.data;
+      if (!data || typeof data !== 'object') return;
+      if (data.type === 'sodax:swap' && ['started', 'submitted', 'completed', 'failed'].includes(data.status)) {
+        frame.dispatchEvent(new CustomEvent('sodax:swap', { detail: { status: data.status } }));
+      }
+      if (data.type === 'sodax:resize' && 'height' in data && typeof data.height === 'number' && Number.isFinite(data.height)) {
+        frame.height = String(Math.max(360, Math.min(1600, data.height)));
       }
     });
   })();
@@ -49,34 +56,42 @@ function widgetSnippet(embedUrl: string): string {
 // a page, so it carries its own React, its own SDK version and its own token list.
 import { useEffect, useRef } from 'react';
 
-type SodaxSwapWidgetProps = { src?: string; height?: number };
+type SwapStatus = 'started' | 'submitted' | 'completed' | 'failed';
+type SodaxSwapWidgetProps = { src?: string; height?: number; onSwapStatus?: (status: SwapStatus) => void };
 
-export function SodaxSwapWidget({ src = '${embedUrl}', height = 760 }: SodaxSwapWidgetProps) {
+export function SodaxSwapWidget({ src = '${embedUrl}', height = 760, onSwapStatus }: SodaxSwapWidgetProps) {
   const frame = useRef<HTMLIFrameElement>(null);
   useEffect(() => {
-    const onMessage = (event: MessageEvent) => {
+    const onMessage = (event: MessageEvent<unknown>) => {
       const element = frame.current;
       if (!element || event.source !== element.contentWindow || event.origin !== new URL(src).origin) return;
-      if (event.data?.type === 'sodax:resize' && Number.isFinite(event.data.height)) {
-        element.style.height = String(Math.max(360, Math.min(1600, event.data.height))) + 'px';
+      const data = event.data;
+      if (!data || typeof data !== 'object' || !('type' in data)) return;
+      const status = 'status' in data ? data.status : undefined;
+      if (data.type === 'sodax:swap' && (status === 'started' || status === 'submitted' || status === 'completed' || status === 'failed')) {
+        onSwapStatus?.(status);
+      }
+      if (data.type === 'sodax:resize' && 'height' in data && typeof data.height === 'number' && Number.isFinite(data.height)) {
+        element.style.height = String(Math.max(360, Math.min(1600, data.height))) + 'px';
       }
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [src]);
+  }, [src, onSwapStatus]);
   return (
     <iframe
       ref={frame}
       src={src}
       title="SODAX swap"
       loading="lazy"
-      referrerPolicy="no-referrer"
+      referrerPolicy="origin"
+      allow="ethereum; solana; clipboard-write"
       style={{ width: '100%', maxWidth: 480, height, border: 0, borderRadius: 24 }}
     />
   );
 }
 
-// Every field of the form is a query parameter, so the host page decides what it opens on:
+// The defaults configured in Setup are query parameters, so the host page decides what it opens on:
 // ?srcChain= &srcToken= &dstChain= &dstToken= &amount= &slippage= &embed=1
 // The partner fee is deliberately not one of them — it is the one field that redirects money.
 ${themeParamsComment()}`;
@@ -140,8 +155,8 @@ const minOutputAmount = quote && (BigInt(quote.quotedAmount) * ${bps}n) / 10_000
  */
 export function buildSnippets(state: SnippetState, embedUrl: string): Snippet[] {
   return [
-    { id: 'embed', label: 'embed.html', code: embedSnippet(embedUrl) },
-    { id: 'widget', label: 'Widget.tsx', code: widgetSnippet(embedUrl) },
-    { id: 'quote', label: 'quote.tsx', code: quoteSnippet(state) },
+    { id: 'embed', label: 'HTML embed', code: embedSnippet(embedUrl) },
+    { id: 'widget', label: 'React iframe', code: widgetSnippet(embedUrl) },
+    { id: 'quote', label: 'SDK quote', code: quoteSnippet(state) },
   ];
 }

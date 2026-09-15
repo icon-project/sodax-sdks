@@ -12,6 +12,7 @@ import {
   toIntentRequest,
   broadcast,
   isUserRejection,
+  executionError,
   type ExecutionDependencies,
 } from './execution';
 import { readActivity, submissionFor, type Activity } from './activity';
@@ -310,6 +311,24 @@ describe('activity recovery', () => {
     expect(submissionFor(restored).intent.intentId).toBe(9007199254740993n);
     expect(submissionFor(restored).txHash).toBe(activity.txHash);
   });
+  it('restores captured analytics and settlement reporting without trusting arbitrary fields', () => {
+    const pair = {
+      source_chain: activity.srcChainKey,
+      destination_chain: activity.dstChainKey,
+      input_token_symbol: 'ETH',
+      output_token_symbol: 'USDC',
+      input_amount: '1',
+      has_partner_fee: false,
+    };
+    expect(readActivity(JSON.stringify({ ...activity, pair, settlementReported: true }))?.pair).toEqual(pair);
+    expect(readActivity(JSON.stringify({ ...activity, pair, settlementReported: true }))?.settlementReported).toBe(
+      true,
+    );
+    expect(
+      readActivity(JSON.stringify({ ...activity, pair: { ...pair, input_amount: 'secret' } }))?.pair,
+    ).toBeUndefined();
+    expect(readActivity(JSON.stringify({ ...activity, pair: { ...pair, wallet: 'private' } }))?.pair).toEqual(pair);
+  });
   it('rejects corrupted storage and untrusted chain keys', () => {
     expect(readActivity('{')).toBeUndefined();
     expect(readActivity(JSON.stringify({ ...activity, srcChainKey: 'toString' }))).toBeUndefined();
@@ -324,5 +343,21 @@ describe('isUserRejection', () => {
     expect(isUserRejection(new Error('MetaMask Tx Signature: User denied transaction signature'))).toBe(true);
     expect(isUserRejection(new Error('insufficient funds for gas'))).toBe(false);
     expect(isUserRejection('not an error')).toBe(false);
+  });
+});
+
+describe('executionError', () => {
+  it('explains blocked RPC access without exposing the response payload', () => {
+    const cause = new Error('403 : {"jsonrpc":"2.0","error":{"code":403,"message":"Access forbidden"}}');
+    expect(executionError(cause)).toBe(
+      'The network connection refused this request (403). Please try again once the connection is restored.',
+    );
+  });
+
+  it('does not label a rejected RPC request as a wallet rejection', () => {
+    expect(executionError(new Error('RPC rejected the request: 403'))).toContain('network connection');
+    expect(executionError(new Error('User rejected the request'))).toBe(
+      'Request declined in your wallet. You can try again.',
+    );
   });
 });

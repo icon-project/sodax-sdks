@@ -213,7 +213,8 @@ function mix(from: string, to: string, weight: number): string {
 
 /** Whichever brand ink is readable on `background`. This is what stops white-on-yellow. */
 function ink(background: string): string {
-  return contrast(INK_DARK, background) >= contrast(INK_LIGHT, background) ? INK_DARK : INK_LIGHT;
+  if (contrast(INK_DARK, background) >= AA_TEXT) return INK_DARK;
+  return contrast(INK_LIGHT, background) >= AA_TEXT ? INK_LIGHT : '#000000';
 }
 
 /** Toward the colour's own ink: darkens a light colour, lightens a dark one. */
@@ -223,7 +224,7 @@ function step(hex: string, weight: number): string {
 
 /** Away from it, which is the other half of a hover/active pair whichever way round it is. */
 function lift(hex: string, weight: number): string {
-  return mix(hex, ink(hex) === INK_DARK ? INK_LIGHT : INK_DARK, weight);
+  return mix(hex, ink(hex) !== INK_LIGHT ? INK_LIGHT : INK_DARK, weight);
 }
 
 /** Both themes frame the app in something darker than the card, so this one goes to black either way. */
@@ -292,9 +293,9 @@ function colorRoles(brand: Brand, theme: 'light' | 'dark'): { decls: Declaration
 
     Object.assign(decls, {
       '--text-heading': checked.value,
-      '--text-body': mix(checked.value, surface, 0.12),
-      '--text-muted': mix(checked.value, surface, 0.34),
-      '--text-faint': mix(checked.value, surface, 0.52),
+      '--text-body': readable(mix(checked.value, surface, 0.12), surface, AA_TEXT).value,
+      '--text-muted': readable(mix(checked.value, surface, 0.34), surface, AA_TEXT).value,
+      '--text-faint': readable(mix(checked.value, surface, 0.52), surface, AA_TEXT).value,
     });
   }
 
@@ -371,4 +372,15 @@ export function brandStyles(brand: Brand): BrandStyles {
     .join('\n\n');
 
   return { css, notes: [...new Set([...light.notes, ...dark.notes])] };
+}
+
+/** Resolved values for the controls, including the active theme and derived text corrections. */
+export function resolvedColors(brand: Brand, theme: 'light' | 'dark'): Record<ColorField, string> {
+  const { decls } = colorRoles(brand, theme);
+  return {
+    accent: decls['--accent'] ?? (theme === 'dark' ? '#ffd92f' : '#a55c55'),
+    cta: decls['--cta-bg'] ?? (theme === 'dark' ? '#ecc100' : '#a55c55'),
+    surface: decls['--surface-embed'] ?? (theme === 'dark' ? '#17100f' : '#f5f2f2'),
+    text: decls['--text-heading'] ?? (theme === 'dark' ? '#ffffff' : '#483434'),
+  };
 }

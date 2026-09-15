@@ -61,7 +61,7 @@ describe('readUrlState', () => {
     expect(readUrlState(`?amount=${encodeURIComponent(value)}`).amount).toBeUndefined();
   });
 
-  it.each(['<script>', 'a'.repeat(21), 'US DC'])('drops the malformed token symbol %j', value => {
+  it.each(['<script>', 'a'.repeat(65), 'US/DC'])('drops the malformed token symbol %j', value => {
     expect(readUrlState(`?srcToken=${encodeURIComponent(value)}`).srcSymbol).toBeUndefined();
   });
 

@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { type Brand, NO_BRAND, type ThemeChoice, brandStyles, isBranded } from '../lib/brand';
+import {
+  type Brand,
+  NO_BRAND,
+  type ThemeChoice,
+  readBrandField,
+  brandStyles,
+  isBranded,
+  resolvedColors,
+} from '../lib/brand';
 import { initialUrl } from '../lib/initialUrl';
 
 export type Theme = 'light' | 'dark';
@@ -67,7 +75,7 @@ export type BrandControls = ReturnType<typeof useBrand>;
  * attribute and the derived stylesheet, and the demo page's controls edit the same state, so a
  * visitor's tweak lands in the query string and the copied embed snippet carries it.
  */
-export function useBrand() {
+export function useBrand(applyToDocument = true) {
   const [brand, setBrand] = useState<Brand>(initialUrl.brand);
   const [systemDark, setSystemDark] = useState(prefersDark);
 
@@ -82,17 +90,20 @@ export function useBrand() {
   const { css, notes } = useMemo(() => brandStyles(brand), [brand]);
 
   useEffect(() => {
-    applyBrandStyles(css);
-  }, [css]);
+    if (applyToDocument) applyBrandStyles(css);
+  }, [css, applyToDocument]);
 
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-  }, [theme]);
+    if (applyToDocument) document.documentElement.dataset.theme = theme;
+  }, [theme, applyToDocument]);
 
-  const update = useCallback(<K extends keyof Brand>(key: K, value: Brand[K]) => {
-    if (key === 'theme') pinTheme(value as ThemeChoice | undefined);
-    setBrand(previous => ({ ...previous, [key]: value }));
-  }, []);
+  const update = useCallback(
+    <K extends keyof Brand>(key: K, value: Brand[K]) => {
+      if (applyToDocument && key === 'theme') pinTheme(readBrandField('theme', value ?? null));
+      setBrand(previous => ({ ...previous, [key]: value }));
+    },
+    [applyToDocument],
+  );
 
   /**
    * Every field at once, for a preset. The controls then edit it like any other brand.
@@ -103,9 +114,10 @@ export function useBrand() {
   const apply = useCallback((next: Brand) => setBrand(next), []);
 
   const reset = useCallback(() => {
-    pinTheme(undefined);
+    if (applyToDocument) pinTheme(undefined);
     setBrand(NO_BRAND);
-  }, []);
+  }, [applyToDocument]);
 
-  return { brand, theme, notes, isBranded: isBranded(brand), update, apply, reset };
+  const colors = resolvedColors(brand, theme);
+  return { brand, theme, colors, notes, isBranded: isBranded(brand), update, apply, reset };
 }

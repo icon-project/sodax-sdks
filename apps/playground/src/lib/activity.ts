@@ -1,4 +1,5 @@
 import type { ChainKey, IntentResponseV2, SubmitTxRequestV2 } from '@sodax/dapp-kit';
+import type { PairDimensions } from './analytics';
 import { isChainKey } from './chains';
 import { toIntentRequest } from './execution';
 
@@ -14,6 +15,8 @@ export type Activity = {
   createdAt: number;
   intent: IntentResponseV2;
   relayData: string;
+  pair?: PairDimensions;
+  settlementReported?: boolean;
 };
 
 function record(value: unknown): value is Record<string, unknown> {
@@ -29,6 +32,32 @@ function isIntent(value: unknown): value is IntentResponseV2 {
     strings.every(key => typeof value[key] === 'string' && value[key].length < 10000) &&
     typeof value.allowPartialFill === 'boolean'
   );
+}
+
+function readPair(value: unknown): PairDimensions | undefined {
+  if (
+    !record(value) ||
+    typeof value.source_chain !== 'string' ||
+    !isChainKey(value.source_chain) ||
+    typeof value.destination_chain !== 'string' ||
+    !isChainKey(value.destination_chain) ||
+    typeof value.input_token_symbol !== 'string' ||
+    !/^[A-Za-z0-9 ._()-]{1,64}$/.test(value.input_token_symbol) ||
+    typeof value.output_token_symbol !== 'string' ||
+    !/^[A-Za-z0-9 ._()-]{1,64}$/.test(value.output_token_symbol) ||
+    typeof value.input_amount !== 'string' ||
+    !/^\d{1,30}(\.\d{0,30})?$/.test(value.input_amount) ||
+    typeof value.has_partner_fee !== 'boolean'
+  )
+    return undefined;
+  return {
+    source_chain: value.source_chain,
+    destination_chain: value.destination_chain,
+    input_token_symbol: value.input_token_symbol,
+    output_token_symbol: value.output_token_symbol,
+    input_amount: value.input_amount,
+    has_partner_fee: value.has_partner_fee,
+  };
 }
 
 export function readActivity(value: string | null): Activity | undefined {
@@ -64,6 +93,8 @@ export function readActivity(value: string | null): Activity | undefined {
       createdAt: data.createdAt,
       relayData: data.relayData,
       intent: data.intent,
+      ...(readPair(data.pair) ? { pair: readPair(data.pair) } : {}),
+      ...(data.settlementReported === true ? { settlementReported: true } : {}),
     };
   } catch {
     return undefined;
