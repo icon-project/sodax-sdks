@@ -9,7 +9,7 @@ const COLOR_FIELDS: readonly { key: ColorField; label: string; hint: string }[] 
   { key: 'accent', label: 'Accent', hint: 'Emphasis, and the button unless one is set below' },
   { key: 'cta', label: 'Button', hint: 'Its label colour is derived from this fill' },
   { key: 'surface', label: 'Surface', hint: 'Borders, insets and the text ramp follow it' },
-  { key: 'text', label: 'Text', hint: 'Corrected if it fails 4.5:1 on the surface' },
+  { key: 'text', label: 'Text', hint: 'Adjusted if it is hard to read on the surface' },
 ];
 
 /** Layer 2's own values, so the control shows what is rendering before a partner overrides it. */

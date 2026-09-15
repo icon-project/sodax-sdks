@@ -234,7 +234,7 @@ describe('brandStyles', () => {
 
     expect(light['--surface-card']).toBe('#ffffff');
     expect(contrast(dark['--surface-card'], '#ffffff')).toBeGreaterThan(4.5);
-    expect(notes.dark.some(note => note.includes('derives its ground'))).toBe(true);
+    expect(notes.dark.some(note => note.includes('the dark theme darkens it'))).toBe(true);
     expect(notes.light).toEqual([]);
   });
 
@@ -264,7 +264,7 @@ describe('brandStyles', () => {
     const [light] = blocks(css);
 
     expect(contrast(light['--text-heading'], '#ffffff')).toBeGreaterThanOrEqual(4.5);
-    expect(notes.light.some(note => note.includes('4.5:1'))).toBe(true);
+    expect(notes.light.some(note => note.includes('Text colour adjusted'))).toBe(true);
   });
 
   // Editorial's register: an ink button on paper, which on a ground we derived would be ink on ink.
@@ -274,7 +274,7 @@ describe('brandStyles', () => {
 
     expect(light['--cta-bg']).toBe('#1a1e1b');
     expect(contrast(dark['--cta-bg'], dark['--surface-card'])).toBeGreaterThanOrEqual(3);
-    expect(notes.dark.some(note => note.includes('Button fill'))).toBe(true);
+    expect(notes.dark.some(note => note.includes('Button colour adjusted'))).toBe(true);
     expect(notes.light).toEqual([]);
   });
 

@@ -291,7 +291,8 @@ function colorRoles(brand: Brand, theme: 'light' | 'dark'): { decls: Declaration
 
   if (brand.surface) {
     if (derivedGround) {
-      notes.push(`Your surface is a ${surfaceTheme(brand.surface)} colour, so ${theme} derives its ground from it.`);
+      const shade = theme === 'light' ? 'lightens' : 'darkens';
+      notes.push(`Your surface is ${surfaceTheme(brand.surface)}, so the ${theme} theme ${shade} it.`);
     }
 
     Object.assign(decls, {
@@ -326,7 +327,7 @@ function colorRoles(brand: Brand, theme: 'light' | 'dark'): { decls: Declaration
 
   if (heading) {
     const checked = readable(heading, surface, AA_TEXT);
-    if (checked.corrected) notes.push('Text colour was moved toward readable — it failed 4.5:1 on that surface.');
+    if (checked.corrected) notes.push('Text colour adjusted — yours was hard to read on this background.');
 
     Object.assign(decls, {
       '--text-heading': checked.value,
@@ -338,7 +339,7 @@ function colorRoles(brand: Brand, theme: 'light' | 'dark'): { decls: Declaration
 
   if (brand.accent) {
     const checked = readable(brand.accent, surface, AA_TEXT);
-    if (checked.corrected) notes.push('Accent was darkened or lightened where it is used as text — it failed 4.5:1.');
+    if (checked.corrected) notes.push('Accent adjusted — yours was hard to read on this background.');
 
     decls['--accent'] = checked.value;
     decls['--accent-hover'] = step(checked.value, 0.14);
@@ -352,7 +353,7 @@ function colorRoles(brand: Brand, theme: 'light' | 'dark'): { decls: Declaration
     // A stated fill is rendered as given. On a ground we derived, an ink button on ink-black paper
     // would vanish into a ground its owner never chose, so that one case is corrected.
     const fill = derivedGround ? readable(cta, surface, AA_CONTROL) : { value: cta, corrected: false };
-    if (fill.corrected) notes.push('Button fill was moved to stay visible against the derived ground.');
+    if (fill.corrected) notes.push('Button colour adjusted — yours was hard to see on this background.');
 
     Object.assign(decls, {
       '--cta-bg': fill.value,
