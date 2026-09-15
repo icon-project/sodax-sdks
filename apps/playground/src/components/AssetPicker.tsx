@@ -1,6 +1,6 @@
 import { type ChainKey, tokenLogo } from '@sodax/dapp-kit';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import { type PlaygroundChainKey, type TokenChoice, chainLogo, chainName } from '../lib/chains';
+import { type TokenChoice, chainLogo, chainName } from '../lib/chains';
 import { type AssetGroup, filterGroups, previewNetworks } from '../lib/pickerOptions';
 import { Glyph } from './AssetLogo';
 
@@ -336,52 +336,6 @@ export function AssetPicker<K extends ChainKey>({
           </div>
         )}
       </div>
-    </Shell>
-  );
-}
-
-export type NetworkPickerProps = {
-  open: boolean;
-  onClose: () => void;
-  networks: readonly PlaygroundChainKey[];
-  selected: PlaygroundChainKey;
-  onSelect: (chain: PlaygroundChainKey) => void;
-};
-
-/** The bridge's receive leg picks a network — the shared hub vault decides which asset arrives. */
-export function NetworkPicker({ open, onClose, networks, selected, onSelect }: NetworkPickerProps) {
-  const [query, setQuery] = useState('');
-
-  useEffect(() => {
-    if (open) setQuery('');
-  }, [open]);
-
-  const visible = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    return needle ? networks.filter(key => chainName(key).toLowerCase().includes(needle)) : networks;
-  }, [networks, query]);
-
-  return (
-    <Shell open={open} onClose={onClose} placeholder="Search networks…" query={query} onQueryChange={setQuery}>
-      {visible.length === 0 ? (
-        <p className="muted small picker-empty">No network matches that search.</p>
-      ) : (
-        <div className="tile-grid">
-          {visible.map(key => (
-            <Tile
-              key={key}
-              logo={chainLogo(key)}
-              alt={chainName(key)}
-              label={chainName(key)}
-              active={key === selected}
-              onClick={() => {
-                onSelect(key);
-                onClose();
-              }}
-            />
-          ))}
-        </div>
-      )}
     </Shell>
   );
 }

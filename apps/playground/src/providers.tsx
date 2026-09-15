@@ -17,6 +17,12 @@ const walletConfig: SodaxWalletConfig = {
   },
   SOLANA: { autoConnect: false },
   SUI: { autoConnect: false },
+  // RPC endpoints stay unset so each provider uses its SDK defaults; a deployment that needs its
+  // own endpoints sets them here. Bitcoin is not mounted — see `EXECUTABLE_CHAIN_TYPES`.
+  STELLAR: {},
+  NEAR: {},
+  STACKS: {},
+  INJECTIVE: {},
 };
 
 export default function Providers({ children }: { children: ReactNode }) {

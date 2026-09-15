@@ -1,7 +1,7 @@
 import { ChainKeys, type XToken } from '@sodax/dapp-kit';
 import { describe, expect, it } from 'vitest';
 import { NO_BRAND } from './brand';
-import { embedUrl, readUrlState, seedFor, toSearch } from './urlState';
+import { embedUrl, readUrlState, toSearch } from './urlState';
 
 const SRC_CHAIN = ChainKeys.BASE_MAINNET;
 const DST_CHAIN = ChainKeys.SOLANA_MAINNET;
@@ -22,7 +22,6 @@ const USDC = token('USDC', '0xaaa');
 const WETH = token('WETH', '0xbbb');
 
 const BLANK = {
-  flow: undefined,
   srcChain: undefined,
   dstChain: undefined,
   srcSymbol: undefined,
@@ -52,14 +51,6 @@ describe('readUrlState', () => {
     '',
   ])('drops the malformed chain %j', value => {
     expect(readUrlState(`?srcChain=${encodeURIComponent(value)}`).srcChain).toBeUndefined();
-  });
-
-  it.each(['swap', 'bridge'])('reads the %s flow', value => {
-    expect(readUrlState(`?flow=${value}`).flow).toBe(value);
-  });
-
-  it.each(['stake', 'SWAP', 'borrow', ''])('drops the unknown flow %j', value => {
-    expect(readUrlState(`?flow=${encodeURIComponent(value)}`).flow).toBeUndefined();
   });
 
   it.each(['12.5', '0.001', '7'])('keeps the decimal amount %s', value => {
@@ -93,38 +84,8 @@ describe('readUrlState', () => {
   });
 });
 
-describe('seedFor', () => {
-  const bridgeLink = readUrlState(`?flow=bridge&srcChain=${SRC_CHAIN}&amount=2`);
-
-  it('seeds the flow the link was written for', () => {
-    expect(seedFor('bridge', bridgeLink).srcChain).toBe(SRC_CHAIN);
-  });
-
-  // Otherwise a bridge link would preload the swap form with chains that were only ever written
-  // against the bridge's list.
-  it('seeds nothing into the other flow', () => {
-    expect(seedFor('swap', bridgeLink)).toEqual(BLANK);
-  });
-
-  // Embed and styling are about the frame, not about the form, so they survive a flow mismatch.
-  it('keeps embed mode across flows', () => {
-    expect(seedFor('swap', readUrlState('?flow=bridge&embed=1')).embed).toBe(true);
-  });
-
-  it('keeps the styling across flows', () => {
-    expect(seedFor('swap', readUrlState('?flow=bridge&accent=7c3aed')).brand.accent).toBe('#7c3aed');
-  });
-
-  it('treats a link with no flow as a swap link, which is what every older link is', () => {
-    const legacy = readUrlState(`?srcChain=${SRC_CHAIN}&amount=2`);
-    expect(seedFor('swap', legacy).amount).toBe('2');
-    expect(seedFor('bridge', legacy).amount).toBeUndefined();
-  });
-});
-
 describe('toSearch', () => {
   const base = {
-    flow: 'swap' as const,
     srcChain: SRC_CHAIN,
     dstChain: DST_CHAIN,
     srcToken: USDC,
@@ -135,7 +96,6 @@ describe('toSearch', () => {
 
   it('round-trips through readUrlState', () => {
     expect(readUrlState(`?${toSearch(base)}`)).toEqual({
-      flow: undefined,
       srcChain: SRC_CHAIN,
       dstChain: DST_CHAIN,
       srcSymbol: 'USDC',
@@ -145,11 +105,6 @@ describe('toSearch', () => {
       embed: false,
       brand: NO_BRAND,
     });
-  });
-
-  it('writes no flow for a swap, which is the default a bare link means', () => {
-    expect(toSearch(base)).not.toContain('flow=');
-    expect(toSearch({ ...base, flow: 'bridge' })).toContain('flow=bridge');
   });
 
   // The widget rewrites the query string on every change; dropping the flag would take a framed
@@ -182,7 +137,6 @@ describe('toSearch', () => {
 
 describe('embedUrl', () => {
   const state = {
-    flow: 'swap' as const,
     srcChain: SRC_CHAIN,
     dstChain: DST_CHAIN,
     srcToken: USDC,

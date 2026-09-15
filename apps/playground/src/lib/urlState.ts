@@ -1,7 +1,6 @@
 import { readWidgetSettings, type WidgetSettings } from './widgetSettings';
 import type { ChainKey, XToken } from '@sodax/dapp-kit';
-import { type Brand, NO_BRAND, readBrand, writeBrand } from './brand';
-import { type Flow, flowParam } from './flows';
+import { type Brand, readBrand, writeBrand } from './brand';
 
 /**
  * The form state a link can carry, so a docs page or a partner's `<iframe>` can open the widget on
@@ -12,7 +11,6 @@ import { type Flow, flowParam } from './flows';
  */
 export type UrlState = {
   widget?: WidgetSettings;
-  flow: Flow | undefined;
   /** Syntax only. A key from a URL is a string until the caller resolves it against a live list. */
   srcChain: string | undefined;
   dstChain: string | undefined;
@@ -28,13 +26,11 @@ export type UrlState = {
 
 export type UrlStateSource = {
   widget?: WidgetSettings;
-  flow: Flow;
   srcChain: ChainKey;
   dstChain: ChainKey;
   srcToken: XToken | undefined;
   dstToken: XToken | undefined;
   amount: string;
-  /** Swap-only: bridging has no slippage, so the link carries none. */
   slippage?: string;
   /** Kept on every rewrite, or a framed widget loses its chrome-off mode on the first reload. */
   embed?: boolean;
@@ -55,7 +51,6 @@ export function readUrlState(search: string): UrlState {
 
   return {
     ...(params.has('allowedSrc') || params.has('allowedDst') ? { widget: readWidgetSettings(params) } : {}),
-    flow: flowParam(params.get('flow')),
     srcChain: matching(CHAIN_KEY, params.get('srcChain')),
     dstChain: matching(CHAIN_KEY, params.get('dstChain')),
     srcSymbol: matching(SYMBOL, params.get('srcToken')),
@@ -67,30 +62,6 @@ export function readUrlState(search: string): UrlState {
   };
 }
 
-const BLANK: UrlState = {
-  flow: undefined,
-  srcChain: undefined,
-  dstChain: undefined,
-  srcSymbol: undefined,
-  dstSymbol: undefined,
-  amount: undefined,
-  slippage: undefined,
-  embed: false,
-  brand: NO_BRAND,
-};
-
-/**
- * A link seeds only the flow it was written for. Without this a `?flow=bridge` link would also
- * preload the swap form, and its chains were written against a different list.
- *
- * Chrome and styling are about the frame rather than the form, so both cross a flow mismatch.
- */
-export function seedFor(flow: Flow, state: UrlState): UrlState {
-  return (state.flow ?? 'swap') === flow
-    ? state
-    : { ...BLANK, embed: state.embed, brand: state.brand, widget: state.widget };
-}
-
 export function toSearch(state: UrlStateSource): string {
   const params = new URLSearchParams();
   params.set('srcChain', state.srcChain);
@@ -99,7 +70,6 @@ export function toSearch(state: UrlStateSource): string {
   if (state.dstToken) params.set('dstToken', state.dstToken.symbol);
   if (state.amount.trim()) params.set('amount', state.amount.trim());
   if (state.slippage !== undefined) params.set('slippage', state.slippage);
-  if (state.flow !== 'swap') params.set('flow', state.flow);
   if (state.embed) params.set('embed', '1');
   if (state.brand) writeBrand(params, state.brand);
   if (state.widget?.sourceNetworks.length) params.set('allowedSrc', state.widget.sourceNetworks.join(','));

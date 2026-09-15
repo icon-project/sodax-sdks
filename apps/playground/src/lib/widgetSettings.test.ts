@@ -13,7 +13,6 @@ describe('widget network configuration', () => {
   it('preserves restrictions in exported and rewritten URLs', () => {
     const widget = { sourceNetworks: [ChainKeys.BASE_MAINNET], destinationNetworks: [ChainKeys.SOLANA_MAINNET] };
     const search = toSearch({
-      flow: 'swap',
       srcChain: ChainKeys.BASE_MAINNET,
       dstChain: ChainKeys.SOLANA_MAINNET,
       srcToken: undefined,
