@@ -81,11 +81,20 @@ pnpm check:ai-dev-files
   `input_amount_usd` while nothing here prices the input. Failure reasons stay a closed set.
 - Use native dialogs, keyboard-operable controls, readable errors and responsive layouts. Keep partner
   controls and technical setup in the builder, not inside the user's swap form.
+- `components/Dropdown.tsx` is the design system's navigation menu as a form control; use it rather
+  than `<select>`, whose popup the OS draws in its own colours. Its panel is a top-layer popover
+  because the builder's cards and scrolling column would clip an anchored one, so its position is a
+  snapshot: anything that moves the trigger closes it. Keys resolve through `lib/dropdown.ts`.
 - Preview appearance changes must not restyle the builder or reload an active swap. Setup edits are
   blocked while its preview has a wallet dialog, review, preparation or activity.
 - Preserve the SODAX B2B palette and semantic CSS roles. Brand overrides validate values and derive
-  contrast. Theme resolves pre-paint in `index.html` and must agree with `useBrand`. A preset seeds
+  contrast. Theme resolves pre-paint in `index.html` and must agree with `useBrand`; that script does
+  no colour maths, which is why `writeBrand` spells out the theme a surface implies. A preset seeds
   that same state; it must not name a real third-party brand or load a font outside `FONT_STACKS`.
+- A brand states one surface and both themes derive from it: the theme that surface already is renders
+  it exactly, the other gets a ground derived from it, so `?theme=` and `sodax:theme` reach a branded
+  embed. With no `theme` the surface decides — never invert a ground a partner chose. Corrections are
+  reported per theme; pooling them reports one the theme on screen did not make.
 - No UI framework or icon-library dependency. Import SDK/types through `@sodax/dapp-kit`.
 - `polyfill.ts` must remain the first entry import; the SDK graph needs `Buffer` during evaluation.
 - Swap is the only flow. Do not turn the swap widget into a multi-product dashboard; another product

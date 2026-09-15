@@ -64,13 +64,16 @@ The builder has three panels: **Setup**, **Appearance**, and **Integrate**.
   token blocks the route rather than silently substituting another asset.
 - The live preview is a real iframe at 480px or 375px (limited by available screen width). Dialogs,
   media queries, and wallet connections belong to that frame. Trying a different trade in the
-  preview does not change the exported defaults in Setup.
+  preview does not change the exported defaults in Setup. The builder caption explains that preview
+  swaps use real funds; the swap review repeats the warning before confirmation.
 - Appearance updates the preview without reloading it or restyling the builder. The color controls
   show resolved theme colors and accept hex entry; font, radius, density and secondary colors sit
   under Advanced appearance. Derived text and CTA labels are checked for contrast.
 - Integrate provides HTML, a React iframe wrapper, and a separate SDK quote example. The React
-  wrapper owns no wallet provider and supports an optional `onSwapStatus` callback.
+  wrapper owns no wallet provider and supports an optional `onSwapStatus` callback. Its info tooltip
+  uses the frontend bubble style above the icon, with viewport positioning outside the scrolling panel.
 - Share copies a configuration URL. Reset all restores the default trade, restrictions, and theme.
+  Action confirmations appear in reserved space below the header buttons so the configuration tabs stay put.
   Setup and Appearance pause while a wallet dialog, review, preparation or activity is active in
   the preview, so an edit cannot replace an in-progress swap.
 - The compact swap form shows minimum received, estimated time, and applicable partner fees before

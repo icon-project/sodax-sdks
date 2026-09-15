@@ -35,7 +35,14 @@ export function assetGroups<K extends ChainKey>(choices: readonly TokenChoice<K>
     .sort((a, b) => b.choices.length - a.choices.length || a.symbol.localeCompare(b.symbol));
 }
 
-/** Case-insensitive symbol match, and — when a network is picked — only groups that reach it. */
+/** Symbol, name or pasted contract address — an address reaches the asset it belongs to. */
+function matches<K extends ChainKey>(choice: TokenChoice<K>, needle: string): boolean {
+  return [choice.token.symbol, choice.token.name, choice.token.address].some(value =>
+    value.toLowerCase().includes(needle),
+  );
+}
+
+/** Case-insensitive search, and — when a network is picked — only groups that reach it. */
 export function filterGroups<K extends ChainKey>(
   groups: readonly AssetGroup<K>[],
   query: string,
@@ -44,10 +51,11 @@ export function filterGroups<K extends ChainKey>(
   const needle = query.trim().toLowerCase();
 
   const kept = groups.reduce<AssetGroup<K>[]>((kept, group) => {
-    if (needle && !group.symbol.toLowerCase().includes(needle)) return kept;
-
     const choices = network ? group.choices.filter(choice => choice.chain === network) : group.choices;
-    if (choices.length > 0) kept.push({ symbol: group.symbol, choices });
+    if (choices.length === 0) return kept;
+    if (needle && !choices.some(choice => matches(choice, needle))) return kept;
+
+    kept.push({ symbol: group.symbol, choices });
     return kept;
   }, []);
 
@@ -69,22 +77,4 @@ export function previewNetworks<K extends ChainKey>(networks: readonly K[], coun
   const preferred = MARK_ORDER.filter((key): key is K => (networks as readonly ChainKey[]).includes(key));
   const rest = networks.filter(key => !preferred.includes(key));
   return [...preferred, ...rest].slice(0, count);
-}
-
-/** Search resolved API assets, retaining the network on every result. */
-export function searchChoices<K extends ChainKey>(
-  choices: readonly TokenChoice<K>[],
-  query: string,
-  network?: K,
-): TokenChoice<K>[] {
-  const needle = query.trim().toLowerCase();
-  return choices
-    .filter(
-      choice =>
-        (!network || choice.chain === network) &&
-        [choice.token.symbol, choice.token.name, choice.token.address].some(value =>
-          value.toLowerCase().includes(needle),
-        ),
-    )
-    .sort((a, b) => Number(b.token.symbol.toLowerCase() === needle) - Number(a.token.symbol.toLowerCase() === needle));
 }

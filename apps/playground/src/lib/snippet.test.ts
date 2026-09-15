@@ -23,7 +23,7 @@ const codeFor = (state: SnippetState, id: string): string =>
 describe('buildSnippets', () => {
   // The takeaway leads: every competitor's playground ends with something the visitor can ship.
   it('opens on the embed, then the code behind it', () => {
-    expect(buildSnippets(base, EMBED_URL).map(snippet => snippet.id)).toEqual(['embed', 'widget', 'quote']);
+    expect(buildSnippets(base, EMBED_URL).map(snippet => snippet.id)).toEqual(['embed', 'widget', 'agent', 'quote']);
   });
 
   // The hosted embed owns signing; its integration snippet should not duplicate that flow.
@@ -64,6 +64,30 @@ describe('buildSnippets', () => {
     expect(react).toContain('MessageEvent<unknown>');
     expect(html).toContain('referrerpolicy="origin"');
     expect(react).toContain('referrerPolicy="origin"');
+  });
+
+  // An agent reads the prompt and edits the host app unattended, so the constraints it cannot infer
+  // from the markup have to be stated: the query string is the configuration, allow is load-bearing,
+  // there is no package to install, and the thing spends real money.
+  describe('the agent prompt', () => {
+    it('carries the configured embed and the constraints an agent would otherwise tidy away', () => {
+      const prompt = codeFor(base, 'agent');
+
+      expect(prompt).toContain(EMBED_URL);
+      expect(prompt).toContain('allow="ethereum; solana; clipboard-write"');
+      expect(prompt).toContain('do not rewrite or drop the query string');
+      expect(prompt).toContain('Do not install any @sodax/* package');
+      expect(prompt).toContain('real funds on mainnet');
+    });
+
+    it('names the pair in ChainKeys terms, as the code tabs do', () => {
+      expect(codeFor(base, 'agent')).toContain('ChainKeys.SOLANA_MAINNET');
+    });
+
+    it('tells the reader where to paste it', () => {
+      const agent = buildSnippets(base, EMBED_URL).find(snippet => snippet.id === 'agent');
+      expect(agent?.note).toContain('coding agent');
+    });
   });
 
   // The whole point of the panel: a reader pastes chain keys that exist in the version they install.

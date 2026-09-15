@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { BrandBar } from '../components/BrandBar';
 import { CodePanel } from '../components/CodePanel';
+import { CopyLabel } from '../components/CopyLabel';
 import { SetupPanel } from '../components/SetupPanel';
 import { WidgetPreview } from '../components/WidgetPreview';
 import { SwapPanel } from '../components/SwapPanel';
@@ -17,7 +18,6 @@ export function SwapWidget({ flow }: { flow: SwapFlow }) {
     <div className="flow-column">
       <header className="widget-heading">
         <h2>Swap</h2>
-        <span className="network-label">Live on mainnet</span>
       </header>
       <SwapPanel flow={flow} />
       <SwapActivity execution={flow.execution} />
@@ -30,7 +30,10 @@ const PANELS = { setup: 'Setup', appearance: 'Appearance', integrate: 'Integrate
 export function SwapView({ flow, brandControls }: { flow: SwapFlow; brandControls: BrandControls }) {
   const [panel, setPanel] = useState<keyof typeof PANELS>('setup');
   const [mobile, setMobile] = useState(false);
-  const [message, setMessage] = useState('');
+  // Success is confirmed on the button that was pressed; the line below is for the paths that need
+  // an instruction, so nothing reserves space for a message that is usually absent.
+  const [copied, setCopied] = useState<'share' | 'embed'>();
+  const [notice, setNotice] = useState('');
   const [shareFallback, setShareFallback] = useState('');
   const [previewBusy, setPreviewBusy] = useState(false);
   const { srcChain, dstChain, srcToken, dstToken, amount, slippagePercent, partnerFee, brand, widget } = flow;
@@ -59,15 +62,21 @@ export function SwapView({ flow, brandControls }: { flow: SwapFlow; brandControl
     flow.isSlippageValid,
   ]);
 
+  const confirm = (button: 'share' | 'embed') => {
+    setCopied(button);
+    window.setTimeout(() => setCopied(undefined), 1500);
+  };
+
   const share = async () => {
     if (!configured) return;
     try {
       await navigator.clipboard.writeText(configured.share);
       setShareFallback('');
-      setMessage('Configuration link copied');
+      setNotice('');
+      confirm('share');
     } catch {
       setShareFallback(configured.share);
-      setMessage('Select and copy your configuration link below.');
+      setNotice('Select and copy your configuration link below.');
     }
   };
   const copy = async () => {
@@ -76,10 +85,11 @@ export function SwapView({ flow, brandControls }: { flow: SwapFlow; brandControl
     try {
       await navigator.clipboard.writeText(snippet.code);
       trackSnippetCopied('embed');
-      setMessage('HTML embed copied');
+      setNotice('');
+      confirm('embed');
     } catch {
       setPanel('integrate');
-      setMessage('Select and copy the code in Integrate.');
+      setNotice('Select and copy the code in Integrate.');
     }
   };
 
@@ -90,30 +100,32 @@ export function SwapView({ flow, brandControls }: { flow: SwapFlow; brandControl
           <h2>Build your swap widget.</h2>
           <p className="muted">Set the trade, make it yours, and embed it in your app.</p>
         </div>
-        <div className="studio-actions">
-          <button
-            type="button"
-            className="btn"
-            disabled={previewBusy}
-            onClick={() => {
-              flow.resetDefaults();
-              brandControls.reset();
-              setMessage('Configuration reset');
-              setShareFallback('');
-            }}
-          >
-            Reset all
-          </button>
-          <button type="button" className="btn" disabled={!configured} onClick={share}>
-            Share
-          </button>
-          <button type="button" className="btn btn-primary" disabled={!configured} onClick={copy}>
-            Copy embed
-          </button>
+        <div className="studio-action-group">
+          <div className="studio-actions">
+            <button
+              type="button"
+              className="btn"
+              disabled={previewBusy}
+              onClick={() => {
+                flow.resetDefaults();
+                brandControls.reset();
+                setNotice('');
+                setShareFallback('');
+              }}
+            >
+              Reset all
+            </button>
+            <button type="button" className="btn" disabled={!configured} onClick={share}>
+              <CopyLabel label="Share" copied={copied === 'share'} />
+            </button>
+            <button type="button" className="btn btn-primary" disabled={!configured} onClick={copy}>
+              <CopyLabel label="Copy embed" copied={copied === 'embed'} />
+            </button>
+          </div>
+          <p className="studio-status small" role="status">
+            {notice}
+          </p>
         </div>
-        <p className="studio-status small" role="status" hidden={!message}>
-          {message}
-        </p>
         {shareFallback && (
           <input
             className="input share-link"
@@ -147,8 +159,8 @@ export function SwapView({ flow, brandControls }: { flow: SwapFlow; brandControl
             <section className="card integration-card">
               <h3>Add it to your app</h3>
               <p className="muted small">
-                Choose HTML or React below. Both embed the hosted widget, with its own wallet connection. No SODAX
-                package installation needed.
+                Take the HTML or React embed, or hand the prompt to your coding agent — each installs the hosted widget
+                with its own wallet connection, and no SODAX package.
               </p>
               {configured ? (
                 <CodePanel snippets={configured.snippets} initialId="embed" />
@@ -207,10 +219,10 @@ export function SwapView({ flow, brandControls }: { flow: SwapFlow; brandControl
           <span className="eyebrow">Live preview</span>
           <fieldset className="segmented" aria-label="Preview width">
             <button type="button" className="btn" aria-pressed={!mobile} onClick={() => setMobile(false)}>
-              Desktop · 480
+              Desktop
             </button>
             <button type="button" className="btn" aria-pressed={mobile} onClick={() => setMobile(true)}>
-              Mobile · 375
+              Mobile
             </button>
           </fieldset>
         </div>
@@ -236,7 +248,7 @@ export function SwapView({ flow, brandControls }: { flow: SwapFlow; brandControl
           )}
         </div>
         <p className="preview-caption muted small">
-          Try the widget here. Your exported starting trade is set in Setup.
+          Swaps in this preview use real funds. Your exported starting trade is set in Setup.
         </p>
       </div>
     </>

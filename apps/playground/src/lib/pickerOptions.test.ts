@@ -1,7 +1,7 @@
 import { CHAIN_KEYS, ChainKeys, type ChainKey, getSupportedSolverTokens } from '@sodax/dapp-kit';
 import { describe, expect, it } from 'vitest';
 import type { TokenChoice } from './chains';
-import { searchChoices, assetGroups, filterGroups, previewNetworks, tokenOptionId } from './pickerOptions';
+import { assetGroups, filterGroups, previewNetworks, tokenOptionId } from './pickerOptions';
 
 // The packaged solver list stands in for the API's here: same shape, offline, and it already spans
 // EVM and non-EVM families, which is what the grouping has to survive.
@@ -71,6 +71,18 @@ describe('filterGroups', () => {
     expect(matched.length).toBeGreaterThan(0);
     for (const group of matched) {
       expect(group.symbol.toLowerCase()).toContain('usd');
+    }
+  });
+
+  // A tile is one symbol, but a partner pasting an address or typing a full name still has to land
+  // on the asset that carries it.
+  it('finds a group by a token name or pasted contract address', () => {
+    const choice = CHOICES.find(({ token }) => token.address.length > 10);
+    if (!choice) throw new Error('Missing address fixture');
+
+    for (const query of [choice.token.name, choice.token.address]) {
+      const symbols = filterGroups(groups, query, choice.chain).map(group => group.symbol);
+      expect(symbols).toContain(choice.token.symbol);
     }
   });
 
@@ -157,21 +169,5 @@ describe('previewNetworks', () => {
     const exotic = CHAINS.filter(key => !(PREFERRED as readonly string[]).includes(key)).slice(0, 4);
     expect(exotic.length).toBeGreaterThan(0);
     expect(previewNetworks(exotic)).toEqual(exotic);
-  });
-});
-
-describe('asset search', () => {
-  it('finds names and contract addresses as well as symbols', () => {
-    const first = CHOICES.find(choice => choice.token.address.length > 10);
-    if (!first) throw new Error('Missing address fixture');
-    expect(searchChoices(CHOICES, first.token.name, first.chain)).toContainEqual(first);
-    expect(searchChoices(CHOICES, first.token.address, first.chain)).toContainEqual(first);
-  });
-  it('keeps results on the selected network and matches exact symbols first', () => {
-    const results = searchChoices(CHOICES, 'ETH', ChainKeys.BASE_MAINNET);
-    expect(results.length).toBeGreaterThan(0);
-    expect(results.every(choice => choice.chain === ChainKeys.BASE_MAINNET)).toBe(true);
-    expect(results[0].token.symbol).toBe('ETH');
-    expect(searchChoices(CHOICES, 'no-such-token')).toEqual([]);
   });
 });
