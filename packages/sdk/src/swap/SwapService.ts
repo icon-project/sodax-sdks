@@ -1842,8 +1842,6 @@ export class SwapService {
    * @returns the estimated `tier` bucket and `estimatedSeconds`
    */
   public getSwapSpeedTier(params: SwapSpeedTierParams): SwapSpeedTierResult {
-    // Despite its name, this ConfigService method tests membership of the reserve set, which holds
-    // vault addresses — so it is the right predicate for the `XToken.vault` the estimator passes.
-    return estimateSwapSpeedTier(params, vault => this.config.isMoneyMarketReserveHubAsset(vault));
+    return estimateSwapSpeedTier(params, vault => this.config.isMoneyMarketReserveAsset(vault));
   }
 }

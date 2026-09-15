@@ -1484,7 +1484,7 @@ describe('SwapService.getSupportedSwapTokensByChainId', () => {
 describe('SwapService.getSwapSpeedTier', () => {
   it('recognizes a real packaged reserve asset despite its mixed-case checksummed config address', () => {
     // Regression test for a case-sensitivity bug: packaged reserve addresses (from SodaTokens) are
-    // EIP-55 checksummed mixed-case, but ConfigService.isMoneyMarketReserveHubAsset lowercases its
+    // EIP-55 checksummed mixed-case, but ConfigService.isMoneyMarketReserveAsset lowercases its
     // query — so the Set backing it must be normalized too, or every checksummed entry silently
     // misses and every sodaAsset pair reports the slow default tier instead of the fast one.
     const reserveHubAsset = sodax.config
@@ -1524,7 +1524,7 @@ describe('SwapService.getSwapSpeedTier', () => {
     const srcToken = spokeChainConfig[ChainKeys.SONIC_MAINNET].supportedTokens.SODA;
     const dstToken = spokeChainConfig[ChainKeys.SOLANA_MAINNET].supportedTokens.SOL;
     expect(srcToken.hubAsset.toLowerCase()).not.toBe(srcToken.vault.toLowerCase());
-    expect(sodax.config.isMoneyMarketReserveHubAsset(srcToken.hubAsset)).toBe(false);
+    expect(sodax.config.isMoneyMarketReserveAsset(srcToken.hubAsset)).toBe(false);
 
     expect(sodax.swaps.getSwapSpeedTier({ srcToken, dstToken })).toEqual({
       tier: 'fast',

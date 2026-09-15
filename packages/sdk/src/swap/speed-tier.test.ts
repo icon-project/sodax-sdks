@@ -26,7 +26,7 @@ const token = (chainKey: ChainKey, vault: Address): XToken => ({
   vault,
 });
 
-// Predicate stand-in for config.isMoneyMarketReserveHubAsset, which is backed by the reserve set.
+// Predicate stand-in for config.isMoneyMarketReserveAsset, which is backed by the reserve set.
 const isSodaAsset = (vault: Address): boolean => vault.toLowerCase() === SODA_VAULT.toLowerCase();
 
 describe('estimateSwapSpeedTier', () => {
