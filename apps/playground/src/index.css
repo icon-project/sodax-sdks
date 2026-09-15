@@ -1607,6 +1607,30 @@ code,
   padding: 0;
 }
 
+/* Label and confirmation share one cell: the button sizes to the wider of the two and holds it. */
+.copy-label {
+  display: inline-grid;
+  align-items: center;
+  justify-items: center;
+}
+
+.copy-label > span {
+  grid-area: 1 / 1;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+  white-space: nowrap;
+}
+
+.copy-label-done,
+.copy-label-copied .copy-label-idle {
+  visibility: hidden;
+}
+
+.copy-label-copied .copy-label-done {
+  visibility: visible;
+}
+
 .copied-glyph {
   width: 14px;
   height: 14px;

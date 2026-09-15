@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { trackSnippetCopied } from '../lib/analytics';
 import type { Snippet } from '../lib/snippet';
-import { CheckGlyph } from './CheckGlyph';
+import { CopyLabel } from './CopyLabel';
 import { SnippetHint } from './SnippetHint';
 
 /** Renders whichever flow's snippets it is handed — the view decides what those are. */
@@ -47,13 +47,7 @@ export function CodePanel({ snippets, initialId }: { snippets: Snippet[]; initia
         <div className="code-actions">
           <SnippetHint />
           <button type="button" className="btn" onClick={copy}>
-            {copied ? (
-              <>
-                <CheckGlyph /> Copied
-              </>
-            ) : (
-              'Copy'
-            )}
+            <CopyLabel label="Copy" copied={copied} />
           </button>
           <a className="btn btn-docs" href="https://docs.sodax.com/" target="_blank" rel="noreferrer">
             Docs ↗
