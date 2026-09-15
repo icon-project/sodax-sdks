@@ -9,7 +9,7 @@ import type { BrandControls } from '../hooks/useBrand';
 import type { SwapFlow } from '../hooks/useSwapFlow';
 import { buildSnippets } from '../lib/snippet';
 import { embedUrl } from '../lib/urlState';
-import { chainName } from '../lib/chains';
+import { chainName, executableFamilies } from '../lib/chains';
 import { networkAllowed } from '../lib/widgetSettings';
 import { canExecute } from '../lib/execution';
 import { trackSnippetCopied } from '../lib/analytics';
@@ -146,7 +146,7 @@ export function SwapView({ flow, brandControls }: { flow: SwapFlow; brandControl
               </fieldset>
             ))}
             <p className="muted small">
-              In-widget execution: EVM, Solana and Sui. Other networks open the SODAX exchange.
+              In-widget execution: {executableFamilies()}. Other networks open the SODAX exchange.
             </p>
           </section>
         )}

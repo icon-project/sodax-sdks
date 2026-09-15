@@ -13,7 +13,7 @@ pnpm --filter @sodax/playground dev
 pnpm --filter @sodax/playground test
 pnpm --filter @sodax/playground checkTs
 pnpm --filter @sodax/playground build
-pnpm exec biome check apps/playground
+pnpm --filter @sodax/playground exec biome check .
 pnpm check:ai-dev-files
 ```
 

@@ -121,6 +121,11 @@ dimensions, so its settlement reports nothing — `swap_completed` undercounts r
 `?embed=1` removes the builder and page header. Use **Copy embed** for the full integration, including
 an automatic height listener that checks both the widget origin and `event.source`.
 
+Both generated embeds set `allow="ethereum; solana"` on the `<iframe>`. Brave injects wallet providers
+into a third-party frame only when the host page grants those features
+([provider availability](https://wallet-docs.brave.com/provider-availability/)); other browsers ignore
+the names. Keep the attribute when moving the iframe into your own markup.
+
 | Parameters | Values |
 | --- | --- |
 | `srcChain`, `dstChain` | SDK chain keys, resolved against the live token list |

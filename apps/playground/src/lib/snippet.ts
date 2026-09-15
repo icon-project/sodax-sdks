@@ -20,7 +20,8 @@ function feeExpression(fee: PartnerFeePercentage): string {
 
 /** The takeaway: the widget on the visitor's own page, opened on the pair they just configured. */
 function embedSnippet(embedUrl: string): string {
-  return `<!-- Live mainnet swaps. Visitors connect and approve transactions in their wallet. -->
+  return `<!-- Live mainnet swaps. Visitors connect and approve transactions in their wallet.
+     Brave shows wallets to a third-party frame only when the host allows them: keep the allow attribute. -->
 <iframe
   src="${embedUrl}"
   title="SODAX swap"
@@ -28,6 +29,7 @@ function embedSnippet(embedUrl: string): string {
   height="760"
   loading="lazy"
   referrerpolicy="no-referrer"
+  allow="ethereum; solana"
   style="border: 0; border-radius: 24px; max-width: 100%"
 ></iframe>
 <script>
@@ -71,6 +73,7 @@ export function SodaxSwapWidget({ src = '${embedUrl}', height = 760 }: SodaxSwap
       title="SODAX swap"
       loading="lazy"
       referrerPolicy="no-referrer"
+      allow="ethereum; solana"
       style={{ width: '100%', maxWidth: 480, height, border: 0, borderRadius: 24 }}
     />
   );

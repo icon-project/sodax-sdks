@@ -47,6 +47,13 @@ describe('buildSnippets', () => {
     expect(codeFor(base, 'embed')).toContain('approve transactions in their wallet');
   });
 
+  // Brave injects window.ethereum and window.solana into a third-party frame only when the host
+  // grants those features; without them the embed's connect buttons find no wallet in Brave.
+  it('asks the host to expose wallets to the frame, in both embeds', () => {
+    expect(codeFor(base, 'embed')).toContain('allow="ethereum; solana"');
+    expect(codeFor(base, 'widget')).toContain('allow="ethereum; solana"');
+  });
+
   // The whole point of the panel: a reader pastes chain keys that exist in the version they install.
   it('names chains as ChainKeys expressions, never raw key strings', () => {
     const code = codeFor(base, 'quote');
