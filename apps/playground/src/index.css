@@ -953,7 +953,6 @@ code,
   color: var(--text-body);
 }
 
-.select,
 .input {
   background: var(--surface-inset);
   border: 1px solid var(--border-inset);
@@ -966,7 +965,6 @@ code,
   width: 100%;
 }
 
-.select:focus-visible,
 .input:focus-visible {
   outline: 2px solid var(--border-strong);
   outline-offset: -2px;
@@ -978,26 +976,125 @@ code,
   opacity: 1;
 }
 
-/* `appearance: none` drops the OS chevron and metrics, which sat a browser widget next to our own
-   controls. Redrawn on the design system's clay ink — one variant per theme, since a data URI
-   cannot read a custom property. */
-.select {
+/* ── Dropdown ───────────────────────────────────────────────────────────── */
+/* The B2B design system's navigation menu, rebuilt as a form control: a 42px trigger on an 8px
+   radius, a 12px chevron behind a 4px gap, and a panel of 12px/8px rows. Only the geometry is
+   borrowed — every colour stays on a semantic role, so an appearance the visitor picks reaches it. */
+.dropdown {
+  display: flex;
+  min-width: 0;
+}
+
+.dropdown-trigger {
+  display: flex;
   flex: 1;
-  appearance: none;
-  height: 36px;
-  padding: 0 32px 0 12px;
-  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="none"><path d="M2.5 4.5 6 8l3.5-3.5" stroke="%238E7E7D" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>');
-  background-repeat: no-repeat;
-  background-position: right 12px center;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  min-width: 0;
+  height: 42px;
+  padding: 0 var(--space-16);
+  border: 1px solid var(--border-inset);
+  border-radius: var(--radius-small);
+  background: var(--surface-inset);
+  color: var(--text-heading);
+  font-family: var(--font-body);
+  font-size: var(--text-body-small);
+  font-weight: 500;
+  line-height: 18px;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color 150ms,
+    border-color 150ms;
+}
+
+.dropdown-trigger:hover:not(:disabled) {
+  border-color: var(--border-strong);
+}
+
+.dropdown-trigger:focus-visible {
+  outline: 2px solid var(--border-strong);
+  outline-offset: -2px;
+}
+
+.dropdown-trigger:disabled {
+  color: var(--text-faint);
+  cursor: default;
+}
+
+/* An open trigger is filled in the brand colour there; the brand here is the visitor's, so it is a
+   wash of the accent rather than the accent itself — a solid fill would redraw its own label. */
+.dropdown-trigger[aria-expanded="true"] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface-inset));
+}
+
+.dropdown-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dropdown-chevron {
+  flex: none;
+  color: var(--text-muted);
+}
+
+.dropdown-trigger[aria-expanded="true"] .dropdown-chevron {
+  color: var(--accent);
+}
+
+/* A popover in the top layer, not a child of the control: these open inside cards and a scrolling
+   column, either of which would clip an absolutely-positioned panel at its own edge. The component
+   sets `top`/`bottom`/`left` from the trigger, which is why the UA's centring inset is cleared. */
+.dropdown-panel {
+  position: fixed;
+  inset: auto;
+  z-index: 5;
+  width: max-content;
+  max-width: min(260px, 72vw);
+  margin: 0;
+  padding: 4px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-small);
+  background: color-mix(in srgb, var(--surface-card) 88%, transparent);
+  color: var(--text-heading);
+  backdrop-filter: blur(40px);
+  box-shadow: 0 12px 36px var(--logo-shadow);
+  overflow: visible;
+}
+
+/* Positioned so a row's `offsetTop` is measured against the list the component scrolls. */
+.dropdown-list {
+  position: relative;
+  max-height: 264px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.dropdown-option {
+  padding: 12px var(--space-8);
+  border-radius: var(--radius-small);
+  color: var(--text-muted);
+  font-size: var(--text-body-regular);
+  line-height: 18px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   cursor: pointer;
 }
 
-:root[data-theme="dark"] .select {
-  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="none"><path d="M2.5 4.5 6 8l3.5-3.5" stroke="%23B9ACAB" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>');
+/* The design system holds one row at full strength and dims the rest, so pointing at a row and
+   having chosen it are the same signal read at different moments. */
+.dropdown-option-active {
+  background: var(--ghost-bg-hover);
+  color: var(--text-heading);
 }
 
-.select:hover {
-  border-color: var(--border-strong);
+.dropdown-option-selected {
+  color: var(--text-heading);
+  font-weight: 600;
 }
 
 .slip {
@@ -1174,9 +1271,10 @@ code,
   box-shadow: -4px 0 4px var(--chip-shadow);
 }
 
+/* The design system's chevron is a 12px box; scaling it up would thicken its 1.5 stroke with it. */
 .picker-chevron {
-  width: 16px;
-  height: 16px;
+  width: 12px;
+  height: 12px;
   border-radius: 0;
 }
 
@@ -1962,8 +2060,8 @@ code,
 .brand-card {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding-block: 12px;
+  gap: 14px;
+  padding-block: 16px;
 }
 
 .brand-head {
@@ -2038,20 +2136,15 @@ code,
 .brand-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 10px var(--space-16);
+  gap: 14px var(--space-16);
 }
 
 .brand-cell {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 6px;
   min-width: 0;
   cursor: pointer;
-}
-
-/* `.select` grows to fill a row by default, which in this column would stretch its height. */
-.brand-cell .select {
-  flex: none;
 }
 
 .brand-label {
@@ -2219,7 +2312,6 @@ body:has(.app-embed) {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
-.setup-pair .select,
 .setup-pair .input {
   width: 100%;
   min-width: 0;

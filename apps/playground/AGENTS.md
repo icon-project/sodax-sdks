@@ -81,6 +81,10 @@ pnpm check:ai-dev-files
   `input_amount_usd` while nothing here prices the input. Failure reasons stay a closed set.
 - Use native dialogs, keyboard-operable controls, readable errors and responsive layouts. Keep partner
   controls and technical setup in the builder, not inside the user's swap form.
+- `components/Dropdown.tsx` is the design system's navigation menu as a form control; use it rather
+  than `<select>`, whose popup the OS draws in its own colours. Its panel is a top-layer popover
+  because the builder's cards and scrolling column would clip an anchored one, so its position is a
+  snapshot: anything that moves the trigger closes it. Keys resolve through `lib/dropdown.ts`.
 - Preview appearance changes must not restyle the builder or reload an active swap. Setup edits are
   blocked while its preview has a wallet dialog, review, preparation or activity.
 - Preserve the SODAX B2B palette and semantic CSS roles. Brand overrides validate values and derive

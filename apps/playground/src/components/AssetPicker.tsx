@@ -4,6 +4,7 @@ import { type TokenChoice, chainLogo, chainName } from '../lib/chains';
 import { canExecute } from '../lib/execution';
 import { type AssetGroup, filterGroups, previewNetworks } from '../lib/pickerOptions';
 import { Glyph } from './AssetLogo';
+import { Chevron } from './Dropdown';
 
 /** A tile's corner mark: how many chains carry the asset, or — when only one does — which chain. */
 type Mark = { kind: 'count'; value: number } | { kind: 'chain'; chain: ChainKey };
@@ -24,21 +25,6 @@ function GridGlyph() {
       <rect x="9.5" y="1.5" width="5" height="5" rx="1" fill="currentColor" />
       <rect x="1.5" y="9.5" width="5" height="5" rx="1" fill="currentColor" />
       <rect x="9.5" y="9.5" width="5" height="5" rx="1" fill="currentColor" />
-    </svg>
-  );
-}
-
-function Chevron({ up }: { up: boolean }) {
-  return (
-    <svg viewBox="0 0 16 16" aria-hidden="true" className="picker-chevron">
-      <path
-        d={up ? 'M4 10l4-4 4 4' : 'M4 6l4 4 4-4'}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
     </svg>
   );
 }
@@ -210,7 +196,7 @@ export function AssetPicker<K extends ChainKey>({
             ) : (
               <AllNetworksMark networks={networks} />
             )}
-            <Chevron up={isNetworkOpen} />
+            <Chevron up={isNetworkOpen} className="picker-chevron" />
           </button>
         </div>
 
