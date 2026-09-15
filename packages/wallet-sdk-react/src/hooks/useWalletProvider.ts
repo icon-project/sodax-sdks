@@ -28,12 +28,14 @@ const warnedChains = new Set<ChainType>();
  *
  * @see {@link https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/WALLET_PROVIDER_BRIDGE.md | Wallet Provider Bridge}
  */
-export function useWalletProvider<S extends SpokeChainKey>(options: { xChainId: S; xChainType?: never }):
-  | GetWalletProviderType<GetChainType<S>>
-  | undefined;
-export function useWalletProvider<K extends ChainType | undefined>(options?: { xChainId?: never; xChainType?: K }):
-  | GetWalletProviderReturnType<K>
-  | undefined;
+export function useWalletProvider<S extends SpokeChainKey>(options: {
+  xChainId: S;
+  xChainType?: never;
+}): GetWalletProviderType<GetChainType<S>> | undefined;
+export function useWalletProvider<K extends ChainType | undefined>(options?: {
+  xChainId?: never;
+  xChainType?: K;
+}): GetWalletProviderReturnType<K> | undefined;
 export function useWalletProvider({
   xChainId,
   xChainType,

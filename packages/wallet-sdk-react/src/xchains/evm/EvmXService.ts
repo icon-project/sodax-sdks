@@ -71,6 +71,26 @@ export const hyper = /*#__PURE__*/ defineChain({
   },
 });
 
+// Robinhood Chain is not yet in viem/wagmi's bundled chain list, so define it manually
+export const robinhoodChain = /*#__PURE__*/ defineChain({
+  id: 4663,
+  name: 'Robinhood Chain',
+  nativeCurrency: {
+    decimals: 18,
+    name: 'Ether',
+    symbol: 'ETH',
+  },
+  rpcUrls: {
+    default: { http: ['https://rpc.mainnet.chain.robinhood.com'] },
+  },
+  blockExplorers: {
+    default: {
+      name: 'Blockscout',
+      url: 'https://robinhoodchain.blockscout.com',
+    },
+  },
+});
+
 export const createWagmiConfig = (
   evmChains?: EvmTypeConfig['chains'],
   options?: WagmiOptions & { connectors?: CreateConnectorFn[] },
@@ -90,6 +110,7 @@ export const createWagmiConfig = (
       kaia,
       redbellyMainnet,
       hedera,
+      robinhoodChain,
     ],
     connectors: options?.connectors ?? [],
     // NOTE: wagmi's `ssr` is a hydration-timing flag, not an "is host app SSR"
@@ -113,6 +134,7 @@ export const createWagmiConfig = (
       [redbellyMainnet.id]: http(getRpcUrl(evmChains?.[ChainKeys.REDBELLY_MAINNET])),
       [kaia.id]: http(getRpcUrl(evmChains?.[ChainKeys.KAIA_MAINNET])),
       [hedera.id]: http(getRpcUrl(evmChains?.[ChainKeys.HEDERA_MAINNET])),
+      [robinhoodChain.id]: http(getRpcUrl(evmChains?.[ChainKeys.ROBINHOOD_MAINNET])),
     },
     storage: createStorage({
       storage: cookieStorage,

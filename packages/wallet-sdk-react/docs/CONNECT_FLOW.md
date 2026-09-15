@@ -194,7 +194,7 @@ The callback delegates to `ChainActions.disconnect()`. If no actions are registe
 
 ## Provider-managed chains caveat
 
-EVM, Solana, and Sui mount their native React adapters (wagmi, `@solana/wallet-adapter`, `@mysten/dapp-kit`) and use a **Provider/Hydrator/Actions trio**:
+EVM, Solana, and Sui mount their native React adapters (wagmi, `@solana/wallet-adapter`, `@mysten/dapp-kit-react`) and use a **Provider/Hydrator/Actions trio**:
 
 - `<ChainProvider>` — wraps native adapter context.
 - `<ChainHydrator>` — sole writer of connection state into the store, watching native adapter hooks.

@@ -1,4 +1,5 @@
 import { useSodaxContext } from '../shared/useSodaxContext.js';
+import { invalidateBalances } from '../shared/invalidateBalances.js';
 import type { SpokeChainKey, VaultSwapActionParams, VaultSwapResponse } from '@sodax/sdk';
 import { useQueryClient } from '@tanstack/react-query';
 import type { MutationHookParams } from '../shared/types.js';
@@ -42,8 +43,7 @@ export function useLeverageYieldVaultSwap<K extends SpokeChainKey = SpokeChainKe
     ...mutationOptions,
     mutationFn: async vars => unwrapResult(await sodax.leverageYield.vaultSwap({ ...vars, raw: false })),
     onSuccess: async (data, vars, ctx) => {
-      queryClient.invalidateQueries({ queryKey: ['shared', 'xBalances', vars.params.srcChainKey] });
-      queryClient.invalidateQueries({ queryKey: ['shared', 'xBalances', vars.params.dstChainKey] });
+      invalidateBalances(queryClient, vars.params.srcChainKey, vars.params.dstChainKey);
       await mutationOptions?.onSuccess?.(data, vars, ctx);
     },
   });

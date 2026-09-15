@@ -3,6 +3,7 @@ import {
   type EvmChainKey,
   type EvmRawTransaction,
   type EvmRawTransactionReceipt,
+  type EvmSendTransactionOptions,
   type IEvmWalletProvider,
 } from '@sodax/types';
 import type { Account, Address, Chain, Hash, PublicClient, TransactionReceipt, Transport, WalletClient } from 'viem';
@@ -49,6 +50,21 @@ export const hyper = /*#__PURE__*/ defineChain({
 });
 
 /**
+ * Manually defined viem chain config for Robinhood Chain (not yet in `viem/chains`).
+ */
+export const robinhoodChain = /*#__PURE__*/ defineChain({
+  id: 4663,
+  name: 'Robinhood Chain',
+  nativeCurrency: { decimals: 18, name: 'Ether', symbol: 'ETH' },
+  rpcUrls: {
+    default: { http: ['https://rpc.mainnet.chain.robinhood.com'] },
+  },
+  blockExplorers: {
+    default: { name: 'Blockscout', url: 'https://robinhoodchain.blockscout.com' },
+  },
+});
+
+/**
  * Returns the viem `Chain` config for the given EVM chain key.
  *
  * @param key - An `EvmChainKey` constant (e.g. `ChainKeys.SONIC_MAINNET`).
@@ -83,6 +99,8 @@ export function getEvmViemChain(key: EvmChainKey): Chain {
       return kaia;
     case ChainKeys.HEDERA_MAINNET:
       return hedera;
+    case ChainKeys.ROBINHOOD_MAINNET:
+      return robinhoodChain;
     default: {
       const exhaustiveCheck: never = key; // The never type is used to ensure that the default case is exhaustive
       console.log(exhaustiveCheck);
@@ -112,8 +130,9 @@ export function isBrowserExtensionEvmWalletConfig(config: EvmWalletConfig): conf
  *   injected by the dApp's wallet adapter (e.g. wagmi). Transport/client defaults are ignored
  *   in this mode.
  *
- * All 13 supported EVM chains are covered via {@link getEvmViemChain}; HyperEVM is defined
- * locally as {@link hyper} because it is absent from `viem/chains`.
+ * All 14 supported EVM chains are covered via {@link getEvmViemChain}; HyperEVM and
+ * Robinhood Chain are defined locally ({@link hyper}, {@link robinhoodChain}) because they
+ * are absent from `viem/chains`.
  */
 export class EvmWalletProvider extends BaseWalletProvider<EvmWalletDefaults> implements IEvmWalletProvider {
   public readonly chainType = 'EVM' as const;
@@ -155,8 +174,21 @@ export class EvmWalletProvider extends BaseWalletProvider<EvmWalletDefaults> imp
   }
 
   /** Submits a signed transaction to the network and returns the transaction hash. */
-  async sendTransaction(txData: EvmRawTransaction, options?: EvmSendTransactionPolicy): Promise<Hash> {
-    const policy = this.mergePolicy('sendTransaction', options);
+  async sendTransaction(
+    txData: EvmRawTransaction,
+    options?: EvmSendTransactionPolicy & EvmSendTransactionOptions,
+  ): Promise<Hash> {
+    const { expectedChainId, ...policyOverrides } = options ?? {};
+    if (expectedChainId !== undefined) {
+      // The wallet broadcasts on its ACTUAL active chain, not the chain the calldata targets.
+      const actualChainId = await this.walletClient.getChainId();
+      if (actualChainId !== expectedChainId) {
+        throw new Error(
+          `[EvmWalletProvider] wallet is connected to chain ${actualChainId} but the transaction targets chain ${expectedChainId}; switch the wallet network and retry`,
+        );
+      }
+    }
+    const policy = this.mergePolicy('sendTransaction', policyOverrides);
     const tx = { ...policy, ...txData } as Parameters<typeof this.walletClient.sendTransaction>[0];
     return this.walletClient.sendTransaction(tx);
   }

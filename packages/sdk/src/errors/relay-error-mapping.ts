@@ -69,11 +69,15 @@ export function mapRelayFailure(error: unknown, ctx: MapRelayFailureCtx): SodaxE
   }
 
   if (message === RELAY_ERROR_CODES.RELAY_POLLING_FAILED) {
-    return new SodaxError<RelayWrappedErrorCode>('RELAY_FAILED', 'Relay polling failed; cannot determine packet status', {
-      feature: ctx.feature,
-      cause: error,
-      context: { ...baseCtx, phase, relayCode: 'RELAY_POLLING_FAILED' },
-    });
+    return new SodaxError<RelayWrappedErrorCode>(
+      'RELAY_FAILED',
+      'Relay polling failed; cannot determine packet status',
+      {
+        feature: ctx.feature,
+        cause: error,
+        context: { ...baseCtx, phase, relayCode: 'RELAY_POLLING_FAILED' },
+      },
+    );
   }
 
   return new SodaxError<RelayWrappedErrorCode>('RELAY_FAILED', message || 'Relay failed', {

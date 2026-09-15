@@ -4,6 +4,7 @@ export * from './shared/entities/Sodax.js';
 export * from './moneyMarket/index.js';
 export * from './swap/index.js';
 export * from './backendApi/index.js';
+export * from './sponsoring/index.js';
 export * from './bridge/index.js';
 export * from './staking/index.js';
 export * from './migration/index.js';

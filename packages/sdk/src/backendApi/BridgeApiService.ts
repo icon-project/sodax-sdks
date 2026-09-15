@@ -27,8 +27,10 @@ import type {
 import { DEFAULT_BACKEND_API_TIMEOUT } from '@sodax/types';
 import * as v from 'valibot';
 
-import type { RequestOverrideConfig } from './api-utils.js';
+import { apiKeyHeader, assignHeaders, mergeHeaders, type RequestOverrideConfig } from './api-utils.js';
+import { stripLegacyBackendMount } from './apiConfig.js';
 import { SodaxError } from '../errors/SodaxError.js';
+import { isAuthStatus } from '../errors/guards.js';
 import { consoleLogger } from '../shared/logger.js';
 
 /**
@@ -93,26 +95,43 @@ export function toCreateBridgeIntentParamsV2(
  * canonical `SodaxError<'EXTERNAL_API_ERROR'>` (`feature: 'backend'`, `context.api: 'bridge'`,
  * `context.endpoint`); the underlying `BridgeApiError` is preserved on `error.cause`.
  *
- * Per-call request overrides (base URL, timeout, headers) can be passed as the optional last
- * argument to any method via `RequestOverrideConfig`.
+ * Per-call request overrides (base URL, timeout, headers, API key) can be passed as the
+ * optional last argument to any method via `RequestOverrideConfig`.
  *
- * The Bridge API shares the swaps host — its config is resolved by
- * `resolveBridgeApiConfig` (an alias of `resolveBaseApiConfig`), so it is typed as a flat
- * {@link BaseApiConfig}.
+ * The Bridge API hangs off the shared gateway root as `/bridge/*` — a sibling of the data API's `/be`
+ * mount, not a child of it, so `resolveBridgeApiConfig` returns a flat {@link BaseApiConfig} with no
+ * `basePath`. It defaults to the same host as the swaps client but is not configured with it:
+ * a `swapsApiConfig` slice does not move the bridge routes; set `baseURL` / `baseApiConfig` instead.
  *
  * Reachable on the Sodax facade as `sodax.api.bridge`.
  */
+/** Construction options for {@link BridgeApiService}. */
+export type BridgeApiServiceOptions = {
+  /**
+   * Whether a legacy `/be` suffix is trimmed off a per-call `baseURL` override. Defaults to `true`, the
+   * migration behaviour. `BackendApiService` passes `false` when the `ApiConfig` states a `basePath`
+   * explicitly: that marks a config written against the current contract, whose base URLs are deliberate
+   * roots, so a trailing `/be` is a real path segment rather than the data API's mount.
+   */
+  trimLegacyOverrides?: boolean;
+};
+
 export class BridgeApiService implements ResultifiedBridgeApiV2 {
   // Fully-resolved bridge-API config supplied by the caller (BackendApiService resolves the
   // `ApiConfig` union via `resolveBridgeApiConfig`); this service does not resolve the union.
   private readonly config: BaseApiConfig;
   private readonly headers: Record<string, string>;
   private readonly logger: SodaxLogger;
+  /** See {@link BridgeApiServiceOptions.trimLegacyOverrides}. */
+  private readonly trimsLegacyOverrides: boolean;
 
-  constructor(config: BaseApiConfig, logger: SodaxLogger = consoleLogger) {
+  constructor(config: BaseApiConfig, logger: SodaxLogger = consoleLogger, options: BridgeApiServiceOptions = {}) {
     this.config = config;
-    this.headers = { ...config.headers };
+    // The config-level key arrives pre-baked in `headers` (see `withApiKey`); merged rather than
+    // spread so two casings of one name cannot both survive — see `mergeHeaders`.
+    this.headers = mergeHeaders(config.headers);
     this.logger = logger;
+    this.trimsLegacyOverrides = options.trimLegacyOverrides ?? true;
   }
 
   /**
@@ -124,9 +143,20 @@ export class BridgeApiService implements ResultifiedBridgeApiV2 {
    * overrides both take effect without caching stale state.
    */
   private buildClient(overrideConfig?: RequestOverrideConfig): BridgeApi {
-    const baseUrl = overrideConfig?.baseURL || this.config.baseURL;
+    // A per-call override is normalized exactly like a configured base URL: it is the gateway root, so a
+    // legacy `/be`-suffixed value must not nest `/bridge/*` under the data API's mount. `this.config.baseURL`
+    // was already normalized during resolution — including the opt-out, which is why the same decision
+    // has to reach this path too.
+    const override = overrideConfig?.baseURL;
+    const baseUrl = override
+      ? this.trimsLegacyOverrides
+        ? stripLegacyBackendMount(override)
+        : override
+      : this.config.baseURL;
     const timeout = overrideConfig?.timeout ?? this.config.timeout ?? DEFAULT_BACKEND_API_TIMEOUT;
-    const headers = { ...this.headers, ...overrideConfig?.headers };
+    // A per-call `apiKey` wins over the service's configured key (already expanded into `this.headers`);
+    // an explicit override `x-api-key` header wins over both.
+    const headers = mergeHeaders(this.headers, apiKeyHeader(overrideConfig?.apiKey), overrideConfig?.headers);
     return new BridgeApi({ baseUrl, headers, timeout });
   }
 
@@ -165,6 +195,13 @@ export class BridgeApiService implements ResultifiedBridgeApiV2 {
           context.issues = issues instanceof v.ValiError ? v.flatten(issues.issues) : issues;
         }
         if (error.context.status !== undefined) context.status = error.context.status;
+        // The apiguard's 401/403 are terminal config problems only the consumer can fix: point at the fix
+        // instead of leaving a bare status. The key itself is never logged.
+        if (isAuthStatus(error.context.status)) {
+          this.logger.warn(
+            `[BridgeApiService] ${endpoint} was rejected by the bridge API key guard (${error.context.status}). Configure a valid partner API key — new Sodax({ apiKey }) — see docs/CONFIGURE_SDK.md.`,
+          );
+        }
       }
       this.logger.error(`[BridgeApiService] Request to ${endpoint} failed`, error);
       return {
@@ -223,7 +260,8 @@ export class BridgeApiService implements ResultifiedBridgeApiV2 {
   /**
    * Build an unsigned token-approval transaction for the source token.
    *
-   * @returns `Result<BridgeApproveResponseV2>` — `{ tx }` (chain-specific unsigned tx).
+   * @returns `Result<BridgeApproveResponseV2>` — `{ tx, resetTx? }` (chain-specific unsigned txs);
+   * broadcast and mine `resetTx` first when it is present.
    */
   public async approve(
     body: CreateBridgeIntentParamsV2,
@@ -285,10 +323,7 @@ export class BridgeApiService implements ResultifiedBridgeApiV2 {
    *
    * @returns `Result<BridgeFeeResponseV2>` — `{ fee }` (decimal string).
    */
-  public async getFee(
-    body: BridgeFeeRequestV2,
-    config?: RequestOverrideConfig,
-  ): Promise<Result<BridgeFeeResponseV2>> {
+  public async getFee(body: BridgeFeeRequestV2, config?: RequestOverrideConfig): Promise<Result<BridgeFeeResponseV2>> {
     return this.toResult('/bridge/fee', c => c.getFee(body), config);
   }
 
@@ -328,13 +363,23 @@ export class BridgeApiService implements ResultifiedBridgeApiV2 {
    * every subsequent call (the delegated client is rebuilt per call).
    */
   public setHeaders(headers: Record<string, string>): void {
-    Object.entries(headers).forEach(([key, value]) => {
-      this.headers[key] = value;
-    });
+    assignHeaders(this.headers, headers);
   }
 
   /** Return the base URL the service is currently pointing at. */
   public getBaseURL(): string {
     return this.config.baseURL;
+  }
+
+  /**
+   * Return the effective per-request timeout (ms).
+   *
+   * Callers bounding a request tighter than this need it as the CEILING, because a
+   * `RequestOverrideConfig.timeout` REPLACES the service value rather than lowering it: an override
+   * derived from a caller budget alone would raise the bound whenever that budget is the larger of the
+   * two. `SubmitTxAttempt.requestTimeout` clamps against both (`min(budget left in the attempt, this)`).
+   */
+  public getTimeout(): number {
+    return this.config.timeout;
   }
 }

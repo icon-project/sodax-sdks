@@ -1,6 +1,6 @@
 # @sodax/wallet-sdk-core
 
-The Sodax wallet-sdk-core is a core wallet SDK package containing implementations of wallet providers that enable multi-chain wallet connectivity. This package provides TypeScript implementations of wallet providers for various blockchain networks, making them compatible with the Core Sodax SDK (@sodax/sdk).
+The SODAX wallet-sdk-core is a core wallet SDK package containing implementations of wallet providers that enable multi-chain wallet connectivity. This package provides TypeScript implementations of wallet providers for various blockchain networks, making them compatible with the Core SODAX SDK (@sodax/sdk).
 
 > **AI-friendly docs:** shipped via [`@sodax/skills`](https://github.com/icon-project/sodax-sdks/tree/main/packages/skills) — [`skills` CLI](https://github.com/vercel-labs/skills) recommended; npm + `AGENTS.md` pointer as fallback. See [docs/ai-integration-guide.md](https://github.com/icon-project/sodax-sdks/blob/main/docs/ai-integration-guide.md) for all install modes and per-tool wiring.
 
@@ -22,7 +22,7 @@ yarn add @sodax/wallet-sdk-core
 - **Multi-chain Support**: Wallet provider implementations for multiple blockchain networks
 - **TypeScript Compatibility**: Fully typed implementations compatible with @sodax/sdk
 - **Wallet Provider Interface**: Standardized interface for wallet connectivity across different chains
-- **Core Integration**: Seamless integration with the Core Sodax SDK
+- **Core Integration**: Seamless integration with the Core SODAX SDK
 
 ## Supported Wallet Providers
 
@@ -116,22 +116,27 @@ const btcBrowser = new BitcoinWalletProvider({
 
 ### Sui
 
-Sui uses `mnemonics` (not `privateKey`) for private-key mode. Browser extension requires a pre-constructed `SuiClient`, wallet object, and active `WalletAccount`.
+Sui uses `mnemonics` (not `privateKey`) for private-key mode. Both modes speak gRPC-web — Mysten's public fullnodes stopped serving JSON-RPC in July 2026, and `sui-node` drops it in October 2026. Browser extension supplies the connected address plus a signer callback; the provider builds its own client.
+
+`signTransaction` takes the transaction positionally. `dAppKit.signTransaction` is options-shaped, so wrap it rather than assigning it directly — and pass `account` explicitly, since dApp Kit otherwise signs with whatever account is currently connected, which need not be the `address` given here. `myWalletAccount` is dApp Kit's own `UiWalletAccount`, from `useCurrentAccount()` in React.
 
 ```ts
 import { SuiWalletProvider } from '@sodax/wallet-sdk-core';
 
 // Private key (Node/scripts/CI) — field presence discriminant
 const suiPk = new SuiWalletProvider({
-  rpcUrl: 'https://...',
+  grpcUrl: 'https://fullnode.mainnet.sui.io',
   mnemonics: '...',
 });
 
 // Browser/extension
 const suiBrowser = new SuiWalletProvider({
-  client: mySuiClient,
-  wallet: myWalletWithFeatures,
-  account: myWalletAccount,
+  grpcUrl: 'https://fullnode.mainnet.sui.io',
+  address: myWalletAccount.address,
+  // The provider has already built the transaction against its client, so serializing it
+  // is all the adapter has to do.
+  signTransaction: async txn =>
+    dAppKit.signTransaction({ transaction: await txn.toJSON(), account: myWalletAccount }),
 });
 ```
 

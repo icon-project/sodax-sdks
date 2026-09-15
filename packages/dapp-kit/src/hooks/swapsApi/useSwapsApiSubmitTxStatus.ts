@@ -1,6 +1,7 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
-import type { RequestOverrideConfig, SubmitTxStatusResponseV2 } from '@sodax/sdk';
+import { isAuthFailure, type RequestOverrideConfig, type SubmitTxStatusResponseV2 } from '@sodax/sdk';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
+import { retryUnlessAuthFailure } from '../shared/retryUnlessAuthFailure.js';
 import { unwrapResult } from '../shared/unwrapResult.js';
 import type { ReadHookParams } from '../shared/types.js';
 
@@ -24,8 +25,9 @@ export type UseSwapsApiSubmitTxStatusParams = ReadHookParams<
  * });
  *
  * @remarks
- * - Default refetch interval is 1 second; stops on 'solved' or 'failed' status, or when the
- *   backend marks the submission abandoned (`abandonedAt`) while `status` stays non-terminal.
+ * - Default refetch interval is 1 second; stops on 'solved' or 'failed' status, when the
+ *   backend marks the submission abandoned (`abandonedAt`) while `status` stays non-terminal, or
+ *   once the backend rejects the API key (401/403 is terminal — a retry cannot fix it).
  */
 export const useSwapsApiSubmitTxStatus = ({
   params,
@@ -45,8 +47,10 @@ export const useSwapsApiSubmitTxStatus = ({
       return unwrapResult(await sodax.api.swaps.getSubmitTxStatus({ txHash, srcChainKey }, apiConfig));
     },
     enabled: !!txHash && txHash.length > 0 && !!srcChainKey,
-    retry: 3,
+    retry: retryUnlessAuthFailure,
     refetchInterval: query => {
+      // `retry` bounds attempts within a tick, not the interval itself — so stop it here too.
+      if (isAuthFailure(query.state.error)) return false;
       const data = query.state.data?.data;
       // `abandonedAt` is terminal even when `status` is still non-terminal — same rule as the
       // SDK's pollBackendSubmitTx and the bridge-api status hook.

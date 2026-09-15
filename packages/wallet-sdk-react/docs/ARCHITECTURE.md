@@ -147,7 +147,7 @@ See [`ADDING_A_NEW_CHAIN.md`](https://github.com/icon-project/sodax-sdks/blob/ma
 
 | Property | Provider-managed (EVM/Solana/Sui) | Non-provider (Bitcoin/ICON/Injective/Stellar/NEAR/Stacks) |
 |----------|-----------------------------------|------------------------------------------------------------|
-| Native SDK | wagmi / @solana/wallet-adapter / @mysten/dapp-kit | sats-connect / icon-sdk-js / @injectivelabs/wallet-* / etc. |
+| Native SDK | wagmi / @solana/wallet-adapter / @mysten/dapp-kit-react | sats-connect / icon-sdk-js / @injectivelabs/wallet-* / etc. |
 | React provider needed | Yes | No |
 | Connection-state writer | `<Hydrator>` component | Store side-effect inside `setXConnection()` |
 | `ChainActions.connect/disconnect` | Triggers native SDK only — never writes state | `createDefaultActions` reads store, calls connector, writes state |

@@ -2,12 +2,12 @@ export type ClientOptions = {
   baseUrl: 'https://raw.githubusercontent.com' | (string & {});
 };
 /**
-* Access key provides limited access to an account. Each access key belongs to some account and
-* is identified by a unique (within the account) public key. One account may have large number of
-* access keys. Access keys allow to act on behalf of the account by restricting transactions
-* that can be issued.
-* `account_id,public_key` is a key in the state
-*/
+ * Access key provides limited access to an account. Each access key belongs to some account and
+ * is identified by a unique (within the account) public key. One account may have large number of
+ * access keys. Access keys allow to act on behalf of the account by restricting transactions
+ * that can be issued.
+ * `account_id,public_key` is a key in the state
+ */
 export type AccessKey = {
   /**
    * Nonce for this access key, used for tx nonce generation. When access key is created, nonce
@@ -21,8 +21,8 @@ export type AccessKey = {
   permission: AccessKeyPermission;
 };
 /**
-* Describes the cost of creating an access key.
-*/
+ * Describes the cost of creating an access key.
+ */
 export type AccessKeyCreationConfigView = {
   /**
    * Base cost of creating a full access access-key.
@@ -38,44 +38,48 @@ export type AccessKeyCreationConfigView = {
   function_call_cost_per_byte: Fee;
 };
 /**
-* Describes information about an access key including the public key.
-*/
+ * Describes information about an access key including the public key.
+ */
 export type AccessKeyInfoView = {
   access_key: AccessKeyView;
   public_key: PublicKey;
 };
 /**
-* Lists access keys
-*/
+ * Lists access keys
+ */
 export type AccessKeyList = {
   keys: Array<AccessKeyInfoView>;
 };
 /**
-* Defines permissions for AccessKey
-*/
-export type AccessKeyPermission = {
-  FunctionCall: FunctionCallPermission;
-} | 'FullAccess';
+ * Defines permissions for AccessKey
+ */
+export type AccessKeyPermission =
+  | {
+      FunctionCall: FunctionCallPermission;
+    }
+  | 'FullAccess';
 /**
-* Describes the permission scope for an access key. Whether it is a function call or a full access key.
-*/
-export type AccessKeyPermissionView = 'FullAccess' | {
-  FunctionCall: {
-      allowance?: NearToken | null;
-      method_names: Array<string>;
-      receiver_id: string;
-  };
-};
+ * Describes the permission scope for an access key. Whether it is a function call or a full access key.
+ */
+export type AccessKeyPermissionView =
+  | 'FullAccess'
+  | {
+      FunctionCall: {
+        allowance?: NearToken | null;
+        method_names: Array<string>;
+        receiver_id: string;
+      };
+    };
 /**
-* Describes access key permission scope and nonce.
-*/
+ * Describes access key permission scope and nonce.
+ */
 export type AccessKeyView = {
   nonce: number;
   permission: AccessKeyPermissionView;
 };
 /**
-* The structure describes configuration for creation of new accounts.
-*/
+ * The structure describes configuration for creation of new accounts.
+ */
 export type AccountCreationConfigView = {
   /**
    * The minimum length of the top-level account ID that is allowed to be created by any account.
@@ -88,18 +92,18 @@ export type AccountCreationConfigView = {
   registrar_account_id?: AccountId;
 };
 /**
-* AccountData is a piece of global state that a validator
-* signs and broadcasts to the network.
-*
-* It is essentially the data that a validator wants to share with the network.
-* All the nodes in the network are collecting the account data
-* broadcasted by the validators.
-* Since the number of the validators is bounded and their
-* identity is known (and the maximal size of allowed AccountData is bounded)
-* the global state that is distributed in the form of AccountData is bounded
-* as well.
-* Find more information in the docs [here](https://github.com/near/nearcore/blob/560f7fc8f4b3106e0d5d46050688610b1f104ac6/chain/client/src/client.rs#L2232)
-*/
+ * AccountData is a piece of global state that a validator
+ * signs and broadcasts to the network.
+ *
+ * It is essentially the data that a validator wants to share with the network.
+ * All the nodes in the network are collecting the account data
+ * broadcasted by the validators.
+ * Since the number of the validators is bounded and their
+ * identity is known (and the maximal size of allowed AccountData is bounded)
+ * the global state that is distributed in the form of AccountData is bounded
+ * as well.
+ * Find more information in the docs [here](https://github.com/near/nearcore/blob/560f7fc8f4b3106e0d5d46050688610b1f104ac6/chain/client/src/client.rs#L2232)
+ */
 export type AccountDataView = {
   /**
    * Account key of the validator signing this AccountData.
@@ -122,39 +126,39 @@ export type AccountDataView = {
   timestamp: string;
 };
 /**
-* AccountId
-*
-* NEAR Account Identifier.
-*
-* This is a unique, syntactically valid, human-readable account identifier on the NEAR network.
-*
-* [See the Rust crate documentation for information about validation.](https://docs.rs/near-account-id/latest/near_account_id/)
-*
-* Also see the error kind documentation.
-*
-* ## Examples
-*
-* ```
-* use near_account_id::AccountId;
-*
-* let alice: AccountId = "alice.near".parse().unwrap();
-*
-* assert!("ƒelicia.near".parse::<AccountId>().is_err()); // (ƒ is not f)
-* ```
-*/
+ * AccountId
+ *
+ * NEAR Account Identifier.
+ *
+ * This is a unique, syntactically valid, human-readable account identifier on the NEAR network.
+ *
+ * [See the Rust crate documentation for information about validation.](https://docs.rs/near-account-id/latest/near_account_id/)
+ *
+ * Also see the error kind documentation.
+ *
+ * ## Examples
+ *
+ * ```
+ * use near_account_id::AccountId;
+ *
+ * let alice: AccountId = "alice.near".parse().unwrap();
+ *
+ * assert!("ƒelicia.near".parse::<AccountId>().is_err()); // (ƒ is not f)
+ * ```
+ */
 export type AccountId = string;
 export type AccountIdValidityRulesVersion = number;
 /**
-* Account info for validators
-*/
+ * Account info for validators
+ */
 export type AccountInfo = {
   account_id: AccountId;
   amount: NearToken;
   public_key: PublicKey;
 };
 /**
-* A view of the account
-*/
+ * A view of the account
+ */
 export type AccountView = {
   amount: NearToken;
   code_hash: CryptoHash;
@@ -168,15 +172,15 @@ export type AccountView = {
   storage_usage: number;
 };
 /**
-* Account ID with its public key.
-*/
+ * Account ID with its public key.
+ */
 export type AccountWithPublicKey = {
   account_id: AccountId;
   public_key: PublicKey;
 };
 /**
-* Describes the cost of creating a specific action, `Action`. Includes all variants.
-*/
+ * Describes the cost of creating a specific action, `Action`. Includes all variants.
+ */
 export type ActionCreationConfigView = {
   /**
    * Base cost of adding a key.
@@ -226,8 +230,8 @@ export type ActionCreationConfigView = {
   transfer_cost?: Fee;
 };
 /**
-* An error happened during Action execution
-*/
+ * An error happened during Action execution
+ */
 export type ActionError = {
   /**
    * Index of the failed action in the transaction.
@@ -239,278 +243,339 @@ export type ActionError = {
    */
   kind: ActionErrorKind;
 };
-export type ActionErrorKind = {
-  AccountAlreadyExists: {
-      account_id: AccountId;
-  };
-} | {
-  AccountDoesNotExist: {
-      account_id: AccountId;
-  };
-} | {
-  CreateAccountOnlyByRegistrar: {
-      account_id: AccountId;
-      predecessor_id: AccountId;
-      registrar_account_id: AccountId;
-  };
-} | {
-  CreateAccountNotAllowed: {
-      account_id: AccountId;
-      predecessor_id: AccountId;
-  };
-} | {
-  ActorNoPermission: {
-      account_id: AccountId;
-      actor_id: AccountId;
-  };
-} | {
-  DeleteKeyDoesNotExist: {
-      account_id: AccountId;
-      public_key: PublicKey;
-  };
-} | {
-  AddKeyAlreadyExists: {
-      account_id: AccountId;
-      public_key: PublicKey;
-  };
-} | {
-  DeleteAccountStaking: {
-      account_id: AccountId;
-  };
-} | {
-  LackBalanceForState: {
-      /**
-       * An account which needs balance
-       */
-      account_id: AccountId;
-      /**
-       * Balance required to complete an action.
-       */
-      amount: NearToken;
-  };
-} | {
-  TriesToUnstake: {
-      account_id: AccountId;
-  };
-} | {
-  TriesToStake: {
-      account_id: AccountId;
-      balance: NearToken;
-      locked: NearToken;
-      stake: NearToken;
-  };
-} | {
-  InsufficientStake: {
-      account_id: AccountId;
-      minimum_stake: NearToken;
-      stake: NearToken;
-  };
-} | {
-  FunctionCallError: FunctionCallError;
-} | {
-  NewReceiptValidationError: ReceiptValidationError;
-} | {
-  OnlyImplicitAccountCreationAllowed: {
-      account_id: AccountId;
-  };
-} | {
-  DeleteAccountWithLargeState: {
-      account_id: AccountId;
-  };
-} | 'DelegateActionInvalidSignature' | {
-  DelegateActionSenderDoesNotMatchTxReceiver: {
-      receiver_id: AccountId;
-      sender_id: AccountId;
-  };
-} | 'DelegateActionExpired' | {
-  DelegateActionAccessKeyError: InvalidAccessKeyError;
-} | {
-  DelegateActionInvalidNonce: {
-      ak_nonce: number;
-      delegate_nonce: number;
-  };
-} | {
-  DelegateActionNonceTooLarge: {
-      delegate_nonce: number;
-      upper_bound: number;
-  };
-} | {
-  GlobalContractDoesNotExist: {
-      identifier: GlobalContractIdentifier;
-  };
-} | {
-  GasKeyDoesNotExist: {
-      account_id: AccountId;
-      public_key: PublicKey;
-  };
-} | {
-  GasKeyAlreadyExists: {
-      account_id: AccountId;
-      public_key: PublicKey;
-  };
-};
-export type ActionView = 'CreateAccount' | {
-  DeployContract: {
-      code: string;
-  };
-} | {
-  FunctionCall: {
-      args: FunctionArgs;
-      deposit: NearToken;
-      gas: NearGas;
-      method_name: string;
-  };
-} | {
-  Transfer: {
-      deposit: NearToken;
-  };
-} | {
-  Stake: {
-      public_key: PublicKey;
-      stake: NearToken;
-  };
-} | {
-  AddKey: {
-      access_key: AccessKeyView;
-      public_key: PublicKey;
-  };
-} | {
-  DeleteKey: {
-      public_key: PublicKey;
-  };
-} | {
-  DeleteAccount: {
-      beneficiary_id: AccountId;
-  };
-} | {
-  Delegate: {
-      delegate_action: DelegateAction;
-      signature: Signature;
-  };
-} | {
-  DeployGlobalContract: {
-      code: string;
-  };
-} | {
-  DeployGlobalContractByAccountId: {
-      code: string;
-  };
-} | {
-  UseGlobalContract: {
-      code_hash: CryptoHash;
-  };
-} | {
-  UseGlobalContractByAccountId: {
-      account_id: AccountId;
-  };
-} | {
-  DeterministicStateInit: {
-      code: GlobalContractIdentifierView;
-      data: {
-          [key: string]: string;
+export type ActionErrorKind =
+  | {
+      AccountAlreadyExists: {
+        account_id: AccountId;
       };
-      deposit: NearToken;
-  };
-} | {
-  AddGasKey: {
-      num_nonces: number;
-      permission: AccessKeyPermissionView;
-      public_key: PublicKey;
-  };
-} | {
-  DeleteGasKey: {
-      public_key: PublicKey;
-  };
-} | {
-  TransferToGasKey: {
-      amount: NearToken;
-      public_key: PublicKey;
-  };
-};
+    }
+  | {
+      AccountDoesNotExist: {
+        account_id: AccountId;
+      };
+    }
+  | {
+      CreateAccountOnlyByRegistrar: {
+        account_id: AccountId;
+        predecessor_id: AccountId;
+        registrar_account_id: AccountId;
+      };
+    }
+  | {
+      CreateAccountNotAllowed: {
+        account_id: AccountId;
+        predecessor_id: AccountId;
+      };
+    }
+  | {
+      ActorNoPermission: {
+        account_id: AccountId;
+        actor_id: AccountId;
+      };
+    }
+  | {
+      DeleteKeyDoesNotExist: {
+        account_id: AccountId;
+        public_key: PublicKey;
+      };
+    }
+  | {
+      AddKeyAlreadyExists: {
+        account_id: AccountId;
+        public_key: PublicKey;
+      };
+    }
+  | {
+      DeleteAccountStaking: {
+        account_id: AccountId;
+      };
+    }
+  | {
+      LackBalanceForState: {
+        /**
+         * An account which needs balance
+         */
+        account_id: AccountId;
+        /**
+         * Balance required to complete an action.
+         */
+        amount: NearToken;
+      };
+    }
+  | {
+      TriesToUnstake: {
+        account_id: AccountId;
+      };
+    }
+  | {
+      TriesToStake: {
+        account_id: AccountId;
+        balance: NearToken;
+        locked: NearToken;
+        stake: NearToken;
+      };
+    }
+  | {
+      InsufficientStake: {
+        account_id: AccountId;
+        minimum_stake: NearToken;
+        stake: NearToken;
+      };
+    }
+  | {
+      FunctionCallError: FunctionCallError;
+    }
+  | {
+      NewReceiptValidationError: ReceiptValidationError;
+    }
+  | {
+      OnlyImplicitAccountCreationAllowed: {
+        account_id: AccountId;
+      };
+    }
+  | {
+      DeleteAccountWithLargeState: {
+        account_id: AccountId;
+      };
+    }
+  | 'DelegateActionInvalidSignature'
+  | {
+      DelegateActionSenderDoesNotMatchTxReceiver: {
+        receiver_id: AccountId;
+        sender_id: AccountId;
+      };
+    }
+  | 'DelegateActionExpired'
+  | {
+      DelegateActionAccessKeyError: InvalidAccessKeyError;
+    }
+  | {
+      DelegateActionInvalidNonce: {
+        ak_nonce: number;
+        delegate_nonce: number;
+      };
+    }
+  | {
+      DelegateActionNonceTooLarge: {
+        delegate_nonce: number;
+        upper_bound: number;
+      };
+    }
+  | {
+      GlobalContractDoesNotExist: {
+        identifier: GlobalContractIdentifier;
+      };
+    }
+  | {
+      GasKeyDoesNotExist: {
+        account_id: AccountId;
+        public_key: PublicKey;
+      };
+    }
+  | {
+      GasKeyAlreadyExists: {
+        account_id: AccountId;
+        public_key: PublicKey;
+      };
+    };
+export type ActionView =
+  | 'CreateAccount'
+  | {
+      DeployContract: {
+        code: string;
+      };
+    }
+  | {
+      FunctionCall: {
+        args: FunctionArgs;
+        deposit: NearToken;
+        gas: NearGas;
+        method_name: string;
+      };
+    }
+  | {
+      Transfer: {
+        deposit: NearToken;
+      };
+    }
+  | {
+      Stake: {
+        public_key: PublicKey;
+        stake: NearToken;
+      };
+    }
+  | {
+      AddKey: {
+        access_key: AccessKeyView;
+        public_key: PublicKey;
+      };
+    }
+  | {
+      DeleteKey: {
+        public_key: PublicKey;
+      };
+    }
+  | {
+      DeleteAccount: {
+        beneficiary_id: AccountId;
+      };
+    }
+  | {
+      Delegate: {
+        delegate_action: DelegateAction;
+        signature: Signature;
+      };
+    }
+  | {
+      DeployGlobalContract: {
+        code: string;
+      };
+    }
+  | {
+      DeployGlobalContractByAccountId: {
+        code: string;
+      };
+    }
+  | {
+      UseGlobalContract: {
+        code_hash: CryptoHash;
+      };
+    }
+  | {
+      UseGlobalContractByAccountId: {
+        account_id: AccountId;
+      };
+    }
+  | {
+      DeterministicStateInit: {
+        code: GlobalContractIdentifierView;
+        data: {
+          [key: string]: string;
+        };
+        deposit: NearToken;
+      };
+    }
+  | {
+      AddGasKey: {
+        num_nonces: number;
+        permission: AccessKeyPermissionView;
+        public_key: PublicKey;
+      };
+    }
+  | {
+      DeleteGasKey: {
+        public_key: PublicKey;
+      };
+    }
+  | {
+      TransferToGasKey: {
+        amount: NearToken;
+        public_key: PublicKey;
+      };
+    };
 /**
-* Describes the error for validating a list of actions.
-*/
-export type ActionsValidationError = 'DeleteActionMustBeFinal' | {
-  TotalPrepaidGasExceeded: {
-      limit: NearGas;
-      total_prepaid_gas: NearGas;
-  };
-} | {
-  TotalNumberOfActionsExceeded: {
-      limit: number;
-      total_number_of_actions: number;
-  };
-} | {
-  AddKeyMethodNamesNumberOfBytesExceeded: {
-      limit: number;
-      total_number_of_bytes: number;
-  };
-} | {
-  AddKeyMethodNameLengthExceeded: {
-      length: number;
-      limit: number;
-  };
-} | 'IntegerOverflow' | {
-  InvalidAccountId: {
-      account_id: string;
-  };
-} | {
-  ContractSizeExceeded: {
-      limit: number;
-      size: number;
-  };
-} | {
-  FunctionCallMethodNameLengthExceeded: {
-      length: number;
-      limit: number;
-  };
-} | {
-  FunctionCallArgumentsLengthExceeded: {
-      length: number;
-      limit: number;
-  };
-} | {
-  UnsuitableStakingKey: {
-      public_key: PublicKey;
-  };
-} | 'FunctionCallZeroAttachedGas' | 'DelegateActionMustBeOnlyOne' | {
-  UnsupportedProtocolFeature: {
-      protocol_feature: string;
-      version: number;
-  };
-} | {
-  InvalidDeterministicStateInitReceiver: {
-      derived_id: AccountId;
-      receiver_id: AccountId;
-  };
-} | {
-  DeterministicStateInitKeyLengthExceeded: {
-      length: number;
-      limit: number;
-  };
-} | {
-  DeterministicStateInitValueLengthExceeded: {
-      length: number;
-      limit: number;
-  };
-} | {
-  GasKeyPermissionInvalid: {
-      permission: AccessKeyPermission;
-  };
-} | {
-  GasKeyTooManyNoncesRequested: {
-      limit: number;
-      requested_nonces: number;
-  };
-};
+ * Describes the error for validating a list of actions.
+ */
+export type ActionsValidationError =
+  | 'DeleteActionMustBeFinal'
+  | {
+      TotalPrepaidGasExceeded: {
+        limit: NearGas;
+        total_prepaid_gas: NearGas;
+      };
+    }
+  | {
+      TotalNumberOfActionsExceeded: {
+        limit: number;
+        total_number_of_actions: number;
+      };
+    }
+  | {
+      AddKeyMethodNamesNumberOfBytesExceeded: {
+        limit: number;
+        total_number_of_bytes: number;
+      };
+    }
+  | {
+      AddKeyMethodNameLengthExceeded: {
+        length: number;
+        limit: number;
+      };
+    }
+  | 'IntegerOverflow'
+  | {
+      InvalidAccountId: {
+        account_id: string;
+      };
+    }
+  | {
+      ContractSizeExceeded: {
+        limit: number;
+        size: number;
+      };
+    }
+  | {
+      FunctionCallMethodNameLengthExceeded: {
+        length: number;
+        limit: number;
+      };
+    }
+  | {
+      FunctionCallArgumentsLengthExceeded: {
+        length: number;
+        limit: number;
+      };
+    }
+  | {
+      UnsuitableStakingKey: {
+        public_key: PublicKey;
+      };
+    }
+  | 'FunctionCallZeroAttachedGas'
+  | 'DelegateActionMustBeOnlyOne'
+  | {
+      UnsupportedProtocolFeature: {
+        protocol_feature: string;
+        version: number;
+      };
+    }
+  | {
+      InvalidDeterministicStateInitReceiver: {
+        derived_id: AccountId;
+        receiver_id: AccountId;
+      };
+    }
+  | {
+      DeterministicStateInitKeyLengthExceeded: {
+        length: number;
+        limit: number;
+      };
+    }
+  | {
+      DeterministicStateInitValueLengthExceeded: {
+        length: number;
+        limit: number;
+      };
+    }
+  | {
+      GasKeyPermissionInvalid: {
+        permission: AccessKeyPermission;
+      };
+    }
+  | {
+      GasKeyTooManyNoncesRequested: {
+        limit: number;
+        requested_nonces: number;
+      };
+    };
 export type AddGasKeyAction = {
   num_nonces: number;
   permission: AccessKeyPermission;
   public_key: PublicKey;
 };
 /**
-* An action that adds key with public key associated
-*/
+ * An action that adds key with public key associated
+ */
 export type AddKeyAction = {
   /**
    * An access key with the permission
@@ -522,10 +587,10 @@ export type AddKeyAction = {
   public_key: PublicKey;
 };
 /**
-* `BandwidthRequest` describes the size of receipts that a shard would like to send to another shard.
-* When a shard wants to send a lot of receipts to another shard, it needs to create a request and wait
-* for a bandwidth grant from the bandwidth scheduler.
-*/
+ * `BandwidthRequest` describes the size of receipts that a shard would like to send to another shard.
+ * When a shard wants to send a lot of receipts to another shard, it needs to create a request and wait
+ * for a bandwidth grant from the bandwidth scheduler.
+ */
 export type BandwidthRequest = {
   /**
    * Bitmap which describes what values of bandwidth are requested.
@@ -537,28 +602,28 @@ export type BandwidthRequest = {
   to_shard: number;
 };
 /**
-* Bitmap which describes which values from the predefined list are being requested.
-* The nth bit is set to 1 when the nth value from the list is being requested.
-*/
+ * Bitmap which describes which values from the predefined list are being requested.
+ * The nth bit is set to 1 when the nth value from the list is being requested.
+ */
 export type BandwidthRequestBitmap = {
   data: [number, number, number, number, number];
 };
 /**
-* A list of shard's bandwidth requests.
-* Describes how much the shard would like to send to other shards.
-*/
+ * A list of shard's bandwidth requests.
+ * Describes how much the shard would like to send to other shards.
+ */
 export type BandwidthRequests = {
   V1: BandwidthRequestsV1;
 };
 /**
-* Version 1 of [`BandwidthRequest`].
-*/
+ * Version 1 of [`BandwidthRequest`].
+ */
 export type BandwidthRequestsV1 = {
   requests: Array<BandwidthRequest>;
 };
 /**
-* A part of a state for the current head of a light client. More info [here](https://nomicon.io/ChainSpec/LightClient).
-*/
+ * A part of a state for the current head of a light client. More info [here](https://nomicon.io/ChainSpec/LightClient).
+ */
 export type BlockHeaderInnerLiteView = {
   /**
    * The merkle root of all the block hashes
@@ -586,8 +651,8 @@ export type BlockHeaderInnerLiteView = {
   timestamp_nanosec: string;
 };
 /**
-* Contains main info about the block.
-*/
+ * Contains main info about the block.
+ */
 export type BlockHeaderView = {
   approvals: Array<Signature | null>;
   block_body_hash?: CryptoHash | null;
@@ -640,51 +705,54 @@ export type BlockHeaderView = {
   validator_reward?: NearToken;
 };
 export type BlockId = number | CryptoHash;
-export type BlockReference = {
-  block_id: BlockId;
-} | {
-  finality: Finality;
-} | {
-  sync_checkpoint: SyncCheckpoint;
-};
+export type BlockReference =
+  | {
+      block_id: BlockId;
+    }
+  | {
+      finality: Finality;
+    }
+  | {
+      sync_checkpoint: SyncCheckpoint;
+    };
 /**
-* Height and hash of a block
-*/
+ * Height and hash of a block
+ */
 export type BlockStatusView = {
   hash: CryptoHash;
   height: number;
 };
 /**
-* A result returned by contract method
-*/
+ * A result returned by contract method
+ */
 export type CallResult = {
   logs: Array<string>;
   result: Array<number>;
 };
 /**
-* Status of the [catchup](https://near.github.io/nearcore/architecture/how/sync.html#catchup) process
-*/
+ * Status of the [catchup](https://near.github.io/nearcore/architecture/how/sync.html#catchup) process
+ */
 export type CatchupStatusView = {
   blocks_to_catchup: Array<BlockStatusView>;
   shard_sync_status: {
-      [key: string]: never;
+    [key: string]: never;
   };
   sync_block_hash: CryptoHash;
   sync_block_height: number;
 };
 /**
-* Config for the Chunk Distribution Network feature.
-* This allows nodes to push and pull chunks from a central stream.
-* The two benefits of this approach are: (1) less request/response traffic
-* on the peer-to-peer network and (2) lower latency for RPC nodes indexing the chain.
-*/
+ * Config for the Chunk Distribution Network feature.
+ * This allows nodes to push and pull chunks from a central stream.
+ * The two benefits of this approach are: (1) less request/response traffic
+ * on the peer-to-peer network and (2) lower latency for RPC nodes indexing the chain.
+ */
 export type ChunkDistributionNetworkConfig = {
   enabled?: boolean;
   uris?: ChunkDistributionUris;
 };
 /**
-* URIs for the Chunk Distribution Network feature.
-*/
+ * URIs for the Chunk Distribution Network feature.
+ */
 export type ChunkDistributionUris = {
   /**
    * URI for pulling chunks from the stream.
@@ -697,8 +765,8 @@ export type ChunkDistributionUris = {
 };
 export type ChunkHash = CryptoHash;
 /**
-* Contains main info about the chunk.
-*/
+ * Contains main info about the chunk.
+ */
 export type ChunkHeaderView = {
   balance_burnt: NearToken;
   bandwidth_requests?: BandwidthRequests | null;
@@ -728,10 +796,10 @@ export type ChunkHeaderView = {
   validator_reward?: NearToken;
 };
 /**
-* Configuration for a cloud-based archival writer. If this config is present, the writer is enabled and
-* writes chunk-related data based on the tracked shards. This config also controls additional archival
-* behavior such as block data and polling interval.
-*/
+ * Configuration for a cloud-based archival writer. If this config is present, the writer is enabled and
+ * writes chunk-related data based on the tracked shards. This config also controls additional archival
+ * behavior such as block data and polling interval.
+ */
 export type CloudArchivalWriterConfig = {
   /**
    * Determines whether block-related data should be written to cloud storage.
@@ -742,20 +810,23 @@ export type CloudArchivalWriterConfig = {
    */
   polling_interval?: DurationAsStdSchemaProvider;
 };
-export type CompilationError = {
-  CodeDoesNotExist: {
-      account_id: AccountId;
-  };
-} | {
-  PrepareError: PrepareError;
-} | {
-  WasmerCompileError: {
-      msg: string;
-  };
-};
+export type CompilationError =
+  | {
+      CodeDoesNotExist: {
+        account_id: AccountId;
+      };
+    }
+  | {
+      PrepareError: PrepareError;
+    }
+  | {
+      WasmerCompileError: {
+        msg: string;
+      };
+    };
 /**
-* The configuration for congestion control. More info about congestion [here](https://near.github.io/nearcore/architecture/how/receipt-congestion.html?highlight=congestion#receipt-congestion)
-*/
+ * The configuration for congestion control. More info about congestion [here](https://near.github.io/nearcore/architecture/how/receipt-congestion.html?highlight=congestion#receipt-congestion)
+ */
 export type CongestionControlConfigView = {
   /**
    * How much gas the chosen allowed shard can send to a 100% congested shard.
@@ -833,8 +904,8 @@ export type CongestionControlConfigView = {
   reject_tx_congestion_threshold?: number;
 };
 /**
-* Stores the congestion level of a shard. More info about congestion [here](https://near.github.io/nearcore/architecture/how/receipt-congestion.html?highlight=congestion#receipt-congestion)
-*/
+ * Stores the congestion level of a shard. More info about congestion [here](https://near.github.io/nearcore/architecture/how/receipt-congestion.html?highlight=congestion#receipt-congestion)
+ */
 export type CongestionInfoView = {
   allowed_shard: number;
   buffered_receipts_gas: string;
@@ -842,15 +913,15 @@ export type CongestionInfoView = {
   receipt_bytes: number;
 };
 /**
-* A view of the contract code.
-*/
+ * A view of the contract code.
+ */
 export type ContractCodeView = {
   code_base64: string;
   hash: CryptoHash;
 };
 /**
-* Shows gas profile. More info [here](https://near.github.io/nearcore/architecture/gas/gas_profile.html?highlight=WASM_HOST_COST#example-transaction-gas-profile).
-*/
+ * Shows gas profile. More info [here](https://near.github.io/nearcore/architecture/gas/gas_profile.html?highlight=WASM_HOST_COST#example-transaction-gas-profile).
+ */
 export type CostGasUsed = {
   cost: string;
   /**
@@ -860,15 +931,15 @@ export type CostGasUsed = {
   gas_used: string;
 };
 /**
-* Create account action
-*/
+ * Create account action
+ */
 export type CreateAccountAction = {
   [key: string]: unknown;
 };
 export type CryptoHash = string;
 /**
-* Describes information about the current epoch validator
-*/
+ * Describes information about the current epoch validator
+ */
 export type CurrentEpochValidatorInfo = {
   account_id: AccountId;
   is_slashed: boolean;
@@ -902,8 +973,8 @@ export type CurrentEpochValidatorInfo = {
   stake: NearToken;
 };
 /**
-* The fees settings for a data receipt creation
-*/
+ * The fees settings for a data receipt creation
+ */
 export type DataReceiptCreationConfigView = {
   /**
    * Base cost of creating a data receipt.
@@ -928,8 +999,8 @@ export type DataReceiverView = {
   receiver_id: AccountId;
 };
 /**
-* This action allows to execute the inner actions behalf of the defined sender.
-*/
+ * This action allows to execute the inner actions behalf of the defined sender.
+ */
 export type DelegateAction = {
   /**
    * List of actions to be executed.
@@ -974,8 +1045,8 @@ export type DeleteKeyAction = {
   public_key: PublicKey;
 };
 /**
-* Deploy contract action
-*/
+ * Deploy contract action
+ */
 export type DeployContractAction = {
   /**
    * WebAssembly binary
@@ -983,8 +1054,8 @@ export type DeployContractAction = {
   code: string;
 };
 /**
-* Deploy global contract action
-*/
+ * Deploy global contract action
+ */
 export type DeployGlobalContractAction = {
   /**
    * WebAssembly binary
@@ -1006,7 +1077,7 @@ export type DeterministicAccountStateInit = {
 export type DeterministicAccountStateInitV1 = {
   code: GlobalContractIdentifier;
   data: {
-      [key: string]: string;
+    [key: string]: string;
   };
 };
 export type DeterministicStateInitAction = {
@@ -1014,13 +1085,13 @@ export type DeterministicStateInitAction = {
   state_init: DeterministicAccountStateInit;
 };
 export declare const Direction: {
-  readonly LEFT: "Left";
-  readonly RIGHT: "Right";
+  readonly LEFT: 'Left';
+  readonly RIGHT: 'Right';
 };
 export type Direction = (typeof Direction)[keyof typeof Direction];
 /**
-* Configures how to dump state to external storage.
-*/
+ * Configures how to dump state to external storage.
+ */
 export type DumpConfig = {
   /**
    * Location of a json file with credentials allowing access to the bucket.
@@ -1046,8 +1117,8 @@ export type DurationAsStdSchemaProvider = {
   secs: number;
 };
 /**
-* Configuration for dynamic resharding feature
-*/
+ * Configuration for dynamic resharding feature
+ */
 export type DynamicReshardingConfigView = {
   /**
    * Maximum number of shards in the network.
@@ -1075,10 +1146,10 @@ export type DynamicReshardingConfigView = {
   min_epochs_between_resharding: number;
 };
 /**
-* Epoch identifier -- wrapped hash, to make it easier to distinguish.
-* EpochId of epoch T is the hash of last block in T-2
-* EpochId of first two epochs is 0
-*/
+ * Epoch identifier -- wrapped hash, to make it easier to distinguish.
+ * EpochId of epoch T is the hash of last block in T-2
+ * EpochId of first two epochs is 0
+ */
 export type EpochId = CryptoHash;
 export type EpochSyncConfig = {
   /**
@@ -1109,256 +1180,331 @@ export type EpochSyncConfig = {
    */
   timeout_for_epoch_sync?: DurationAsStdSchemaProvider;
 };
-export type ErrorWrapperForGenesisConfigError = {
-  cause: RpcRequestValidationErrorKind;
-  name: 'REQUEST_VALIDATION_ERROR';
-} | {
-  cause: GenesisConfigError;
-  name: 'HANDLER_ERROR';
-} | {
-  cause: InternalError;
-  name: 'INTERNAL_ERROR';
-};
-export type ErrorWrapperForRpcBlockError = {
-  cause: RpcRequestValidationErrorKind;
-  name: 'REQUEST_VALIDATION_ERROR';
-} | {
-  cause: RpcBlockError;
-  name: 'HANDLER_ERROR';
-} | {
-  cause: InternalError;
-  name: 'INTERNAL_ERROR';
-};
-export type ErrorWrapperForRpcCallFunctionError = {
-  cause: RpcRequestValidationErrorKind;
-  name: 'REQUEST_VALIDATION_ERROR';
-} | {
-  cause: RpcCallFunctionError;
-  name: 'HANDLER_ERROR';
-} | {
-  cause: InternalError;
-  name: 'INTERNAL_ERROR';
-};
-export type ErrorWrapperForRpcChunkError = {
-  cause: RpcRequestValidationErrorKind;
-  name: 'REQUEST_VALIDATION_ERROR';
-} | {
-  cause: RpcChunkError;
-  name: 'HANDLER_ERROR';
-} | {
-  cause: InternalError;
-  name: 'INTERNAL_ERROR';
-};
-export type ErrorWrapperForRpcClientConfigError = {
-  cause: RpcRequestValidationErrorKind;
-  name: 'REQUEST_VALIDATION_ERROR';
-} | {
-  cause: RpcClientConfigError;
-  name: 'HANDLER_ERROR';
-} | {
-  cause: InternalError;
-  name: 'INTERNAL_ERROR';
-};
-export type ErrorWrapperForRpcGasPriceError = {
-  cause: RpcRequestValidationErrorKind;
-  name: 'REQUEST_VALIDATION_ERROR';
-} | {
-  cause: RpcGasPriceError;
-  name: 'HANDLER_ERROR';
-} | {
-  cause: InternalError;
-  name: 'INTERNAL_ERROR';
-};
-export type ErrorWrapperForRpcLightClientNextBlockError = {
-  cause: RpcRequestValidationErrorKind;
-  name: 'REQUEST_VALIDATION_ERROR';
-} | {
-  cause: RpcLightClientNextBlockError;
-  name: 'HANDLER_ERROR';
-} | {
-  cause: InternalError;
-  name: 'INTERNAL_ERROR';
-};
-export type ErrorWrapperForRpcLightClientProofError = {
-  cause: RpcRequestValidationErrorKind;
-  name: 'REQUEST_VALIDATION_ERROR';
-} | {
-  cause: RpcLightClientProofError;
-  name: 'HANDLER_ERROR';
-} | {
-  cause: InternalError;
-  name: 'INTERNAL_ERROR';
-};
-export type ErrorWrapperForRpcMaintenanceWindowsError = {
-  cause: RpcRequestValidationErrorKind;
-  name: 'REQUEST_VALIDATION_ERROR';
-} | {
-  cause: RpcMaintenanceWindowsError;
-  name: 'HANDLER_ERROR';
-} | {
-  cause: InternalError;
-  name: 'INTERNAL_ERROR';
-};
-export type ErrorWrapperForRpcNetworkInfoError = {
-  cause: RpcRequestValidationErrorKind;
-  name: 'REQUEST_VALIDATION_ERROR';
-} | {
-  cause: RpcNetworkInfoError;
-  name: 'HANDLER_ERROR';
-} | {
-  cause: InternalError;
-  name: 'INTERNAL_ERROR';
-};
-export type ErrorWrapperForRpcProtocolConfigError = {
-  cause: RpcRequestValidationErrorKind;
-  name: 'REQUEST_VALIDATION_ERROR';
-} | {
-  cause: RpcProtocolConfigError;
-  name: 'HANDLER_ERROR';
-} | {
-  cause: InternalError;
-  name: 'INTERNAL_ERROR';
-};
-export type ErrorWrapperForRpcQueryError = {
-  cause: RpcRequestValidationErrorKind;
-  name: 'REQUEST_VALIDATION_ERROR';
-} | {
-  cause: RpcQueryError;
-  name: 'HANDLER_ERROR';
-} | {
-  cause: InternalError;
-  name: 'INTERNAL_ERROR';
-};
-export type ErrorWrapperForRpcReceiptError = {
-  cause: RpcRequestValidationErrorKind;
-  name: 'REQUEST_VALIDATION_ERROR';
-} | {
-  cause: RpcReceiptError;
-  name: 'HANDLER_ERROR';
-} | {
-  cause: InternalError;
-  name: 'INTERNAL_ERROR';
-};
-export type ErrorWrapperForRpcSplitStorageInfoError = {
-  cause: RpcRequestValidationErrorKind;
-  name: 'REQUEST_VALIDATION_ERROR';
-} | {
-  cause: RpcSplitStorageInfoError;
-  name: 'HANDLER_ERROR';
-} | {
-  cause: InternalError;
-  name: 'INTERNAL_ERROR';
-};
-export type ErrorWrapperForRpcStateChangesError = {
-  cause: RpcRequestValidationErrorKind;
-  name: 'REQUEST_VALIDATION_ERROR';
-} | {
-  cause: RpcStateChangesError;
-  name: 'HANDLER_ERROR';
-} | {
-  cause: InternalError;
-  name: 'INTERNAL_ERROR';
-};
-export type ErrorWrapperForRpcStatusError = {
-  cause: RpcRequestValidationErrorKind;
-  name: 'REQUEST_VALIDATION_ERROR';
-} | {
-  cause: RpcStatusError;
-  name: 'HANDLER_ERROR';
-} | {
-  cause: InternalError;
-  name: 'INTERNAL_ERROR';
-};
-export type ErrorWrapperForRpcTransactionError = {
-  cause: RpcRequestValidationErrorKind;
-  name: 'REQUEST_VALIDATION_ERROR';
-} | {
-  cause: RpcTransactionError;
-  name: 'HANDLER_ERROR';
-} | {
-  cause: InternalError;
-  name: 'INTERNAL_ERROR';
-};
-export type ErrorWrapperForRpcValidatorError = {
-  cause: RpcRequestValidationErrorKind;
-  name: 'REQUEST_VALIDATION_ERROR';
-} | {
-  cause: RpcValidatorError;
-  name: 'HANDLER_ERROR';
-} | {
-  cause: InternalError;
-  name: 'INTERNAL_ERROR';
-};
-export type ErrorWrapperForRpcViewAccessKeyError = {
-  cause: RpcRequestValidationErrorKind;
-  name: 'REQUEST_VALIDATION_ERROR';
-} | {
-  cause: RpcViewAccessKeyError;
-  name: 'HANDLER_ERROR';
-} | {
-  cause: InternalError;
-  name: 'INTERNAL_ERROR';
-};
-export type ErrorWrapperForRpcViewAccessKeyListError = {
-  cause: RpcRequestValidationErrorKind;
-  name: 'REQUEST_VALIDATION_ERROR';
-} | {
-  cause: RpcViewAccessKeyListError;
-  name: 'HANDLER_ERROR';
-} | {
-  cause: InternalError;
-  name: 'INTERNAL_ERROR';
-};
-export type ErrorWrapperForRpcViewAccountError = {
-  cause: RpcRequestValidationErrorKind;
-  name: 'REQUEST_VALIDATION_ERROR';
-} | {
-  cause: RpcViewAccountError;
-  name: 'HANDLER_ERROR';
-} | {
-  cause: InternalError;
-  name: 'INTERNAL_ERROR';
-};
-export type ErrorWrapperForRpcViewCodeError = {
-  cause: RpcRequestValidationErrorKind;
-  name: 'REQUEST_VALIDATION_ERROR';
-} | {
-  cause: RpcViewCodeError;
-  name: 'HANDLER_ERROR';
-} | {
-  cause: InternalError;
-  name: 'INTERNAL_ERROR';
-};
-export type ErrorWrapperForRpcViewGasKeyError = {
-  cause: RpcRequestValidationErrorKind;
-  name: 'REQUEST_VALIDATION_ERROR';
-} | {
-  cause: RpcViewGasKeyError;
-  name: 'HANDLER_ERROR';
-} | {
-  cause: InternalError;
-  name: 'INTERNAL_ERROR';
-};
-export type ErrorWrapperForRpcViewGasKeyListError = {
-  cause: RpcRequestValidationErrorKind;
-  name: 'REQUEST_VALIDATION_ERROR';
-} | {
-  cause: RpcViewGasKeyListError;
-  name: 'HANDLER_ERROR';
-} | {
-  cause: InternalError;
-  name: 'INTERNAL_ERROR';
-};
-export type ErrorWrapperForRpcViewStateError = {
-  cause: RpcRequestValidationErrorKind;
-  name: 'REQUEST_VALIDATION_ERROR';
-} | {
-  cause: RpcViewStateError;
-  name: 'HANDLER_ERROR';
-} | {
-  cause: InternalError;
-  name: 'INTERNAL_ERROR';
-};
+export type ErrorWrapperForGenesisConfigError =
+  | {
+      cause: RpcRequestValidationErrorKind;
+      name: 'REQUEST_VALIDATION_ERROR';
+    }
+  | {
+      cause: GenesisConfigError;
+      name: 'HANDLER_ERROR';
+    }
+  | {
+      cause: InternalError;
+      name: 'INTERNAL_ERROR';
+    };
+export type ErrorWrapperForRpcBlockError =
+  | {
+      cause: RpcRequestValidationErrorKind;
+      name: 'REQUEST_VALIDATION_ERROR';
+    }
+  | {
+      cause: RpcBlockError;
+      name: 'HANDLER_ERROR';
+    }
+  | {
+      cause: InternalError;
+      name: 'INTERNAL_ERROR';
+    };
+export type ErrorWrapperForRpcCallFunctionError =
+  | {
+      cause: RpcRequestValidationErrorKind;
+      name: 'REQUEST_VALIDATION_ERROR';
+    }
+  | {
+      cause: RpcCallFunctionError;
+      name: 'HANDLER_ERROR';
+    }
+  | {
+      cause: InternalError;
+      name: 'INTERNAL_ERROR';
+    };
+export type ErrorWrapperForRpcChunkError =
+  | {
+      cause: RpcRequestValidationErrorKind;
+      name: 'REQUEST_VALIDATION_ERROR';
+    }
+  | {
+      cause: RpcChunkError;
+      name: 'HANDLER_ERROR';
+    }
+  | {
+      cause: InternalError;
+      name: 'INTERNAL_ERROR';
+    };
+export type ErrorWrapperForRpcClientConfigError =
+  | {
+      cause: RpcRequestValidationErrorKind;
+      name: 'REQUEST_VALIDATION_ERROR';
+    }
+  | {
+      cause: RpcClientConfigError;
+      name: 'HANDLER_ERROR';
+    }
+  | {
+      cause: InternalError;
+      name: 'INTERNAL_ERROR';
+    };
+export type ErrorWrapperForRpcGasPriceError =
+  | {
+      cause: RpcRequestValidationErrorKind;
+      name: 'REQUEST_VALIDATION_ERROR';
+    }
+  | {
+      cause: RpcGasPriceError;
+      name: 'HANDLER_ERROR';
+    }
+  | {
+      cause: InternalError;
+      name: 'INTERNAL_ERROR';
+    };
+export type ErrorWrapperForRpcLightClientNextBlockError =
+  | {
+      cause: RpcRequestValidationErrorKind;
+      name: 'REQUEST_VALIDATION_ERROR';
+    }
+  | {
+      cause: RpcLightClientNextBlockError;
+      name: 'HANDLER_ERROR';
+    }
+  | {
+      cause: InternalError;
+      name: 'INTERNAL_ERROR';
+    };
+export type ErrorWrapperForRpcLightClientProofError =
+  | {
+      cause: RpcRequestValidationErrorKind;
+      name: 'REQUEST_VALIDATION_ERROR';
+    }
+  | {
+      cause: RpcLightClientProofError;
+      name: 'HANDLER_ERROR';
+    }
+  | {
+      cause: InternalError;
+      name: 'INTERNAL_ERROR';
+    };
+export type ErrorWrapperForRpcMaintenanceWindowsError =
+  | {
+      cause: RpcRequestValidationErrorKind;
+      name: 'REQUEST_VALIDATION_ERROR';
+    }
+  | {
+      cause: RpcMaintenanceWindowsError;
+      name: 'HANDLER_ERROR';
+    }
+  | {
+      cause: InternalError;
+      name: 'INTERNAL_ERROR';
+    };
+export type ErrorWrapperForRpcNetworkInfoError =
+  | {
+      cause: RpcRequestValidationErrorKind;
+      name: 'REQUEST_VALIDATION_ERROR';
+    }
+  | {
+      cause: RpcNetworkInfoError;
+      name: 'HANDLER_ERROR';
+    }
+  | {
+      cause: InternalError;
+      name: 'INTERNAL_ERROR';
+    };
+export type ErrorWrapperForRpcProtocolConfigError =
+  | {
+      cause: RpcRequestValidationErrorKind;
+      name: 'REQUEST_VALIDATION_ERROR';
+    }
+  | {
+      cause: RpcProtocolConfigError;
+      name: 'HANDLER_ERROR';
+    }
+  | {
+      cause: InternalError;
+      name: 'INTERNAL_ERROR';
+    };
+export type ErrorWrapperForRpcQueryError =
+  | {
+      cause: RpcRequestValidationErrorKind;
+      name: 'REQUEST_VALIDATION_ERROR';
+    }
+  | {
+      cause: RpcQueryError;
+      name: 'HANDLER_ERROR';
+    }
+  | {
+      cause: InternalError;
+      name: 'INTERNAL_ERROR';
+    };
+export type ErrorWrapperForRpcReceiptError =
+  | {
+      cause: RpcRequestValidationErrorKind;
+      name: 'REQUEST_VALIDATION_ERROR';
+    }
+  | {
+      cause: RpcReceiptError;
+      name: 'HANDLER_ERROR';
+    }
+  | {
+      cause: InternalError;
+      name: 'INTERNAL_ERROR';
+    };
+export type ErrorWrapperForRpcSplitStorageInfoError =
+  | {
+      cause: RpcRequestValidationErrorKind;
+      name: 'REQUEST_VALIDATION_ERROR';
+    }
+  | {
+      cause: RpcSplitStorageInfoError;
+      name: 'HANDLER_ERROR';
+    }
+  | {
+      cause: InternalError;
+      name: 'INTERNAL_ERROR';
+    };
+export type ErrorWrapperForRpcStateChangesError =
+  | {
+      cause: RpcRequestValidationErrorKind;
+      name: 'REQUEST_VALIDATION_ERROR';
+    }
+  | {
+      cause: RpcStateChangesError;
+      name: 'HANDLER_ERROR';
+    }
+  | {
+      cause: InternalError;
+      name: 'INTERNAL_ERROR';
+    };
+export type ErrorWrapperForRpcStatusError =
+  | {
+      cause: RpcRequestValidationErrorKind;
+      name: 'REQUEST_VALIDATION_ERROR';
+    }
+  | {
+      cause: RpcStatusError;
+      name: 'HANDLER_ERROR';
+    }
+  | {
+      cause: InternalError;
+      name: 'INTERNAL_ERROR';
+    };
+export type ErrorWrapperForRpcTransactionError =
+  | {
+      cause: RpcRequestValidationErrorKind;
+      name: 'REQUEST_VALIDATION_ERROR';
+    }
+  | {
+      cause: RpcTransactionError;
+      name: 'HANDLER_ERROR';
+    }
+  | {
+      cause: InternalError;
+      name: 'INTERNAL_ERROR';
+    };
+export type ErrorWrapperForRpcValidatorError =
+  | {
+      cause: RpcRequestValidationErrorKind;
+      name: 'REQUEST_VALIDATION_ERROR';
+    }
+  | {
+      cause: RpcValidatorError;
+      name: 'HANDLER_ERROR';
+    }
+  | {
+      cause: InternalError;
+      name: 'INTERNAL_ERROR';
+    };
+export type ErrorWrapperForRpcViewAccessKeyError =
+  | {
+      cause: RpcRequestValidationErrorKind;
+      name: 'REQUEST_VALIDATION_ERROR';
+    }
+  | {
+      cause: RpcViewAccessKeyError;
+      name: 'HANDLER_ERROR';
+    }
+  | {
+      cause: InternalError;
+      name: 'INTERNAL_ERROR';
+    };
+export type ErrorWrapperForRpcViewAccessKeyListError =
+  | {
+      cause: RpcRequestValidationErrorKind;
+      name: 'REQUEST_VALIDATION_ERROR';
+    }
+  | {
+      cause: RpcViewAccessKeyListError;
+      name: 'HANDLER_ERROR';
+    }
+  | {
+      cause: InternalError;
+      name: 'INTERNAL_ERROR';
+    };
+export type ErrorWrapperForRpcViewAccountError =
+  | {
+      cause: RpcRequestValidationErrorKind;
+      name: 'REQUEST_VALIDATION_ERROR';
+    }
+  | {
+      cause: RpcViewAccountError;
+      name: 'HANDLER_ERROR';
+    }
+  | {
+      cause: InternalError;
+      name: 'INTERNAL_ERROR';
+    };
+export type ErrorWrapperForRpcViewCodeError =
+  | {
+      cause: RpcRequestValidationErrorKind;
+      name: 'REQUEST_VALIDATION_ERROR';
+    }
+  | {
+      cause: RpcViewCodeError;
+      name: 'HANDLER_ERROR';
+    }
+  | {
+      cause: InternalError;
+      name: 'INTERNAL_ERROR';
+    };
+export type ErrorWrapperForRpcViewGasKeyError =
+  | {
+      cause: RpcRequestValidationErrorKind;
+      name: 'REQUEST_VALIDATION_ERROR';
+    }
+  | {
+      cause: RpcViewGasKeyError;
+      name: 'HANDLER_ERROR';
+    }
+  | {
+      cause: InternalError;
+      name: 'INTERNAL_ERROR';
+    };
+export type ErrorWrapperForRpcViewGasKeyListError =
+  | {
+      cause: RpcRequestValidationErrorKind;
+      name: 'REQUEST_VALIDATION_ERROR';
+    }
+  | {
+      cause: RpcViewGasKeyListError;
+      name: 'HANDLER_ERROR';
+    }
+  | {
+      cause: InternalError;
+      name: 'INTERNAL_ERROR';
+    };
+export type ErrorWrapperForRpcViewStateError =
+  | {
+      cause: RpcRequestValidationErrorKind;
+      name: 'REQUEST_VALIDATION_ERROR';
+    }
+  | {
+      cause: RpcViewStateError;
+      name: 'HANDLER_ERROR';
+    }
+  | {
+      cause: InternalError;
+      name: 'INTERNAL_ERROR';
+    };
 export type ExecutionMetadataView = {
   gas_profile?: Array<CostGasUsed> | null;
   version: number;
@@ -1404,17 +1550,21 @@ export type ExecutionOutcomeWithIdView = {
   outcome: ExecutionOutcomeView;
   proof: Array<MerklePathItem>;
 };
-export type ExecutionStatusView = 'Unknown' | {
-  Failure: TxExecutionError;
-} | {
-  SuccessValue: string;
-} | {
-  SuccessReceiptId: CryptoHash;
-};
+export type ExecutionStatusView =
+  | 'Unknown'
+  | {
+      Failure: TxExecutionError;
+    }
+  | {
+      SuccessValue: string;
+    }
+  | {
+      SuccessReceiptId: CryptoHash;
+    };
 /**
-* Typed view of ExtCostsConfig to preserve JSON output field names in protocol
-* config RPC output.
-*/
+ * Typed view of ExtCostsConfig to preserve JSON output field names in protocol
+ * config RPC output.
+ */
 export type ExtCostsConfigView = {
   /**
    * Base cost for multiexp
@@ -1727,34 +1877,37 @@ export type ExternalStorageConfig = {
   num_concurrent_requests_during_catchup?: number;
 };
 /**
-* Supported external storage backends and their minimal config.
-*/
-export type ExternalStorageLocation = {
-  S3: {
-      /**
-       * Location on S3.
-       */
-      bucket: string;
-      /**
-       * Data may only be available in certain locations.
-       */
-      region: string;
-  };
-} | {
-  Filesystem: {
-      root_dir: string;
-  };
-} | {
-  GCS: {
-      bucket: string;
-  };
-};
+ * Supported external storage backends and their minimal config.
+ */
+export type ExternalStorageLocation =
+  | {
+      S3: {
+        /**
+         * Location on S3.
+         */
+        bucket: string;
+        /**
+         * Data may only be available in certain locations.
+         */
+        region: string;
+      };
+    }
+  | {
+      Filesystem: {
+        root_dir: string;
+      };
+    }
+  | {
+      GCS: {
+        bucket: string;
+      };
+    };
 /**
-* Costs associated with an object that can only be sent over the network (and executed
-* by the receiver).
-* NOTE: `send_sir` or `send_not_sir` fees are usually burned when the item is being created.
-* And `execution` fee is burned when the item is being executed.
-*/
+ * Costs associated with an object that can only be sent over the network (and executed
+ * by the receiver).
+ * NOTE: `send_sir` or `send_not_sir` fees are usually burned when the item is being created.
+ * And `execution` fee is burned when the item is being executed.
+ */
 export type Fee = {
   /**
    * Fee for executing the object.
@@ -1771,9 +1924,9 @@ export type Fee = {
   send_sir: NearGas;
 };
 /**
-* Execution outcome of the transaction and all the subsequent receipts.
-* Could be not finalized yet
-*/
+ * Execution outcome of the transaction and all the subsequent receipts.
+ * Could be not finalized yet
+ */
 export type FinalExecutionOutcomeView = {
   /**
    * The execution outcome of receipts.
@@ -1797,9 +1950,9 @@ export type FinalExecutionOutcomeView = {
   transaction_outcome: ExecutionOutcomeWithIdView;
 };
 /**
-* Final execution outcome of the transaction and all of subsequent the receipts. Also includes
-* the generated receipt.
-*/
+ * Final execution outcome of the transaction and all of subsequent the receipts. Also includes
+ * the generated receipt.
+ */
 export type FinalExecutionOutcomeWithReceiptView = {
   /**
    * Receipts generated from the transaction
@@ -1826,30 +1979,34 @@ export type FinalExecutionOutcomeWithReceiptView = {
    */
   transaction_outcome: ExecutionOutcomeWithIdView;
 };
-export type FinalExecutionStatus = 'NotStarted' | 'Started' | {
-  Failure: TxExecutionError;
-} | {
-  SuccessValue: string;
-};
+export type FinalExecutionStatus =
+  | 'NotStarted'
+  | 'Started'
+  | {
+      Failure: TxExecutionError;
+    }
+  | {
+      SuccessValue: string;
+    };
 /**
-* Different types of finality.
-*/
+ * Different types of finality.
+ */
 export declare const Finality: {
-  readonly OPTIMISTIC: "optimistic";
-  readonly NEAR_FINAL: "near-final";
-  readonly FINAL: "final";
+  readonly OPTIMISTIC: 'optimistic';
+  readonly NEAR_FINAL: 'near-final';
+  readonly FINAL: 'final';
 };
 /**
-* Different types of finality.
-*/
+ * Different types of finality.
+ */
 export type Finality = (typeof Finality)[keyof typeof Finality];
 /**
-* This type is used to mark function arguments.
-*
-* NOTE: The main reason for this to exist (except the type-safety) is that the value is
-* transparently serialized and deserialized as a base64-encoded string when serde is used
-* (serde_json).
-*/
+ * This type is used to mark function arguments.
+ *
+ * NOTE: The main reason for this to exist (except the type-safety) is that the value is
+ * transparently serialized and deserialized as a base64-encoded string when serde is used
+ * (serde_json).
+ */
 export type FunctionArgs = string;
 export type FunctionCallAction = {
   args: string;
@@ -1858,32 +2015,40 @@ export type FunctionCallAction = {
   method_name: string;
 };
 /**
-* Serializable version of `near-vm-runner::FunctionCallError`.
-*
-* Must never reorder/remove elements, can only add new variants at the end (but do that very
-* carefully). It describes stable serialization format, and only used by serialization logic.
-*/
-export type FunctionCallError = 'WasmUnknownError' | '_EVMError' | {
-  CompilationError: CompilationError;
-} | {
-  LinkError: {
-      msg: string;
-  };
-} | {
-  MethodResolveError: MethodResolveError;
-} | {
-  WasmTrap: WasmTrap;
-} | {
-  HostError: HostError;
-} | {
-  ExecutionError: string;
-};
+ * Serializable version of `near-vm-runner::FunctionCallError`.
+ *
+ * Must never reorder/remove elements, can only add new variants at the end (but do that very
+ * carefully). It describes stable serialization format, and only used by serialization logic.
+ */
+export type FunctionCallError =
+  | 'WasmUnknownError'
+  | '_EVMError'
+  | {
+      CompilationError: CompilationError;
+    }
+  | {
+      LinkError: {
+        msg: string;
+      };
+    }
+  | {
+      MethodResolveError: MethodResolveError;
+    }
+  | {
+      WasmTrap: WasmTrap;
+    }
+  | {
+      HostError: HostError;
+    }
+  | {
+      ExecutionError: string;
+    };
 /**
-* Grants limited permission to make transactions with FunctionCallActions
-* The permission can limit the allowed balance to be spent on the prepaid gas.
-* It also restrict the account ID of the receiver for this function call.
-* It also can restrict the method name for the allowed function calls.
-*/
+ * Grants limited permission to make transactions with FunctionCallActions
+ * The permission can limit the allowed balance to be spent on the prepaid gas.
+ * It also restrict the account ID of the receiver for this function call.
+ * It also can restrict the method name for the allowed function calls.
+ */
 export type FunctionCallPermission = {
   /**
    * Allowance is a balance limit to use by this access key to pay for function call gas and
@@ -1906,8 +2071,8 @@ export type FunctionCallPermission = {
   receiver_id: string;
 };
 /**
-* Configuration for garbage collection.
-*/
+ * Configuration for garbage collection.
+ */
 export type GcConfig = {
   /**
    * Maximum number of blocks to garbage collect at every garbage collection
@@ -1929,9 +2094,9 @@ export type GcConfig = {
   gc_step_period?: DurationAsStdSchemaProvider;
 };
 /**
-* Gas key is like an access key, except it stores a balance separately, and transactions signed
-* with it deduct their cost from the gas key balance instead of the account balance.
-*/
+ * Gas key is like an access key, except it stores a balance separately, and transactions signed
+ * with it deduct their cost from the gas key balance instead of the account balance.
+ */
 export type GasKey = {
   /**
    * The balance of the gas key.
@@ -2129,221 +2294,282 @@ export declare const GenesisConfigError: {
 };
 export type GenesisConfigError = (typeof GenesisConfigError)[keyof typeof GenesisConfigError];
 /**
-* GenesisConfigRequest
-*/
+ * GenesisConfigRequest
+ */
 export declare const GenesisConfigRequest: {
   readonly NULL: null;
 };
 /**
-* GenesisConfigRequest
-*/
+ * GenesisConfigRequest
+ */
 export type GenesisConfigRequest = (typeof GenesisConfigRequest)[keyof typeof GenesisConfigRequest];
 export type GlobalContractDeployMode = 'CodeHash' | 'AccountId';
-export type GlobalContractIdentifier = {
-  CodeHash: CryptoHash;
-} | {
-  AccountId: AccountId;
-};
-export type GlobalContractIdentifierView = {
-  hash: CryptoHash;
-} | {
-  account_id: AccountId;
-};
-export type HostError = 'BadUTF16' | 'BadUTF8' | 'GasExceeded' | 'GasLimitExceeded' | 'BalanceExceeded' | 'EmptyMethodName' | {
-  GuestPanic: {
-      panic_msg: string;
-  };
-} | 'IntegerOverflow' | {
-  InvalidPromiseIndex: {
-      promise_idx: number;
-  };
-} | 'CannotAppendActionToJointPromise' | 'CannotReturnJointPromise' | {
-  InvalidPromiseResultIndex: {
-      result_idx: number;
-  };
-} | {
-  InvalidRegisterId: {
-      register_id: number;
-  };
-} | {
-  IteratorWasInvalidated: {
-      iterator_index: number;
-  };
-} | 'MemoryAccessViolation' | {
-  InvalidReceiptIndex: {
-      receipt_index: number;
-  };
-} | {
-  InvalidIteratorIndex: {
-      iterator_index: number;
-  };
-} | 'InvalidAccountId' | 'InvalidMethodName' | 'InvalidPublicKey' | {
-  ProhibitedInView: {
-      method_name: string;
-  };
-} | {
-  NumberOfLogsExceeded: {
-      limit: number;
-  };
-} | {
-  KeyLengthExceeded: {
-      length: number;
-      limit: number;
-  };
-} | {
-  ValueLengthExceeded: {
-      length: number;
-      limit: number;
-  };
-} | {
-  TotalLogLengthExceeded: {
-      length: number;
-      limit: number;
-  };
-} | {
-  NumberPromisesExceeded: {
-      limit: number;
-      number_of_promises: number;
-  };
-} | {
-  NumberInputDataDependenciesExceeded: {
-      limit: number;
-      number_of_input_data_dependencies: number;
-  };
-} | {
-  ReturnedValueLengthExceeded: {
-      length: number;
-      limit: number;
-  };
-} | {
-  ContractSizeExceeded: {
-      limit: number;
-      size: number;
-  };
-} | {
-  Deprecated: {
-      method_name: string;
-  };
-} | {
-  ECRecoverError: {
-      msg: string;
-  };
-} | {
-  AltBn128InvalidInput: {
-      msg: string;
-  };
-} | {
-  Ed25519VerifyInvalidInput: {
-      msg: string;
-  };
-};
+export type GlobalContractIdentifier =
+  | {
+      CodeHash: CryptoHash;
+    }
+  | {
+      AccountId: AccountId;
+    };
+export type GlobalContractIdentifierView =
+  | {
+      hash: CryptoHash;
+    }
+  | {
+      account_id: AccountId;
+    };
+export type HostError =
+  | 'BadUTF16'
+  | 'BadUTF8'
+  | 'GasExceeded'
+  | 'GasLimitExceeded'
+  | 'BalanceExceeded'
+  | 'EmptyMethodName'
+  | {
+      GuestPanic: {
+        panic_msg: string;
+      };
+    }
+  | 'IntegerOverflow'
+  | {
+      InvalidPromiseIndex: {
+        promise_idx: number;
+      };
+    }
+  | 'CannotAppendActionToJointPromise'
+  | 'CannotReturnJointPromise'
+  | {
+      InvalidPromiseResultIndex: {
+        result_idx: number;
+      };
+    }
+  | {
+      InvalidRegisterId: {
+        register_id: number;
+      };
+    }
+  | {
+      IteratorWasInvalidated: {
+        iterator_index: number;
+      };
+    }
+  | 'MemoryAccessViolation'
+  | {
+      InvalidReceiptIndex: {
+        receipt_index: number;
+      };
+    }
+  | {
+      InvalidIteratorIndex: {
+        iterator_index: number;
+      };
+    }
+  | 'InvalidAccountId'
+  | 'InvalidMethodName'
+  | 'InvalidPublicKey'
+  | {
+      ProhibitedInView: {
+        method_name: string;
+      };
+    }
+  | {
+      NumberOfLogsExceeded: {
+        limit: number;
+      };
+    }
+  | {
+      KeyLengthExceeded: {
+        length: number;
+        limit: number;
+      };
+    }
+  | {
+      ValueLengthExceeded: {
+        length: number;
+        limit: number;
+      };
+    }
+  | {
+      TotalLogLengthExceeded: {
+        length: number;
+        limit: number;
+      };
+    }
+  | {
+      NumberPromisesExceeded: {
+        limit: number;
+        number_of_promises: number;
+      };
+    }
+  | {
+      NumberInputDataDependenciesExceeded: {
+        limit: number;
+        number_of_input_data_dependencies: number;
+      };
+    }
+  | {
+      ReturnedValueLengthExceeded: {
+        length: number;
+        limit: number;
+      };
+    }
+  | {
+      ContractSizeExceeded: {
+        limit: number;
+        size: number;
+      };
+    }
+  | {
+      Deprecated: {
+        method_name: string;
+      };
+    }
+  | {
+      ECRecoverError: {
+        msg: string;
+      };
+    }
+  | {
+      AltBn128InvalidInput: {
+        msg: string;
+      };
+    }
+  | {
+      Ed25519VerifyInvalidInput: {
+        msg: string;
+      };
+    };
 export type InternalError = {
   info: {
-      error_message: string;
+    error_message: string;
   };
   name: 'INTERNAL_ERROR';
 };
-export type InvalidAccessKeyError = {
-  AccessKeyNotFound: {
-      account_id: AccountId;
-      public_key: PublicKey;
-  };
-} | {
-  ReceiverMismatch: {
-      ak_receiver: string;
-      tx_receiver: AccountId;
-  };
-} | {
-  MethodNameMismatch: {
-      method_name: string;
-  };
-} | 'RequiresFullAccess' | {
-  NotEnoughAllowance: {
-      account_id: AccountId;
-      allowance: NearToken;
-      cost: NearToken;
-      public_key: PublicKey;
-  };
-} | 'DepositWithFunctionCall';
+export type InvalidAccessKeyError =
+  | {
+      AccessKeyNotFound: {
+        account_id: AccountId;
+        public_key: PublicKey;
+      };
+    }
+  | {
+      ReceiverMismatch: {
+        ak_receiver: string;
+        tx_receiver: AccountId;
+      };
+    }
+  | {
+      MethodNameMismatch: {
+        method_name: string;
+      };
+    }
+  | 'RequiresFullAccess'
+  | {
+      NotEnoughAllowance: {
+        account_id: AccountId;
+        allowance: NearToken;
+        cost: NearToken;
+        public_key: PublicKey;
+      };
+    }
+  | 'DepositWithFunctionCall';
 /**
-* An error happened during TX execution
-*/
-export type InvalidTxError = {
-  InvalidAccessKeyError: InvalidAccessKeyError;
-} | {
-  InvalidSignerId: {
-      signer_id: string;
-  };
-} | {
-  SignerDoesNotExist: {
-      signer_id: AccountId;
-  };
-} | {
-  InvalidNonce: {
-      ak_nonce: number;
-      tx_nonce: number;
-  };
-} | {
-  NonceTooLarge: {
-      tx_nonce: number;
-      upper_bound: number;
-  };
-} | {
-  InvalidReceiverId: {
-      receiver_id: string;
-  };
-} | 'InvalidSignature' | {
-  NotEnoughBalance: {
-      balance: NearToken;
-      cost: NearToken;
-      signer_id: AccountId;
-  };
-} | {
-  LackBalanceForState: {
-      /**
-       * Required balance to cover the state.
-       */
-      amount: NearToken;
-      /**
-       * An account which doesn't have enough balance to cover storage.
-       */
-      signer_id: AccountId;
-  };
-} | 'CostOverflow' | 'InvalidChain' | 'Expired' | {
-  ActionsValidation: ActionsValidationError;
-} | {
-  TransactionSizeExceeded: {
-      limit: number;
-      size: number;
-  };
-} | 'InvalidTransactionVersion' | {
-  StorageError: StorageError;
-} | {
-  ShardCongested: {
-      /**
-       * A value between 0 (no congestion) and 1 (max congestion).
-       */
-      congestion_level: number;
-      /**
-       * The congested shard.
-       */
-      shard_id: number;
-  };
-} | {
-  ShardStuck: {
-      /**
-       * The number of blocks since the last included chunk of the shard.
-       */
-      missed_chunks: number;
-      /**
-       * The shard that fails making progress.
-       */
-      shard_id: number;
-  };
-};
+ * An error happened during TX execution
+ */
+export type InvalidTxError =
+  | {
+      InvalidAccessKeyError: InvalidAccessKeyError;
+    }
+  | {
+      InvalidSignerId: {
+        signer_id: string;
+      };
+    }
+  | {
+      SignerDoesNotExist: {
+        signer_id: AccountId;
+      };
+    }
+  | {
+      InvalidNonce: {
+        ak_nonce: number;
+        tx_nonce: number;
+      };
+    }
+  | {
+      NonceTooLarge: {
+        tx_nonce: number;
+        upper_bound: number;
+      };
+    }
+  | {
+      InvalidReceiverId: {
+        receiver_id: string;
+      };
+    }
+  | 'InvalidSignature'
+  | {
+      NotEnoughBalance: {
+        balance: NearToken;
+        cost: NearToken;
+        signer_id: AccountId;
+      };
+    }
+  | {
+      LackBalanceForState: {
+        /**
+         * Required balance to cover the state.
+         */
+        amount: NearToken;
+        /**
+         * An account which doesn't have enough balance to cover storage.
+         */
+        signer_id: AccountId;
+      };
+    }
+  | 'CostOverflow'
+  | 'InvalidChain'
+  | 'Expired'
+  | {
+      ActionsValidation: ActionsValidationError;
+    }
+  | {
+      TransactionSizeExceeded: {
+        limit: number;
+        size: number;
+      };
+    }
+  | 'InvalidTransactionVersion'
+  | {
+      StorageError: StorageError;
+    }
+  | {
+      ShardCongested: {
+        /**
+         * A value between 0 (no congestion) and 1 (max congestion).
+         */
+        congestion_level: number;
+        /**
+         * The congested shard.
+         */
+        shard_id: number;
+      };
+    }
+  | {
+      ShardStuck: {
+        /**
+         * The number of blocks since the last included chunk of the shard.
+         */
+        missed_chunks: number;
+        /**
+         * The shard that fails making progress.
+         */
+        shard_id: number;
+      };
+    };
 /**
-* JsonRpcRequest_for_EXPERIMENTAL_call_function
-*/
+ * JsonRpcRequest_for_EXPERIMENTAL_call_function
+ */
 export type JsonRpcRequestForExperimentalCallFunction = {
   id: string;
   jsonrpc: string;
@@ -2351,8 +2577,8 @@ export type JsonRpcRequestForExperimentalCallFunction = {
   params: RpcCallFunctionRequest;
 };
 /**
-* JsonRpcRequest_for_EXPERIMENTAL_changes
-*/
+ * JsonRpcRequest_for_EXPERIMENTAL_changes
+ */
 export type JsonRpcRequestForExperimentalChanges = {
   id: string;
   jsonrpc: string;
@@ -2360,8 +2586,8 @@ export type JsonRpcRequestForExperimentalChanges = {
   params: RpcStateChangesInBlockByTypeRequest;
 };
 /**
-* JsonRpcRequest_for_EXPERIMENTAL_changes_in_block
-*/
+ * JsonRpcRequest_for_EXPERIMENTAL_changes_in_block
+ */
 export type JsonRpcRequestForExperimentalChangesInBlock = {
   id: string;
   jsonrpc: string;
@@ -2369,8 +2595,8 @@ export type JsonRpcRequestForExperimentalChangesInBlock = {
   params: RpcStateChangesInBlockRequest;
 };
 /**
-* JsonRpcRequest_for_EXPERIMENTAL_congestion_level
-*/
+ * JsonRpcRequest_for_EXPERIMENTAL_congestion_level
+ */
 export type JsonRpcRequestForExperimentalCongestionLevel = {
   id: string;
   jsonrpc: string;
@@ -2378,8 +2604,8 @@ export type JsonRpcRequestForExperimentalCongestionLevel = {
   params: RpcCongestionLevelRequest;
 };
 /**
-* JsonRpcRequest_for_EXPERIMENTAL_genesis_config
-*/
+ * JsonRpcRequest_for_EXPERIMENTAL_genesis_config
+ */
 export type JsonRpcRequestForExperimentalGenesisConfig = {
   id: string;
   jsonrpc: string;
@@ -2387,8 +2613,8 @@ export type JsonRpcRequestForExperimentalGenesisConfig = {
   params: GenesisConfigRequest;
 };
 /**
-* JsonRpcRequest_for_EXPERIMENTAL_light_client_block_proof
-*/
+ * JsonRpcRequest_for_EXPERIMENTAL_light_client_block_proof
+ */
 export type JsonRpcRequestForExperimentalLightClientBlockProof = {
   id: string;
   jsonrpc: string;
@@ -2396,8 +2622,8 @@ export type JsonRpcRequestForExperimentalLightClientBlockProof = {
   params: RpcLightClientBlockProofRequest;
 };
 /**
-* JsonRpcRequest_for_EXPERIMENTAL_light_client_proof
-*/
+ * JsonRpcRequest_for_EXPERIMENTAL_light_client_proof
+ */
 export type JsonRpcRequestForExperimentalLightClientProof = {
   id: string;
   jsonrpc: string;
@@ -2405,8 +2631,8 @@ export type JsonRpcRequestForExperimentalLightClientProof = {
   params: RpcLightClientExecutionProofRequest;
 };
 /**
-* JsonRpcRequest_for_EXPERIMENTAL_maintenance_windows
-*/
+ * JsonRpcRequest_for_EXPERIMENTAL_maintenance_windows
+ */
 export type JsonRpcRequestForExperimentalMaintenanceWindows = {
   id: string;
   jsonrpc: string;
@@ -2414,8 +2640,8 @@ export type JsonRpcRequestForExperimentalMaintenanceWindows = {
   params: RpcMaintenanceWindowsRequest;
 };
 /**
-* JsonRpcRequest_for_EXPERIMENTAL_protocol_config
-*/
+ * JsonRpcRequest_for_EXPERIMENTAL_protocol_config
+ */
 export type JsonRpcRequestForExperimentalProtocolConfig = {
   id: string;
   jsonrpc: string;
@@ -2423,8 +2649,8 @@ export type JsonRpcRequestForExperimentalProtocolConfig = {
   params: RpcProtocolConfigRequest;
 };
 /**
-* JsonRpcRequest_for_EXPERIMENTAL_receipt
-*/
+ * JsonRpcRequest_for_EXPERIMENTAL_receipt
+ */
 export type JsonRpcRequestForExperimentalReceipt = {
   id: string;
   jsonrpc: string;
@@ -2432,8 +2658,8 @@ export type JsonRpcRequestForExperimentalReceipt = {
   params: RpcReceiptRequest;
 };
 /**
-* JsonRpcRequest_for_EXPERIMENTAL_split_storage_info
-*/
+ * JsonRpcRequest_for_EXPERIMENTAL_split_storage_info
+ */
 export type JsonRpcRequestForExperimentalSplitStorageInfo = {
   id: string;
   jsonrpc: string;
@@ -2441,8 +2667,8 @@ export type JsonRpcRequestForExperimentalSplitStorageInfo = {
   params: RpcSplitStorageInfoRequest;
 };
 /**
-* JsonRpcRequest_for_EXPERIMENTAL_tx_status
-*/
+ * JsonRpcRequest_for_EXPERIMENTAL_tx_status
+ */
 export type JsonRpcRequestForExperimentalTxStatus = {
   id: string;
   jsonrpc: string;
@@ -2450,8 +2676,8 @@ export type JsonRpcRequestForExperimentalTxStatus = {
   params: RpcTransactionStatusRequest;
 };
 /**
-* JsonRpcRequest_for_EXPERIMENTAL_validators_ordered
-*/
+ * JsonRpcRequest_for_EXPERIMENTAL_validators_ordered
+ */
 export type JsonRpcRequestForExperimentalValidatorsOrdered = {
   id: string;
   jsonrpc: string;
@@ -2459,8 +2685,8 @@ export type JsonRpcRequestForExperimentalValidatorsOrdered = {
   params: RpcValidatorsOrderedRequest;
 };
 /**
-* JsonRpcRequest_for_EXPERIMENTAL_view_access_key
-*/
+ * JsonRpcRequest_for_EXPERIMENTAL_view_access_key
+ */
 export type JsonRpcRequestForExperimentalViewAccessKey = {
   id: string;
   jsonrpc: string;
@@ -2468,8 +2694,8 @@ export type JsonRpcRequestForExperimentalViewAccessKey = {
   params: RpcViewAccessKeyRequest;
 };
 /**
-* JsonRpcRequest_for_EXPERIMENTAL_view_access_key_list
-*/
+ * JsonRpcRequest_for_EXPERIMENTAL_view_access_key_list
+ */
 export type JsonRpcRequestForExperimentalViewAccessKeyList = {
   id: string;
   jsonrpc: string;
@@ -2477,8 +2703,8 @@ export type JsonRpcRequestForExperimentalViewAccessKeyList = {
   params: RpcViewAccessKeyListRequest;
 };
 /**
-* JsonRpcRequest_for_EXPERIMENTAL_view_account
-*/
+ * JsonRpcRequest_for_EXPERIMENTAL_view_account
+ */
 export type JsonRpcRequestForExperimentalViewAccount = {
   id: string;
   jsonrpc: string;
@@ -2486,8 +2712,8 @@ export type JsonRpcRequestForExperimentalViewAccount = {
   params: RpcViewAccountRequest;
 };
 /**
-* JsonRpcRequest_for_EXPERIMENTAL_view_code
-*/
+ * JsonRpcRequest_for_EXPERIMENTAL_view_code
+ */
 export type JsonRpcRequestForExperimentalViewCode = {
   id: string;
   jsonrpc: string;
@@ -2495,8 +2721,8 @@ export type JsonRpcRequestForExperimentalViewCode = {
   params: RpcViewCodeRequest;
 };
 /**
-* JsonRpcRequest_for_EXPERIMENTAL_view_gas_key
-*/
+ * JsonRpcRequest_for_EXPERIMENTAL_view_gas_key
+ */
 export type JsonRpcRequestForExperimentalViewGasKey = {
   id: string;
   jsonrpc: string;
@@ -2504,8 +2730,8 @@ export type JsonRpcRequestForExperimentalViewGasKey = {
   params: RpcViewGasKeyRequest;
 };
 /**
-* JsonRpcRequest_for_EXPERIMENTAL_view_gas_key_list
-*/
+ * JsonRpcRequest_for_EXPERIMENTAL_view_gas_key_list
+ */
 export type JsonRpcRequestForExperimentalViewGasKeyList = {
   id: string;
   jsonrpc: string;
@@ -2513,8 +2739,8 @@ export type JsonRpcRequestForExperimentalViewGasKeyList = {
   params: RpcViewGasKeyListRequest;
 };
 /**
-* JsonRpcRequest_for_EXPERIMENTAL_view_state
-*/
+ * JsonRpcRequest_for_EXPERIMENTAL_view_state
+ */
 export type JsonRpcRequestForExperimentalViewState = {
   id: string;
   jsonrpc: string;
@@ -2522,8 +2748,8 @@ export type JsonRpcRequestForExperimentalViewState = {
   params: RpcViewStateRequest;
 };
 /**
-* JsonRpcRequest_for_block
-*/
+ * JsonRpcRequest_for_block
+ */
 export type JsonRpcRequestForBlock = {
   id: string;
   jsonrpc: string;
@@ -2531,8 +2757,8 @@ export type JsonRpcRequestForBlock = {
   params: RpcBlockRequest;
 };
 /**
-* JsonRpcRequest_for_block_effects
-*/
+ * JsonRpcRequest_for_block_effects
+ */
 export type JsonRpcRequestForBlockEffects = {
   id: string;
   jsonrpc: string;
@@ -2540,8 +2766,8 @@ export type JsonRpcRequestForBlockEffects = {
   params: RpcStateChangesInBlockRequest;
 };
 /**
-* JsonRpcRequest_for_broadcast_tx_async
-*/
+ * JsonRpcRequest_for_broadcast_tx_async
+ */
 export type JsonRpcRequestForBroadcastTxAsync = {
   id: string;
   jsonrpc: string;
@@ -2549,8 +2775,8 @@ export type JsonRpcRequestForBroadcastTxAsync = {
   params: RpcSendTransactionRequest;
 };
 /**
-* JsonRpcRequest_for_broadcast_tx_commit
-*/
+ * JsonRpcRequest_for_broadcast_tx_commit
+ */
 export type JsonRpcRequestForBroadcastTxCommit = {
   id: string;
   jsonrpc: string;
@@ -2558,8 +2784,8 @@ export type JsonRpcRequestForBroadcastTxCommit = {
   params: RpcSendTransactionRequest;
 };
 /**
-* JsonRpcRequest_for_changes
-*/
+ * JsonRpcRequest_for_changes
+ */
 export type JsonRpcRequestForChanges = {
   id: string;
   jsonrpc: string;
@@ -2567,8 +2793,8 @@ export type JsonRpcRequestForChanges = {
   params: RpcStateChangesInBlockByTypeRequest;
 };
 /**
-* JsonRpcRequest_for_chunk
-*/
+ * JsonRpcRequest_for_chunk
+ */
 export type JsonRpcRequestForChunk = {
   id: string;
   jsonrpc: string;
@@ -2576,8 +2802,8 @@ export type JsonRpcRequestForChunk = {
   params: RpcChunkRequest;
 };
 /**
-* JsonRpcRequest_for_client_config
-*/
+ * JsonRpcRequest_for_client_config
+ */
 export type JsonRpcRequestForClientConfig = {
   id: string;
   jsonrpc: string;
@@ -2585,8 +2811,8 @@ export type JsonRpcRequestForClientConfig = {
   params: RpcClientConfigRequest;
 };
 /**
-* JsonRpcRequest_for_gas_price
-*/
+ * JsonRpcRequest_for_gas_price
+ */
 export type JsonRpcRequestForGasPrice = {
   id: string;
   jsonrpc: string;
@@ -2594,8 +2820,8 @@ export type JsonRpcRequestForGasPrice = {
   params: RpcGasPriceRequest;
 };
 /**
-* JsonRpcRequest_for_genesis_config
-*/
+ * JsonRpcRequest_for_genesis_config
+ */
 export type JsonRpcRequestForGenesisConfig = {
   id: string;
   jsonrpc: string;
@@ -2603,8 +2829,8 @@ export type JsonRpcRequestForGenesisConfig = {
   params: GenesisConfigRequest;
 };
 /**
-* JsonRpcRequest_for_health
-*/
+ * JsonRpcRequest_for_health
+ */
 export type JsonRpcRequestForHealth = {
   id: string;
   jsonrpc: string;
@@ -2612,8 +2838,8 @@ export type JsonRpcRequestForHealth = {
   params: RpcHealthRequest;
 };
 /**
-* JsonRpcRequest_for_light_client_proof
-*/
+ * JsonRpcRequest_for_light_client_proof
+ */
 export type JsonRpcRequestForLightClientProof = {
   id: string;
   jsonrpc: string;
@@ -2621,8 +2847,8 @@ export type JsonRpcRequestForLightClientProof = {
   params: RpcLightClientExecutionProofRequest;
 };
 /**
-* JsonRpcRequest_for_maintenance_windows
-*/
+ * JsonRpcRequest_for_maintenance_windows
+ */
 export type JsonRpcRequestForMaintenanceWindows = {
   id: string;
   jsonrpc: string;
@@ -2630,8 +2856,8 @@ export type JsonRpcRequestForMaintenanceWindows = {
   params: RpcMaintenanceWindowsRequest;
 };
 /**
-* JsonRpcRequest_for_network_info
-*/
+ * JsonRpcRequest_for_network_info
+ */
 export type JsonRpcRequestForNetworkInfo = {
   id: string;
   jsonrpc: string;
@@ -2639,8 +2865,8 @@ export type JsonRpcRequestForNetworkInfo = {
   params: RpcNetworkInfoRequest;
 };
 /**
-* JsonRpcRequest_for_next_light_client_block
-*/
+ * JsonRpcRequest_for_next_light_client_block
+ */
 export type JsonRpcRequestForNextLightClientBlock = {
   id: string;
   jsonrpc: string;
@@ -2648,8 +2874,8 @@ export type JsonRpcRequestForNextLightClientBlock = {
   params: RpcLightClientNextBlockRequest;
 };
 /**
-* JsonRpcRequest_for_query
-*/
+ * JsonRpcRequest_for_query
+ */
 export type JsonRpcRequestForQuery = {
   id: string;
   jsonrpc: string;
@@ -2657,8 +2883,8 @@ export type JsonRpcRequestForQuery = {
   params: RpcQueryRequest;
 };
 /**
-* JsonRpcRequest_for_send_tx
-*/
+ * JsonRpcRequest_for_send_tx
+ */
 export type JsonRpcRequestForSendTx = {
   id: string;
   jsonrpc: string;
@@ -2666,8 +2892,8 @@ export type JsonRpcRequestForSendTx = {
   params: RpcSendTransactionRequest;
 };
 /**
-* JsonRpcRequest_for_status
-*/
+ * JsonRpcRequest_for_status
+ */
 export type JsonRpcRequestForStatus = {
   id: string;
   jsonrpc: string;
@@ -2675,8 +2901,8 @@ export type JsonRpcRequestForStatus = {
   params: RpcStatusRequest;
 };
 /**
-* JsonRpcRequest_for_tx
-*/
+ * JsonRpcRequest_for_tx
+ */
 export type JsonRpcRequestForTx = {
   id: string;
   jsonrpc: string;
@@ -2684,266 +2910,359 @@ export type JsonRpcRequestForTx = {
   params: RpcTransactionStatusRequest;
 };
 /**
-* JsonRpcRequest_for_validators
-*/
+ * JsonRpcRequest_for_validators
+ */
 export type JsonRpcRequestForValidators = {
   id: string;
   jsonrpc: string;
   method: 'validators';
   params: RpcValidatorRequest;
 };
-export type JsonRpcResponseForArrayOfRangeOfUint64AndRpcMaintenanceWindowsError = ({
-  result: Array<RangeOfUint64>;
-} | {
-  error: ErrorWrapperForRpcMaintenanceWindowsError;
-}) & {
+export type JsonRpcResponseForArrayOfRangeOfUint64AndRpcMaintenanceWindowsError = (
+  | {
+      result: Array<RangeOfUint64>;
+    }
+  | {
+      error: ErrorWrapperForRpcMaintenanceWindowsError;
+    }
+) & {
   id: string;
   jsonrpc: string;
 };
-export type JsonRpcResponseForArrayOfValidatorStakeViewAndRpcValidatorError = ({
-  result: Array<ValidatorStakeView>;
-} | {
-  error: ErrorWrapperForRpcValidatorError;
-}) & {
+export type JsonRpcResponseForArrayOfValidatorStakeViewAndRpcValidatorError = (
+  | {
+      result: Array<ValidatorStakeView>;
+    }
+  | {
+      error: ErrorWrapperForRpcValidatorError;
+    }
+) & {
   id: string;
   jsonrpc: string;
 };
-export type JsonRpcResponseForCryptoHashAndRpcTransactionError = ({
-  result: CryptoHash;
-} | {
-  error: ErrorWrapperForRpcTransactionError;
-}) & {
+export type JsonRpcResponseForCryptoHashAndRpcTransactionError = (
+  | {
+      result: CryptoHash;
+    }
+  | {
+      error: ErrorWrapperForRpcTransactionError;
+    }
+) & {
   id: string;
   jsonrpc: string;
 };
-export type JsonRpcResponseForGenesisConfigAndGenesisConfigError = ({
-  result: GenesisConfig;
-} | {
-  error: ErrorWrapperForGenesisConfigError;
-}) & {
+export type JsonRpcResponseForGenesisConfigAndGenesisConfigError = (
+  | {
+      result: GenesisConfig;
+    }
+  | {
+      error: ErrorWrapperForGenesisConfigError;
+    }
+) & {
   id: string;
   jsonrpc: string;
 };
-export type JsonRpcResponseForNullableRpcHealthResponseAndRpcStatusError = ({
-  result: RpcHealthResponse | null;
-} | {
-  error: ErrorWrapperForRpcStatusError;
-}) & {
+export type JsonRpcResponseForNullableRpcHealthResponseAndRpcStatusError = (
+  | {
+      result: RpcHealthResponse | null;
+    }
+  | {
+      error: ErrorWrapperForRpcStatusError;
+    }
+) & {
   id: string;
   jsonrpc: string;
 };
-export type JsonRpcResponseForRpcBlockResponseAndRpcBlockError = ({
-  result: RpcBlockResponse;
-} | {
-  error: ErrorWrapperForRpcBlockError;
-}) & {
+export type JsonRpcResponseForRpcBlockResponseAndRpcBlockError = (
+  | {
+      result: RpcBlockResponse;
+    }
+  | {
+      error: ErrorWrapperForRpcBlockError;
+    }
+) & {
   id: string;
   jsonrpc: string;
 };
-export type JsonRpcResponseForRpcCallFunctionResponseAndRpcCallFunctionError = ({
-  result: RpcCallFunctionResponse;
-} | {
-  error: ErrorWrapperForRpcCallFunctionError;
-}) & {
+export type JsonRpcResponseForRpcCallFunctionResponseAndRpcCallFunctionError = (
+  | {
+      result: RpcCallFunctionResponse;
+    }
+  | {
+      error: ErrorWrapperForRpcCallFunctionError;
+    }
+) & {
   id: string;
   jsonrpc: string;
 };
-export type JsonRpcResponseForRpcChunkResponseAndRpcChunkError = ({
-  result: RpcChunkResponse;
-} | {
-  error: ErrorWrapperForRpcChunkError;
-}) & {
+export type JsonRpcResponseForRpcChunkResponseAndRpcChunkError = (
+  | {
+      result: RpcChunkResponse;
+    }
+  | {
+      error: ErrorWrapperForRpcChunkError;
+    }
+) & {
   id: string;
   jsonrpc: string;
 };
-export type JsonRpcResponseForRpcClientConfigResponseAndRpcClientConfigError = ({
-  result: RpcClientConfigResponse;
-} | {
-  error: ErrorWrapperForRpcClientConfigError;
-}) & {
+export type JsonRpcResponseForRpcClientConfigResponseAndRpcClientConfigError = (
+  | {
+      result: RpcClientConfigResponse;
+    }
+  | {
+      error: ErrorWrapperForRpcClientConfigError;
+    }
+) & {
   id: string;
   jsonrpc: string;
 };
-export type JsonRpcResponseForRpcCongestionLevelResponseAndRpcChunkError = ({
-  result: RpcCongestionLevelResponse;
-} | {
-  error: ErrorWrapperForRpcChunkError;
-}) & {
+export type JsonRpcResponseForRpcCongestionLevelResponseAndRpcChunkError = (
+  | {
+      result: RpcCongestionLevelResponse;
+    }
+  | {
+      error: ErrorWrapperForRpcChunkError;
+    }
+) & {
   id: string;
   jsonrpc: string;
 };
-export type JsonRpcResponseForRpcGasPriceResponseAndRpcGasPriceError = ({
-  result: RpcGasPriceResponse;
-} | {
-  error: ErrorWrapperForRpcGasPriceError;
-}) & {
+export type JsonRpcResponseForRpcGasPriceResponseAndRpcGasPriceError = (
+  | {
+      result: RpcGasPriceResponse;
+    }
+  | {
+      error: ErrorWrapperForRpcGasPriceError;
+    }
+) & {
   id: string;
   jsonrpc: string;
 };
-export type JsonRpcResponseForRpcLightClientBlockProofResponseAndRpcLightClientProofError = ({
-  result: RpcLightClientBlockProofResponse;
-} | {
-  error: ErrorWrapperForRpcLightClientProofError;
-}) & {
+export type JsonRpcResponseForRpcLightClientBlockProofResponseAndRpcLightClientProofError = (
+  | {
+      result: RpcLightClientBlockProofResponse;
+    }
+  | {
+      error: ErrorWrapperForRpcLightClientProofError;
+    }
+) & {
   id: string;
   jsonrpc: string;
 };
-export type JsonRpcResponseForRpcLightClientExecutionProofResponseAndRpcLightClientProofError = ({
-  result: RpcLightClientExecutionProofResponse;
-} | {
-  error: ErrorWrapperForRpcLightClientProofError;
-}) & {
+export type JsonRpcResponseForRpcLightClientExecutionProofResponseAndRpcLightClientProofError = (
+  | {
+      result: RpcLightClientExecutionProofResponse;
+    }
+  | {
+      error: ErrorWrapperForRpcLightClientProofError;
+    }
+) & {
   id: string;
   jsonrpc: string;
 };
-export type JsonRpcResponseForRpcLightClientNextBlockResponseAndRpcLightClientNextBlockError = ({
-  result: RpcLightClientNextBlockResponse;
-} | {
-  error: ErrorWrapperForRpcLightClientNextBlockError;
-}) & {
+export type JsonRpcResponseForRpcLightClientNextBlockResponseAndRpcLightClientNextBlockError = (
+  | {
+      result: RpcLightClientNextBlockResponse;
+    }
+  | {
+      error: ErrorWrapperForRpcLightClientNextBlockError;
+    }
+) & {
   id: string;
   jsonrpc: string;
 };
-export type JsonRpcResponseForRpcNetworkInfoResponseAndRpcNetworkInfoError = ({
-  result: RpcNetworkInfoResponse;
-} | {
-  error: ErrorWrapperForRpcNetworkInfoError;
-}) & {
+export type JsonRpcResponseForRpcNetworkInfoResponseAndRpcNetworkInfoError = (
+  | {
+      result: RpcNetworkInfoResponse;
+    }
+  | {
+      error: ErrorWrapperForRpcNetworkInfoError;
+    }
+) & {
   id: string;
   jsonrpc: string;
 };
-export type JsonRpcResponseForRpcProtocolConfigResponseAndRpcProtocolConfigError = ({
-  result: RpcProtocolConfigResponse;
-} | {
-  error: ErrorWrapperForRpcProtocolConfigError;
-}) & {
+export type JsonRpcResponseForRpcProtocolConfigResponseAndRpcProtocolConfigError = (
+  | {
+      result: RpcProtocolConfigResponse;
+    }
+  | {
+      error: ErrorWrapperForRpcProtocolConfigError;
+    }
+) & {
   id: string;
   jsonrpc: string;
 };
-export type JsonRpcResponseForRpcQueryResponseAndRpcQueryError = ({
-  result: RpcQueryResponse;
-} | {
-  error: ErrorWrapperForRpcQueryError;
-}) & {
+export type JsonRpcResponseForRpcQueryResponseAndRpcQueryError = (
+  | {
+      result: RpcQueryResponse;
+    }
+  | {
+      error: ErrorWrapperForRpcQueryError;
+    }
+) & {
   id: string;
   jsonrpc: string;
 };
-export type JsonRpcResponseForRpcReceiptResponseAndRpcReceiptError = ({
-  result: RpcReceiptResponse;
-} | {
-  error: ErrorWrapperForRpcReceiptError;
-}) & {
+export type JsonRpcResponseForRpcReceiptResponseAndRpcReceiptError = (
+  | {
+      result: RpcReceiptResponse;
+    }
+  | {
+      error: ErrorWrapperForRpcReceiptError;
+    }
+) & {
   id: string;
   jsonrpc: string;
 };
-export type JsonRpcResponseForRpcSplitStorageInfoResponseAndRpcSplitStorageInfoError = ({
-  result: RpcSplitStorageInfoResponse;
-} | {
-  error: ErrorWrapperForRpcSplitStorageInfoError;
-}) & {
+export type JsonRpcResponseForRpcSplitStorageInfoResponseAndRpcSplitStorageInfoError = (
+  | {
+      result: RpcSplitStorageInfoResponse;
+    }
+  | {
+      error: ErrorWrapperForRpcSplitStorageInfoError;
+    }
+) & {
   id: string;
   jsonrpc: string;
 };
-export type JsonRpcResponseForRpcStateChangesInBlockByTypeResponseAndRpcStateChangesError = ({
-  result: RpcStateChangesInBlockByTypeResponse;
-} | {
-  error: ErrorWrapperForRpcStateChangesError;
-}) & {
+export type JsonRpcResponseForRpcStateChangesInBlockByTypeResponseAndRpcStateChangesError = (
+  | {
+      result: RpcStateChangesInBlockByTypeResponse;
+    }
+  | {
+      error: ErrorWrapperForRpcStateChangesError;
+    }
+) & {
   id: string;
   jsonrpc: string;
 };
-export type JsonRpcResponseForRpcStateChangesInBlockResponseAndRpcStateChangesError = ({
-  result: RpcStateChangesInBlockResponse;
-} | {
-  error: ErrorWrapperForRpcStateChangesError;
-}) & {
+export type JsonRpcResponseForRpcStateChangesInBlockResponseAndRpcStateChangesError = (
+  | {
+      result: RpcStateChangesInBlockResponse;
+    }
+  | {
+      error: ErrorWrapperForRpcStateChangesError;
+    }
+) & {
   id: string;
   jsonrpc: string;
 };
-export type JsonRpcResponseForRpcStatusResponseAndRpcStatusError = ({
-  result: RpcStatusResponse;
-} | {
-  error: ErrorWrapperForRpcStatusError;
-}) & {
+export type JsonRpcResponseForRpcStatusResponseAndRpcStatusError = (
+  | {
+      result: RpcStatusResponse;
+    }
+  | {
+      error: ErrorWrapperForRpcStatusError;
+    }
+) & {
   id: string;
   jsonrpc: string;
 };
-export type JsonRpcResponseForRpcTransactionResponseAndRpcTransactionError = ({
-  result: RpcTransactionResponse;
-} | {
-  error: ErrorWrapperForRpcTransactionError;
-}) & {
+export type JsonRpcResponseForRpcTransactionResponseAndRpcTransactionError = (
+  | {
+      result: RpcTransactionResponse;
+    }
+  | {
+      error: ErrorWrapperForRpcTransactionError;
+    }
+) & {
   id: string;
   jsonrpc: string;
 };
-export type JsonRpcResponseForRpcValidatorResponseAndRpcValidatorError = ({
-  result: RpcValidatorResponse;
-} | {
-  error: ErrorWrapperForRpcValidatorError;
-}) & {
+export type JsonRpcResponseForRpcValidatorResponseAndRpcValidatorError = (
+  | {
+      result: RpcValidatorResponse;
+    }
+  | {
+      error: ErrorWrapperForRpcValidatorError;
+    }
+) & {
   id: string;
   jsonrpc: string;
 };
-export type JsonRpcResponseForRpcViewAccessKeyListResponseAndRpcViewAccessKeyListError = ({
-  result: RpcViewAccessKeyListResponse;
-} | {
-  error: ErrorWrapperForRpcViewAccessKeyListError;
-}) & {
+export type JsonRpcResponseForRpcViewAccessKeyListResponseAndRpcViewAccessKeyListError = (
+  | {
+      result: RpcViewAccessKeyListResponse;
+    }
+  | {
+      error: ErrorWrapperForRpcViewAccessKeyListError;
+    }
+) & {
   id: string;
   jsonrpc: string;
 };
-export type JsonRpcResponseForRpcViewAccessKeyResponseAndRpcViewAccessKeyError = ({
-  result: RpcViewAccessKeyResponse;
-} | {
-  error: ErrorWrapperForRpcViewAccessKeyError;
-}) & {
+export type JsonRpcResponseForRpcViewAccessKeyResponseAndRpcViewAccessKeyError = (
+  | {
+      result: RpcViewAccessKeyResponse;
+    }
+  | {
+      error: ErrorWrapperForRpcViewAccessKeyError;
+    }
+) & {
   id: string;
   jsonrpc: string;
 };
-export type JsonRpcResponseForRpcViewAccountResponseAndRpcViewAccountError = ({
-  result: RpcViewAccountResponse;
-} | {
-  error: ErrorWrapperForRpcViewAccountError;
-}) & {
+export type JsonRpcResponseForRpcViewAccountResponseAndRpcViewAccountError = (
+  | {
+      result: RpcViewAccountResponse;
+    }
+  | {
+      error: ErrorWrapperForRpcViewAccountError;
+    }
+) & {
   id: string;
   jsonrpc: string;
 };
-export type JsonRpcResponseForRpcViewCodeResponseAndRpcViewCodeError = ({
-  result: RpcViewCodeResponse;
-} | {
-  error: ErrorWrapperForRpcViewCodeError;
-}) & {
+export type JsonRpcResponseForRpcViewCodeResponseAndRpcViewCodeError = (
+  | {
+      result: RpcViewCodeResponse;
+    }
+  | {
+      error: ErrorWrapperForRpcViewCodeError;
+    }
+) & {
   id: string;
   jsonrpc: string;
 };
-export type JsonRpcResponseForRpcViewGasKeyListResponseAndRpcViewGasKeyListError = ({
-  result: RpcViewGasKeyListResponse;
-} | {
-  error: ErrorWrapperForRpcViewGasKeyListError;
-}) & {
+export type JsonRpcResponseForRpcViewGasKeyListResponseAndRpcViewGasKeyListError = (
+  | {
+      result: RpcViewGasKeyListResponse;
+    }
+  | {
+      error: ErrorWrapperForRpcViewGasKeyListError;
+    }
+) & {
   id: string;
   jsonrpc: string;
 };
-export type JsonRpcResponseForRpcViewGasKeyResponseAndRpcViewGasKeyError = ({
-  result: RpcViewGasKeyResponse;
-} | {
-  error: ErrorWrapperForRpcViewGasKeyError;
-}) & {
+export type JsonRpcResponseForRpcViewGasKeyResponseAndRpcViewGasKeyError = (
+  | {
+      result: RpcViewGasKeyResponse;
+    }
+  | {
+      error: ErrorWrapperForRpcViewGasKeyError;
+    }
+) & {
   id: string;
   jsonrpc: string;
 };
-export type JsonRpcResponseForRpcViewStateResponseAndRpcViewStateError = ({
-  result: RpcViewStateResponse;
-} | {
-  error: ErrorWrapperForRpcViewStateError;
-}) & {
+export type JsonRpcResponseForRpcViewStateResponseAndRpcViewStateError = (
+  | {
+      result: RpcViewStateResponse;
+    }
+  | {
+      error: ErrorWrapperForRpcViewStateError;
+    }
+) & {
   id: string;
   jsonrpc: string;
 };
 /**
-* Information about a Producer: its account name, peer_id and a list of connected peers that
-* the node can use to send message for this producer.
-*/
+ * Information about a Producer: its account name, peer_id and a list of connected peers that
+ * the node can use to send message for this producer.
+ */
 export type KnownProducerView = {
   account_id: AccountId;
   next_hops?: Array<PublicKey> | null;
@@ -2955,9 +3274,9 @@ export type LightClientBlockLiteView = {
   prev_block_hash: CryptoHash;
 };
 /**
-* Describes limits for VM and Runtime.
-* TODO #4139: consider switching to strongly-typed wrappers instead of raw quantities
-*/
+ * Describes limits for VM and Runtime.
+ * TODO #4139: consider switching to strongly-typed wrappers instead of raw quantities
+ */
 export type LimitConfig = {
   /**
    * Whether to enforce account_id well-formed-ness where it wasn't enforced
@@ -3091,8 +3410,8 @@ export type LimitConfig = {
   yield_timeout_length_in_blocks?: number;
 };
 export declare const LogSummaryStyle: {
-  readonly PLAIN: "plain";
-  readonly COLORED: "colored";
+  readonly PLAIN: 'plain';
+  readonly COLORED: 'colored';
 };
 export type LogSummaryStyle = (typeof LogSummaryStyle)[keyof typeof LogSummaryStyle];
 export type MerklePathItem = {
@@ -3100,9 +3419,9 @@ export type MerklePathItem = {
   hash: CryptoHash;
 };
 export declare const MethodResolveError: {
-  readonly METHOD_EMPTY_NAME: "MethodEmptyName";
-  readonly METHOD_NOT_FOUND: "MethodNotFound";
-  readonly METHOD_INVALID_SIGNATURE: "MethodInvalidSignature";
+  readonly METHOD_EMPTY_NAME: 'MethodEmptyName';
+  readonly METHOD_NOT_FOUND: 'MethodNotFound';
+  readonly METHOD_INVALID_SIGNATURE: 'MethodInvalidSignature';
 };
 export type MethodResolveError = (typeof MethodResolveError)[keyof typeof MethodResolveError];
 export type MissingTrieValue = {
@@ -3110,9 +3429,13 @@ export type MissingTrieValue = {
   hash: CryptoHash;
 };
 /**
-* Contexts in which `StorageError::MissingTrieValue` error might occur.
-*/
-export type MissingTrieValueContext = 'TrieIterator' | 'TriePrefetchingStorage' | 'TrieMemoryPartialStorage' | 'TrieStorage';
+ * Contexts in which `StorageError::MissingTrieValue` error might occur.
+ */
+export type MissingTrieValueContext =
+  | 'TrieIterator'
+  | 'TriePrefetchingStorage'
+  | 'TrieMemoryPartialStorage'
+  | 'TrieStorage';
 export type MutableConfigValue = string;
 export type NearGas = number;
 export type NearToken = string;
@@ -3132,40 +3455,54 @@ export type NextEpochValidatorInfo = {
   stake: NearToken;
 };
 /**
-* An Action that can be included in a transaction or receipt, excluding delegate actions. This type represents all possible action types except DelegateAction to prevent infinite recursion in meta-transactions.
-*/
-export type NonDelegateAction = {
-  CreateAccount: CreateAccountAction;
-} | {
-  DeployContract: DeployContractAction;
-} | {
-  FunctionCall: FunctionCallAction;
-} | {
-  Transfer: TransferAction;
-} | {
-  Stake: StakeAction;
-} | {
-  AddKey: AddKeyAction;
-} | {
-  DeleteKey: DeleteKeyAction;
-} | {
-  DeleteAccount: DeleteAccountAction;
-} | {
-  DeployGlobalContract: DeployGlobalContractAction;
-} | {
-  UseGlobalContract: UseGlobalContractAction;
-} | {
-  DeterministicStateInit: DeterministicStateInitAction;
-} | {
-  AddGasKey: AddGasKeyAction;
-} | {
-  DeleteGasKey: DeleteGasKeyAction;
-} | {
-  TransferToGasKey: TransferToGasKeyAction;
-};
+ * An Action that can be included in a transaction or receipt, excluding delegate actions. This type represents all possible action types except DelegateAction to prevent infinite recursion in meta-transactions.
+ */
+export type NonDelegateAction =
+  | {
+      CreateAccount: CreateAccountAction;
+    }
+  | {
+      DeployContract: DeployContractAction;
+    }
+  | {
+      FunctionCall: FunctionCallAction;
+    }
+  | {
+      Transfer: TransferAction;
+    }
+  | {
+      Stake: StakeAction;
+    }
+  | {
+      AddKey: AddKeyAction;
+    }
+  | {
+      DeleteKey: DeleteKeyAction;
+    }
+  | {
+      DeleteAccount: DeleteAccountAction;
+    }
+  | {
+      DeployGlobalContract: DeployGlobalContractAction;
+    }
+  | {
+      UseGlobalContract: UseGlobalContractAction;
+    }
+  | {
+      DeterministicStateInit: DeterministicStateInitAction;
+    }
+  | {
+      AddGasKey: AddGasKeyAction;
+    }
+  | {
+      DeleteGasKey: DeleteGasKeyAction;
+    }
+  | {
+      TransferToGasKey: TransferToGasKeyAction;
+    };
 /**
-* Peer id is the public key.
-*/
+ * Peer id is the public key.
+ */
 export type PeerId = PublicKey;
 export type PeerInfoView = {
   account_id?: AccountId | null;
@@ -3188,91 +3525,114 @@ export type PeerInfoView = {
   tracked_shards: Array<ShardId>;
 };
 /**
-* Error that can occur while preparing or executing Wasm smart-contract.
-*/
-export type PrepareError = 'Serialization' | 'Deserialization' | 'InternalMemoryDeclared' | 'GasInstrumentation' | 'StackHeightInstrumentation' | 'Instantiate' | 'Memory' | 'TooManyFunctions' | 'TooManyLocals' | 'TooManyTables' | 'TooManyTableElements';
+ * Error that can occur while preparing or executing Wasm smart-contract.
+ */
+export type PrepareError =
+  | 'Serialization'
+  | 'Deserialization'
+  | 'InternalMemoryDeclared'
+  | 'GasInstrumentation'
+  | 'StackHeightInstrumentation'
+  | 'Instantiate'
+  | 'Memory'
+  | 'TooManyFunctions'
+  | 'TooManyLocals'
+  | 'TooManyTables'
+  | 'TooManyTableElements';
 /**
-* Configures whether the node checks the next or the next next epoch for network version compatibility.
-*/
+ * Configures whether the node checks the next or the next next epoch for network version compatibility.
+ */
 export declare const ProtocolVersionCheckConfig: {
-  readonly NEXT: "Next";
-  readonly NEXT_NEXT: "NextNext";
+  readonly NEXT: 'Next';
+  readonly NEXT_NEXT: 'NextNext';
 };
 /**
-* Configures whether the node checks the next or the next next epoch for network version compatibility.
-*/
+ * Configures whether the node checks the next or the next next epoch for network version compatibility.
+ */
 export type ProtocolVersionCheckConfig = (typeof ProtocolVersionCheckConfig)[keyof typeof ProtocolVersionCheckConfig];
 export type PublicKey = string;
 export type RangeOfUint64 = {
   end: number;
   start: number;
 };
-export type ReceiptEnumView = {
-  Action: {
-      actions: Array<ActionView>;
-      gas_price: NearToken;
-      input_data_ids: Array<CryptoHash>;
-      is_promise_yield?: boolean;
-      output_data_receivers: Array<DataReceiverView>;
-      refund_to?: AccountId | null;
-      signer_id: AccountId;
-      signer_public_key: PublicKey;
-  };
-} | {
-  Data: {
-      data?: string | null;
-      data_id: CryptoHash;
-      is_promise_resume?: boolean;
-  };
-} | {
-  GlobalContractDistribution: {
-      already_delivered_shards: Array<ShardId>;
-      code: string;
-      id: GlobalContractIdentifier;
-      target_shard: ShardId;
-  };
-};
+export type ReceiptEnumView =
+  | {
+      Action: {
+        actions: Array<ActionView>;
+        gas_price: NearToken;
+        input_data_ids: Array<CryptoHash>;
+        is_promise_yield?: boolean;
+        output_data_receivers: Array<DataReceiverView>;
+        refund_to?: AccountId | null;
+        signer_id: AccountId;
+        signer_public_key: PublicKey;
+      };
+    }
+  | {
+      Data: {
+        data?: string | null;
+        data_id: CryptoHash;
+        is_promise_resume?: boolean;
+      };
+    }
+  | {
+      GlobalContractDistribution: {
+        already_delivered_shards: Array<ShardId>;
+        code: string;
+        id: GlobalContractIdentifier;
+        target_shard: ShardId;
+      };
+    };
 /**
-* Describes the error for validating a receipt.
-*/
-export type ReceiptValidationError = {
-  InvalidPredecessorId: {
-      account_id: string;
-  };
-} | {
-  InvalidReceiverId: {
-      account_id: string;
-  };
-} | {
-  InvalidSignerId: {
-      account_id: string;
-  };
-} | {
-  InvalidDataReceiverId: {
-      account_id: string;
-  };
-} | {
-  ReturnedValueLengthExceeded: {
-      length: number;
-      limit: number;
-  };
-} | {
-  NumberInputDataDependenciesExceeded: {
-      limit: number;
-      number_of_input_data_dependencies: number;
-  };
-} | {
-  ActionsValidation: ActionsValidationError;
-} | {
-  ReceiptSizeExceeded: {
-      limit: number;
-      size: number;
-  };
-} | {
-  InvalidRefundTo: {
-      account_id: string;
-  };
-};
+ * Describes the error for validating a receipt.
+ */
+export type ReceiptValidationError =
+  | {
+      InvalidPredecessorId: {
+        account_id: string;
+      };
+    }
+  | {
+      InvalidReceiverId: {
+        account_id: string;
+      };
+    }
+  | {
+      InvalidSignerId: {
+        account_id: string;
+      };
+    }
+  | {
+      InvalidDataReceiverId: {
+        account_id: string;
+      };
+    }
+  | {
+      ReturnedValueLengthExceeded: {
+        length: number;
+        limit: number;
+      };
+    }
+  | {
+      NumberInputDataDependenciesExceeded: {
+        limit: number;
+        number_of_input_data_dependencies: number;
+      };
+    }
+  | {
+      ActionsValidation: ActionsValidationError;
+    }
+  | {
+      ReceiptSizeExceeded: {
+        limit: number;
+        size: number;
+      };
+    }
+  | {
+      InvalidRefundTo: {
+        account_id: string;
+      };
+    };
 export type ReceiptView = {
   predecessor_id: AccountId;
   priority?: number;
@@ -3280,29 +3640,35 @@ export type ReceiptView = {
   receipt_id: CryptoHash;
   receiver_id: AccountId;
 };
-export type RpcBlockError = {
-  info: {
-      [key: string]: unknown;
-  };
-  name: 'UNKNOWN_BLOCK';
-} | {
-  name: 'NOT_SYNCED_YET';
-} | {
-  info: {
-      error_message: string;
-  };
-  name: 'INTERNAL_ERROR';
-};
+export type RpcBlockError =
+  | {
+      info: {
+        [key: string]: unknown;
+      };
+      name: 'UNKNOWN_BLOCK';
+    }
+  | {
+      name: 'NOT_SYNCED_YET';
+    }
+  | {
+      info: {
+        error_message: string;
+      };
+      name: 'INTERNAL_ERROR';
+    };
 /**
-* RpcBlockRequest
-*/
-export type RpcBlockRequest = {
-  block_id: BlockId;
-} | {
-  finality: Finality;
-} | {
-  sync_checkpoint: SyncCheckpoint;
-};
+ * RpcBlockRequest
+ */
+export type RpcBlockRequest =
+  | {
+      block_id: BlockId;
+    }
+  | {
+      finality: Finality;
+    }
+  | {
+      sync_checkpoint: SyncCheckpoint;
+    };
 export type RpcBlockResponse = {
   /**
    * The AccountId of the author of the Block
@@ -3311,95 +3677,111 @@ export type RpcBlockResponse = {
   chunks: Array<ChunkHeaderView>;
   header: BlockHeaderView;
 };
-export type RpcCallFunctionError = {
-  info: {
-      block_reference: BlockReference;
-  };
-  name: 'UNKNOWN_BLOCK';
-} | {
-  info: {
-      block_hash: CryptoHash;
-      block_height: number;
-      requested_account_id: AccountId;
-  };
-  name: 'INVALID_ACCOUNT';
-} | {
-  info: {
-      block_hash: CryptoHash;
-      block_height: number;
-      requested_account_id: AccountId;
-  };
-  name: 'UNKNOWN_ACCOUNT';
-} | {
-  info: {
-      block_hash: CryptoHash;
-      block_height: number;
-      contract_account_id: AccountId;
-  };
-  name: 'NO_CONTRACT_CODE';
-} | {
-  info: {
-      block_hash: CryptoHash;
-      block_height: number;
-      vm_error: FunctionCallError;
-  };
-  name: 'CONTRACT_EXECUTION_ERROR';
-} | {
-  info: {
-      error_message: string;
-  };
-  name: 'INTERNAL_ERROR';
-};
-export type RpcCallFunctionRequest = ({
-  block_id: BlockId;
-} | {
-  finality: Finality;
-} | {
-  sync_checkpoint: SyncCheckpoint;
-}) & {
+export type RpcCallFunctionError =
+  | {
+      info: {
+        block_reference: BlockReference;
+      };
+      name: 'UNKNOWN_BLOCK';
+    }
+  | {
+      info: {
+        block_hash: CryptoHash;
+        block_height: number;
+        requested_account_id: AccountId;
+      };
+      name: 'INVALID_ACCOUNT';
+    }
+  | {
+      info: {
+        block_hash: CryptoHash;
+        block_height: number;
+        requested_account_id: AccountId;
+      };
+      name: 'UNKNOWN_ACCOUNT';
+    }
+  | {
+      info: {
+        block_hash: CryptoHash;
+        block_height: number;
+        contract_account_id: AccountId;
+      };
+      name: 'NO_CONTRACT_CODE';
+    }
+  | {
+      info: {
+        block_hash: CryptoHash;
+        block_height: number;
+        vm_error: FunctionCallError;
+      };
+      name: 'CONTRACT_EXECUTION_ERROR';
+    }
+  | {
+      info: {
+        error_message: string;
+      };
+      name: 'INTERNAL_ERROR';
+    };
+export type RpcCallFunctionRequest = (
+  | {
+      block_id: BlockId;
+    }
+  | {
+      finality: Finality;
+    }
+  | {
+      sync_checkpoint: SyncCheckpoint;
+    }
+) & {
   account_id: AccountId;
   args_base64: FunctionArgs;
   method_name: string;
 };
 /**
-* A result returned by contract method
-*/
+ * A result returned by contract method
+ */
 export type RpcCallFunctionResponse = {
   block_hash: CryptoHash;
   block_height: number;
   logs: Array<string>;
   result: Array<number>;
 };
-export type RpcChunkError = {
-  info: {
-      error_message: string;
-  };
-  name: 'INTERNAL_ERROR';
-} | {
-  info: {
-      [key: string]: unknown;
-  };
-  name: 'UNKNOWN_BLOCK';
-} | {
-  info: {
-      shard_id: ShardId;
-  };
-  name: 'INVALID_SHARD_ID';
-} | {
-  info: {
-      chunk_hash: CryptoHash;
-  };
-  name: 'UNKNOWN_CHUNK';
-};
+export type RpcChunkError =
+  | {
+      info: {
+        error_message: string;
+      };
+      name: 'INTERNAL_ERROR';
+    }
+  | {
+      info: {
+        [key: string]: unknown;
+      };
+      name: 'UNKNOWN_BLOCK';
+    }
+  | {
+      info: {
+        shard_id: ShardId;
+      };
+      name: 'INVALID_SHARD_ID';
+    }
+  | {
+      info: {
+        chunk_hash: CryptoHash;
+      };
+      name: 'UNKNOWN_CHUNK';
+    };
 /**
-* RpcChunkRequest
-*/
-export type RpcChunkRequest = {
-  block_id: BlockId;
-  shard_id: ShardId;
-} | {
-  chunk_id: CryptoHash;
-};
+ * RpcChunkRequest
+ */
+export type RpcChunkRequest =
+  | {
+      block_id: BlockId;
+      shard_id: ShardId;
+    }
+  | {
+      chunk_id: CryptoHash;
+    };
 export type RpcChunkResponse = {
   author: AccountId;
   header: ChunkHeaderView;
@@ -3408,23 +3790,23 @@ export type RpcChunkResponse = {
 };
 export type RpcClientConfigError = {
   info: {
-      error_message: string;
+    error_message: string;
   };
   name: 'INTERNAL_ERROR';
 };
 /**
-* RpcClientConfigRequest
-*/
+ * RpcClientConfigRequest
+ */
 export declare const RpcClientConfigRequest: {
   readonly NULL: null;
 };
 /**
-* RpcClientConfigRequest
-*/
+ * RpcClientConfigRequest
+ */
 export type RpcClientConfigRequest = (typeof RpcClientConfigRequest)[keyof typeof RpcClientConfigRequest];
 /**
-* ClientConfig where some fields can be updated at runtime.
-*/
+ * ClientConfig where some fields can be updated at runtime.
+ */
 export type RpcClientConfigResponse = {
   /**
    * Not clear old data, set `true` for archive nodes.
@@ -3723,31 +4105,35 @@ export type RpcClientConfigResponse = {
   view_client_threads?: number;
 };
 /**
-* RpcCongestionLevelRequest
-*/
-export type RpcCongestionLevelRequest = {
-  block_id: BlockId;
-  shard_id: ShardId;
-} | {
-  chunk_id: CryptoHash;
-};
+ * RpcCongestionLevelRequest
+ */
+export type RpcCongestionLevelRequest =
+  | {
+      block_id: BlockId;
+      shard_id: ShardId;
+    }
+  | {
+      chunk_id: CryptoHash;
+    };
 export type RpcCongestionLevelResponse = {
   congestion_level: number;
 };
-export type RpcGasPriceError = {
-  info: {
-      error_message: string;
-  };
-  name: 'INTERNAL_ERROR';
-} | {
-  info: {
-      [key: string]: unknown;
-  };
-  name: 'UNKNOWN_BLOCK';
-};
+export type RpcGasPriceError =
+  | {
+      info: {
+        error_message: string;
+      };
+      name: 'INTERNAL_ERROR';
+    }
+  | {
+      info: {
+        [key: string]: unknown;
+      };
+      name: 'UNKNOWN_BLOCK';
+    };
 /**
-* RpcGasPriceRequest
-*/
+ * RpcGasPriceRequest
+ */
 export type RpcGasPriceRequest = {
   block_id?: BlockId | null;
 };
@@ -3755,14 +4141,14 @@ export type RpcGasPriceResponse = {
   gas_price: NearToken;
 };
 /**
-* RpcHealthRequest
-*/
+ * RpcHealthRequest
+ */
 export declare const RpcHealthRequest: {
   readonly NULL: null;
 };
 /**
-* RpcHealthRequest
-*/
+ * RpcHealthRequest
+ */
 export type RpcHealthRequest = (typeof RpcHealthRequest)[keyof typeof RpcHealthRequest];
 export declare const RpcHealthResponse: {
   readonly NULL: null;
@@ -3774,8 +4160,8 @@ export type RpcKnownProducer = {
   peer_id: PeerId;
 };
 /**
-* RpcLightClientBlockProofRequest
-*/
+ * RpcLightClientBlockProofRequest
+ */
 export type RpcLightClientBlockProofRequest = {
   block_hash: CryptoHash;
   light_client_head: CryptoHash;
@@ -3784,15 +4170,18 @@ export type RpcLightClientBlockProofResponse = {
   block_header_lite: LightClientBlockLiteView;
   block_proof: Array<MerklePathItem>;
 };
-export type RpcLightClientExecutionProofRequest = ({
-  sender_id: AccountId;
-  transaction_hash: CryptoHash;
-  type: 'transaction';
-} | {
-  receipt_id: CryptoHash;
-  receiver_id: AccountId;
-  type: 'receipt';
-}) & {
+export type RpcLightClientExecutionProofRequest = (
+  | {
+      sender_id: AccountId;
+      transaction_hash: CryptoHash;
+      type: 'transaction';
+    }
+  | {
+      receipt_id: CryptoHash;
+      receiver_id: AccountId;
+      type: 'receipt';
+    }
+) & {
   light_client_head: CryptoHash;
 };
 export type RpcLightClientExecutionProofResponse = {
@@ -3801,31 +4190,34 @@ export type RpcLightClientExecutionProofResponse = {
   outcome_proof: ExecutionOutcomeWithIdView;
   outcome_root_proof: Array<MerklePathItem>;
 };
-export type RpcLightClientNextBlockError = {
-  info: {
-      error_message: string;
-  };
-  name: 'INTERNAL_ERROR';
-} | {
-  info: {
-      [key: string]: unknown;
-  };
-  name: 'UNKNOWN_BLOCK';
-} | {
-  info: {
-      epoch_id: EpochId;
-  };
-  name: 'EPOCH_OUT_OF_BOUNDS';
-};
+export type RpcLightClientNextBlockError =
+  | {
+      info: {
+        error_message: string;
+      };
+      name: 'INTERNAL_ERROR';
+    }
+  | {
+      info: {
+        [key: string]: unknown;
+      };
+      name: 'UNKNOWN_BLOCK';
+    }
+  | {
+      info: {
+        epoch_id: EpochId;
+      };
+      name: 'EPOCH_OUT_OF_BOUNDS';
+    };
 /**
-* RpcLightClientNextBlockRequest
-*/
+ * RpcLightClientNextBlockRequest
+ */
 export type RpcLightClientNextBlockRequest = {
   last_block_hash: CryptoHash;
 };
 /**
-* A state for the current head of a light client. More info [here](https://nomicon.io/ChainSpec/LightClient).
-*/
+ * A state for the current head of a light client. More info [here](https://nomicon.io/ChainSpec/LightClient).
+ */
 export type RpcLightClientNextBlockResponse = {
   approvals_after_next?: Array<Signature | null>;
   /**
@@ -3838,66 +4230,72 @@ export type RpcLightClientNextBlockResponse = {
   next_bps?: Array<ValidatorStakeView> | null;
   prev_block_hash?: CryptoHash;
 };
-export type RpcLightClientProofError = {
-  info: {
-      [key: string]: unknown;
-  };
-  name: 'UNKNOWN_BLOCK';
-} | {
-  info: {
-      execution_outcome_shard_id: ShardId;
-      number_or_shards: number;
-  };
-  name: 'INCONSISTENT_STATE';
-} | {
-  info: {
-      transaction_or_receipt_id: CryptoHash;
-  };
-  name: 'NOT_CONFIRMED';
-} | {
-  info: {
-      transaction_or_receipt_id: CryptoHash;
-  };
-  name: 'UNKNOWN_TRANSACTION_OR_RECEIPT';
-} | {
-  info: {
-      shard_id: ShardId;
-      transaction_or_receipt_id: CryptoHash;
-  };
-  name: 'UNAVAILABLE_SHARD';
-} | {
-  info: {
-      error_message: string;
-  };
-  name: 'INTERNAL_ERROR';
-};
+export type RpcLightClientProofError =
+  | {
+      info: {
+        [key: string]: unknown;
+      };
+      name: 'UNKNOWN_BLOCK';
+    }
+  | {
+      info: {
+        execution_outcome_shard_id: ShardId;
+        number_or_shards: number;
+      };
+      name: 'INCONSISTENT_STATE';
+    }
+  | {
+      info: {
+        transaction_or_receipt_id: CryptoHash;
+      };
+      name: 'NOT_CONFIRMED';
+    }
+  | {
+      info: {
+        transaction_or_receipt_id: CryptoHash;
+      };
+      name: 'UNKNOWN_TRANSACTION_OR_RECEIPT';
+    }
+  | {
+      info: {
+        shard_id: ShardId;
+        transaction_or_receipt_id: CryptoHash;
+      };
+      name: 'UNAVAILABLE_SHARD';
+    }
+  | {
+      info: {
+        error_message: string;
+      };
+      name: 'INTERNAL_ERROR';
+    };
 export type RpcMaintenanceWindowsError = {
   info: {
-      error_message: string;
+    error_message: string;
   };
   name: 'INTERNAL_ERROR';
 };
 /**
-* RpcMaintenanceWindowsRequest
-*/
+ * RpcMaintenanceWindowsRequest
+ */
 export type RpcMaintenanceWindowsRequest = {
   account_id: AccountId;
 };
 export type RpcNetworkInfoError = {
   info: {
-      error_message: string;
+    error_message: string;
   };
   name: 'INTERNAL_ERROR';
 };
 /**
-* RpcNetworkInfoRequest
-*/
+ * RpcNetworkInfoRequest
+ */
 export declare const RpcNetworkInfoRequest: {
   readonly NULL: null;
 };
 /**
-* RpcNetworkInfoRequest
-*/
+ * RpcNetworkInfoRequest
+ */
 export type RpcNetworkInfoRequest = (typeof RpcNetworkInfoRequest)[keyof typeof RpcNetworkInfoRequest];
 export type RpcNetworkInfoResponse = {
   active_peers: Array<RpcPeerInfo>;
@@ -3915,27 +4313,32 @@ export type RpcPeerInfo = {
   addr?: string | null;
   id: PeerId;
 };
-export type RpcProtocolConfigError = {
-  info: {
-      [key: string]: unknown;
-  };
-  name: 'UNKNOWN_BLOCK';
-} | {
-  info: {
-      error_message: string;
-  };
-  name: 'INTERNAL_ERROR';
-};
+export type RpcProtocolConfigError =
+  | {
+      info: {
+        [key: string]: unknown;
+      };
+      name: 'UNKNOWN_BLOCK';
+    }
+  | {
+      info: {
+        error_message: string;
+      };
+      name: 'INTERNAL_ERROR';
+    };
 /**
-* RpcProtocolConfigRequest
-*/
-export type RpcProtocolConfigRequest = {
-  block_id: BlockId;
-} | {
-  finality: Finality;
-} | {
-  sync_checkpoint: SyncCheckpoint;
-};
+ * RpcProtocolConfigRequest
+ */
+export type RpcProtocolConfigRequest =
+  | {
+      block_id: BlockId;
+    }
+  | {
+      finality: Finality;
+    }
+  | {
+      sync_checkpoint: SyncCheckpoint;
+    };
 export type RpcProtocolConfigResponse = {
   /**
    * Expected number of hidden validators per shard.
@@ -4075,277 +4478,331 @@ export type RpcProtocolConfigResponse = {
    */
   transaction_validity_period?: number;
 };
-export type RpcQueryError = {
-  name: 'NO_SYNCED_BLOCKS';
-} | {
-  info: {
-      requested_shard_id: ShardId;
-  };
-  name: 'UNAVAILABLE_SHARD';
-} | {
-  info: {
-      block_hash: CryptoHash;
-      block_height: number;
-  };
-  name: 'GARBAGE_COLLECTED_BLOCK';
-} | {
-  info: {
-      block_reference: BlockReference;
-  };
-  name: 'UNKNOWN_BLOCK';
-} | {
-  info: {
-      block_hash: CryptoHash;
-      block_height: number;
-      requested_account_id: AccountId;
-  };
-  name: 'INVALID_ACCOUNT';
-} | {
-  info: {
-      block_hash: CryptoHash;
-      block_height: number;
-      requested_account_id: AccountId;
-  };
-  name: 'UNKNOWN_ACCOUNT';
-} | {
-  info: {
-      block_hash: CryptoHash;
-      block_height: number;
-      contract_account_id: AccountId;
-  };
-  name: 'NO_CONTRACT_CODE';
-} | {
-  info: {
-      block_hash: CryptoHash;
-      block_height: number;
-      contract_account_id: AccountId;
-  };
-  name: 'TOO_LARGE_CONTRACT_STATE';
-} | {
-  info: {
-      block_hash: CryptoHash;
-      block_height: number;
-      public_key: PublicKey;
-  };
-  name: 'UNKNOWN_ACCESS_KEY';
-} | {
-  info: {
-      block_hash: CryptoHash;
-      block_height: number;
-      public_key: PublicKey;
-  };
-  name: 'UNKNOWN_GAS_KEY';
-} | {
-  info: {
-      block_hash: CryptoHash;
-      block_height: number;
-      error: FunctionCallError;
-      vm_error: string;
-  };
-  name: 'CONTRACT_EXECUTION_ERROR';
-} | {
-  info: {
-      block_hash: CryptoHash;
-      block_height: number;
-      identifier: GlobalContractIdentifier;
-  };
-  name: 'NO_GLOBAL_CONTRACT_CODE';
-} | {
-  info: {
-      error_message: string;
-  };
-  name: 'INTERNAL_ERROR';
-};
+export type RpcQueryError =
+  | {
+      name: 'NO_SYNCED_BLOCKS';
+    }
+  | {
+      info: {
+        requested_shard_id: ShardId;
+      };
+      name: 'UNAVAILABLE_SHARD';
+    }
+  | {
+      info: {
+        block_hash: CryptoHash;
+        block_height: number;
+      };
+      name: 'GARBAGE_COLLECTED_BLOCK';
+    }
+  | {
+      info: {
+        block_reference: BlockReference;
+      };
+      name: 'UNKNOWN_BLOCK';
+    }
+  | {
+      info: {
+        block_hash: CryptoHash;
+        block_height: number;
+        requested_account_id: AccountId;
+      };
+      name: 'INVALID_ACCOUNT';
+    }
+  | {
+      info: {
+        block_hash: CryptoHash;
+        block_height: number;
+        requested_account_id: AccountId;
+      };
+      name: 'UNKNOWN_ACCOUNT';
+    }
+  | {
+      info: {
+        block_hash: CryptoHash;
+        block_height: number;
+        contract_account_id: AccountId;
+      };
+      name: 'NO_CONTRACT_CODE';
+    }
+  | {
+      info: {
+        block_hash: CryptoHash;
+        block_height: number;
+        contract_account_id: AccountId;
+      };
+      name: 'TOO_LARGE_CONTRACT_STATE';
+    }
+  | {
+      info: {
+        block_hash: CryptoHash;
+        block_height: number;
+        public_key: PublicKey;
+      };
+      name: 'UNKNOWN_ACCESS_KEY';
+    }
+  | {
+      info: {
+        block_hash: CryptoHash;
+        block_height: number;
+        public_key: PublicKey;
+      };
+      name: 'UNKNOWN_GAS_KEY';
+    }
+  | {
+      info: {
+        block_hash: CryptoHash;
+        block_height: number;
+        error: FunctionCallError;
+        vm_error: string;
+      };
+      name: 'CONTRACT_EXECUTION_ERROR';
+    }
+  | {
+      info: {
+        block_hash: CryptoHash;
+        block_height: number;
+        identifier: GlobalContractIdentifier;
+      };
+      name: 'NO_GLOBAL_CONTRACT_CODE';
+    }
+  | {
+      info: {
+        error_message: string;
+      };
+      name: 'INTERNAL_ERROR';
+    };
 /**
-* RpcQueryRequest
-*/
-export type RpcQueryRequest = ({
-  block_id: BlockId;
-} & {
-  account_id: AccountId;
-  request_type: 'view_account';
-}) | ({
-  block_id: BlockId;
-} & {
-  account_id: AccountId;
-  request_type: 'view_code';
-}) | ({
-  block_id: BlockId;
-} & {
-  account_id: AccountId;
-  include_proof?: boolean;
-  prefix_base64: StoreKey;
-  request_type: 'view_state';
-}) | ({
-  block_id: BlockId;
-} & {
-  account_id: AccountId;
-  public_key: PublicKey;
-  request_type: 'view_access_key';
-}) | ({
-  block_id: BlockId;
-} & {
-  account_id: AccountId;
-  request_type: 'view_access_key_list';
-}) | ({
-  block_id: BlockId;
-} & {
-  account_id: AccountId;
-  public_key: PublicKey;
-  request_type: 'view_gas_key';
-}) | ({
-  block_id: BlockId;
-} & {
-  account_id: AccountId;
-  request_type: 'view_gas_key_list';
-}) | ({
-  block_id: BlockId;
-} & {
-  account_id: AccountId;
-  args_base64: FunctionArgs;
-  method_name: string;
-  request_type: 'call_function';
-}) | ({
-  block_id: BlockId;
-} & {
-  code_hash: CryptoHash;
-  request_type: 'view_global_contract_code';
-}) | ({
-  block_id: BlockId;
-} & {
-  account_id: AccountId;
-  request_type: 'view_global_contract_code_by_account_id';
-}) | ({
-  finality: Finality;
-} & {
-  account_id: AccountId;
-  request_type: 'view_account';
-}) | ({
-  finality: Finality;
-} & {
-  account_id: AccountId;
-  request_type: 'view_code';
-}) | ({
-  finality: Finality;
-} & {
-  account_id: AccountId;
-  include_proof?: boolean;
-  prefix_base64: StoreKey;
-  request_type: 'view_state';
-}) | ({
-  finality: Finality;
-} & {
-  account_id: AccountId;
-  public_key: PublicKey;
-  request_type: 'view_access_key';
-}) | ({
-  finality: Finality;
-} & {
-  account_id: AccountId;
-  request_type: 'view_access_key_list';
-}) | ({
-  finality: Finality;
-} & {
-  account_id: AccountId;
-  public_key: PublicKey;
-  request_type: 'view_gas_key';
-}) | ({
-  finality: Finality;
-} & {
-  account_id: AccountId;
-  request_type: 'view_gas_key_list';
-}) | ({
-  finality: Finality;
-} & {
-  account_id: AccountId;
-  args_base64: FunctionArgs;
-  method_name: string;
-  request_type: 'call_function';
-}) | ({
-  finality: Finality;
-} & {
-  code_hash: CryptoHash;
-  request_type: 'view_global_contract_code';
-}) | ({
-  finality: Finality;
-} & {
-  account_id: AccountId;
-  request_type: 'view_global_contract_code_by_account_id';
-}) | ({
-  sync_checkpoint: SyncCheckpoint;
-} & {
-  account_id: AccountId;
-  request_type: 'view_account';
-}) | ({
-  sync_checkpoint: SyncCheckpoint;
-} & {
-  account_id: AccountId;
-  request_type: 'view_code';
-}) | ({
-  sync_checkpoint: SyncCheckpoint;
-} & {
-  account_id: AccountId;
-  include_proof?: boolean;
-  prefix_base64: StoreKey;
-  request_type: 'view_state';
-}) | ({
-  sync_checkpoint: SyncCheckpoint;
-} & {
-  account_id: AccountId;
-  public_key: PublicKey;
-  request_type: 'view_access_key';
-}) | ({
-  sync_checkpoint: SyncCheckpoint;
-} & {
-  account_id: AccountId;
-  request_type: 'view_access_key_list';
-}) | ({
-  sync_checkpoint: SyncCheckpoint;
-} & {
-  account_id: AccountId;
-  public_key: PublicKey;
-  request_type: 'view_gas_key';
-}) | ({
-  sync_checkpoint: SyncCheckpoint;
-} & {
-  account_id: AccountId;
-  request_type: 'view_gas_key_list';
-}) | ({
-  sync_checkpoint: SyncCheckpoint;
-} & {
-  account_id: AccountId;
-  args_base64: FunctionArgs;
-  method_name: string;
-  request_type: 'call_function';
-}) | ({
-  sync_checkpoint: SyncCheckpoint;
-} & {
-  code_hash: CryptoHash;
-  request_type: 'view_global_contract_code';
-}) | ({
-  sync_checkpoint: SyncCheckpoint;
-} & {
-  account_id: AccountId;
-  request_type: 'view_global_contract_code_by_account_id';
-});
-export type RpcQueryResponse = (AccountView | ContractCodeView | ViewStateResult | CallResult | AccessKeyView | AccessKeyList | GasKeyView | GasKeyList) & {
+ * RpcQueryRequest
+ */
+export type RpcQueryRequest =
+  | ({
+      block_id: BlockId;
+    } & {
+      account_id: AccountId;
+      request_type: 'view_account';
+    })
+  | ({
+      block_id: BlockId;
+    } & {
+      account_id: AccountId;
+      request_type: 'view_code';
+    })
+  | ({
+      block_id: BlockId;
+    } & {
+      account_id: AccountId;
+      include_proof?: boolean;
+      prefix_base64: StoreKey;
+      request_type: 'view_state';
+    })
+  | ({
+      block_id: BlockId;
+    } & {
+      account_id: AccountId;
+      public_key: PublicKey;
+      request_type: 'view_access_key';
+    })
+  | ({
+      block_id: BlockId;
+    } & {
+      account_id: AccountId;
+      request_type: 'view_access_key_list';
+    })
+  | ({
+      block_id: BlockId;
+    } & {
+      account_id: AccountId;
+      public_key: PublicKey;
+      request_type: 'view_gas_key';
+    })
+  | ({
+      block_id: BlockId;
+    } & {
+      account_id: AccountId;
+      request_type: 'view_gas_key_list';
+    })
+  | ({
+      block_id: BlockId;
+    } & {
+      account_id: AccountId;
+      args_base64: FunctionArgs;
+      method_name: string;
+      request_type: 'call_function';
+    })
+  | ({
+      block_id: BlockId;
+    } & {
+      code_hash: CryptoHash;
+      request_type: 'view_global_contract_code';
+    })
+  | ({
+      block_id: BlockId;
+    } & {
+      account_id: AccountId;
+      request_type: 'view_global_contract_code_by_account_id';
+    })
+  | ({
+      finality: Finality;
+    } & {
+      account_id: AccountId;
+      request_type: 'view_account';
+    })
+  | ({
+      finality: Finality;
+    } & {
+      account_id: AccountId;
+      request_type: 'view_code';
+    })
+  | ({
+      finality: Finality;
+    } & {
+      account_id: AccountId;
+      include_proof?: boolean;
+      prefix_base64: StoreKey;
+      request_type: 'view_state';
+    })
+  | ({
+      finality: Finality;
+    } & {
+      account_id: AccountId;
+      public_key: PublicKey;
+      request_type: 'view_access_key';
+    })
+  | ({
+      finality: Finality;
+    } & {
+      account_id: AccountId;
+      request_type: 'view_access_key_list';
+    })
+  | ({
+      finality: Finality;
+    } & {
+      account_id: AccountId;
+      public_key: PublicKey;
+      request_type: 'view_gas_key';
+    })
+  | ({
+      finality: Finality;
+    } & {
+      account_id: AccountId;
+      request_type: 'view_gas_key_list';
+    })
+  | ({
+      finality: Finality;
+    } & {
+      account_id: AccountId;
+      args_base64: FunctionArgs;
+      method_name: string;
+      request_type: 'call_function';
+    })
+  | ({
+      finality: Finality;
+    } & {
+      code_hash: CryptoHash;
+      request_type: 'view_global_contract_code';
+    })
+  | ({
+      finality: Finality;
+    } & {
+      account_id: AccountId;
+      request_type: 'view_global_contract_code_by_account_id';
+    })
+  | ({
+      sync_checkpoint: SyncCheckpoint;
+    } & {
+      account_id: AccountId;
+      request_type: 'view_account';
+    })
+  | ({
+      sync_checkpoint: SyncCheckpoint;
+    } & {
+      account_id: AccountId;
+      request_type: 'view_code';
+    })
+  | ({
+      sync_checkpoint: SyncCheckpoint;
+    } & {
+      account_id: AccountId;
+      include_proof?: boolean;
+      prefix_base64: StoreKey;
+      request_type: 'view_state';
+    })
+  | ({
+      sync_checkpoint: SyncCheckpoint;
+    } & {
+      account_id: AccountId;
+      public_key: PublicKey;
+      request_type: 'view_access_key';
+    })
+  | ({
+      sync_checkpoint: SyncCheckpoint;
+    } & {
+      account_id: AccountId;
+      request_type: 'view_access_key_list';
+    })
+  | ({
+      sync_checkpoint: SyncCheckpoint;
+    } & {
+      account_id: AccountId;
+      public_key: PublicKey;
+      request_type: 'view_gas_key';
+    })
+  | ({
+      sync_checkpoint: SyncCheckpoint;
+    } & {
+      account_id: AccountId;
+      request_type: 'view_gas_key_list';
+    })
+  | ({
+      sync_checkpoint: SyncCheckpoint;
+    } & {
+      account_id: AccountId;
+      args_base64: FunctionArgs;
+      method_name: string;
+      request_type: 'call_function';
+    })
+  | ({
+      sync_checkpoint: SyncCheckpoint;
+    } & {
+      code_hash: CryptoHash;
+      request_type: 'view_global_contract_code';
+    })
+  | ({
+      sync_checkpoint: SyncCheckpoint;
+    } & {
+      account_id: AccountId;
+      request_type: 'view_global_contract_code_by_account_id';
+    });
+export type RpcQueryResponse = (
+  | AccountView
+  | ContractCodeView
+  | ViewStateResult
+  | CallResult
+  | AccessKeyView
+  | AccessKeyList
+  | GasKeyView
+  | GasKeyList
+) & {
   block_hash: CryptoHash;
   block_height: number;
 };
-export type RpcReceiptError = {
-  info: {
-      error_message: string;
-  };
-  name: 'INTERNAL_ERROR';
-} | {
-  info: {
-      receipt_id: CryptoHash;
-  };
-  name: 'UNKNOWN_RECEIPT';
-};
+export type RpcReceiptError =
+  | {
+      info: {
+        error_message: string;
+      };
+      name: 'INTERNAL_ERROR';
+    }
+  | {
+      info: {
+        receipt_id: CryptoHash;
+      };
+      name: 'UNKNOWN_RECEIPT';
+    };
 /**
-* RpcReceiptRequest
-*/
+ * RpcReceiptRequest
+ */
 export type RpcReceiptRequest = {
   receipt_id: CryptoHash;
 };
@@ -4356,219 +4813,252 @@ export type RpcReceiptResponse = {
   receipt_id: CryptoHash;
   receiver_id: AccountId;
 };
-export type RpcRequestValidationErrorKind = {
-  info: {
-      method_name: string;
-  };
-  name: 'METHOD_NOT_FOUND';
-} | {
-  info: {
-      error_message: string;
-  };
-  name: 'PARSE_ERROR';
-};
+export type RpcRequestValidationErrorKind =
+  | {
+      info: {
+        method_name: string;
+      };
+      name: 'METHOD_NOT_FOUND';
+    }
+  | {
+      info: {
+        error_message: string;
+      };
+      name: 'PARSE_ERROR';
+    };
 /**
-* RpcSendTransactionRequest
-*/
+ * RpcSendTransactionRequest
+ */
 export type RpcSendTransactionRequest = {
   signed_tx_base64: SignedTransaction;
   wait_until?: TxExecutionStatus;
 };
 export type RpcSplitStorageInfoError = {
   info: {
-      error_message: string;
+    error_message: string;
   };
   name: 'INTERNAL_ERROR';
 };
 /**
-* RpcSplitStorageInfoRequest
-*/
+ * RpcSplitStorageInfoRequest
+ */
 export type RpcSplitStorageInfoRequest = {
   [key: string]: unknown;
 };
 /**
-* Contains the split storage information.
-*/
+ * Contains the split storage information.
+ */
 export type RpcSplitStorageInfoResponse = {
   cold_head_height?: number | null;
   final_head_height?: number | null;
   head_height?: number | null;
   hot_db_kind?: string | null;
 };
-export type RpcStateChangesError = {
-  info: {
-      [key: string]: unknown;
-  };
-  name: 'UNKNOWN_BLOCK';
-} | {
-  name: 'NOT_SYNCED_YET';
-} | {
-  info: {
-      error_message: string;
-  };
-  name: 'INTERNAL_ERROR';
-};
+export type RpcStateChangesError =
+  | {
+      info: {
+        [key: string]: unknown;
+      };
+      name: 'UNKNOWN_BLOCK';
+    }
+  | {
+      name: 'NOT_SYNCED_YET';
+    }
+  | {
+      info: {
+        error_message: string;
+      };
+      name: 'INTERNAL_ERROR';
+    };
 /**
-* RpcStateChangesInBlockByTypeRequest
-*
-* It is a serializable view of `StateChangesRequest`.
-*
-* See the Rust crate documentation for more information.
-*/
-export type RpcStateChangesInBlockByTypeRequest = ({
-  block_id: BlockId;
-} & {
-  account_ids: Array<AccountId>;
-  changes_type: 'account_changes';
-}) | ({
-  block_id: BlockId;
-} & {
-  changes_type: 'single_access_key_changes';
-  keys: Array<AccountWithPublicKey>;
-}) | ({
-  block_id: BlockId;
-} & {
-  changes_type: 'single_gas_key_changes';
-  keys: Array<AccountWithPublicKey>;
-}) | ({
-  block_id: BlockId;
-} & {
-  account_ids: Array<AccountId>;
-  changes_type: 'all_access_key_changes';
-}) | ({
-  block_id: BlockId;
-} & {
-  account_ids: Array<AccountId>;
-  changes_type: 'all_gas_key_changes';
-}) | ({
-  block_id: BlockId;
-} & {
-  account_ids: Array<AccountId>;
-  changes_type: 'contract_code_changes';
-}) | ({
-  block_id: BlockId;
-} & {
-  account_ids: Array<AccountId>;
-  changes_type: 'data_changes';
-  key_prefix_base64: StoreKey;
-}) | ({
-  finality: Finality;
-} & {
-  account_ids: Array<AccountId>;
-  changes_type: 'account_changes';
-}) | ({
-  finality: Finality;
-} & {
-  changes_type: 'single_access_key_changes';
-  keys: Array<AccountWithPublicKey>;
-}) | ({
-  finality: Finality;
-} & {
-  changes_type: 'single_gas_key_changes';
-  keys: Array<AccountWithPublicKey>;
-}) | ({
-  finality: Finality;
-} & {
-  account_ids: Array<AccountId>;
-  changes_type: 'all_access_key_changes';
-}) | ({
-  finality: Finality;
-} & {
-  account_ids: Array<AccountId>;
-  changes_type: 'all_gas_key_changes';
-}) | ({
-  finality: Finality;
-} & {
-  account_ids: Array<AccountId>;
-  changes_type: 'contract_code_changes';
-}) | ({
-  finality: Finality;
-} & {
-  account_ids: Array<AccountId>;
-  changes_type: 'data_changes';
-  key_prefix_base64: StoreKey;
-}) | ({
-  sync_checkpoint: SyncCheckpoint;
-} & {
-  account_ids: Array<AccountId>;
-  changes_type: 'account_changes';
-}) | ({
-  sync_checkpoint: SyncCheckpoint;
-} & {
-  changes_type: 'single_access_key_changes';
-  keys: Array<AccountWithPublicKey>;
-}) | ({
-  sync_checkpoint: SyncCheckpoint;
-} & {
-  changes_type: 'single_gas_key_changes';
-  keys: Array<AccountWithPublicKey>;
-}) | ({
-  sync_checkpoint: SyncCheckpoint;
-} & {
-  account_ids: Array<AccountId>;
-  changes_type: 'all_access_key_changes';
-}) | ({
-  sync_checkpoint: SyncCheckpoint;
-} & {
-  account_ids: Array<AccountId>;
-  changes_type: 'all_gas_key_changes';
-}) | ({
-  sync_checkpoint: SyncCheckpoint;
-} & {
-  account_ids: Array<AccountId>;
-  changes_type: 'contract_code_changes';
-}) | ({
-  sync_checkpoint: SyncCheckpoint;
-} & {
-  account_ids: Array<AccountId>;
-  changes_type: 'data_changes';
-  key_prefix_base64: StoreKey;
-});
+ * RpcStateChangesInBlockByTypeRequest
+ *
+ * It is a serializable view of `StateChangesRequest`.
+ *
+ * See the Rust crate documentation for more information.
+ */
+export type RpcStateChangesInBlockByTypeRequest =
+  | ({
+      block_id: BlockId;
+    } & {
+      account_ids: Array<AccountId>;
+      changes_type: 'account_changes';
+    })
+  | ({
+      block_id: BlockId;
+    } & {
+      changes_type: 'single_access_key_changes';
+      keys: Array<AccountWithPublicKey>;
+    })
+  | ({
+      block_id: BlockId;
+    } & {
+      changes_type: 'single_gas_key_changes';
+      keys: Array<AccountWithPublicKey>;
+    })
+  | ({
+      block_id: BlockId;
+    } & {
+      account_ids: Array<AccountId>;
+      changes_type: 'all_access_key_changes';
+    })
+  | ({
+      block_id: BlockId;
+    } & {
+      account_ids: Array<AccountId>;
+      changes_type: 'all_gas_key_changes';
+    })
+  | ({
+      block_id: BlockId;
+    } & {
+      account_ids: Array<AccountId>;
+      changes_type: 'contract_code_changes';
+    })
+  | ({
+      block_id: BlockId;
+    } & {
+      account_ids: Array<AccountId>;
+      changes_type: 'data_changes';
+      key_prefix_base64: StoreKey;
+    })
+  | ({
+      finality: Finality;
+    } & {
+      account_ids: Array<AccountId>;
+      changes_type: 'account_changes';
+    })
+  | ({
+      finality: Finality;
+    } & {
+      changes_type: 'single_access_key_changes';
+      keys: Array<AccountWithPublicKey>;
+    })
+  | ({
+      finality: Finality;
+    } & {
+      changes_type: 'single_gas_key_changes';
+      keys: Array<AccountWithPublicKey>;
+    })
+  | ({
+      finality: Finality;
+    } & {
+      account_ids: Array<AccountId>;
+      changes_type: 'all_access_key_changes';
+    })
+  | ({
+      finality: Finality;
+    } & {
+      account_ids: Array<AccountId>;
+      changes_type: 'all_gas_key_changes';
+    })
+  | ({
+      finality: Finality;
+    } & {
+      account_ids: Array<AccountId>;
+      changes_type: 'contract_code_changes';
+    })
+  | ({
+      finality: Finality;
+    } & {
+      account_ids: Array<AccountId>;
+      changes_type: 'data_changes';
+      key_prefix_base64: StoreKey;
+    })
+  | ({
+      sync_checkpoint: SyncCheckpoint;
+    } & {
+      account_ids: Array<AccountId>;
+      changes_type: 'account_changes';
+    })
+  | ({
+      sync_checkpoint: SyncCheckpoint;
+    } & {
+      changes_type: 'single_access_key_changes';
+      keys: Array<AccountWithPublicKey>;
+    })
+  | ({
+      sync_checkpoint: SyncCheckpoint;
+    } & {
+      changes_type: 'single_gas_key_changes';
+      keys: Array<AccountWithPublicKey>;
+    })
+  | ({
+      sync_checkpoint: SyncCheckpoint;
+    } & {
+      account_ids: Array<AccountId>;
+      changes_type: 'all_access_key_changes';
+    })
+  | ({
+      sync_checkpoint: SyncCheckpoint;
+    } & {
+      account_ids: Array<AccountId>;
+      changes_type: 'all_gas_key_changes';
+    })
+  | ({
+      sync_checkpoint: SyncCheckpoint;
+    } & {
+      account_ids: Array<AccountId>;
+      changes_type: 'contract_code_changes';
+    })
+  | ({
+      sync_checkpoint: SyncCheckpoint;
+    } & {
+      account_ids: Array<AccountId>;
+      changes_type: 'data_changes';
+      key_prefix_base64: StoreKey;
+    });
 export type RpcStateChangesInBlockByTypeResponse = {
   block_hash: CryptoHash;
   changes: Array<StateChangeKindView>;
 };
 /**
-* RpcStateChangesInBlockRequest
-*/
-export type RpcStateChangesInBlockRequest = {
-  block_id: BlockId;
-} | {
-  finality: Finality;
-} | {
-  sync_checkpoint: SyncCheckpoint;
-};
+ * RpcStateChangesInBlockRequest
+ */
+export type RpcStateChangesInBlockRequest =
+  | {
+      block_id: BlockId;
+    }
+  | {
+      finality: Finality;
+    }
+  | {
+      sync_checkpoint: SyncCheckpoint;
+    };
 export type RpcStateChangesInBlockResponse = {
   block_hash: CryptoHash;
   changes: Array<StateChangeWithCauseView>;
 };
-export type RpcStatusError = {
-  name: 'NODE_IS_SYNCING';
-} | {
-  info: {
-      elapsed: [number, number];
-  };
-  name: 'NO_NEW_BLOCKS';
-} | {
-  info: {
-      epoch_id: EpochId;
-  };
-  name: 'EPOCH_OUT_OF_BOUNDS';
-} | {
-  info: {
-      error_message: string;
-  };
-  name: 'INTERNAL_ERROR';
-};
+export type RpcStatusError =
+  | {
+      name: 'NODE_IS_SYNCING';
+    }
+  | {
+      info: {
+        elapsed: [number, number];
+      };
+      name: 'NO_NEW_BLOCKS';
+    }
+  | {
+      info: {
+        epoch_id: EpochId;
+      };
+      name: 'EPOCH_OUT_OF_BOUNDS';
+    }
+  | {
+      info: {
+        error_message: string;
+      };
+      name: 'INTERNAL_ERROR';
+    };
 /**
-* RpcStatusRequest
-*/
+ * RpcStatusRequest
+ */
 export declare const RpcStatusRequest: {
   readonly NULL: null;
 };
 /**
-* RpcStatusRequest
-*/
+ * RpcStatusRequest
+ */
 export type RpcStatusRequest = (typeof RpcStatusRequest)[keyof typeof RpcStatusRequest];
 export type RpcStatusResponse = {
   /**
@@ -4628,63 +5118,78 @@ export type RpcStatusResponse = {
    */
   version: Version;
 };
-export type RpcTransactionError = {
-  info: {
-      [key: string]: unknown;
-  };
-  name: 'INVALID_TRANSACTION';
-} | {
-  name: 'DOES_NOT_TRACK_SHARD';
-} | {
-  info: {
-      transaction_hash: CryptoHash;
-  };
-  name: 'REQUEST_ROUTED';
-} | {
-  info: {
-      requested_transaction_hash: CryptoHash;
-  };
-  name: 'UNKNOWN_TRANSACTION';
-} | {
-  info: {
-      debug_info: string;
-  };
-  name: 'INTERNAL_ERROR';
-} | {
-  name: 'TIMEOUT_ERROR';
-};
+export type RpcTransactionError =
+  | {
+      info: {
+        [key: string]: unknown;
+      };
+      name: 'INVALID_TRANSACTION';
+    }
+  | {
+      name: 'DOES_NOT_TRACK_SHARD';
+    }
+  | {
+      info: {
+        transaction_hash: CryptoHash;
+      };
+      name: 'REQUEST_ROUTED';
+    }
+  | {
+      info: {
+        requested_transaction_hash: CryptoHash;
+      };
+      name: 'UNKNOWN_TRANSACTION';
+    }
+  | {
+      info: {
+        debug_info: string;
+      };
+      name: 'INTERNAL_ERROR';
+    }
+  | {
+      name: 'TIMEOUT_ERROR';
+    };
 export type RpcTransactionResponse = (FinalExecutionOutcomeWithReceiptView | FinalExecutionOutcomeView) & {
   final_execution_status: TxExecutionStatus;
 };
-export type RpcTransactionStatusRequest = ({
-  signed_tx_base64: SignedTransaction;
-} | {
-  sender_account_id: AccountId;
-  tx_hash: CryptoHash;
-}) & {
+export type RpcTransactionStatusRequest = (
+  | {
+      signed_tx_base64: SignedTransaction;
+    }
+  | {
+      sender_account_id: AccountId;
+      tx_hash: CryptoHash;
+    }
+) & {
   wait_until?: TxExecutionStatus;
 };
-export type RpcValidatorError = {
-  name: 'UNKNOWN_EPOCH';
-} | {
-  name: 'VALIDATOR_INFO_UNAVAILABLE';
-} | {
-  info: {
-      error_message: string;
-  };
-  name: 'INTERNAL_ERROR';
-};
+export type RpcValidatorError =
+  | {
+      name: 'UNKNOWN_EPOCH';
+    }
+  | {
+      name: 'VALIDATOR_INFO_UNAVAILABLE';
+    }
+  | {
+      info: {
+        error_message: string;
+      };
+      name: 'INTERNAL_ERROR';
+    };
 /**
-* RpcValidatorRequest
-*/
-export type RpcValidatorRequest = 'latest' | {
-  epoch_id: EpochId;
-} | {
-  block_id: BlockId;
-};
+ * RpcValidatorRequest
+ */
+export type RpcValidatorRequest =
+  | 'latest'
+  | {
+      epoch_id: EpochId;
+    }
+  | {
+      block_id: BlockId;
+    };
 /**
-* Information about this epoch validators and next epoch validators
-*/
+ * Information about this epoch validators and next epoch validators
+ */
 export type RpcValidatorResponse = {
   /**
    * Fishermen for the current epoch
@@ -4720,141 +5225,166 @@ export type RpcValidatorResponse = {
   prev_epoch_kickout: Array<ValidatorKickoutView>;
 };
 /**
-* RpcValidatorsOrderedRequest
-*/
+ * RpcValidatorsOrderedRequest
+ */
 export type RpcValidatorsOrderedRequest = {
   block_id?: BlockId | null;
 };
-export type RpcViewAccessKeyError = {
-  info: {
-      block_reference: BlockReference;
-  };
-  name: 'UNKNOWN_BLOCK';
-} | {
-  info: {
-      block_hash: CryptoHash;
-      block_height: number;
-      requested_account_id: AccountId;
-  };
-  name: 'INVALID_ACCOUNT';
-} | {
-  info: {
-      block_hash: CryptoHash;
-      block_height: number;
-      requested_account_id: AccountId;
-  };
-  name: 'UNKNOWN_ACCOUNT';
-} | {
-  info: {
-      block_hash: CryptoHash;
-      block_height: number;
-      public_key: PublicKey;
-  };
-  name: 'UNKNOWN_ACCESS_KEY';
-} | {
-  info: {
-      error_message: string;
-  };
-  name: 'INTERNAL_ERROR';
-};
-export type RpcViewAccessKeyListError = {
-  info: {
-      block_reference: BlockReference;
-  };
-  name: 'UNKNOWN_BLOCK';
-} | {
-  info: {
-      block_hash: CryptoHash;
-      block_height: number;
-      requested_account_id: AccountId;
-  };
-  name: 'INVALID_ACCOUNT';
-} | {
-  info: {
-      block_hash: CryptoHash;
-      block_height: number;
-      requested_account_id: AccountId;
-  };
-  name: 'UNKNOWN_ACCOUNT';
-} | {
-  info: {
-      error_message: string;
-  };
-  name: 'INTERNAL_ERROR';
-};
-export type RpcViewAccessKeyListRequest = ({
-  block_id: BlockId;
-} | {
-  finality: Finality;
-} | {
-  sync_checkpoint: SyncCheckpoint;
-}) & {
+export type RpcViewAccessKeyError =
+  | {
+      info: {
+        block_reference: BlockReference;
+      };
+      name: 'UNKNOWN_BLOCK';
+    }
+  | {
+      info: {
+        block_hash: CryptoHash;
+        block_height: number;
+        requested_account_id: AccountId;
+      };
+      name: 'INVALID_ACCOUNT';
+    }
+  | {
+      info: {
+        block_hash: CryptoHash;
+        block_height: number;
+        requested_account_id: AccountId;
+      };
+      name: 'UNKNOWN_ACCOUNT';
+    }
+  | {
+      info: {
+        block_hash: CryptoHash;
+        block_height: number;
+        public_key: PublicKey;
+      };
+      name: 'UNKNOWN_ACCESS_KEY';
+    }
+  | {
+      info: {
+        error_message: string;
+      };
+      name: 'INTERNAL_ERROR';
+    };
+export type RpcViewAccessKeyListError =
+  | {
+      info: {
+        block_reference: BlockReference;
+      };
+      name: 'UNKNOWN_BLOCK';
+    }
+  | {
+      info: {
+        block_hash: CryptoHash;
+        block_height: number;
+        requested_account_id: AccountId;
+      };
+      name: 'INVALID_ACCOUNT';
+    }
+  | {
+      info: {
+        block_hash: CryptoHash;
+        block_height: number;
+        requested_account_id: AccountId;
+      };
+      name: 'UNKNOWN_ACCOUNT';
+    }
+  | {
+      info: {
+        error_message: string;
+      };
+      name: 'INTERNAL_ERROR';
+    };
+export type RpcViewAccessKeyListRequest = (
+  | {
+      block_id: BlockId;
+    }
+  | {
+      finality: Finality;
+    }
+  | {
+      sync_checkpoint: SyncCheckpoint;
+    }
+) & {
   account_id: AccountId;
 };
 /**
-* Lists access keys
-*/
+ * Lists access keys
+ */
 export type RpcViewAccessKeyListResponse = {
   block_hash: CryptoHash;
   block_height: number;
   keys: Array<AccessKeyInfoView>;
 };
-export type RpcViewAccessKeyRequest = ({
-  block_id: BlockId;
-} | {
-  finality: Finality;
-} | {
-  sync_checkpoint: SyncCheckpoint;
-}) & {
+export type RpcViewAccessKeyRequest = (
+  | {
+      block_id: BlockId;
+    }
+  | {
+      finality: Finality;
+    }
+  | {
+      sync_checkpoint: SyncCheckpoint;
+    }
+) & {
   account_id: AccountId;
   public_key: PublicKey;
 };
 /**
-* Describes access key permission scope and nonce.
-*/
+ * Describes access key permission scope and nonce.
+ */
 export type RpcViewAccessKeyResponse = {
   block_hash: CryptoHash;
   block_height: number;
   nonce: number;
   permission: AccessKeyPermissionView;
 };
-export type RpcViewAccountError = {
-  info: {
-      block_reference: BlockReference;
-  };
-  name: 'UNKNOWN_BLOCK';
-} | {
-  info: {
-      block_hash: CryptoHash;
-      block_height: number;
-      requested_account_id: AccountId;
-  };
-  name: 'INVALID_ACCOUNT';
-} | {
-  info: {
-      block_hash: CryptoHash;
-      block_height: number;
-      requested_account_id: AccountId;
-  };
-  name: 'UNKNOWN_ACCOUNT';
-} | {
-  info: {
-      error_message: string;
-  };
-  name: 'INTERNAL_ERROR';
-};
-export type RpcViewAccountRequest = ({
-  block_id: BlockId;
-} | {
-  finality: Finality;
-} | {
-  sync_checkpoint: SyncCheckpoint;
-}) & {
+export type RpcViewAccountError =
+  | {
+      info: {
+        block_reference: BlockReference;
+      };
+      name: 'UNKNOWN_BLOCK';
+    }
+  | {
+      info: {
+        block_hash: CryptoHash;
+        block_height: number;
+        requested_account_id: AccountId;
+      };
+      name: 'INVALID_ACCOUNT';
+    }
+  | {
+      info: {
+        block_hash: CryptoHash;
+        block_height: number;
+        requested_account_id: AccountId;
+      };
+      name: 'UNKNOWN_ACCOUNT';
+    }
+  | {
+      info: {
+        error_message: string;
+      };
+      name: 'INTERNAL_ERROR';
+    };
+export type RpcViewAccountRequest = (
+  | {
+      block_id: BlockId;
+    }
+  | {
+      finality: Finality;
+    }
+  | {
+      sync_checkpoint: SyncCheckpoint;
+    }
+) & {
   account_id: AccountId;
 };
 /**
-* A view of the account
-*/
+ * A view of the account
+ */
 export type RpcViewAccountResponse = {
   amount: NearToken;
   block_hash: CryptoHash;
@@ -4869,120 +5399,142 @@ export type RpcViewAccountResponse = {
   storage_paid_at?: number;
   storage_usage: number;
 };
-export type RpcViewCodeError = {
-  info: {
-      block_reference: BlockReference;
-  };
-  name: 'UNKNOWN_BLOCK';
-} | {
-  info: {
-      block_hash: CryptoHash;
-      block_height: number;
-      requested_account_id: AccountId;
-  };
-  name: 'INVALID_ACCOUNT';
-} | {
-  info: {
-      block_hash: CryptoHash;
-      block_height: number;
-      requested_account_id: AccountId;
-  };
-  name: 'UNKNOWN_ACCOUNT';
-} | {
-  info: {
-      block_hash: CryptoHash;
-      block_height: number;
-      contract_account_id: AccountId;
-  };
-  name: 'NO_CONTRACT_CODE';
-} | {
-  info: {
-      error_message: string;
-  };
-  name: 'INTERNAL_ERROR';
-};
-export type RpcViewCodeRequest = ({
-  block_id: BlockId;
-} | {
-  finality: Finality;
-} | {
-  sync_checkpoint: SyncCheckpoint;
-}) & {
+export type RpcViewCodeError =
+  | {
+      info: {
+        block_reference: BlockReference;
+      };
+      name: 'UNKNOWN_BLOCK';
+    }
+  | {
+      info: {
+        block_hash: CryptoHash;
+        block_height: number;
+        requested_account_id: AccountId;
+      };
+      name: 'INVALID_ACCOUNT';
+    }
+  | {
+      info: {
+        block_hash: CryptoHash;
+        block_height: number;
+        requested_account_id: AccountId;
+      };
+      name: 'UNKNOWN_ACCOUNT';
+    }
+  | {
+      info: {
+        block_hash: CryptoHash;
+        block_height: number;
+        contract_account_id: AccountId;
+      };
+      name: 'NO_CONTRACT_CODE';
+    }
+  | {
+      info: {
+        error_message: string;
+      };
+      name: 'INTERNAL_ERROR';
+    };
+export type RpcViewCodeRequest = (
+  | {
+      block_id: BlockId;
+    }
+  | {
+      finality: Finality;
+    }
+  | {
+      sync_checkpoint: SyncCheckpoint;
+    }
+) & {
   account_id: AccountId;
 };
 /**
-* A view of the contract code.
-*/
+ * A view of the contract code.
+ */
 export type RpcViewCodeResponse = {
   block_hash: CryptoHash;
   block_height: number;
   code_base64: string;
   hash: CryptoHash;
 };
-export type RpcViewGasKeyError = {
-  info: {
-      block_reference: BlockReference;
-  };
-  name: 'UNKNOWN_BLOCK';
-} | {
-  info: {
-      block_hash: CryptoHash;
-      block_height: number;
-      requested_account_id: AccountId;
-  };
-  name: 'INVALID_ACCOUNT';
-} | {
-  info: {
-      block_hash: CryptoHash;
-      block_height: number;
-      requested_account_id: AccountId;
-  };
-  name: 'UNKNOWN_ACCOUNT';
-} | {
-  info: {
-      block_hash: CryptoHash;
-      block_height: number;
-      public_key: PublicKey;
-  };
-  name: 'UNKNOWN_GAS_KEY';
-} | {
-  info: {
-      error_message: string;
-  };
-  name: 'INTERNAL_ERROR';
-};
-export type RpcViewGasKeyListError = {
-  info: {
-      block_reference: BlockReference;
-  };
-  name: 'UNKNOWN_BLOCK';
-} | {
-  info: {
-      block_hash: CryptoHash;
-      block_height: number;
-      requested_account_id: AccountId;
-  };
-  name: 'INVALID_ACCOUNT';
-} | {
-  info: {
-      block_hash: CryptoHash;
-      block_height: number;
-      requested_account_id: AccountId;
-  };
-  name: 'UNKNOWN_ACCOUNT';
-} | {
-  info: {
-      error_message: string;
-  };
-  name: 'INTERNAL_ERROR';
-};
-export type RpcViewGasKeyListRequest = ({
-  block_id: BlockId;
-} | {
-  finality: Finality;
-} | {
-  sync_checkpoint: SyncCheckpoint;
-}) & {
+export type RpcViewGasKeyError =
+  | {
+      info: {
+        block_reference: BlockReference;
+      };
+      name: 'UNKNOWN_BLOCK';
+    }
+  | {
+      info: {
+        block_hash: CryptoHash;
+        block_height: number;
+        requested_account_id: AccountId;
+      };
+      name: 'INVALID_ACCOUNT';
+    }
+  | {
+      info: {
+        block_hash: CryptoHash;
+        block_height: number;
+        requested_account_id: AccountId;
+      };
+      name: 'UNKNOWN_ACCOUNT';
+    }
+  | {
+      info: {
+        block_hash: CryptoHash;
+        block_height: number;
+        public_key: PublicKey;
+      };
+      name: 'UNKNOWN_GAS_KEY';
+    }
+  | {
+      info: {
+        error_message: string;
+      };
+      name: 'INTERNAL_ERROR';
+    };
+export type RpcViewGasKeyListError =
+  | {
+      info: {
+        block_reference: BlockReference;
+      };
+      name: 'UNKNOWN_BLOCK';
+    }
+  | {
+      info: {
+        block_hash: CryptoHash;
+        block_height: number;
+        requested_account_id: AccountId;
+      };
+      name: 'INVALID_ACCOUNT';
+    }
+  | {
+      info: {
+        block_hash: CryptoHash;
+        block_height: number;
+        requested_account_id: AccountId;
+      };
+      name: 'UNKNOWN_ACCOUNT';
+    }
+  | {
+      info: {
+        error_message: string;
+      };
+      name: 'INTERNAL_ERROR';
+    };
+export type RpcViewGasKeyListRequest = (
+  | {
+      block_id: BlockId;
+    }
+  | {
+      finality: Finality;
+    }
+  | {
+      sync_checkpoint: SyncCheckpoint;
+    }
+) & {
   account_id: AccountId;
 };
 export type RpcViewGasKeyListResponse = {
@@ -4990,13 +5542,17 @@ export type RpcViewGasKeyListResponse = {
   block_height: number;
   keys: Array<GasKeyInfoView>;
 };
-export type RpcViewGasKeyRequest = ({
-  block_id: BlockId;
-} | {
-  finality: Finality;
-} | {
-  sync_checkpoint: SyncCheckpoint;
-}) & {
+export type RpcViewGasKeyRequest = (
+  | {
+      block_id: BlockId;
+    }
+  | {
+      finality: Finality;
+    }
+  | {
+      sync_checkpoint: SyncCheckpoint;
+    }
+) & {
   account_id: AccountId;
   public_key: PublicKey;
 };
@@ -5008,52 +5564,61 @@ export type RpcViewGasKeyResponse = {
   num_nonces: number;
   permission: AccessKeyPermissionView;
 };
-export type RpcViewStateError = {
-  info: {
-      block_reference: BlockReference;
-  };
-  name: 'UNKNOWN_BLOCK';
-} | {
-  info: {
-      block_hash: CryptoHash;
-      block_height: number;
-      requested_account_id: AccountId;
-  };
-  name: 'INVALID_ACCOUNT';
-} | {
-  info: {
-      block_hash: CryptoHash;
-      block_height: number;
-      requested_account_id: AccountId;
-  };
-  name: 'UNKNOWN_ACCOUNT';
-} | {
-  info: {
-      block_hash: CryptoHash;
-      block_height: number;
-      contract_account_id: AccountId;
-  };
-  name: 'TOO_LARGE_CONTRACT_STATE';
-} | {
-  info: {
-      error_message: string;
-  };
-  name: 'INTERNAL_ERROR';
-};
-export type RpcViewStateRequest = ({
-  block_id: BlockId;
-} | {
-  finality: Finality;
-} | {
-  sync_checkpoint: SyncCheckpoint;
-}) & {
+export type RpcViewStateError =
+  | {
+      info: {
+        block_reference: BlockReference;
+      };
+      name: 'UNKNOWN_BLOCK';
+    }
+  | {
+      info: {
+        block_hash: CryptoHash;
+        block_height: number;
+        requested_account_id: AccountId;
+      };
+      name: 'INVALID_ACCOUNT';
+    }
+  | {
+      info: {
+        block_hash: CryptoHash;
+        block_height: number;
+        requested_account_id: AccountId;
+      };
+      name: 'UNKNOWN_ACCOUNT';
+    }
+  | {
+      info: {
+        block_hash: CryptoHash;
+        block_height: number;
+        contract_account_id: AccountId;
+      };
+      name: 'TOO_LARGE_CONTRACT_STATE';
+    }
+  | {
+      info: {
+        error_message: string;
+      };
+      name: 'INTERNAL_ERROR';
+    };
+export type RpcViewStateRequest = (
+  | {
+      block_id: BlockId;
+    }
+  | {
+      finality: Finality;
+    }
+  | {
+      sync_checkpoint: SyncCheckpoint;
+    }
+) & {
   account_id: AccountId;
   include_proof?: boolean;
   prefix_base64: StoreKey;
 };
 /**
-* Resulting state values for a view state query request
-*/
+ * Resulting state values for a view state query request
+ */
 export type RpcViewStateResponse = {
   block_hash: CryptoHash;
   block_height: number;
@@ -5061,8 +5626,8 @@ export type RpcViewStateResponse = {
   values: Array<StateItem>;
 };
 /**
-* View that preserves JSON format of the runtime config.
-*/
+ * View that preserves JSON format of the runtime config.
+ */
 export type RuntimeConfigView = {
   /**
    * Config that defines rules for account creation.
@@ -5096,8 +5661,8 @@ export type RuntimeConfigView = {
   witness_config?: WitnessConfigView;
 };
 /**
-* Describes different fees for the runtime
-*/
+ * Describes different fees for the runtime
+ */
 export type RuntimeFeesConfigView = {
   /**
    * Describes the cost of creating a certain action, `Action`. Includes all variants.
@@ -5129,41 +5694,45 @@ export type RuntimeFeesConfigView = {
   storage_usage_config?: StorageUsageConfigView;
 };
 /**
-* The shard identifier. It may be an arbitrary number - it does not need to be
-* a number in the range 0..NUM_SHARDS. The shard ids do not need to be
-* sequential or contiguous.
-*
-* The shard id is wrapped in a new type to prevent the old pattern of using
-* indices in range 0..NUM_SHARDS and casting to ShardId. Once the transition
-* if fully complete it potentially may be simplified to a regular type alias.
-*/
+ * The shard identifier. It may be an arbitrary number - it does not need to be
+ * a number in the range 0..NUM_SHARDS. The shard ids do not need to be
+ * sequential or contiguous.
+ *
+ * The shard id is wrapped in a new type to prevent the old pattern of using
+ * indices in range 0..NUM_SHARDS and casting to ShardId. Once the transition
+ * if fully complete it potentially may be simplified to a regular type alias.
+ */
 export type ShardId = number;
 /**
-* A versioned struct that contains all information needed to assign accounts to shards.
-*
-* Because of re-sharding, the chain may use different shard layout to split shards at different
-* times. Currently, `ShardLayout` is stored as part of `EpochConfig`, which is generated each
-* epoch given the epoch protocol version. In mainnet/testnet, we use two shard layouts since
-* re-sharding has only happened once. It is stored as part of genesis config, see
-* default_simple_nightshade_shard_layout() Below is an overview for some important
-* functionalities of ShardLayout interface.
-*/
-export type ShardLayout = {
-  V0: ShardLayoutV0;
-} | {
-  V1: ShardLayoutV1;
-} | {
-  V2: ShardLayoutV2;
-} | {
-  V3: ShardLayoutV3;
-};
+ * A versioned struct that contains all information needed to assign accounts to shards.
+ *
+ * Because of re-sharding, the chain may use different shard layout to split shards at different
+ * times. Currently, `ShardLayout` is stored as part of `EpochConfig`, which is generated each
+ * epoch given the epoch protocol version. In mainnet/testnet, we use two shard layouts since
+ * re-sharding has only happened once. It is stored as part of genesis config, see
+ * default_simple_nightshade_shard_layout() Below is an overview for some important
+ * functionalities of ShardLayout interface.
+ */
+export type ShardLayout =
+  | {
+      V0: ShardLayoutV0;
+    }
+  | {
+      V1: ShardLayoutV1;
+    }
+  | {
+      V2: ShardLayoutV2;
+    }
+  | {
+      V3: ShardLayoutV3;
+    };
 /**
-* A shard layout that maps accounts evenly across all shards -- by calculate the hash of account
-* id and mod number of shards. This is added to capture the old `account_id_to_shard_id` algorithm,
-* to keep backward compatibility for some existing tests.
-* `parent_shards` for `ShardLayoutV1` is always `None`, meaning it can only be the first shard layout
-* a chain uses.
-*/
+ * A shard layout that maps accounts evenly across all shards -- by calculate the hash of account
+ * id and mod number of shards. This is added to capture the old `account_id_to_shard_id` algorithm,
+ * to keep backward compatibility for some existing tests.
+ * `parent_shards` for `ShardLayoutV1` is always `None`, meaning it can only be the first shard layout
+ * a chain uses.
+ */
 export type ShardLayoutV0 = {
   /**
    * Map accounts evenly across all shards
@@ -5199,52 +5768,52 @@ export type ShardLayoutV1 = {
   version: number;
 };
 /**
-* Counterpart to `ShardLayoutV2` composed of maps with string keys to aid
-* serde serialization.
-*/
+ * Counterpart to `ShardLayoutV2` composed of maps with string keys to aid
+ * serde serialization.
+ */
 export type ShardLayoutV2 = {
   boundary_accounts: Array<AccountId>;
   id_to_index_map: {
-      [key: string]: number;
+    [key: string]: number;
   };
   index_to_id_map: {
-      [key: string]: ShardId;
+    [key: string]: ShardId;
   };
   shard_ids: Array<ShardId>;
   shards_parent_map?: {
-      [key: string]: ShardId;
+    [key: string]: ShardId;
   } | null;
   shards_split_map?: {
-      [key: string]: Array<ShardId>;
+    [key: string]: Array<ShardId>;
   } | null;
   version: number;
 };
 /**
-* Counterpart to `ShardLayoutV3` composed of maps with string keys to aid
-* serde serialization.
-*/
+ * Counterpart to `ShardLayoutV3` composed of maps with string keys to aid
+ * serde serialization.
+ */
 export type ShardLayoutV3 = {
   boundary_accounts: Array<AccountId>;
   id_to_index_map: {
-      [key: string]: number;
+    [key: string]: number;
   };
   last_split: ShardId;
   shard_ids: Array<ShardId>;
   shards_split_map: {
-      [key: string]: Array<ShardId>;
+    [key: string]: Array<ShardId>;
   };
 };
 /**
-* `ShardUId` is a unique representation for shards from different shard layouts.
-*
-* Comparing to `ShardId`, which is just an ordinal number ranging from 0 to NUM_SHARDS-1,
-* `ShardUId` provides a way to unique identify shards when shard layouts may change across epochs.
-* This is important because we store states indexed by shards in our database, so we need a
-* way to unique identify shard even when shards change across epochs.
-* Another difference between `ShardUId` and `ShardId` is that `ShardUId` should only exist in
-* a node's internal state while `ShardId` can be exposed to outside APIs and used in protocol
-* level information (for example, `ShardChunkHeader` contains `ShardId` instead of `ShardUId`)
-*/
+ * `ShardUId` is a unique representation for shards from different shard layouts.
+ *
+ * Comparing to `ShardId`, which is just an ordinal number ranging from 0 to NUM_SHARDS-1,
+ * `ShardUId` provides a way to unique identify shards when shard layouts may change across epochs.
+ * This is important because we store states indexed by shards in our database, so we need a
+ * way to unique identify shard even when shards change across epochs.
+ * Another difference between `ShardUId` and `ShardId` is that `ShardUId` should only exist in
+ * a node's internal state while `ShardId` can be exposed to outside APIs and used in protocol
+ * level information (for example, `ShardChunkHeader` contains `ShardId` instead of `ShardUId`)
+ */
 export type ShardUId = {
   shard_id: number;
   version: number;
@@ -5270,8 +5839,8 @@ export type SlashedValidator = {
   is_double_sign: boolean;
 };
 /**
-* An action which stakes signer_id tokens and setup's validator public key
-*/
+ * An action which stakes signer_id tokens and setup's validator public key
+ */
 export type StakeAction = {
   /**
    * Validator key which will be used to sign transactions on behalf of signer_id
@@ -5283,141 +5852,168 @@ export type StakeAction = {
   stake: NearToken;
 };
 /**
-* See crate::types::StateChangeCause for details.
-*/
-export type StateChangeCauseView = {
-  type: 'not_writable_to_disk';
-} | {
-  type: 'initial_state';
-} | {
-  tx_hash: CryptoHash;
-  type: 'transaction_processing';
-} | {
-  receipt_hash: CryptoHash;
-  type: 'action_receipt_processing_started';
-} | {
-  receipt_hash: CryptoHash;
-  type: 'action_receipt_gas_reward';
-} | {
-  receipt_hash: CryptoHash;
-  type: 'receipt_processing';
-} | {
-  receipt_hash: CryptoHash;
-  type: 'postponed_receipt';
-} | {
-  type: 'updated_delayed_receipts';
-} | {
-  type: 'validator_accounts_update';
-} | {
-  type: 'migration';
-} | {
-  type: 'bandwidth_scheduler_state_update';
-};
+ * See crate::types::StateChangeCause for details.
+ */
+export type StateChangeCauseView =
+  | {
+      type: 'not_writable_to_disk';
+    }
+  | {
+      type: 'initial_state';
+    }
+  | {
+      tx_hash: CryptoHash;
+      type: 'transaction_processing';
+    }
+  | {
+      receipt_hash: CryptoHash;
+      type: 'action_receipt_processing_started';
+    }
+  | {
+      receipt_hash: CryptoHash;
+      type: 'action_receipt_gas_reward';
+    }
+  | {
+      receipt_hash: CryptoHash;
+      type: 'receipt_processing';
+    }
+  | {
+      receipt_hash: CryptoHash;
+      type: 'postponed_receipt';
+    }
+  | {
+      type: 'updated_delayed_receipts';
+    }
+  | {
+      type: 'validator_accounts_update';
+    }
+  | {
+      type: 'migration';
+    }
+  | {
+      type: 'bandwidth_scheduler_state_update';
+    };
 /**
-* It is a serializable view of `StateChangeKind`.
-*
-* See the Rust crate documentation for more information.
-*/
-export type StateChangeKindView = {
-  account_id: AccountId;
-  type: 'account_touched';
-} | {
-  account_id: AccountId;
-  type: 'access_key_touched';
-} | {
-  account_id: AccountId;
-  type: 'data_touched';
-} | {
-  account_id: AccountId;
-  type: 'contract_code_touched';
-};
-export type StateChangeWithCauseView = ({
-  /**
-   * A view of the account
-   */
-  change: {
+ * It is a serializable view of `StateChangeKind`.
+ *
+ * See the Rust crate documentation for more information.
+ */
+export type StateChangeKindView =
+  | {
       account_id: AccountId;
-      amount: NearToken;
-      code_hash: CryptoHash;
-      global_contract_account_id?: AccountId | null;
-      global_contract_hash?: CryptoHash | null;
-      locked: NearToken;
+      type: 'account_touched';
+    }
+  | {
+      account_id: AccountId;
+      type: 'access_key_touched';
+    }
+  | {
+      account_id: AccountId;
+      type: 'data_touched';
+    }
+  | {
+      account_id: AccountId;
+      type: 'contract_code_touched';
+    };
+export type StateChangeWithCauseView = (
+  | {
       /**
-       * TODO(2271): deprecated.
+       * A view of the account
        */
-      storage_paid_at?: number;
-      storage_usage: number;
-  };
-  type: 'account_update';
-} | {
-  change: {
-      account_id: AccountId;
-  };
-  type: 'account_deletion';
-} | {
-  change: {
-      access_key: AccessKeyView;
-      account_id: AccountId;
-      public_key: PublicKey;
-  };
-  type: 'access_key_update';
-} | {
-  change: {
-      account_id: AccountId;
-      public_key: PublicKey;
-  };
-  type: 'access_key_deletion';
-} | {
-  change: {
-      account_id: AccountId;
-      gas_key: GasKey;
-      public_key: PublicKey;
-  };
-  type: 'gas_key_update';
-} | {
-  change: {
-      account_id: AccountId;
-      index: number;
-      nonce: number;
-      public_key: PublicKey;
-  };
-  type: 'gas_key_nonce_update';
-} | {
-  change: {
-      account_id: AccountId;
-      public_key: PublicKey;
-  };
-  type: 'gas_key_deletion';
-} | {
-  change: {
-      account_id: AccountId;
-      key_base64: StoreKey;
-      value_base64: StoreValue;
-  };
-  type: 'data_update';
-} | {
-  change: {
-      account_id: AccountId;
-      key_base64: StoreKey;
-  };
-  type: 'data_deletion';
-} | {
-  change: {
-      account_id: AccountId;
-      code_base64: string;
-  };
-  type: 'contract_code_update';
-} | {
-  change: {
-      account_id: AccountId;
-  };
-  type: 'contract_code_deletion';
-}) & {
+      change: {
+        account_id: AccountId;
+        amount: NearToken;
+        code_hash: CryptoHash;
+        global_contract_account_id?: AccountId | null;
+        global_contract_hash?: CryptoHash | null;
+        locked: NearToken;
+        /**
+         * TODO(2271): deprecated.
+         */
+        storage_paid_at?: number;
+        storage_usage: number;
+      };
+      type: 'account_update';
+    }
+  | {
+      change: {
+        account_id: AccountId;
+      };
+      type: 'account_deletion';
+    }
+  | {
+      change: {
+        access_key: AccessKeyView;
+        account_id: AccountId;
+        public_key: PublicKey;
+      };
+      type: 'access_key_update';
+    }
+  | {
+      change: {
+        account_id: AccountId;
+        public_key: PublicKey;
+      };
+      type: 'access_key_deletion';
+    }
+  | {
+      change: {
+        account_id: AccountId;
+        gas_key: GasKey;
+        public_key: PublicKey;
+      };
+      type: 'gas_key_update';
+    }
+  | {
+      change: {
+        account_id: AccountId;
+        index: number;
+        nonce: number;
+        public_key: PublicKey;
+      };
+      type: 'gas_key_nonce_update';
+    }
+  | {
+      change: {
+        account_id: AccountId;
+        public_key: PublicKey;
+      };
+      type: 'gas_key_deletion';
+    }
+  | {
+      change: {
+        account_id: AccountId;
+        key_base64: StoreKey;
+        value_base64: StoreValue;
+      };
+      type: 'data_update';
+    }
+  | {
+      change: {
+        account_id: AccountId;
+        key_base64: StoreKey;
+      };
+      type: 'data_deletion';
+    }
+  | {
+      change: {
+        account_id: AccountId;
+        code_base64: string;
+      };
+      type: 'contract_code_update';
+    }
+  | {
+      change: {
+        account_id: AccountId;
+      };
+      type: 'contract_code_deletion';
+    }
+) & {
   cause: StateChangeCauseView;
 };
 /**
-* Item of the state, key and value are serialized in base64 and proof for inclusion of given state item.
-*/
+ * Item of the state, key and value are serialized in base64 and proof for inclusion of given state item.
+ */
 export type StateItem = {
   key: StoreKey;
   value: StoreValue;
@@ -5447,32 +6043,38 @@ export type StatusSyncInfo = {
   syncing: boolean;
 };
 /**
-* Errors which may occur during working with trie storages, storing
-* trie values (trie nodes and state values) by their hashes.
-*/
-export type StorageError = 'StorageInternalError' | {
-  MissingTrieValue: MissingTrieValue;
-} | 'UnexpectedTrieValue' | {
-  StorageInconsistentState: string;
-} | {
-  FlatStorageBlockNotSupported: string;
-} | {
-  MemTrieLoadingError: string;
-};
+ * Errors which may occur during working with trie storages, storing
+ * trie values (trie nodes and state values) by their hashes.
+ */
+export type StorageError =
+  | 'StorageInternalError'
+  | {
+      MissingTrieValue: MissingTrieValue;
+    }
+  | 'UnexpectedTrieValue'
+  | {
+      StorageInconsistentState: string;
+    }
+  | {
+      FlatStorageBlockNotSupported: string;
+    }
+  | {
+      MemTrieLoadingError: string;
+    };
 /**
-* This enum represents if a storage_get call will be performed through flat storage or trie
-*/
+ * This enum represents if a storage_get call will be performed through flat storage or trie
+ */
 export declare const StorageGetMode: {
-  readonly FLAT_STORAGE: "FlatStorage";
-  readonly TRIE: "Trie";
+  readonly FLAT_STORAGE: 'FlatStorage';
+  readonly TRIE: 'Trie';
 };
 /**
-* This enum represents if a storage_get call will be performed through flat storage or trie
-*/
+ * This enum represents if a storage_get call will be performed through flat storage or trie
+ */
 export type StorageGetMode = (typeof StorageGetMode)[keyof typeof StorageGetMode];
 /**
-* Describes cost of storage per block
-*/
+ * Describes cost of storage per block
+ */
 export type StorageUsageConfigView = {
   /**
    * Number of bytes for an account record, including rounding up for account id.
@@ -5484,22 +6086,22 @@ export type StorageUsageConfigView = {
   num_extra_bytes_record?: number;
 };
 /**
-* This type is used to mark keys (arrays of bytes) that are queried from store.
-*
-* NOTE: Currently, this type is only used in the view_client and RPC to be able to transparently
-* pretty-serialize the bytes arrays as base64-encoded strings (see `serialize.rs`).
-*/
+ * This type is used to mark keys (arrays of bytes) that are queried from store.
+ *
+ * NOTE: Currently, this type is only used in the view_client and RPC to be able to transparently
+ * pretty-serialize the bytes arrays as base64-encoded strings (see `serialize.rs`).
+ */
 export type StoreKey = string;
 /**
-* This type is used to mark values returned from store (arrays of bytes).
-*
-* NOTE: Currently, this type is only used in the view_client and RPC to be able to transparently
-* pretty-serialize the bytes arrays as base64-encoded strings (see `serialize.rs`).
-*/
+ * This type is used to mark values returned from store (arrays of bytes).
+ *
+ * NOTE: Currently, this type is only used in the view_client and RPC to be able to transparently
+ * pretty-serialize the bytes arrays as base64-encoded strings (see `serialize.rs`).
+ */
 export type StoreValue = string;
 export declare const SyncCheckpoint: {
-  readonly GENESIS: "genesis";
-  readonly EARLIEST_AVAILABLE: "earliest_available";
+  readonly GENESIS: 'genesis';
+  readonly EARLIEST_AVAILABLE: 'earliest_available';
 };
 export type SyncCheckpoint = (typeof SyncCheckpoint)[keyof typeof SyncCheckpoint];
 export type SyncConcurrency = {
@@ -5527,28 +6129,36 @@ export type SyncConcurrency = {
   per_shard?: number;
 };
 /**
-* Configures how to fetch state parts during state sync.
-*/
-export type SyncConfig = 'Peers' | {
-  ExternalStorage: ExternalStorageConfig;
-};
+ * Configures how to fetch state parts during state sync.
+ */
+export type SyncConfig =
+  | 'Peers'
+  | {
+      ExternalStorage: ExternalStorageConfig;
+    };
 export type Tier1ProxyView = {
   addr: string;
   peer_id: PublicKey;
 };
 /**
-* Describes the expected behavior of the node regarding shard tracking.
-* If the node is an active validator, it will also track the shards it is responsible for as a validator.
-*/
-export type TrackedShardsConfig = 'NoShards' | {
-  Shards: Array<ShardUId>;
-} | 'AllShards' | {
-  ShadowValidator: AccountId;
-} | {
-  Schedule: Array<Array<ShardId>>;
-} | {
-  Accounts: Array<AccountId>;
-};
+ * Describes the expected behavior of the node regarding shard tracking.
+ * If the node is an active validator, it will also track the shards it is responsible for as a validator.
+ */
+export type TrackedShardsConfig =
+  | 'NoShards'
+  | {
+      Shards: Array<ShardUId>;
+    }
+  | 'AllShards'
+  | {
+      ShadowValidator: AccountId;
+    }
+  | {
+      Schedule: Array<Array<ShardId>>;
+    }
+  | {
+      Accounts: Array<AccountId>;
+    };
 export type TransferAction = {
   deposit: NearToken;
 };
@@ -5557,17 +6167,19 @@ export type TransferToGasKeyAction = {
   public_key: PublicKey;
 };
 /**
-* Error returned in the ExecutionOutcome in case of failure
-*/
-export type TxExecutionError = {
-  ActionError: ActionError;
-} | {
-  InvalidTxError: InvalidTxError;
-};
+ * Error returned in the ExecutionOutcome in case of failure
+ */
+export type TxExecutionError =
+  | {
+      ActionError: ActionError;
+    }
+  | {
+      InvalidTxError: InvalidTxError;
+    };
 export type TxExecutionStatus = 'NONE' | 'INCLUDED' | 'EXECUTED_OPTIMISTIC' | 'INCLUDED_FINAL' | 'EXECUTED' | 'FINAL';
 /**
-* Use global contract action
-*/
+ * Use global contract action
+ */
 export type UseGlobalContractAction = {
   contract_identifier: GlobalContractIdentifier;
 };
@@ -5645,34 +6257,42 @@ export type ValidatorInfo = {
   account_id: AccountId;
 };
 /**
-* Reasons for removing a validator from the validator set.
-*/
-export type ValidatorKickoutReason = '_UnusedSlashed' | {
-  NotEnoughBlocks: {
-      expected: number;
-      produced: number;
-  };
-} | {
-  NotEnoughChunks: {
-      expected: number;
-      produced: number;
-  };
-} | 'Unstaked' | {
-  NotEnoughStake: {
-      stake_u128: NearToken;
-      threshold_u128: NearToken;
-  };
-} | 'DidNotGetASeat' | {
-  NotEnoughChunkEndorsements: {
-      expected: number;
-      produced: number;
-  };
-} | {
-  ProtocolVersionTooOld: {
-      network_version: number;
-      version: number;
-  };
-};
+ * Reasons for removing a validator from the validator set.
+ */
+export type ValidatorKickoutReason =
+  | '_UnusedSlashed'
+  | {
+      NotEnoughBlocks: {
+        expected: number;
+        produced: number;
+      };
+    }
+  | {
+      NotEnoughChunks: {
+        expected: number;
+        produced: number;
+      };
+    }
+  | 'Unstaked'
+  | {
+      NotEnoughStake: {
+        stake_u128: NearToken;
+        threshold_u128: NearToken;
+      };
+    }
+  | 'DidNotGetASeat'
+  | {
+      NotEnoughChunkEndorsements: {
+        expected: number;
+        produced: number;
+      };
+    }
+  | {
+      ProtocolVersionTooOld: {
+        network_version: number;
+        version: number;
+      };
+    };
 export type ValidatorKickoutView = {
   account_id: AccountId;
   reason: ValidatorKickoutReason;
@@ -5686,8 +6306,8 @@ export type ValidatorStakeViewV1 = {
   stake: NearToken;
 };
 /**
-* Data structure for semver version and github tag or commit.
-*/
+ * Data structure for semver version and github tag or commit.
+ */
 export type Version = {
   build: string;
   commit: string;
@@ -5695,19 +6315,28 @@ export type Version = {
   version: string;
 };
 /**
-* Resulting state values for a view state query request
-*/
+ * Resulting state values for a view state query request
+ */
 export type ViewStateResult = {
   proof?: Array<string>;
   values: Array<StateItem>;
 };
 /**
-* A kind of a trap happened during execution of a binary
-*/
-export type WasmTrap = 'Unreachable' | 'IncorrectCallIndirectSignature' | 'MemoryOutOfBounds' | 'CallIndirectOOB' | 'IllegalArithmetic' | 'MisalignedAtomicAccess' | 'IndirectCallToNull' | 'StackOverflow' | 'GenericTrap';
+ * A kind of a trap happened during execution of a binary
+ */
+export type WasmTrap =
+  | 'Unreachable'
+  | 'IncorrectCallIndirectSignature'
+  | 'MemoryOutOfBounds'
+  | 'CallIndirectOOB'
+  | 'IllegalArithmetic'
+  | 'MisalignedAtomicAccess'
+  | 'IndirectCallToNull'
+  | 'StackOverflow'
+  | 'GenericTrap';
 /**
-* Configuration specific to ChunkStateWitness.
-*/
+ * Configuration specific to ChunkStateWitness.
+ */
 export type WitnessConfigView = {
   /**
    * Maximum size of transactions contained inside ChunkStateWitness.
@@ -5735,7 +6364,8 @@ export type ExperimentalCallFunctionData = {
 export type ExperimentalCallFunctionResponses = {
   200: JsonRpcResponseForRpcCallFunctionResponseAndRpcCallFunctionError;
 };
-export type ExperimentalCallFunctionResponse = ExperimentalCallFunctionResponses[keyof ExperimentalCallFunctionResponses];
+export type ExperimentalCallFunctionResponse =
+  ExperimentalCallFunctionResponses[keyof ExperimentalCallFunctionResponses];
 export type ExperimentalChangesData = {
   body: JsonRpcRequestForExperimentalChanges;
   path?: never;
@@ -5755,7 +6385,8 @@ export type ExperimentalChangesInBlockData = {
 export type ExperimentalChangesInBlockResponses = {
   200: JsonRpcResponseForRpcStateChangesInBlockByTypeResponseAndRpcStateChangesError;
 };
-export type ExperimentalChangesInBlockResponse = ExperimentalChangesInBlockResponses[keyof ExperimentalChangesInBlockResponses];
+export type ExperimentalChangesInBlockResponse =
+  ExperimentalChangesInBlockResponses[keyof ExperimentalChangesInBlockResponses];
 export type ExperimentalCongestionLevelData = {
   body: JsonRpcRequestForExperimentalCongestionLevel;
   path?: never;
@@ -5765,7 +6396,8 @@ export type ExperimentalCongestionLevelData = {
 export type ExperimentalCongestionLevelResponses = {
   200: JsonRpcResponseForRpcCongestionLevelResponseAndRpcChunkError;
 };
-export type ExperimentalCongestionLevelResponse = ExperimentalCongestionLevelResponses[keyof ExperimentalCongestionLevelResponses];
+export type ExperimentalCongestionLevelResponse =
+  ExperimentalCongestionLevelResponses[keyof ExperimentalCongestionLevelResponses];
 export type ExperimentalGenesisConfigData = {
   body: JsonRpcRequestForExperimentalGenesisConfig;
   path?: never;
@@ -5775,7 +6407,8 @@ export type ExperimentalGenesisConfigData = {
 export type ExperimentalGenesisConfigResponses = {
   200: JsonRpcResponseForGenesisConfigAndGenesisConfigError;
 };
-export type ExperimentalGenesisConfigResponse = ExperimentalGenesisConfigResponses[keyof ExperimentalGenesisConfigResponses];
+export type ExperimentalGenesisConfigResponse =
+  ExperimentalGenesisConfigResponses[keyof ExperimentalGenesisConfigResponses];
 export type ExperimentalLightClientBlockProofData = {
   body: JsonRpcRequestForExperimentalLightClientBlockProof;
   path?: never;
@@ -5785,7 +6418,8 @@ export type ExperimentalLightClientBlockProofData = {
 export type ExperimentalLightClientBlockProofResponses = {
   200: JsonRpcResponseForRpcLightClientBlockProofResponseAndRpcLightClientProofError;
 };
-export type ExperimentalLightClientBlockProofResponse = ExperimentalLightClientBlockProofResponses[keyof ExperimentalLightClientBlockProofResponses];
+export type ExperimentalLightClientBlockProofResponse =
+  ExperimentalLightClientBlockProofResponses[keyof ExperimentalLightClientBlockProofResponses];
 export type ExperimentalLightClientProofData = {
   body: JsonRpcRequestForExperimentalLightClientProof;
   path?: never;
@@ -5795,7 +6429,8 @@ export type ExperimentalLightClientProofData = {
 export type ExperimentalLightClientProofResponses = {
   200: JsonRpcResponseForRpcLightClientExecutionProofResponseAndRpcLightClientProofError;
 };
-export type ExperimentalLightClientProofResponse = ExperimentalLightClientProofResponses[keyof ExperimentalLightClientProofResponses];
+export type ExperimentalLightClientProofResponse =
+  ExperimentalLightClientProofResponses[keyof ExperimentalLightClientProofResponses];
 export type ExperimentalMaintenanceWindowsData = {
   body: JsonRpcRequestForExperimentalMaintenanceWindows;
   path?: never;
@@ -5805,7 +6440,8 @@ export type ExperimentalMaintenanceWindowsData = {
 export type ExperimentalMaintenanceWindowsResponses = {
   200: JsonRpcResponseForArrayOfRangeOfUint64AndRpcMaintenanceWindowsError;
 };
-export type ExperimentalMaintenanceWindowsResponse = ExperimentalMaintenanceWindowsResponses[keyof ExperimentalMaintenanceWindowsResponses];
+export type ExperimentalMaintenanceWindowsResponse =
+  ExperimentalMaintenanceWindowsResponses[keyof ExperimentalMaintenanceWindowsResponses];
 export type ExperimentalProtocolConfigData = {
   body: JsonRpcRequestForExperimentalProtocolConfig;
   path?: never;
@@ -5815,7 +6451,8 @@ export type ExperimentalProtocolConfigData = {
 export type ExperimentalProtocolConfigResponses = {
   200: JsonRpcResponseForRpcProtocolConfigResponseAndRpcProtocolConfigError;
 };
-export type ExperimentalProtocolConfigResponse = ExperimentalProtocolConfigResponses[keyof ExperimentalProtocolConfigResponses];
+export type ExperimentalProtocolConfigResponse =
+  ExperimentalProtocolConfigResponses[keyof ExperimentalProtocolConfigResponses];
 export type ExperimentalReceiptData = {
   body: JsonRpcRequestForExperimentalReceipt;
   path?: never;
@@ -5835,7 +6472,8 @@ export type ExperimentalSplitStorageInfoData = {
 export type ExperimentalSplitStorageInfoResponses = {
   200: JsonRpcResponseForRpcSplitStorageInfoResponseAndRpcSplitStorageInfoError;
 };
-export type ExperimentalSplitStorageInfoResponse = ExperimentalSplitStorageInfoResponses[keyof ExperimentalSplitStorageInfoResponses];
+export type ExperimentalSplitStorageInfoResponse =
+  ExperimentalSplitStorageInfoResponses[keyof ExperimentalSplitStorageInfoResponses];
 export type ExperimentalTxStatusData = {
   body: JsonRpcRequestForExperimentalTxStatus;
   path?: never;
@@ -5855,7 +6493,8 @@ export type ExperimentalValidatorsOrderedData = {
 export type ExperimentalValidatorsOrderedResponses = {
   200: JsonRpcResponseForArrayOfValidatorStakeViewAndRpcValidatorError;
 };
-export type ExperimentalValidatorsOrderedResponse = ExperimentalValidatorsOrderedResponses[keyof ExperimentalValidatorsOrderedResponses];
+export type ExperimentalValidatorsOrderedResponse =
+  ExperimentalValidatorsOrderedResponses[keyof ExperimentalValidatorsOrderedResponses];
 export type ExperimentalViewAccessKeyData = {
   body: JsonRpcRequestForExperimentalViewAccessKey;
   path?: never;
@@ -5865,7 +6504,8 @@ export type ExperimentalViewAccessKeyData = {
 export type ExperimentalViewAccessKeyResponses = {
   200: JsonRpcResponseForRpcViewAccessKeyResponseAndRpcViewAccessKeyError;
 };
-export type ExperimentalViewAccessKeyResponse = ExperimentalViewAccessKeyResponses[keyof ExperimentalViewAccessKeyResponses];
+export type ExperimentalViewAccessKeyResponse =
+  ExperimentalViewAccessKeyResponses[keyof ExperimentalViewAccessKeyResponses];
 export type ExperimentalViewAccessKeyListData = {
   body: JsonRpcRequestForExperimentalViewAccessKeyList;
   path?: never;
@@ -5875,7 +6515,8 @@ export type ExperimentalViewAccessKeyListData = {
 export type ExperimentalViewAccessKeyListResponses = {
   200: JsonRpcResponseForRpcViewAccessKeyListResponseAndRpcViewAccessKeyListError;
 };
-export type ExperimentalViewAccessKeyListResponse = ExperimentalViewAccessKeyListResponses[keyof ExperimentalViewAccessKeyListResponses];
+export type ExperimentalViewAccessKeyListResponse =
+  ExperimentalViewAccessKeyListResponses[keyof ExperimentalViewAccessKeyListResponses];
 export type ExperimentalViewAccountData = {
   body: JsonRpcRequestForExperimentalViewAccount;
   path?: never;
@@ -5915,7 +6556,8 @@ export type ExperimentalViewGasKeyListData = {
 export type ExperimentalViewGasKeyListResponses = {
   200: JsonRpcResponseForRpcViewGasKeyListResponseAndRpcViewGasKeyListError;
 };
-export type ExperimentalViewGasKeyListResponse = ExperimentalViewGasKeyListResponses[keyof ExperimentalViewGasKeyListResponses];
+export type ExperimentalViewGasKeyListResponse =
+  ExperimentalViewGasKeyListResponses[keyof ExperimentalViewGasKeyListResponses];
 export type ExperimentalViewStateData = {
   body: JsonRpcRequestForExperimentalViewState;
   path?: never;

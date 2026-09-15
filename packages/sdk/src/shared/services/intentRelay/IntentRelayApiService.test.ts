@@ -278,6 +278,103 @@ describe('getTransactionPackets', () => {
     });
   });
 
+  // `timeoutMs` switches the read onto the deadline-aware path. The no-timeout tests above are the
+  // other half of this contract: they assert the legacy request shape (no `signal`) is untouched.
+  describe('bounded reads (timeoutMs)', () => {
+    const payload: IntentRelayRequest<'get_transaction_packets'> = {
+      action: 'get_transaction_packets',
+      params: baseParams,
+    };
+
+    // Never settles on its own; rejects with an AbortError only once its signal aborts, mirroring
+    // how the platform `fetch` reacts to an `AbortSignal`.
+    const hungFetch = (_url: unknown, opts: { signal: AbortSignal }) =>
+      new Promise((_resolve, reject) => {
+        opts.signal.addEventListener('abort', () =>
+          reject(Object.assign(new Error('The operation was aborted'), { name: 'AbortError' })),
+        );
+      });
+
+    it('settles at the deadline when the connection hangs', async () => {
+      vi.useFakeTimers();
+      mockFetch.mockImplementation(hungFetch);
+
+      const promise = getTransactionPackets(payload, API_URL, 5_000);
+      await vi.advanceTimersByTimeAsync(5_000);
+      const result = await promise;
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect((result.error as Error).name).toBe('AbortError');
+      // The budget caps the attempt AND is spent by it — one request, no retry overrun past it.
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('settles at the deadline when the response body stalls after headers arrive', async () => {
+      vi.useFakeTimers();
+      // `fetch` resolves as soon as headers land; only a timer still armed over `json()` catches this.
+      mockFetch.mockImplementation((_url: unknown, opts: { signal: AbortSignal }) =>
+        Promise.resolve({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          json: () =>
+            new Promise((_resolve, reject) =>
+              opts.signal.addEventListener('abort', () =>
+                reject(Object.assign(new Error('aborted'), { name: 'AbortError' })),
+              ),
+            ),
+        }),
+      );
+
+      const promise = getTransactionPackets(payload, API_URL, 5_000);
+      await vi.advanceTimersByTimeAsync(5_000);
+      const result = await promise;
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect((result.error as Error).name).toBe('AbortError');
+    });
+
+    // A caller who mistypes a budget asked for a bound, so they get this module's own per-request
+    // one — not `DEFAULT_RELAY_TX_TIMEOUT`, which is sized for the packet wait loop and would buy
+    // three 15s attempts before the retry cap ended it.
+    it('falls back to the per-request budget when the value is non-finite', async () => {
+      vi.useFakeTimers();
+      mockFetch.mockImplementation(hungFetch);
+
+      const promise = getTransactionPackets(payload, API_URL, Number.NaN);
+      await vi.advanceTimersByTimeAsync(15_000);
+      const result = await promise;
+
+      expect(result.ok).toBe(false);
+      // One attempt: the fallback budget equals the per-attempt cap, so it is spent in full by it.
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('fails without issuing a request when the budget is non-positive', async () => {
+      // No budget left to spend, so there is nothing to spend it on. Documented, not floored —
+      // a floor would be a second timeout policy invented here.
+      const result = await getTransactionPackets(payload, API_URL, 0);
+
+      expect(result.ok).toBe(false);
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('passes the abort signal through on the bounded path', async () => {
+      mockFetch.mockResolvedValueOnce(jsonResponse({ success: true, data: [] }));
+
+      await getTransactionPackets(payload, API_URL, 5_000);
+
+      expect(mockFetch).toHaveBeenCalledWith(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: expect.any(AbortSignal),
+      });
+    });
+  });
+
   describe('rejects on invalid inputs', () => {
     it('throws when chain_id is empty (invariant)', async () => {
       await expect(
@@ -286,6 +383,17 @@ describe('getTransactionPackets', () => {
           API_URL,
         ),
       ).rejects.toThrow('Invalid input parameters. source_chain_id empty');
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('throws before consuming the budget when identifiers are empty', async () => {
+      await expect(
+        getTransactionPackets(
+          { action: 'get_transaction_packets', params: { chain_id: CHAIN_ID, tx_hash: '' } },
+          API_URL,
+          5_000,
+        ),
+      ).rejects.toThrow('Invalid input parameters. tx_hash empty');
       expect(mockFetch).not.toHaveBeenCalled();
     });
 
@@ -377,6 +485,36 @@ describe('waitUntilIntentExecuted', () => {
     srcTxHash: SPOKE_TX_HASH,
     apiUrl: API_URL,
   };
+
+  describe('non-finite caller timeout', () => {
+    // `payload.timeout ?? DEFAULT` catches only `undefined`, so a NaN used to reach
+    // `while (Date.now() - startTime < NaN)` — false on its first evaluation. The wait then returned
+    // RELAY_TIMEOUT within milliseconds, having polled zero times, on a tx already broadcast on-chain.
+    // This is the funnel every feature's relay wait passes through (money market, staking, migration,
+    // cancelIntent, and the swap/bridge fallbacks), so the guard belongs here rather than per caller.
+    it.each([
+      { label: 'NaN', value: Number.NaN },
+      { label: 'Infinity', value: Number.POSITIVE_INFINITY },
+    ])('polls normally on a $label timeout instead of giving up instantly', async ({ value }) => {
+      const packet = buildPacket({ status: 'executed' });
+      mockFetch.mockResolvedValueOnce(
+        jsonResponse({ success: true, data: [packet] } satisfies GetTransactionPacketsResponse),
+      );
+
+      const result = await waitUntilIntentExecuted({ ...baseInput, timeout: value });
+
+      expect(result).toEqual({ ok: true, value: packet });
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('still honours an explicit zero timeout as no budget', async () => {
+      // 0 is finite and deliberate — it must keep meaning "do not wait", not fall back to the default.
+      const result = await waitUntilIntentExecuted({ ...baseInput, timeout: 0 });
+
+      expect(result.ok).toBe(false);
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+  });
 
   describe('happy paths', () => {
     it('returns ok:true with the executed packet on the first poll', async () => {

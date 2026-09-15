@@ -44,7 +44,8 @@ await api.submitTx({ txHash, srcChainKey, walletAddress, relayData });
 `baseUrl` is required and injected by the caller — the package never hardcodes
 environment URLs. Optionally set `timeout` (ms — an overall per-call deadline that
 includes retries; on expiry the call throws `TIMEOUT_ERROR`), a custom `fetch` (for
-tests or non-standard runtimes; it receives the timeout `AbortSignal`), and extra `headers`.
+tests or non-standard runtimes; it receives the timeout `AbortSignal`), extra `headers`, and an
+`apiKey` (see below).
 
 Bridge deltas vs the swaps client worth knowing:
 
@@ -54,9 +55,32 @@ Bridge deltas vs the swaps client worth knowing:
   received from `createBridgeIntent`, not just the payload.
 - `getSubmitTxStatus` `status` is a tolerant `string`; compare against the known
   terminal literals (`'executed'` / `'failed'`).
-- `getFee` / `getBridgeableAmount` / `isBridgeable` are read-only quotes also
-  computable client-side; SDK consumers should prefer the local `sodax.bridge.*`
-  equivalents (no round-trip) — these HTTP mirrors exist for non-SDK clients.
+- `getFee` / `getBridgeableAmount` / `isBridgeable` are read-only quotes SDK consumers can get from
+  the local `sodax.bridge.*` equivalents instead: `getFee` and `isBridgeable` compute locally, and
+  `getBridgeableAmount` reads the hub vaults over RPC rather than calling the backend. These HTTP
+  mirrors exist for non-SDK clients.
+
+## API key
+
+The backend guards the `/bridge/*` routes with an `x-api-key` header check (keys are
+minted through the partner portal). Pass the key once at construction and the client
+sends it on every request:
+
+```ts
+const api = new BridgeApi({ baseUrl: 'https://<bridge-api-host>', apiKey: 'partner-api-key' });
+```
+
+An explicit `headers: { 'x-api-key': ... }` wins over the `apiKey` convenience option.
+For a different key per call, construct another client — instances are cheap and
+stateless. Keys bundled into a browser app are public by nature.
+
+Auth failures surface as `HTTP_ERROR` with the backend's status and message on
+`context`: `401` (missing or invalid key) and `403` (suspended organisation or missing
+scope) are terminal — fix the key, don't retry. The one transient case, a `503` whose
+message is `API key verification is temporarily unavailable` (exported as
+`API_KEY_VERIFICATION_UNAVAILABLE_MESSAGE`), is retried automatically with a short
+backoff — for every call, mutations included, since the guard rejects before the route
+handler runs.
 
 ## Errors
 
@@ -65,7 +89,8 @@ Every method **throws** a `BridgeApiError` on failure — a single typed error w
 `VALIDATION_ERROR`, with diagnostic `context` (endpoint, method, path, HTTP status,
 validation issues) and the underlying failure on `.cause`. Idempotent calls (reads,
 polls, pure-compute POSTs like `getFee`) are retried a few times on transient HTTP /
-network failures; a `timeout` and mutating calls are never retried.
+network failures; mutations are not, with one exception — the apiguard `503` above, which is
+replay-safe. A `timeout` is never retried: it bounds the whole call, retries included.
 
 > Note: this throwing contract is intentional and distinct from `@sodax/sdk`'s
 > `sodax.api.bridge`, which wraps these calls and returns `Result<T>` instead of throwing.

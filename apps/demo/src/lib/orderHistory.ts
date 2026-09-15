@@ -6,7 +6,8 @@ import { readJson, writeJson } from '@/lib/storage';
 // app is closed still shows complete. Orders are JSON-safe scalars.
 //
 // Keyed per feature so the solver, leverage-yield, and swaps-api pages keep separate histories.
-export const SOLVER_ORDERS_KEY = 'sodax-demo:solver:orders';
+/** Value intentionally still says `solver`: renaming it would orphan already-saved demo orders. */
+export const SWAPS_SDK_ORDERS_KEY = 'sodax-demo:solver:orders';
 export const LEVERAGE_YIELD_ORDERS_KEY = 'sodax-demo:leverage-yield:orders';
 export const SWAPS_API_ORDERS_KEY = 'sodax-demo:swaps-api:orders';
 

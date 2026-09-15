@@ -1,5 +1,10 @@
 import type { XAccount } from '@/types/index.js';
-import { detectBitcoinAddressType, type IBitcoinWalletProvider, type BtcAddressType, type BtcWalletAddressType } from '@sodax/types';
+import {
+  detectBitcoinAddressType,
+  type IBitcoinWalletProvider,
+  type BtcAddressType,
+  type BtcWalletAddressType,
+} from '@sodax/types';
 import type { BitcoinWalletDefaults } from '@sodax/wallet-sdk-core';
 import { AddressPurpose, MessageSigningProtocols } from 'sats-connect';
 import { WALLET_METADATA } from '@/constants.js';
@@ -20,7 +25,6 @@ interface GetAccountsResult {
 interface SignMessageResult {
   signature: string;
 }
-
 
 class XverseWalletProvider implements IBitcoinWalletProvider {
   readonly chainType = 'BITCOIN' as const;
@@ -219,11 +223,7 @@ export class XverseXConnector extends BitcoinXConnector {
 
     if (!paymentAccount) return undefined;
 
-    this.walletProvider = new XverseWalletProvider(
-      paymentAccount.address,
-      paymentAccount.publicKey,
-      this.defaults,
-    );
+    this.walletProvider = new XverseWalletProvider(paymentAccount.address, paymentAccount.publicKey, this.defaults);
 
     return {
       address: paymentAccount.address,

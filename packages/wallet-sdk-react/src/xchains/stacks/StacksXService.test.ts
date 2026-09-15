@@ -105,10 +105,7 @@ describe('StacksXService.getBalance — native STX path', () => {
 
   it('swallows !response.ok and returns 0n (error is logged but not thrown)', async () => {
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValueOnce({ ok: false, statusText: 'Internal Server Error' }),
-    );
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({ ok: false, statusText: 'Internal Server Error' }));
 
     const service = StacksXService.getInstance();
     const result = await service.getBalance(USER, STX_TOKEN);

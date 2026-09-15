@@ -19,6 +19,7 @@
 // @stacks/transactions — values
 export {
   Cl,
+  Pc,
   serializeCV,
   cvToString,
   deserializeCV,
@@ -41,7 +42,7 @@ export {
   addressToString,
   PayloadType,
   privateKeyToPublic,
-  publicKeyToHex
+  publicKeyToHex,
 } from '@stacks/transactions';
 
 // @stacks/transactions — types

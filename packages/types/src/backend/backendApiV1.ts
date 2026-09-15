@@ -13,18 +13,18 @@ export type GetSpokeChainConfigApiResponse = SpokeChainConfigMap;
 export type GetMoneyMarketReserveAssetsApiResponse = readonly Address[];
 
 export type GetAllConfigApiResponse = {
-    version?: number;
-    supportedChains: GetChainsApiResponse;
-    supportedSwapTokens: GetSwapTokensApiResponse;
-    supportedMoneyMarketTokens: GetMoneyMarketTokensApiResponse;
-    supportedMoneyMarketReserveAssets: GetMoneyMarketReserveAssetsApiResponse;
-    relayChainIdMap: GetRelayChainIdMapApiResponse;
-    spokeChainConfig: GetSpokeChainConfigApiResponse;
+  version?: number;
+  supportedChains: GetChainsApiResponse;
+  supportedSwapTokens: GetSwapTokensApiResponse;
+  supportedMoneyMarketTokens: GetMoneyMarketTokensApiResponse;
+  supportedMoneyMarketReserveAssets: GetMoneyMarketReserveAssetsApiResponse;
+  relayChainIdMap: GetRelayChainIdMapApiResponse;
+  spokeChainConfig: GetSpokeChainConfigApiResponse;
 };
 export interface IConfigApiV1 {
-    getChains(): Promise<Result<GetChainsApiResponse>>;
-    getSwapTokens(): Promise<Result<GetSwapTokensApiResponse>>;
-    getSwapTokensByChainId(chainId: SpokeChainKey): Promise<Result<GetSwapTokensByChainIdApiResponse>>;
-    getMoneyMarketTokens(): Promise<Result<GetMoneyMarketTokensApiResponse>>;
-    getMoneyMarketTokensByChainId(chainId: SpokeChainKey): Promise<Result<GetMoneyMarketTokensByChainIdApiResponse>>;
+  getChains(): Promise<Result<GetChainsApiResponse>>;
+  getSwapTokens(): Promise<Result<GetSwapTokensApiResponse>>;
+  getSwapTokensByChainId(chainId: SpokeChainKey): Promise<Result<GetSwapTokensByChainIdApiResponse>>;
+  getMoneyMarketTokens(): Promise<Result<GetMoneyMarketTokensApiResponse>>;
+  getMoneyMarketTokensByChainId(chainId: SpokeChainKey): Promise<Result<GetMoneyMarketTokensByChainIdApiResponse>>;
 }

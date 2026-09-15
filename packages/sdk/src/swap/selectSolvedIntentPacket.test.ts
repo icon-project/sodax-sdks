@@ -47,9 +47,7 @@ describe('decodePacketIntentTarget', () => {
   });
 
   it('tolerates a 0x prefix on the payload', () => {
-    expect(decodePacketIntentTarget(`0x${CORRECT_PACKET.payload}`)).toBe(
-      '0x6382d6ccd780758c5e8a6123c33ee8f4472f96ef',
-    );
+    expect(decodePacketIntentTarget(`0x${CORRECT_PACKET.payload}`)).toBe('0x6382d6ccd780758c5e8a6123c33ee8f4472f96ef');
   });
 
   it('returns undefined for a malformed payload (no throw)', () => {

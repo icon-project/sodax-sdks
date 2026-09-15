@@ -104,7 +104,8 @@ Prefer `mutateAsyncSafe` in imperative dApp flows where user rejection is an exp
 4. Add precise query keys and invalidations.
 5. Export from the feature barrel and `src/hooks/index.ts`.
 6. For mutations, add the hook to `_mutationContract.test.ts`.
-7. Update `packages/skills` docs when public hook signatures, keys, polling intervals, or examples change.
+7. For swapsApi/bridgeApi hooks that accept `apiConfig`, add a row to `src/hooks/_apiKeyWire.test.ts` so the key-on-wire coverage stays complete.
+8. Update `packages/skills` docs when public hook signatures, keys, polling intervals, or examples change.
 
 ## AI Docs Coupling
 
@@ -124,6 +125,8 @@ Useful validation:
 pnpm --filter @sodax/skills check:ai
 ```
 
+`README.md` is generated into the docs.sodax.com Mintlify site, so its hook-reference links must be absolute `https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/…` URLs — a relative `src/…` link 404s on the published page. Gate: `pnpm check:doc-links`.
+
 ## Build And Tests
 
 ```bash
@@ -134,3 +137,9 @@ pnpm checkTs
 ```
 
 The package builds ESM with declarations. React, React DOM, and React Query are peer/external dependencies.
+
+`checkTs` typechecks test files too: `tsconfig.json` deliberately does not exclude them, and the
+shared `scripts/check-tests-typechecked.mjs` (repo root, the tail of `checkTs`) fails loudly if a
+future exclude hides them again. It also requires a one-line why-comment on every `as unknown as`
+in a test file, with pre-existing undocumented casts grandfathered in this package's
+`scripts/test-cast-comment-baseline.json`, which may only shrink.

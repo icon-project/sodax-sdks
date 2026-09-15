@@ -1,11 +1,12 @@
 // Per-chain schemas for the unsigned `tx` the Bridge API v2 returns (approve / createBridgeIntent).
 // Each validates the wire shape and transforms it to its `RawTxReturnType` variant (decimal-string →
 // `bigint`; Injective index-object bytes → `Uint8Array`). `rawTxSchemaForChainKey` picks the variant
-// by source chain key, since EVM/Solana/Sui/Stellar are wire-identical and a blind union could not
-// disambiguate them.
+// by source chain key, since EVM/Solana/Sui/Stellar/Bitcoin are wire-identical and a blind union could
+// not disambiguate them.
 //
-// Verbatim copy of `packages/swaps-api/src/rawTxSchemas.ts` (the hardened version), kept in lockstep
-// by the identical colocated test file in both packages.
+// A copy of `packages/swaps-api/src/rawTxSchemas.ts`. Nothing enforces that the two stay in step —
+// extracting them into a shared package is a tracked follow-up — and they already differ: only this
+// copy carries the `BITCOIN` branch below.
 
 import { getChainType } from '@sodax/types';
 import type { Address, ContractArgs, Hex, RawTxReturnType, SpokeChainKey } from '@sodax/types';
@@ -69,6 +70,20 @@ const StellarRawTxSchema = v.object({
   data: v.string(),
 });
 
+/**
+ * `BitcoinRawTransaction` — the Bound-built deposit: `data` is the base64 PSBT, `from` the (trading)
+ * wallet address, and `value` the output amount in satoshis as a decimal string → `bigint`. Declared
+ * separately from the wire-identical Solana/Stellar schemas so the chain dispatch stays explicit; without
+ * this branch Bitcoin fell through to {@link AnyRawTxSchema} and `value` stayed a string while
+ * `BitcoinRawTransaction.value` is typed `bigint`.
+ */
+const BitcoinRawTxSchema = v.object({
+  from: v.string(),
+  to: v.string(),
+  value: BigintFromString,
+  data: v.string(),
+});
+
 /** `InjectiveRawTransaction` — nested `signedDoc` with `Uint8Array` bytes + `bigint` account number. */
 export const InjectiveRawTxSchema = v.object({
   from: HexSchema,
@@ -105,7 +120,7 @@ const StacksRawTxSchema = v.object({
   estimatedLength: v.optional(v.number()),
 });
 
-/** Permissive fallback (Bitcoin / unmapped key): non-null object, typed as `RawTxReturnType`. */
+/** Permissive fallback for an unmapped chain key: non-null object, typed as `RawTxReturnType`. */
 const AnyRawTxSchema = v.custom<RawTxReturnType>(input => typeof input === 'object' && input !== null);
 
 /**
@@ -137,6 +152,8 @@ export function rawTxSchemaForChainKey(chainKey: string): v.GenericSchema<unknow
       return StacksRawTxSchema;
     case 'NEAR':
       return NearRawTxSchema;
+    case 'BITCOIN':
+      return BitcoinRawTxSchema;
     default:
       return AnyRawTxSchema;
   }

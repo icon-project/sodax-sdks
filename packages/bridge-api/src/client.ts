@@ -8,7 +8,7 @@ import type {
 } from '@sodax/types';
 import * as v from 'valibot';
 import type { BridgeApiConfig } from './config.js';
-import { type RequestContext, request } from './http.js';
+import { apiKeyHeader, mergeHeaders, type RequestContext, request } from './http.js';
 import { rawTxSchemaForChainKey } from './rawTxSchemas.js';
 import * as s from './schemas.js';
 
@@ -33,7 +33,8 @@ const PATHS = {
  * bodies go out as-is; every response is validated with a valibot schema (tx-bearing responses are
  * validated per source chain and transformed back to their domain shape). All failures surface as
  * a thrown `BridgeApiError`. `idempotent: true` marks the read/poll/pure-compute calls that may be
- * retried; mutating calls never are.
+ * retried; mutating calls are not, except on an apiguard 503
+ * (see `API_KEY_VERIFICATION_UNAVAILABLE_MESSAGE`).
  */
 export class BridgeApi implements IBridgeApiV2 {
   private readonly ctx: RequestContext;
@@ -44,7 +45,9 @@ export class BridgeApi implements IBridgeApiV2 {
       // Bind the global default so it works in browsers (where unbound fetch throws). A
       // caller-provided fetch is used as-is — they own its binding.
       fetchImpl: config.fetch ?? globalThis.fetch.bind(globalThis),
-      defaultHeaders: config.headers,
+      // The `apiKey` convenience option expands first so an explicit `x-api-key` header wins, in any
+      // casing — see `mergeHeaders`.
+      defaultHeaders: mergeHeaders(apiKeyHeader(config.apiKey), config.headers),
       timeout: config.timeout,
     };
   }

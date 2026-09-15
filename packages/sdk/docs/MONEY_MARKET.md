@@ -164,6 +164,15 @@ The `approve` method sets the allowance for the specified action. The spender ad
 - **Sonic (Hub) Chain**: The spender is the user's hub router contract
 - **Stellar**: Creates/updates the required trustline
 
+**Some tokens need two transactions.** A few ERC-20s of the 2017 TetherToken lineage — Ethereum
+USDT is the one in the SODAX token list today — reject an allowance change from one non-zero value
+to another. When a wallet already holds a stale allowance on such a token, `approve` sends
+`approve(0)` first, waits for it to be mined, then sends the real approval. The user signs twice.
+The SDK detects this by simulating the approval, not from a token list, so a token added or upgraded
+later is handled the same way. Nothing changes for callers: `approve` still resolves to a single
+transaction hash — the hash of the **last** transaction — and everything else is a single
+transaction as before.
+
 ```typescript
 import { type MoneyMarketSupplyParams, ChainKeys } from '@sodax/sdk';
 
@@ -712,7 +721,7 @@ if (a.ok && !a.value) {
 
 ### Migration from the legacy `error.message`-based pattern
 
-If you were on the previous CODE-string-on-`error.message` pattern (or the older `MoneyMarketError<Code>` typed shape that the public docs at <https://docs.sodax.com/developers/packages/foundation/sdk/functional-modules/money_market#error-handling> document), here are the mappings:
+If you were on the previous CODE-string-on-`error.message` pattern (or the older `MoneyMarketError<Code>` typed shape that the public docs [document](https://docs.sodax.com/developers/packages/foundation/sdk/functional-modules/money_market#error-handling)), here are the mappings:
 
 | Before | After |
 |---|---|

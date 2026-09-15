@@ -1,3 +1,4 @@
+import type { EvmRawTransaction } from '@sodax/types';
 import * as v from 'valibot';
 import { describe, expect, it } from 'vitest';
 import { EvmRawTxSchema } from './rawTxSchemas.js';
@@ -9,11 +10,13 @@ import {
   BridgeSubmitTxStatusResponseSchema,
   BridgeTokensByChainResponseSchema,
   BridgeTokensResponseSchema,
+  makeBridgeApproveResponseSchema,
   makeCreateBridgeIntentResponseSchema,
 } from './schemas.js';
 
 // The tx-bearing schemas are chain-parameterized factories; tests pin them to the EVM variant.
 const CreateBridgeIntentResponseSchema = makeCreateBridgeIntentResponseSchema(EvmRawTxSchema);
+const BridgeApproveResponseSchema = makeBridgeApproveResponseSchema(EvmRawTxSchema);
 
 // A valid EVM unsigned tx as it arrives on the wire (`value` is a decimal string).
 const evmTx = {
@@ -64,7 +67,8 @@ describe('CreateBridgeIntentResponseSchema', () => {
       tx: evmTx,
       relayData: { address: '0xa', payload: '0xb' },
     });
-    expect(parsed.tx.value).toBe(1000000000000000000n);
+    const tx = parsed.tx as EvmRawTransaction;
+    expect(tx.value).toBe(1000000000000000000n);
     expect(parsed.relayData.payload).toBe('0xb');
   });
 
@@ -75,6 +79,32 @@ describe('CreateBridgeIntentResponseSchema', () => {
   it('rejects a malformed tx (non-numeric value cannot convert to bigint)', () => {
     const bad = { tx: { ...evmTx, value: 'not-a-number' }, relayData: { address: '', payload: '' } };
     expect(v.safeParse(CreateBridgeIntentResponseSchema, bad).success).toBe(false);
+  });
+});
+
+describe('BridgeApproveResponseSchema', () => {
+  // A second, zero-allowance tx the backend returns for USDT-lineage tokens: it must be broadcast and
+  // mined BEFORE `tx`. It is optional, so a schema that omits the field drops it silently instead of
+  // failing — which is why this is pinned rather than left to the drift guard alone.
+  const resetTx = { ...evmTx, value: '0' };
+
+  it('parses an approve that carries no resetTx', () => {
+    const parsed = v.parse(BridgeApproveResponseSchema, { tx: evmTx });
+    expect((parsed.tx as EvmRawTransaction).value).toBe(1000000000000000000n);
+    expect(parsed.resetTx).toBeUndefined();
+  });
+
+  it('keeps resetTx and transforms it to the chain variant', () => {
+    const parsed = v.parse(BridgeApproveResponseSchema, { tx: evmTx, resetTx });
+    expect(parsed.resetTx).toBeDefined();
+    expect((parsed.resetTx as EvmRawTransaction).value).toBe(0n);
+    expect((parsed.resetTx as EvmRawTransaction).to).toBe(resetTx.to);
+  });
+
+  it('rejects a malformed resetTx rather than dropping it', () => {
+    expect(
+      v.safeParse(BridgeApproveResponseSchema, { tx: evmTx, resetTx: { ...resetTx, value: 'nope' } }).success,
+    ).toBe(false);
   });
 });
 

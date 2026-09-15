@@ -18,8 +18,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
   loadRadfiSession,
   useBitcoinBalance,
+  useBitcoinTradingSetup,
   useBridgeApiAllowance,
-  useBridgeApiApprove,
+  useBridgeApiApproveAndBroadcast,
   useBridgeApiCreateBridgeIntent,
   useBridgeApiFee,
   useBridgeApiSubmitTx,
@@ -34,8 +35,10 @@ import {
   type BridgeSubmitTxRequestV2,
   type CreateBridgeIntentParamsV2,
   type Hex,
+  type ApprovalProgress,
   type IBitcoinWalletProvider,
   type IStellarWalletProvider,
+  type RequestOverrideConfig,
   type SpokeChainKey,
   type StellarChainKey,
   type XToken,
@@ -49,16 +52,23 @@ import {
 } from '@sodax/wallet-sdk-react';
 import { ArrowDownUp, ArrowLeftRight, Loader2 } from 'lucide-react';
 import { formatUnits, parseUnits } from 'viem';
+import { PartnerFeeFields, usePartnerFeeDraft } from '@/components/shared/PartnerFeeFields';
 import { useAppStore } from '@/zustand/useAppStore';
 import { BitcoinSetupPanel } from '@/components/bitcoin/BitcoinSetupPanel';
 import { formatMutationFailureMessage } from '@/lib/utils';
 import type { BridgeApiOrder } from '@/components/bridge-api/OrderStatus';
-import { BRIDGE_API_CONFIG } from '@/components/bridge-api/lib/config';
-import {
-  isSignableBridgeApiChain,
-  signAndBroadcastBridgeApiTx,
-  waitForTxFinality,
-} from '@/components/bridge-api/lib/signAndBroadcast';
+import { BRIDGE_API_MAX_PARTNER_FEE_BPS, DEFAULT_BRIDGE_API_BASE_URL, envBridgeApiBaseUrl } from '@/lib/sodaxSettings';
+import { isSignableBridgeApiChain, signAndBroadcastBridgeApiTx } from '@/components/bridge-api/lib/signAndBroadcast';
+
+/** Short button label for the step the wallet is on, or `null` once that step has landed. */
+function approvalStepLabel({ step, phase, index, total }: ApprovalProgress): string | null {
+  if (phase !== 'signing' && phase !== 'broadcast') return null;
+
+  const counter = total > 1 ? ` (${index}/${total})` : '';
+  const [action, pending] = step === 'allowance-reset' ? ['Reset approval', 'Resetting…'] : ['Approve', 'Approving…'];
+
+  return `${phase === 'signing' ? action : pending}${counter}`;
+}
 
 /**
  * Bridge-api demo card — the existing on-chain bridge UI (chain/token selection, max-bridgeable,
@@ -69,7 +79,9 @@ import {
  */
 export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateAction<BridgeApiOrder[]>) => void }) {
   const { sodax } = useSodaxContext();
-  const { openWalletModal } = useAppStore();
+  const { openWalletModal, sodaxSettings } = useAppStore();
+  const bridgeApiBaseURL = sodaxSettings.bridgeApiBaseUrl ?? envBridgeApiBaseUrl ?? DEFAULT_BRIDGE_API_BASE_URL;
+  const bridgeApiConfig = useMemo((): RequestOverrideConfig => ({ baseURL: bridgeApiBaseURL }), [bridgeApiBaseURL]);
 
   const supportedTokensPerChain = useMemo(() => sodax.config.getSupportedTokensPerChain(), [sodax]);
 
@@ -85,12 +97,13 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
   const [approveError, setApproveError] = useState<string | null>(null);
   const [bridgeError, setBridgeError] = useState<string | null>(null);
   const [isApproving, setIsApproving] = useState(false);
+  // A guarded token needs two signatures; one flat "Approving…" across both looks like a double charge.
+  const [approvalProgress, setApprovalProgress] = useState<ApprovalProgress | null>(null);
   const [isBridging, setIsBridging] = useState(false);
   const [isFromBtcReady, setIsFromBtcReady] = useState(false);
   const [isToBtcReady, setIsToBtcReady] = useState(false);
   // Optional per-request partner fee (demo): a receiver address + fee percent (0.3 = 0.3%, max 1%).
-  const [feeAddress, setFeeAddress] = useState('');
-  const [feePct, setFeePct] = useState('');
+  const feeDraft = usePartnerFeeDraft({ maxBps: BRIDGE_API_MAX_PARTNER_FEE_BPS });
 
   const fromAccount = useXAccount({ xChainId: fromChainKey });
   const toAccount = useXAccount({ xChainId: toChainKey });
@@ -146,15 +159,8 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
       : toAccount.address;
   }, [toChainKey, toAccount.address]);
 
-  // Optional per-request partnerFee — routes a % of the input to `feeAddress`. Omit to use the backend default.
-  const partnerFee = useMemo(() => {
-    // Input is a PERCENT (e.g. 0.3 = 0.3%); convert to basis points (backend caps at 100 bps = 1%).
-    const pct = Number(feePct);
-    if (!feeAddress || !Number.isFinite(pct) || pct <= 0) return undefined;
-    const bps = Math.round(pct * 100);
-    if (bps <= 0 || bps > 100) return undefined;
-    return { address: feeAddress, percentage: bps };
-  }, [feeAddress, feePct]);
+  // Optional per-request partnerFee, seeded from Sodax Settings. Omit to use the backend default.
+  const partnerFee = feeDraft.partnerFee;
 
   // The wire DTO sent to every Bridge API call (swaps naming; built from the client-side selection).
   const bridgeBody = useMemo((): CreateBridgeIntentParamsV2 | undefined => {
@@ -173,16 +179,32 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
       const accessToken = loadRadfiSession(fromAccount.address)?.accessToken;
       if (accessToken) body.bound = { accessToken };
     }
+    // Stacks source: the tx is built unsigned and a Stacks address can't yield the signer public key,
+    // so it has to travel with the request (same extra the swaps showcase sends).
+    if (fromChainType === 'STACKS' && fromAccount.publicKey) {
+      body.srcPublicKey = fromAccount.publicKey;
+    }
     // Per-request partner fee — routed to `partnerFee.address`; omit to use the backend-configured fee.
     if (partnerFee) body.partnerFee = partnerFee;
     return body;
-  }, [fromToken, toToken, fromAccount.address, recipient, parsedAmount, fromChainKey, toChainKey, fromChainType, partnerFee]);
+  }, [
+    fromToken,
+    toToken,
+    fromAccount.address,
+    fromAccount.publicKey,
+    recipient,
+    parsedAmount,
+    fromChainKey,
+    toChainKey,
+    fromChainType,
+    partnerFee,
+  ]);
 
   // Live fee quote via the HTTP API — shows the fee that will be charged for the current amount + partnerFee.
   const { data: feeQuote } = useBridgeApiFee({
     params: {
       body: parsedAmount !== undefined ? { inputAmount: parsedAmount.toString(), partnerFee } : undefined,
-      apiConfig: BRIDGE_API_CONFIG,
+      apiConfig: bridgeApiConfig,
     },
   });
 
@@ -194,20 +216,16 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
     return net > 0n ? formatUnits(net, fromToken.decimals) : '0';
   }, [parsedAmount, fromToken, feeQuote, fromAmount]);
 
-  const {
-    data: allowance,
-    isLoading: isAllowanceLoading,
-    refetch: refetchAllowance,
-  } = useBridgeApiAllowance({
+  const { data: allowance, isLoading: isAllowanceLoading } = useBridgeApiAllowance({
     // Gate the allowance body behind the review dialog (mirrors the swaps-api card, whose intent params
     // are undefined until the dialog builds them). The hook enables itself on `!!body`, so passing an
     // undefined body while the dialog is closed stops `checkAllowance` firing on every amount keystroke;
     // the amount is fixed once the dialog is open, so it runs once.
-    params: { body: dialogOpen ? bridgeBody : undefined, apiConfig: BRIDGE_API_CONFIG },
+    params: { body: dialogOpen ? bridgeBody : undefined, apiConfig: bridgeApiConfig },
   });
   const hasAllowance = allowance?.valid === true;
 
-  const { mutateAsyncSafe: approve } = useBridgeApiApprove();
+  const { mutateAsyncSafe: approve } = useBridgeApiApproveAndBroadcast();
   const { mutateAsyncSafe: createBridgeIntent } = useBridgeApiCreateBridgeIntent();
   const { mutateAsyncSafe: submitTx } = useBridgeApiSubmitTx();
 
@@ -233,13 +251,24 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
     walletProvider: toWalletProvider,
   });
 
+  const fromBtcAddress = fromChainKey === ChainKeys.BITCOIN_MAINNET ? fromAccount.address : undefined;
+  const { data: fromBtcBalance } = useBitcoinBalance({ params: { address: fromBtcAddress } });
   const toBtcAddress = toChainKey === ChainKeys.BITCOIN_MAINNET ? toAccount.address : undefined;
   const { data: toBtcBalance } = useBitcoinBalance({ params: { address: toBtcAddress } });
 
-  const fromBtcWalletProvider =
-    sourceWalletProvider?.chainType === 'BITCOIN' ? (sourceWalletProvider as IBitcoinWalletProvider) : undefined;
-  const toBtcWalletProvider =
-    toWalletProvider?.chainType === 'BITCOIN' ? (toWalletProvider as IBitcoinWalletProvider) : undefined;
+  // Bitcoin trading setup — each side routes through a Bound Exchange (Radfi) trading wallet; the
+  // hook is inert unless its chain is Bitcoin. Keyed on the chain, so it does not depend on the
+  // wallet provider carrying a runtime `chainType`.
+  const sourceBitcoin = useBitcoinTradingSetup({
+    chainKey: fromChainKey,
+    walletProvider: sourceWalletProvider,
+    address: fromAccount.address,
+  });
+  const destBitcoin = useBitcoinTradingSetup({
+    chainKey: toChainKey,
+    walletProvider: toWalletProvider,
+    address: toAccount.address,
+  });
 
   const isSourceSignable = isSignableBridgeApiChain(fromChainKey) || fromChainType === 'BITCOIN';
 
@@ -264,24 +293,23 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
     setApproveError(null);
     setIsApproving(true);
     try {
-      // The API only builds the unsigned approval tx — signing and broadcasting happen here.
-      const result = await approve({ body: bridgeBody, apiConfig: BRIDGE_API_CONFIG });
+      // The hook owns plan → sign → broadcast → wait (stale-allowance reset included) and invalidates
+      // the allowance query itself.
+      const result = await approve({
+        body: bridgeBody,
+        walletProvider: sourceWalletProvider,
+        apiConfig: bridgeApiConfig,
+        onProgress: setApprovalProgress,
+      });
       if (!result.ok) {
         setApproveError(formatMutationFailureMessage(result.error, 'Approve failed'));
         return;
       }
-      const txHash = await signAndBroadcastBridgeApiTx({
-        chainKey: fromChainKey,
-        tx: result.value.tx,
-        walletProvider: sourceWalletProvider,
-      });
-      await waitForTxFinality(fromChainKey, sourceWalletProvider, txHash);
-      // The approve hook can't invalidate the allowance query (confirmation is client-side) — refetch.
-      await refetchAllowance();
     } catch (error) {
       setApproveError(formatMutationFailureMessage(error, 'Approve signing failed'));
     } finally {
       setIsApproving(false);
+      setApprovalProgress(null);
     }
   };
 
@@ -291,7 +319,7 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
     setIsBridging(true);
     try {
       // 1. The API builds the unsigned spoke-deposit tx + relay envelope.
-      const created = await createBridgeIntent({ body: bridgeBody, apiConfig: BRIDGE_API_CONFIG });
+      const created = await createBridgeIntent({ body: bridgeBody, apiConfig: bridgeApiConfig });
       if (!created.ok) {
         setBridgeError(formatMutationFailureMessage(created.error, 'Create bridge intent failed'));
         return;
@@ -331,16 +359,13 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
         walletAddress: fromAccount.address,
         relayData,
       };
-      const submitted = await submitTx({ request, apiConfig: BRIDGE_API_CONFIG });
+      const submitted = await submitTx({ request, apiConfig: bridgeApiConfig });
       if (!submitted.ok) {
         setBridgeError(formatMutationFailureMessage(submitted.error, 'Submit tx failed'));
         return;
       }
 
-      setOrders(prev => [
-        ...prev,
-        { txHash: spokeTxHash, srcChainKey: fromChainKey, apiBaseURL: BRIDGE_API_CONFIG.baseURL },
-      ]);
+      setOrders(prev => [...prev, { txHash: spokeTxHash, srcChainKey: fromChainKey, apiBaseURL: bridgeApiBaseURL }]);
       setDialogOpen(false);
     } catch (error) {
       setBridgeError(formatMutationFailureMessage(error, 'Bridge signing failed'));
@@ -371,6 +396,7 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
   const isBridgeDisabled =
     isBridging ||
     !bridgeBody ||
+    !!feeDraft.error ||
     (fromChainType === 'EVM' && !hasAllowance) ||
     (fromChainKey === ChainKeys.BITCOIN_MAINNET && !isFromBtcReady) ||
     (toChainKey === ChainKeys.BITCOIN_MAINNET && !isToBtcReady) ||
@@ -425,23 +451,7 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
           </div>
 
           <div className="grow">
-            <Label>Partner fee (optional)</Label>
-            <div className="flex space-x-2">
-              <Input
-                type="text"
-                placeholder="Fee receiver address (0x…)"
-                value={feeAddress}
-                onChange={e => setFeeAddress(e.target.value)}
-              />
-              <Input
-                type="number"
-                step="0.1"
-                className="w-[130px]"
-                placeholder="% (max 1)"
-                value={feePct}
-                onChange={e => setFeePct(e.target.value)}
-              />
-            </div>
+            <PartnerFeeFields draft={feeDraft} unsetBehavior="use the backend's configured fee" />
             {feeQuote && fromToken ? (
               <p className="mt-1 text-xs text-muted-foreground">
                 Fee: {formatUnits(BigInt(feeQuote.fee), fromToken.decimals)} {fromToken.symbol}
@@ -461,6 +471,16 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
               )}
             </div>
           </div>
+
+          {/* A Bitcoin source spends from the Bound trading wallet, so funding it is a precondition for
+              bridging at all — not a confirmation step. Each panel sits with the side it belongs to. */}
+          {sourceBitcoin.wallet && (
+            <BitcoinSetupPanel
+              walletProvider={sourceBitcoin.wallet}
+              onReadyChange={setIsFromBtcReady}
+              nativeBalance={fromBtcBalance}
+            />
+          )}
 
           <div className="flex justify-center">
             <Button variant="outline" size="icon" onClick={handleSwitch}>
@@ -523,6 +543,15 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
               )}
             </div>
           </div>
+
+          {destBitcoin.wallet && (
+            <BitcoinSetupPanel
+              walletProvider={destBitcoin.wallet}
+              onReadyChange={setIsToBtcReady}
+              nativeBalance={toBtcBalance}
+              isDestination
+            />
+          )}
         </CardContent>
 
         <CardFooter className="flex flex-col space-y-4">
@@ -544,7 +573,7 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
           <Button
             className="w-full"
             onClick={handleOpenDialog}
-            disabled={!bridgeBody || !isBridgeable || !isSourceSignable}
+            disabled={!bridgeBody || !isBridgeable || !isSourceSignable || !!feeDraft.error}
           >
             Bridge
           </Button>
@@ -578,19 +607,6 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
             )}
           </div>
 
-          {fromBtcWalletProvider && fromChainKey === ChainKeys.BITCOIN_MAINNET && (
-            <BitcoinSetupPanel walletProvider={fromBtcWalletProvider} onReadyChange={setIsFromBtcReady} />
-          )}
-
-          {toBtcWalletProvider && toChainKey === ChainKeys.BITCOIN_MAINNET && toBtcBalance !== undefined && (
-            <BitcoinSetupPanel
-              walletProvider={toBtcWalletProvider}
-              onReadyChange={setIsToBtcReady}
-              nativeBalance={toBtcBalance}
-              isDestination
-            />
-          )}
-
           {(approveError ?? bridgeError) && (
             <div className="text-red-500 text-sm space-y-1">
               {approveError ? <div>{approveError}</div> : null}
@@ -605,7 +621,16 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
                 onClick={handleApprove}
                 disabled={isAllowanceLoading || hasAllowance || isApproving}
               >
-                {isApproving ? 'Approving…' : hasAllowance ? 'Approved' : 'Approve'}
+                {isApproving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />{' '}
+                    {(approvalProgress && approvalStepLabel(approvalProgress)) ?? 'Approving…'}
+                  </>
+                ) : hasAllowance ? (
+                  'Approved'
+                ) : (
+                  'Approve'
+                )}
               </Button>
             )}
 

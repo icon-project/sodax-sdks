@@ -42,6 +42,50 @@ const PRIVATE_KEY = '0xS1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF12345678
 const TX_HASH = 'tx-hash-123';
 const RECEIPT_RAW = { hash: TX_HASH, _links: { self: { href: 'https://h/tx' } } };
 
+describe('StellarWalletProvider — signer selection', () => {
+  it('forwards a requested address to the wallet so it cannot sign with its active account', async () => {
+    // Browser wallets otherwise sign with the active account, producing valid XDR from the wrong signer.
+    const signTransaction = vi.fn().mockResolvedValue({ signedTxXdr: 'signed' });
+    const provider = new StellarWalletProvider({
+      type: 'BROWSER_EXTENSION',
+      walletsKit: { getAddress: vi.fn(), signTransaction },
+      network: 'PUBLIC',
+    });
+
+    await provider.signTransaction('xdr', { address: 'GWANTED' });
+
+    expect(signTransaction).toHaveBeenCalledWith('xdr', {
+      networkPassphrase: 'PUBLIC_PASS',
+      address: 'GWANTED',
+    });
+  });
+
+  it('omits address entirely when the caller does not name one', async () => {
+    const signTransaction = vi.fn().mockResolvedValue({ signedTxXdr: 'signed' });
+    const provider = new StellarWalletProvider({
+      type: 'BROWSER_EXTENSION',
+      walletsKit: { getAddress: vi.fn(), signTransaction },
+      network: 'PUBLIC',
+    });
+
+    await provider.signTransaction('xdr');
+
+    expect(signTransaction).toHaveBeenCalledWith('xdr', { networkPassphrase: 'PUBLIC_PASS' });
+  });
+
+  it('refuses to sign as an address the private key does not own', async () => {
+    const provider = new StellarWalletProvider({ type: 'PRIVATE_KEY', privateKey: PRIVATE_KEY, network: 'PUBLIC' });
+
+    await expect(provider.signTransaction('xdr', { address: 'GSOMEONEELSE' })).rejects.toThrow(StellarWalletError);
+  });
+
+  it('signs when the requested address matches the private key', async () => {
+    const provider = new StellarWalletProvider({ type: 'PRIVATE_KEY', privateKey: PRIVATE_KEY, network: 'PUBLIC' });
+
+    await expect(provider.signTransaction('xdr', { address: 'GABC' })).resolves.toBeDefined();
+  });
+});
+
 describe('StellarWalletProvider', () => {
   describe('constructor', () => {
     it('initializes with private-key config', () => {
@@ -100,7 +144,6 @@ describe('StellarWalletProvider', () => {
 
     it('uses defaults.pollInterval to space retries and respects defaults.pollTimeout', async () => {
       vi.useFakeTimers();
-      // Fail first 2 lookups, succeed on 3rd
       transactionCall
         .mockRejectedValueOnce(new Error('not found'))
         .mockRejectedValueOnce(new Error('not found'))
@@ -261,7 +304,6 @@ describe('StellarWalletProvider', () => {
         data: 'unsigned-xdr',
       });
 
-      // PK signTransaction re-serializes to 'signed-xdr'; that is what gets submitted.
       expect(fromXDR).toHaveBeenCalledWith('signed-xdr', 'PUBLIC_PASS');
       expect(sorobanSendTransaction).toHaveBeenCalledTimes(1);
       expect(hash).toBe(TX_HASH);

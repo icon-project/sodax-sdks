@@ -1,6 +1,12 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BridgeApiError } from './errors.js';
-import { type RequestContext, buildQuery, buildUrl, request } from './http.js';
+import {
+  API_KEY_VERIFICATION_UNAVAILABLE_MESSAGE,
+  type RequestContext,
+  buildQuery,
+  buildUrl,
+  request,
+} from './http.js';
 
 const jsonResponse = (data: unknown, status = 200): Response =>
   new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });
@@ -35,7 +41,7 @@ describe('buildUrl', () => {
 
 describe('request', () => {
   it('returns the parsed body on success and calls the right URL/method', async () => {
-    const fetchImpl = vi.fn(async () => jsonResponse({ fee: '5' }));
+    const fetchImpl = vi.fn<typeof globalThis.fetch>(async () => jsonResponse({ fee: '5' }));
     const out = await request(ctx(fetchImpl), {
       method: 'POST',
       path: '/bridge/fee',
@@ -53,7 +59,7 @@ describe('request', () => {
   });
 
   it('sends no body and no Content-Type for a bodyless GET', async () => {
-    const fetchImpl = vi.fn(async () => jsonResponse([]));
+    const fetchImpl = vi.fn<typeof globalThis.fetch>(async () => jsonResponse([]));
     await request(ctx(fetchImpl), { method: 'GET', path: '/bridge/tokens', endpoint: 'getTokens', parse: identity });
     const [, init] = fetchImpl.mock.calls[0] ?? [];
     expect(init?.body).toBeUndefined();
@@ -61,7 +67,7 @@ describe('request', () => {
   });
 
   it('throws VALIDATION_ERROR (before fetch) when the body carries a stray bigint', async () => {
-    const fetchImpl = vi.fn(async () => jsonResponse({}));
+    const fetchImpl = vi.fn<typeof globalThis.fetch>(async () => jsonResponse({}));
     await expect(
       request(ctx(fetchImpl), {
         method: 'POST',
@@ -75,7 +81,7 @@ describe('request', () => {
   });
 
   it('maps a non-2xx to HTTP_ERROR with status and parsed body', async () => {
-    const fetchImpl = vi.fn(async () => jsonResponse({ message: 'bad request' }, 400));
+    const fetchImpl = vi.fn<typeof globalThis.fetch>(async () => jsonResponse({ message: 'bad request' }, 400));
     const err = await request(ctx(fetchImpl), {
       method: 'POST',
       path: '/x',
@@ -83,6 +89,7 @@ describe('request', () => {
       parse: identity,
     }).catch(e => e as BridgeApiError);
     expect(err).toBeInstanceOf(BridgeApiError);
+    if (!(err instanceof BridgeApiError)) throw new Error('expected a BridgeApiError');
     expect(err.code).toBe('HTTP_ERROR');
     expect(err.context.status).toBe(400);
     expect(err.context.body).toEqual({ message: 'bad request' });
@@ -90,14 +97,14 @@ describe('request', () => {
   });
 
   it('maps invalid JSON on a 2xx to PARSE_ERROR', async () => {
-    const fetchImpl = vi.fn(async () => new Response('not json', { status: 200 }));
+    const fetchImpl = vi.fn<typeof globalThis.fetch>(async () => new Response('not json', { status: 200 }));
     await expect(
       request(ctx(fetchImpl), { method: 'GET', path: '/x', endpoint: 'getTokens', parse: identity }),
     ).rejects.toMatchObject({ code: 'PARSE_ERROR' });
   });
 
   it('maps a parse/validation throw to VALIDATION_ERROR', async () => {
-    const fetchImpl = vi.fn(async () => jsonResponse({ wrong: true }));
+    const fetchImpl = vi.fn<typeof globalThis.fetch>(async () => jsonResponse({ wrong: true }));
     const parse = () => {
       throw new Error('schema mismatch');
     };
@@ -107,7 +114,7 @@ describe('request', () => {
   });
 
   it('maps a thrown fetch to NETWORK_ERROR', async () => {
-    const fetchImpl = vi.fn(async () => {
+    const fetchImpl = vi.fn<typeof globalThis.fetch>(async () => {
       throw new Error('offline');
     });
     await expect(
@@ -132,7 +139,7 @@ describe('request', () => {
   });
 
   it('gives up after the retry budget on a persistent network error', async () => {
-    const fetchImpl = vi.fn(async () => {
+    const fetchImpl = vi.fn<typeof globalThis.fetch>(async () => {
       throw new Error('offline');
     });
     await expect(
@@ -141,14 +148,16 @@ describe('request', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(3); // 1 + MAX_RETRIES(2)
   });
 
-  it('retries an idempotent call on a transient 503 then succeeds', async () => {
+  it.each([
+    408, 429, 500, 502, 503, 504,
+  ])('retries an idempotent call on transient status %i then succeeds', async status => {
     const fetchImpl = vi
       .fn<typeof globalThis.fetch>()
-      .mockResolvedValueOnce(jsonResponse({}, 503))
+      .mockResolvedValueOnce(jsonResponse({}, status))
       .mockResolvedValueOnce(jsonResponse({ ok: true }));
     const out = await request(ctx(fetchImpl), {
       method: 'GET',
-      path: '/bridge/tokens',
+      path: '/x',
       endpoint: 'getTokens',
       parse: identity,
       idempotent: true,
@@ -157,27 +166,8 @@ describe('request', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
-  it.each([408, 429, 500, 502, 503, 504])(
-    'retries an idempotent call on transient status %i then succeeds',
-    async status => {
-      const fetchImpl = vi
-        .fn<typeof globalThis.fetch>()
-        .mockResolvedValueOnce(jsonResponse({}, status))
-        .mockResolvedValueOnce(jsonResponse({ ok: true }));
-      const out = await request(ctx(fetchImpl), {
-        method: 'GET',
-        path: '/x',
-        endpoint: 'getTokens',
-        parse: identity,
-        idempotent: true,
-      });
-      expect(out).toEqual({ ok: true });
-      expect(fetchImpl).toHaveBeenCalledTimes(2);
-    },
-  );
-
   it.each([400, 404, 501])('never retries an idempotent call on non-transient status %i', async status => {
-    const fetchImpl = vi.fn(async () => jsonResponse({}, status));
+    const fetchImpl = vi.fn<typeof globalThis.fetch>(async () => jsonResponse({}, status));
     await expect(
       request(ctx(fetchImpl), { method: 'GET', path: '/x', endpoint: 'getTokens', parse: identity, idempotent: true }),
     ).rejects.toMatchObject({ code: 'HTTP_ERROR', context: { status } });
@@ -185,7 +175,7 @@ describe('request', () => {
   });
 
   it('gives up after the retry budget for a persistently failing idempotent call', async () => {
-    const fetchImpl = vi.fn(async () => jsonResponse({}, 503));
+    const fetchImpl = vi.fn<typeof globalThis.fetch>(async () => jsonResponse({}, 503));
     await expect(
       request(ctx(fetchImpl), {
         method: 'GET',
@@ -198,8 +188,8 @@ describe('request', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(3); // 1 + MAX_RETRIES(2)
   });
 
-  it('never retries a non-idempotent call', async () => {
-    const fetchImpl = vi.fn(async () => jsonResponse({}, 503));
+  it('never retries a non-idempotent call on a plain 503', async () => {
+    const fetchImpl = vi.fn<typeof globalThis.fetch>(async () => jsonResponse({}, 503));
     await expect(
       request(ctx(fetchImpl), {
         method: 'POST',
@@ -209,6 +199,99 @@ describe('request', () => {
       }),
     ).rejects.toMatchObject({ code: 'HTTP_ERROR' });
     expect(fetchImpl).toHaveBeenCalledOnce();
+  });
+
+  it('never retries a non-idempotent call on a network error', async () => {
+    // The thrown-fetch branch has its own idempotency guard: the request may already have reached the
+    // backend, so replaying a mutation could build a second intent.
+    const fetchImpl = vi.fn<typeof globalThis.fetch>(async () => {
+      throw new Error('offline');
+    });
+    await expect(
+      request(ctx(fetchImpl), {
+        method: 'POST',
+        path: '/bridge/intents',
+        endpoint: 'createBridgeIntent',
+        parse: identity,
+      }),
+    ).rejects.toMatchObject({ code: 'NETWORK_ERROR' });
+    expect(fetchImpl).toHaveBeenCalledOnce();
+  });
+
+  describe('apiguard verification 503', () => {
+    // Standard NestJS error body the apiguard returns when key verification is down.
+    const apiGuardBody = {
+      statusCode: 503,
+      message: API_KEY_VERIFICATION_UNAVAILABLE_MESSAGE,
+      error: 'Service Unavailable',
+    };
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('retries a mutation after a backoff and succeeds', async () => {
+      vi.useFakeTimers();
+      const fetchImpl = vi
+        .fn<typeof globalThis.fetch>()
+        .mockResolvedValueOnce(jsonResponse(apiGuardBody, 503))
+        .mockResolvedValueOnce(jsonResponse({ ok: true }));
+      const pending = request(ctx(fetchImpl), {
+        method: 'POST',
+        path: '/bridge/intents',
+        endpoint: 'createBridgeIntent',
+        parse: identity,
+      });
+      // The retry backs off: nothing is replayed until the 250 ms delay elapses.
+      await vi.advanceTimersByTimeAsync(249);
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1);
+      await expect(pending).resolves.toEqual({ ok: true });
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+    });
+
+    it('gives up after the retry budget when the outage persists', async () => {
+      vi.useFakeTimers();
+      const fetchImpl = vi.fn<typeof globalThis.fetch>(async () => jsonResponse(apiGuardBody, 503));
+      const pending = request(ctx(fetchImpl), {
+        method: 'POST',
+        path: '/bridge/submit-tx',
+        endpoint: 'submitTx',
+        parse: identity,
+      });
+      const rejection = expect(pending).rejects.toMatchObject({ code: 'HTTP_ERROR', context: { status: 503 } });
+      await vi.advanceTimersByTimeAsync(250 + 500); // attempt-scaled backoffs before attempts 2 and 3
+      await rejection;
+      expect(fetchImpl).toHaveBeenCalledTimes(3); // 1 + MAX_RETRIES(2)
+    });
+
+    it('does not retry a plain 503 that is not the apiguard message', async () => {
+      // Only the apiguard's exact message is replay-safe for a mutation; any other 503 may have
+      // reached the route handler.
+      const fetchImpl = vi.fn<typeof globalThis.fetch>(async () => jsonResponse({ message: 'down' }, 503));
+      await expect(
+        request(ctx(fetchImpl), {
+          method: 'POST',
+          path: '/bridge/intents',
+          endpoint: 'createBridgeIntent',
+          parse: identity,
+        }),
+      ).rejects.toMatchObject({ code: 'HTTP_ERROR', context: { status: 503 } });
+      expect(fetchImpl).toHaveBeenCalledOnce();
+    });
+
+    it('surfaces TIMEOUT_ERROR when the deadline fires during the backoff sleep', async () => {
+      vi.useFakeTimers();
+      const fetchImpl = vi.fn<typeof globalThis.fetch>(async () => jsonResponse(apiGuardBody, 503));
+      const pending = request(
+        { baseUrl: 'https://api.test', fetchImpl, timeout: 100 },
+        { method: 'POST', path: '/bridge/intents', endpoint: 'createBridgeIntent', parse: identity },
+      );
+      const rejection = expect(pending).rejects.toMatchObject({ code: 'TIMEOUT_ERROR' });
+      await vi.advanceTimersByTimeAsync(100); // deadline < backoff delay: the sleep ends early, as a timeout
+      await rejection;
+      expect(fetchImpl).toHaveBeenCalledOnce();
+    });
   });
 
   it('aborts the whole call as TIMEOUT_ERROR when the deadline elapses, without retrying', async () => {
@@ -285,7 +368,7 @@ describe('request', () => {
   });
 
   it('passes no abort signal and never times out when timeout is unset', async () => {
-    const fetchImpl = vi.fn(async () => jsonResponse({ ok: true }));
+    const fetchImpl = vi.fn<typeof globalThis.fetch>(async () => jsonResponse({ ok: true }));
     const out = await request(ctx(fetchImpl), {
       method: 'GET',
       path: '/x',

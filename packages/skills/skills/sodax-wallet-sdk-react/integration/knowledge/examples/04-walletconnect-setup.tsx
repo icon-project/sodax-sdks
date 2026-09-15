@@ -59,7 +59,7 @@ function ConnectWithWalletConnect() {
   const account = useXAccount({ xChainType: 'EVM' });
   const disconnect = useXDisconnect();
 
-  const wcConnector = connectors.find((c) => c.id === 'walletConnect');
+  const wcConnector = connectors.find(c => c.id === 'walletConnect');
 
   // Hide the modal while wagmi/WalletConnect's QR modal owns the screen
   if (modal.state.kind === 'connecting' && modal.state.connector.id === 'walletConnect') {

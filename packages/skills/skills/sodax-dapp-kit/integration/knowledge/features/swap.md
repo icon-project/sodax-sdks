@@ -13,6 +13,7 @@ Pair: [`features/swap.md`](../../../migration-v1-to-v2/knowledge/features/swap.m
 useQuote({ params: { payload }, queryOptions });                                  // Real-time quote (3s)
 useSwapAllowance({ params: { payload, srcChainKey, walletProvider }, queryOptions }); // allowance (2s)
 useStatus({ params: { intentTxHash }, queryOptions });                            // Intent execution status (3s)
+useDetailedStatus({ params: { srcChainKey, srcTxHash }, queryOptions });          // Swap status by source tx (3s)
 
 // Mutations — domain inputs flow through mutate(vars), see Mutation params below
 useSwap({ mutationOptions });
@@ -24,6 +25,11 @@ useCancelLimitOrder({ mutationOptions });           // TVars are FLAT: { srcChai
 
 (In actual code, you import each hook directly: `import { useSwap, useSwapAllowance, ... } from '@sodax/dapp-kit'`.)
 
+`use*Approve` is unchanged and still resolves to one transaction hash, but the SDK may send **two**
+transactions on a token that rejects a non-zero to non-zero allowance change (Ethereum USDT today) —
+the user signs twice and the hash is the **last** one's. An `isPending`-driven "Approving…" should say
+so. See "Approve hooks can prompt the wallet twice" in [`architecture.md`](../architecture.md).
+
 ## Mutation params
 
 ```ts
@@ -32,10 +38,16 @@ const { mutateAsyncSafe: swap } = useSwap();
 
 // vars shape (TVars):
 type UseSwapVars<K extends SpokeChainKey = SpokeChainKey> = Omit<SwapActionParams<K, false>, 'raw'>;
-// = { params: CreateIntentParams; walletProvider: GetWalletProviderType<K> }
+// = { params: CreateIntentParams; walletProvider: GetWalletProviderType<K>;
+//     extras?; timeout?; skipSimulation? }  // extras: per-action partnerFee / apiKey overrides
 
 const result = await swap({ params: intentParams, walletProvider });
 ```
+
+`vars` also carries the SDK's optional exec fields: `timeout` (per-attempt relay budget),
+`skipSimulation`, and `extras` — per-action overrides of the configured swap `partnerFee` and the
+backend API key (`extras.apiKey`, sent as `x-api-key` on the backend submit-tx leg). Both fall back to
+the `SodaxProvider` config when omitted.
 
 `useSwapApprove` follows the same `{ params, walletProvider }` shape via `mutate(vars)`, where `params` is `CreateIntentParams<K> | CreateLimitOrderParams<K>` (the union — limit-order params also flow through `useSwapApprove`).
 
@@ -71,6 +83,15 @@ type UseStatusParams = ReadHookParams<
   Result<SolverIntentStatusResponse, SolverErrorResponse> | undefined,
   { intentTxHash: Hex | undefined }
 >;
+
+// useDetailedStatus — keyed on the SOURCE tx (useStatus takes the HUB tx). Also Result-wrapped.
+type UseDetailedStatusParams = ReadHookParams<
+  Result<DetailedSwapStatus, DetailedStatusError> | undefined,
+  { srcChainKey: SpokeChainKey | undefined; srcTxHash: string | undefined }
+>;
+// DetailedSwapStatus is a tagged union — narrow on `source`, do not read `.status` off the top level:
+//   { source: 'backend'; data: SubmitTxStatusDataV2 }
+// | { source: 'solver'; dstTxHash: Hex; data: SolverIntentStatusResponse }
 ```
 
 ## Return shapes
@@ -84,7 +105,27 @@ type UseStatusParams = ReadHookParams<
 | `useCreateLimitOrder` | `SafeUseMutationResult<{ intent, intentDeliveryInfo, ... }, Error, ...>` |
 | `useQuote` | `UseQueryResult<Result<SolverIntentQuoteResponse, SolverErrorResponse> \| undefined, Error>` — `data?.ok` branching required; polls 3 s |
 | `useSwapAllowance` | `UseQueryResult<boolean, Error>` — `data` is already-unwrapped `boolean \| undefined`; truthy when approved; polls 2 s |
-| `useStatus` | `UseQueryResult<Result<SolverIntentStatusResponse, SolverErrorResponse> \| undefined, Error>` — Result-wrapped like `useQuote`; `data?.ok` branching required; polls 3 s |
+| `useStatus` | `UseQueryResult<Result<SolverIntentStatusResponse, SolverErrorResponse> \| undefined, Error>` — Result-wrapped like `useQuote`; `data?.ok` branching required; polls 3 s; stops on status `3`/`4`, and after 40 consecutive NOT_FOUND fetches |
+| `useDetailedStatus` | `UseQueryResult<Result<DetailedSwapStatus, DetailedStatusError> \| undefined, Error>` — Result-wrapped tagged union; polls 3 s; stops when the answering source is terminal (backend `'solved'`, or solver `SOLVED`/`FAILED`), and — like `useStatus` — after 40 consecutive ambiguous reads (solver `NOT_FOUND`, or a relay with no packet for the tx); a dependency outage keeps polling |
+
+### `useStatus` vs `useDetailedStatus`
+
+Different transactions — pick by which hash you hold:
+
+- `useStatus` takes the **hub** tx hash (`intentDeliveryInfo.dstTxHash`) and always asks the solver.
+- `useDetailedStatus` takes the **source** tx hash plus chain key (`intentDeliveryInfo.srcTxHash` + `srcChainKey`) and routes to whichever source can answer.
+
+`useDetailedStatus` invents no status of its own — it returns the backend submit-tx record while that is in play, otherwise the solver's answer, tagged with `source`. The union is discriminated, so narrow on the field (no type guards are exported):
+
+```ts
+// @ai-snippets-skip
+if (data?.ok) {
+  if (data.value.source === 'backend') data.value.data.status;      // 'pending' | … | 'solved' | 'failed'
+  if (data.value.source === 'solver') data.value.data.status;       // SolverIntentStatusCode
+}
+```
+
+That is what distinguishes it from `useSwapsApiSubmitTxStatus`, which reads the backend record directly — 404 when none exists, and a stale or abandoned record for a swap the client-side fallback completed. A swap whose relay packet has not landed has no hub tx hash and reads as `LOOKUP_FAILED`; that spends the same 40-read budget as a solver `NOT_FOUND`, so a swap nothing can resolve stops instead of polling forever. A dependency outage does **not** spend the budget — it keeps polling so the read recovers on its own.
 
 ## Gotchas
 

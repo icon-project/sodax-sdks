@@ -118,9 +118,7 @@ describe('StacksXConnector.connect', () => {
     vi.stubGlobal('window', {});
     const c = new StacksXConnector(CONFIG);
 
-    await expect(c.connect()).rejects.toThrow(
-      'Leather is not installed. Install the extension and reload the page.',
-    );
+    await expect(c.connect()).rejects.toThrow('Leather is not installed. Install the extension and reload the page.');
   });
 
   it('returns the XAccount when stx_getAddresses yields an entry with purpose="stacks"', async () => {

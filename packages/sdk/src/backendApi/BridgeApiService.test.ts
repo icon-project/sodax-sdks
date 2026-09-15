@@ -16,14 +16,11 @@
  * `toCreateBridgeIntentParamsV2` converts SDK names + bigint.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  DEFAULT_BACKEND_API_ENDPOINT,
-  type BridgeSubmitTxRequestV2,
-  type CreateBridgeIntentParamsV2,
-} from '@sodax/types';
+import { DEFAULT_API_BASE_URL, type BridgeSubmitTxRequestV2, type CreateBridgeIntentParamsV2 } from '@sodax/types';
 import { Sodax } from '../shared/entities/Sodax.js';
 import { BridgeApiService, toCreateBridgeIntentParamsV2 } from './BridgeApiService.js';
 import { SodaxError } from '../errors/SodaxError.js';
+import { isAuthFailure, isSodaxError } from '../errors/guards.js';
 import { BridgeApiError } from '@sodax/bridge-api';
 
 // --- fetch stub -----------------------------------------------------------
@@ -32,7 +29,7 @@ vi.stubGlobal('fetch', mockFetch);
 
 // --- fixtures -------------------------------------------------------------
 const sodax = new Sodax();
-const BASE = DEFAULT_BACKEND_API_ENDPOINT;
+const BASE = DEFAULT_API_BASE_URL;
 const TX_HASH = '0x46b053464f50836328b6158e1e33e5cf66c0e3ebe5004d30459b23acae5047a0';
 
 const sampleCreateBridgeIntentParams: CreateBridgeIntentParamsV2 = {
@@ -201,6 +198,22 @@ describe('BridgeApiService happy paths (validated responses)', () => {
     expect(result).toEqual({ ok: true, value: { valid: true } });
   });
 
+  it('approve returns ok:true with { tx, resetTx } (both tx.value decimal strings → bigint)', async () => {
+    const approveResponse = {
+      tx: { from: '0x1', to: '0x2', value: '0', data: '0x' },
+      resetTx: { from: '0x1', to: '0x2', value: '0', data: '0xreset' },
+    };
+    mockFetch.mockResolvedValueOnce(okResponse(approveResponse));
+    const result = await sodax.api.bridge.approve(sampleCreateBridgeIntentParams);
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        tx: { ...approveResponse.tx, value: 0n },
+        resetTx: { ...approveResponse.resetTx, value: 0n },
+      },
+    });
+  });
+
   it('createBridgeIntent returns ok:true with { tx, relayData } (tx.value decimal string → bigint)', async () => {
     mockFetch.mockResolvedValueOnce(okResponse(createBridgeIntentResponse));
     const result = await sodax.api.bridge.createBridgeIntent(sampleCreateBridgeIntentParams);
@@ -349,6 +362,19 @@ describe('BridgeApiService response validation', () => {
     }
   });
 
+  it('rejects approve when resetTx is malformed', async () => {
+    mockFetch.mockResolvedValueOnce(
+      okResponse({ tx: { from: '0x1', to: '0x2', value: '0', data: '0x' }, resetTx: { from: '0x1' } }),
+    );
+    const result = await sodax.api.bridge.approve(sampleCreateBridgeIntentParams);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      const err = result.error as SodaxError;
+      expect(err.code).toBe('EXTERNAL_API_ERROR');
+      expect(err.feature).toBe('backend');
+    }
+  });
+
   it('rejects getSubmitTxStatus when the data envelope is missing', async () => {
     mockFetch.mockResolvedValueOnce(okResponse({ success: true }));
     const result = await sodax.api.bridge.getSubmitTxStatus({ txHash: '0xabc', srcChainKey: '0xa4b1.arbitrum' });
@@ -451,6 +477,18 @@ describe('BridgeApiService error propagation', () => {
     }
     expect(mockFetch).toHaveBeenCalledTimes(3); // network errors are retryable for idempotent calls
   });
+
+  it.each([401, 403])('lifts a %d onto error.context so isAuthFailure recognizes it', async status => {
+    // Without the lifted status a rejected key is indistinguishable from a transient failure, and a
+    // keyed bridge submit-tx burns its whole attempt budget re-sending it.
+    mockFetch.mockResolvedValueOnce(httpErrorResponse(status, 'Unauthorized'));
+    const result = await sodax.api.bridge.getTokens();
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(isSodaxError(result.error) && result.error.context?.status).toBe(status);
+      expect(isAuthFailure(result.error)).toBe(true);
+    }
+  });
 });
 
 // =========================================================================
@@ -519,5 +557,79 @@ describe('BridgeApiService utilities', () => {
       expect.any(String),
       expect.objectContaining({ headers: expect.objectContaining({ 'X-API-Key': 'api-key-123' }) }),
     );
+  });
+
+  it('a repeated mixed-casing update sends the newest value, not a stale case variant', async () => {
+    // Updating an existing object key does NOT move it in insertion order, so a raw
+    // `headers[name] = value` would leave the older casing last and let it win the merge.
+    const service = new BridgeApiService({ baseURL: BASE, timeout: 30_000, headers: {} });
+    service.setHeaders({ 'x-trace': 'v1' });
+    service.setHeaders({ 'X-Trace': 'v2' });
+    service.setHeaders({ 'x-trace': 'v3' });
+    mockFetch.mockResolvedValueOnce(okResponse(tokensResponse));
+
+    await service.getTokens();
+
+    const headers = mockFetch.mock.calls[0]?.[1]?.headers as Record<string, string>;
+    expect(Object.keys(headers).filter(h => h.toLowerCase() === 'x-trace')).toHaveLength(1);
+    expect(new Headers(headers).get('x-trace')).toBe('v3');
+  });
+});
+
+// =========================================================================
+// API key → x-api-key. Precedence: per-call header > per-call apiKey > configured header > configured
+// key. The adapter builds a `@sodax/bridge-api` client per call, so the key has to survive that hop —
+// `BridgeService` sends the per-action key as `overrideConfig.apiKey` on the submit-tx leg.
+// =========================================================================
+
+const sentHeaders = (): Record<string, string> => mockFetch.mock.calls[0]?.[1]?.headers;
+
+describe('BridgeApiService API key', () => {
+  it('sends a configured x-api-key header on every request', async () => {
+    const service = new BridgeApiService({ baseURL: BASE, timeout: 30_000, headers: { 'x-api-key': 'config-key' } });
+    mockFetch.mockResolvedValueOnce(okResponse(tokensResponse));
+    await service.getTokens();
+    expect(sentHeaders()['x-api-key']).toBe('config-key');
+  });
+
+  it('bakes the instance key from new Sodax({ apiKey }) into every bridge request', async () => {
+    const keyed = new Sodax({ apiKey: 'global-key', logger: 'silent' });
+    mockFetch.mockResolvedValueOnce(okResponse(tokensResponse));
+    await keyed.api.bridge.getTokens();
+    expect(sentHeaders()['x-api-key']).toBe('global-key');
+  });
+
+  it('lets a per-call apiKey win over the configured key', async () => {
+    const keyed = new Sodax({ apiKey: 'global-key', logger: 'silent' });
+    mockFetch.mockResolvedValueOnce(okResponse(tokensResponse));
+    await keyed.api.bridge.getTokens({ apiKey: 'call-key' });
+    expect(sentHeaders()['x-api-key']).toBe('call-key');
+  });
+
+  it('lets a per-call x-api-key header win over the per-call apiKey, in any casing', async () => {
+    // fetch folds two casings of one header name into a comma-joined value, so the case variant must
+    // REPLACE the expanded key instead of being sent alongside it.
+    for (const name of ['x-api-key', 'X-Api-Key']) {
+      mockFetch.mockReset();
+      const service = new BridgeApiService({ baseURL: BASE, timeout: 30_000, headers: { 'x-api-key': 'config-key' } });
+      mockFetch.mockResolvedValueOnce(okResponse(tokensResponse));
+      await service.getTokens({ apiKey: 'call-key', headers: { [name]: 'call-header-key' } });
+      const headers = sentHeaders();
+      expect(Object.keys(headers).filter(h => h.toLowerCase() === 'x-api-key')).toHaveLength(1);
+      expect(new Headers(headers).get('x-api-key')).toBe('call-header-key');
+    }
+  });
+
+  it('treats an empty per-call apiKey as unset and falls back to the configured key', async () => {
+    const service = new BridgeApiService({ baseURL: BASE, timeout: 30_000, headers: { 'x-api-key': 'config-key' } });
+    mockFetch.mockResolvedValueOnce(okResponse(tokensResponse));
+    await service.getTokens({ apiKey: '' });
+    expect(sentHeaders()['x-api-key']).toBe('config-key');
+  });
+
+  it('sends no x-api-key when nothing configures one', async () => {
+    mockFetch.mockResolvedValueOnce(okResponse(tokensResponse));
+    await sodax.api.bridge.getTokens();
+    expect(sentHeaders()['x-api-key']).toBeUndefined();
   });
 });

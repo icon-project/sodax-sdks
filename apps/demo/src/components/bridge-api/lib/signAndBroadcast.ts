@@ -13,7 +13,6 @@
 
 import type {
   EvmRawTransaction,
-  Hex,
   IEvmWalletProvider,
   IIconWalletProvider,
   IInjectiveWalletProvider,
@@ -34,6 +33,7 @@ import type {
   SuiRawTransaction,
   TxReturnType,
 } from '@sodax/dapp-kit';
+import { getEvmViemChain, type EvmChainKey } from '@sodax/dapp-kit';
 import { getXChainType } from '@sodax/wallet-sdk-react';
 
 export class BridgeApiSignError extends Error {
@@ -65,7 +65,10 @@ export async function signAndBroadcastBridgeApiTx(args: {
 
   switch (chainType) {
     case 'EVM':
-      return await (walletProvider as IEvmWalletProvider).sendTransaction(tx as EvmRawTransaction);
+      // Chain-bind the send: the wallet must be on `chainKey`'s network, not wherever it happens to be.
+      return await (walletProvider as IEvmWalletProvider).sendTransaction(tx as EvmRawTransaction, {
+        expectedChainId: getEvmViemChain(chainKey as EvmChainKey).id,
+      });
     case 'SUI': {
       // SuiTransaction is structurally { toJSON(): Promise<string> }; the wallet provider rebuilds
       // via Transaction.from(...), which accepts the base64-serialized tx bytes in `data`.
@@ -153,28 +156,4 @@ export function isSignableBridgeApiChain(chainKey: SpokeChainKey): boolean {
     chainType === 'STACKS' ||
     chainType === 'INJECTIVE'
   );
-}
-
-/**
- * Wait until the broadcast tx is final enough to re-check allowance / submit to the API.
- * EVM and ICON expose receipts; Solana's signAndSendTransaction returns before confirmation, so
- * await it explicitly. Stellar's signAndSendTransaction returns once the tx is submitted to Soroban
- * RPC, so poll Horizon for the receipt. Sui's signAndExecuteTxn, NEAR's signAndSubmitTxn, and
- * Injective's signAndSendTransaction already resolve on execution, so they need no extra wait.
- */
-export async function waitForTxFinality(
-  chainKey: SpokeChainKey,
-  walletProvider: IWalletProvider,
-  txHash: string,
-): Promise<void> {
-  const chainType = getXChainType(chainKey);
-  if (chainType === 'EVM') {
-    await (walletProvider as IEvmWalletProvider).waitForTransactionReceipt(txHash as Hex);
-  } else if (chainType === 'ICON') {
-    await (walletProvider as IIconWalletProvider).waitForTransactionReceipt(txHash as Hex);
-  } else if (chainType === 'SOLANA') {
-    await (walletProvider as ISolanaWalletProvider).waitForConfirmation(txHash, 'confirmed');
-  } else if (chainType === 'STELLAR') {
-    await (walletProvider as IStellarWalletProvider).waitForTransactionReceipt(txHash);
-  }
 }

@@ -82,7 +82,7 @@ Note: the request param is still `xChainId` (not renamed to `chainKey`). This is
 + const result = await estimateGas({ tx, chainKey });   // TVars is EstimateGasParams<C> = { tx, chainKey } — no walletProvider
 ```
 
-### `useStellarTrustlineCheck` / `useRequestTrustline`
+### `useStellarTrustlineCheck` / `useEstablishTrustline`
 
 ```diff
 - // Positional args; `destProvider` carried both the signer and the destination chain.
@@ -95,10 +95,10 @@ Note: the request param is still `xChainId` (not renamed to `chainKey`). This is
 
 - // The callback took a `spokeProvider`.
 - await requestTrustline({ token, amount, spokeProvider: destProvider });
-+ // useRequestTrustline is NOT a canonical mutation: the token is positional, and it returns a
-+ // `requestTrustline` callback that now takes `srcChainKey` + `walletProvider`.
-+ const { requestTrustline } = useRequestTrustline(token);
-+ await requestTrustline({ token, amount, srcChainKey, walletProvider });
++ // useEstablishTrustline is a canonical mutation; vars take `srcChainKey` + `walletProvider`.
++ const { mutateAsyncSafe: establishTrustline } = useEstablishTrustline();
++ await establishTrustline({ token, amount, srcChainKey, walletProvider });
++ // `useRequestTrustline(token)` still resolves, deprecated, with its 2.0.0 return shape.
 ```
 
 ### `useDeriveUserWalletAddress` / `useGetUserHubWalletAddress`

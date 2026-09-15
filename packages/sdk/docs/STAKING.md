@@ -80,6 +80,13 @@ if (result.ok && result.value) {
 
 Submits a token-spending approval on the source chain for a `stake`, `unstake`, or `instantUnstake` action.
 
+**Some tokens take two transactions.** A few ERC-20s of the 2017 TetherToken lineage — Ethereum USDT
+is the only one in the SODAX token list today — reject an allowance change from one non-zero value to
+another, so `approve` sends `approve(0)` first and waits for it to be mined before the real approval.
+The user signs twice; the returned value is still a single transaction hash, the **last** one's.
+Detection simulates the approval rather than consulting a token list, so a token listed later behaves
+the same way.
+
 Supported chains: EVM spoke chains, hub chain (Sonic), and Stellar. All other chains return an error.
 
 The spender address is resolved automatically:

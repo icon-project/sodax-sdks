@@ -30,8 +30,6 @@ describe('getEntryDefaults', () => {
   it('returns defaults from Bitcoin entry', () => {
     const entry = {
       rpcUrl: 'https://mempool.space/api',
-      radfiApiUrl: 'https://api.bound.exchange/api',
-      radfiUmsUrl: 'https://api.ums.bound.exchange/api',
       defaults: { defaultFinalize: true },
     };
     const result = getEntryDefaults<typeof ChainKeys.BITCOIN_MAINNET>(entry);
@@ -75,8 +73,6 @@ describe('getRpcUrl', () => {
   it('returns rpcUrl from Bitcoin entry (RpcConfig-extended)', () => {
     const entry = {
       rpcUrl: 'https://mempool.space/api',
-      radfiApiUrl: 'https://api.bound.exchange/api',
-      radfiUmsUrl: 'https://api.ums.bound.exchange/api',
     };
     expect(getRpcUrl<typeof ChainKeys.BITCOIN_MAINNET>(entry)).toBe('https://mempool.space/api');
   });
@@ -87,7 +83,9 @@ describe('getRpcUrl', () => {
 describe('resolveEvmDefaults', () => {
   const arbDefaults = { waitForTransactionReceipt: { confirmations: 1, timeout: 60_000 } };
   const ethDefaults = { waitForTransactionReceipt: { confirmations: 3, timeout: 180_000 } };
-  const evmChains: Partial<Record<typeof ChainKeys.ARBITRUM_MAINNET | typeof ChainKeys.ETHEREUM_MAINNET, EvmChainEntry>> = {
+  const evmChains: Partial<
+    Record<typeof ChainKeys.ARBITRUM_MAINNET | typeof ChainKeys.ETHEREUM_MAINNET, EvmChainEntry>
+  > = {
     [ChainKeys.ARBITRUM_MAINNET]: { rpcUrl: 'https://arb', defaults: arbDefaults },
     [ChainKeys.ETHEREUM_MAINNET]: { rpcUrl: 'https://eth', defaults: ethDefaults },
   };

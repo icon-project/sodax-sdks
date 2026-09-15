@@ -7,10 +7,13 @@ import type { Address, GetChainType, Hex, IntentRelayChainId, PartnerFee, SpokeC
  * Prefer this over setting {@link CreateIntentParams.deliveryData} + `dstAddress` by hand — those remain
  * available as a low-level escape hatch for hooks not yet in the registry.
  */
-export type HookRequest = { kind: typeof HookKind.HYPERCORE_DEPOSIT };
+export type HookRequest =
+  | { kind: typeof HookKind.HYPERCORE_DEPOSIT }
+  // Flint takes no extra params: the recipient comes from `dstAddress`, and the vault's referral
+  // attribution is configured on the deployed hook rather than carried per-intent.
+  | { kind: typeof HookKind.FLINT_DEPOSIT };
 // Future hooks that need extra params become additional union members, e.g.
 //   | { kind: typeof HookKind.SOME_HOOK; someParam: Address };
-
 
 export type CreateIntentParams<K extends SpokeChainKey = SpokeChainKey> = {
   inputToken: string;
@@ -74,6 +77,11 @@ type BitcoinBoundSlot<K extends SpokeChainKey> =
 export type SwapExtras<K extends SpokeChainKey = SpokeChainKey> = {
   /** Overrides the configured swap partner fee for this action; falls back to config when omitted. */
   partnerFee?: PartnerFee;
+  /**
+   * Overrides the configured backend API key for this action's backend submit-tx leg; sent as the
+   * `x-api-key` header. Falls back to config when omitted.
+   */
+  apiKey?: string;
 } & SrcPublicKeySlot<K> &
   BitcoinBoundSlot<K>;
 

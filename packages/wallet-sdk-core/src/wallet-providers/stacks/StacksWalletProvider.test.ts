@@ -120,10 +120,7 @@ describe('StacksWalletProvider', () => {
         defaults: { postConditionMode: 0x01 },
       });
 
-      await provider.sendTransaction(
-        { ...TX_PARAMS_BASE, postConditionMode: 0x02 },
-        { postConditionMode: 0x01 },
-      );
+      await provider.sendTransaction({ ...TX_PARAMS_BASE, postConditionMode: 0x02 }, { postConditionMode: 0x01 });
 
       const call = makeContractCall.mock.calls[0]?.[0];
       expect(call.postConditionMode).toBe(0x02);

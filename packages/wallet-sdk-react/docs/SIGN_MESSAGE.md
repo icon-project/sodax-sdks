@@ -49,7 +49,7 @@ Return type is the discriminated union `\`0x${string}\` | Uint8Array | string | 
 |-------|----------------|-----------------|
 | EVM | `signMessageAsync` from wagmi → personal_sign | `\`0x${string}\`` |
 | Solana | `signMessage` from `@solana/wallet-adapter` | `Uint8Array` |
-| Sui | `signPersonalMessage` from `@mysten/dapp-kit` | `string` (base64 signature + bytes) |
+| Sui | `signPersonalMessage` from `@mysten/dapp-kit-react` | `string` (base64 signature + bytes) |
 | Bitcoin | Auto-detect: BIP-322 (P2WPKH/P2TR) or ECDSA (P2SH/P2PKH) | `string` |
 | Stellar | `walletsKit.signMessage` from `@creit.tech/stellar-wallets-kit` | `string` (base64) |
 | Injective | `walletStrategy.signArbitrary` from `@injectivelabs/wallet-base` | `string` |

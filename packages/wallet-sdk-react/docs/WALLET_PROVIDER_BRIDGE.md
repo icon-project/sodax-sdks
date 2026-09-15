@@ -20,7 +20,7 @@ The canonical interfaces are defined in [`@sodax/sdk`](https://github.com/icon-p
 
 `@sodax/sdk` is wallet-library-agnostic — it accepts any object implementing the per-chain `IXxxWalletProvider` interface (see [`packages/sdk/docs/WALLET_PROVIDERS.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/WALLET_PROVIDERS.md)). The implementation can come from:
 
-- **Browser dApp** — `@sodax/wallet-sdk-react` Hydrators wrap `wagmi` / `@solana/wallet-adapter` / `@mysten/dapp-kit` etc. into provider instances and store them in the Zustand store. `useWalletProvider` reads them out.
+- **Browser dApp** — `@sodax/wallet-sdk-react` Hydrators wrap `wagmi` / `@solana/wallet-adapter` / `@mysten/dapp-kit-react` etc. into provider instances and store them in the Zustand store. `useWalletProvider` reads them out.
 - **Server / script / bot** — `@sodax/wallet-sdk-core` exposes the same provider classes (`EvmWalletProvider`, `SolanaWalletProvider`, …) constructed directly from a private key. No React, no wallet-sdk-react.
 
 `useWalletProvider` is the React-side bridge. It hides the per-chain construction details and gives you a typed handle that fits the SDK call slot exactly:

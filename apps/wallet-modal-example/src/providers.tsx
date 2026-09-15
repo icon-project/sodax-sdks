@@ -10,13 +10,13 @@ const walletConfig: SodaxWalletConfig = {
     ssr: false,
     reconnectOnMount: true,
     chains: {
-      [ChainKeys.SONIC_MAINNET]:    { rpcUrl: 'https://sonic-rpc.publicnode.com' },
-      [ChainKeys.AVALANCHE_MAINNET]:{ rpcUrl: 'https://avalanche-c-chain-rpc.publicnode.com' },
+      [ChainKeys.SONIC_MAINNET]: { rpcUrl: 'https://sonic-rpc.publicnode.com' },
+      [ChainKeys.AVALANCHE_MAINNET]: { rpcUrl: 'https://avalanche-c-chain-rpc.publicnode.com' },
       [ChainKeys.ARBITRUM_MAINNET]: { rpcUrl: 'https://arbitrum.drpc.org' },
-      [ChainKeys.BASE_MAINNET]:     { rpcUrl: 'https://base.drpc.org' },
-      [ChainKeys.BSC_MAINNET]:      { rpcUrl: 'https://bsc.drpc.org' },
+      [ChainKeys.BASE_MAINNET]: { rpcUrl: 'https://base.drpc.org' },
+      [ChainKeys.BSC_MAINNET]: { rpcUrl: 'https://bsc.drpc.org' },
       [ChainKeys.OPTIMISM_MAINNET]: { rpcUrl: 'https://optimism-rpc.publicnode.com' },
-      [ChainKeys.POLYGON_MAINNET]:  { rpcUrl: 'https://polygon-bor-rpc.publicnode.com' },
+      [ChainKeys.POLYGON_MAINNET]: { rpcUrl: 'https://polygon-bor-rpc.publicnode.com' },
       [ChainKeys.ETHEREUM_MAINNET]: { rpcUrl: 'https://ethereum-rpc.publicnode.com' },
       [ChainKeys.HYPEREVM_MAINNET]: { rpcUrl: 'https://rpc.hyperliquid.xyz/evm' },
     },
@@ -29,8 +29,6 @@ const walletConfig: SodaxWalletConfig = {
     chains: {
       [ChainKeys.BITCOIN_MAINNET]: {
         rpcUrl: 'https://mempool.space/api',
-        radfiApiUrl: 'https://api.bound.exchange/api',
-        radfiUmsUrl: 'https://api.ums.bound.exchange/api',
       },
     },
   },

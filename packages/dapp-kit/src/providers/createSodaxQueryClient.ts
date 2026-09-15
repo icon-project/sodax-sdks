@@ -72,11 +72,7 @@ export function createSodaxQueryClient({
     // Compose: keep the consumer's cache, attach our observability as an extra subscriber.
     // The consumer's own `MutationCache.onError` (if any) still fires — subscribe is additive.
     config.mutationCache.subscribe(event => {
-      if (
-        event.type === 'updated' &&
-        event.action.type === 'error' &&
-        event.mutation.options.meta?.silent !== true
-      ) {
+      if (event.type === 'updated' && event.action.type === 'error' && event.mutation.options.meta?.silent !== true) {
         onMutationError(event.action.error);
       }
     });

@@ -15,13 +15,16 @@ export type UseBridgeApiApproveVars = {
 };
 
 /**
- * React hook to build an unsigned token-approval transaction for the source token via the bridge
- * API — `sodax.api.bridge.approve`. Returns `{ tx }` (chain-specific unsigned tx) to sign and
- * broadcast yourself; it does not change state, so no queries are invalidated.
+ * React hook to build the unsigned token-approval transaction(s) for the source token via the bridge
+ * API — `sodax.api.bridge.approve`. Returns `{ tx, resetTx? }` (chain-specific unsigned txs) to sign
+ * and broadcast yourself; it does not change state, so no queries are invalidated.
+ *
+ * `resetTx`, when present, must be MINED before `tx` is a valid state transition. Prefer
+ * {@link useBridgeApiApproveAndBroadcast}, which owns that ordering and invalidates the allowance query.
  *
  * @example
  * const { mutateAsync: approve } = useBridgeApiApprove();
- * const { tx } = await approve({ body: createBridgeIntentParams });
+ * const { tx, resetTx } = await approve({ body: createBridgeIntentParams });
  */
 export const useBridgeApiApprove = ({
   mutationOptions,

@@ -20,6 +20,11 @@ useMigrationApprove({ mutationOptions });
 useMigrationAllowance({ params: { params: <inner>, action: 'migrate' | 'revert' }, queryOptions });
 ```
 
+`use*Approve` is unchanged and still resolves to one transaction hash, but the SDK may send **two**
+transactions on a token that rejects a non-zero to non-zero allowance change (Ethereum USDT today) —
+the user signs twice and the hash is the **last** one's. An `isPending`-driven "Approving…" should say
+so. See "Approve hooks can prompt the wallet twice" in [`architecture.md`](../architecture.md).
+
 ## Mutation params
 
 ```ts
