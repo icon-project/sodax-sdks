@@ -36,7 +36,7 @@ export function SwapView({ flow, brandControls }: { flow: SwapFlow; brandControl
     if (!srcChain || !dstChain || !flow.isAmountValid || !flow.isSlippageValid) return undefined;
 
     const state = { srcChain, dstChain, srcToken, dstToken, amount, slippagePercent, partnerFee };
-    const url = embedUrl(embedOrigin, { ...state, flow: 'swap', slippage: slippagePercent, brand, widget });
+    const url = embedUrl(embedOrigin, { ...state, slippage: slippagePercent, brand, widget });
 
     return buildSnippets(state, url);
   }, [

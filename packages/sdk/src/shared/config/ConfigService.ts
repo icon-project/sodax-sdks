@@ -385,12 +385,15 @@ export class ConfigService {
     return this.sodax.moneyMarket.supportedTokens[chainId].some(t => t.address.toLowerCase() === token.toLowerCase());
   }
 
+  /**
+   * Is `asset` one of the money-market reserve assets?
+   *
+   * The reserve set is built from `moneyMarketHubVaults`, so its members are hub **vault**
+   * addresses. Query it with an `XToken.vault`; an `XToken.hubAsset` only matches for the Sonic
+   * vault shares themselves, where `hubAsset === vault`.
+   */
   public isMoneyMarketReserveAsset(asset: Address): boolean {
-    return this.sodax.moneyMarket.supportedReserveAssets.map(a => a.toLowerCase()).includes(asset.toLowerCase());
-  }
-
-  public isMoneyMarketReserveHubAsset(hubAsset: Address): boolean {
-    return this.moneyMarketReserveAssetsSet.has(hubAsset.toLowerCase() as Address);
+    return this.moneyMarketReserveAssetsSet.has(asset.toLowerCase() as Address);
   }
 
   private loadSodaxConfigDataStructures(sodaxConfig: SodaxConfig): void {

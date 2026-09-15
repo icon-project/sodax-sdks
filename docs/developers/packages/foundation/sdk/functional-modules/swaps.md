@@ -231,11 +231,11 @@ All swap-module errors are instances of `SodaxError`, exported from `@sodax/sdk`
 ```typescript
 import { SodaxError, isSodaxError } from '@sodax/sdk';
 
-class SodaxError<C extends string = string> extends Error {
+class SodaxError<C extends SodaxErrorCode = SodaxErrorCode> extends Error {
   readonly code: C;                  // string-literal discriminator
   readonly cause?: unknown;          // ES2022 cause chain
   readonly context?: Record<string, unknown>;
-  toJSON(): { name, code, message, stack, context, cause };
+  toJSON(): { name, code, feature, message, stack, context, cause };
 }
 
 function isSodaxError(e: unknown): e is SodaxError;
@@ -254,7 +254,7 @@ function isSodaxError(e: unknown): e is SodaxError;
 | Method | Error type | Codes |
 |---|---|---|
 | `swap` | `SwapError` | `USER_REJECTED`, `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `TX_VERIFICATION_FAILED`, `TX_SUBMIT_FAILED`, `RELAY_TIMEOUT`, `RELAY_FAILED`, `EXECUTION_FAILED`, `EXTERNAL_API_ERROR`, `UNKNOWN` |
-| `createIntent` / `createLimitOrderIntent` | `CreateIntentError` | `USER_REJECTED`, `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `UNKNOWN` |
+| `createIntent` / `createLimitOrderIntent` | `SwapCreateIntentError` | `USER_REJECTED`, `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `UNKNOWN` |
 | `postExecution` | `PostExecutionError` | `EXECUTION_FAILED`, `EXTERNAL_API_ERROR`, `UNKNOWN` |
 | `createLimitOrder` | `SwapError` | (same as `swap`) |
 
@@ -266,7 +266,7 @@ function isSodaxError(e: unknown): e is SodaxError;
 {
   srcChainKey?: SpokeChainKey;
   dstChainKey?: SpokeChainKey;
-  phase?: 'validate' | 'createIntent' | 'verify' | 'submit' | 'relay' | 'postExecution';
+  phase?: 'validate' | 'intentCreation' | 'verify' | 'submit' | 'relay' | 'approve' | 'lookup' | 'execution' | 'postExecution';
   // Only on EXTERNAL_API_ERROR:
   api?: 'solver';                // discriminator for upstream API errors (used as Sentry/Datadog tag)
   solverCode?: SolverIntentErrorCode;
@@ -343,7 +343,7 @@ if (!result.ok) {
 
 #### Relay-layer contract
 
-The lower-level relay helpers `relayTxAndWaitPacket` and `submitTransaction` (in `packages/sdk/src/shared/services/intentRelay/IntentRelayApiService.ts`) emit two stable error message strings on failure: `'SUBMIT_TX_FAILED'` and `'RELAY_TIMEOUT'`. These are exported as `RELAY_ERROR_CODES` and form a public contract that other modules (moneyMarket, bridge, dex, migration, staking) still rely on directly.
+The lower-level relay helpers `relayTxAndWaitPacket` and `submitTransaction` (in `packages/sdk/src/shared/services/intentRelay/IntentRelayApiService.ts`) emit three stable error message strings on failure: `'SUBMIT_TX_FAILED'`, `'RELAY_TIMEOUT'` and `'RELAY_POLLING_FAILED'`. These are exported as `RELAY_ERROR_CODES` and form a public contract. Only `dex` consumes them directly; every other feature module maps them into a typed `SodaxError` via `mapRelayFailure`.
 
 The swap module wraps these via the unified `mapRelayFailure`, surfacing the original code on `error.context.relayCode` so swap callers don't need to inspect `error.cause.message`.
 
@@ -509,7 +509,7 @@ For limit orders, pass `deadline: 0n` directly to `createIntent` (or use `create
 
 ## Get Swap Speed Tier
 
-Offline, rule-based estimate of how fast a `srcToken` → `dstToken` swap will settle. It is derived purely from SDK config — **no network, on-chain, or backend call** — so it is safe to call synchronously while rendering a quote. Tokens tied to a money-market-reserve (sodaAsset) settle faster, and an Ethereum leg adds a fixed penalty.
+Offline, rule-based estimate of how fast a `srcToken` → `dstToken` swap will settle. It is derived purely from SDK config — **no network, on-chain, or backend call** — so it is safe to call synchronously while rendering a quote. Tokens whose `vault` is a money-market-reserve (sodaAsset) settle faster, and an Ethereum leg adds a fixed penalty.
 
 ```typescript
 const { tier, estimatedSeconds } = sodax.swaps.getSwapSpeedTier({ srcToken, dstToken });
@@ -518,7 +518,7 @@ console.log(tier); // 'fast' | 'normal' | 'slow'
 console.log(estimatedSeconds); // e.g. 15
 ```
 
-`estimatedSeconds` is the source of truth; `tier` is bucketed from it. The rules: a fast base (15s) applies when **either** token is sodaAsset-related, otherwise the base is 35s; an Ethereum leg on either side adds a fixed penalty. See `estimateSwapSpeedTier` in the SDK source for the exact constants.
+`estimatedSeconds` is the source of truth; `tier` is bucketed from it. The rules: a fast base (15s) applies when **either** token's `vault` is a money-market reserve, otherwise the base is 35s; an Ethereum leg on either side adds a fixed penalty. The check is on `XToken.vault`, not `XToken.hubAsset` — the two differ for most tokens, and only the vault is a reserve address. See `estimateSwapSpeedTier` in the SDK source for the exact constants.
 
 ---
 
@@ -1161,6 +1161,10 @@ if (!swapResult.ok) {
   const error = swapResult.error; // SwapError = SodaxError<SwapErrorCode>
 
   switch (error.code) {
+    case 'USER_REJECTED':
+      // User cancelled the wallet prompt. Not a failure — reset the UI, don't show an error.
+      break;
+
     case 'EXECUTION_FAILED':
       // Solver notification failed — the intent may have been created and relayed
       // successfully. Check intent status manually, then retry postExecution.
@@ -1211,7 +1215,7 @@ if (!swapResult.ok) {
 
 ### Handling `createIntent` Errors
 
-`createIntent` returns `Result<CreateIntentResult, CreateIntentError>`. The narrow union is `'VALIDATION_FAILED' | 'INTENT_CREATION_FAILED' | 'UNKNOWN'`:
+`createIntent` returns `Result<CreateIntentResult, SwapCreateIntentError>`. The narrow union is `'USER_REJECTED' | 'VALIDATION_FAILED' | 'INTENT_CREATION_FAILED' | 'UNKNOWN'`:
 
 ```typescript
 const createIntentResult = await sodax.swaps.createIntent({
@@ -1222,6 +1226,9 @@ const createIntentResult = await sodax.swaps.createIntent({
 if (!createIntentResult.ok) {
   const error = createIntentResult.error;
   switch (error.code) {
+    case 'USER_REJECTED':
+      // User cancelled the wallet prompt. Not a failure — reset the UI, don't show an error.
+      break;
     case 'VALIDATION_FAILED':
       // Unsupported token / invalid chain key / Bitcoin dust below 546 sats / wallet provider mismatch
       console.error('Validation failed:', error.message);
@@ -1233,6 +1240,9 @@ if (!createIntentResult.ok) {
     case 'UNKNOWN':
       console.error('Unexpected:', error.cause);
       break;
+    default:
+      // Keeps the switch honest if the union gains a code in a future release.
+      console.error('Unhandled createIntent code:', error.code);
   }
 }
 ```

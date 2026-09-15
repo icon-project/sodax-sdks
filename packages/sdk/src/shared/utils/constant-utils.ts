@@ -1,4 +1,3 @@
-// packages/sdk/src/shared/utils/constant-utils.ts provide utility functions for constants in packages/sdk/src/shared/constants.ts
 import {
   arbitrum,
   avalanche,

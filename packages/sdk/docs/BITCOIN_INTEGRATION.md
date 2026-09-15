@@ -39,7 +39,7 @@ Add `BITCOIN: {}` to `SodaxWalletProvider`. Defaults already point at production
 import { SodaxProvider } from "@sodax/dapp-kit";
 import { SodaxWalletProvider } from "@sodax/wallet-sdk-react";
 
-<SodaxProvider testnet={false}>
+<SodaxProvider>
   <QueryClientProvider client={queryClient}>
     <SodaxWalletProvider config={{ BITCOIN: {} }}>
       {children}
@@ -387,7 +387,7 @@ If you need additional information that is not directly available in this page, 
 Perform an HTTP GET request on the current page URL with the `ask` query parameter:
 
 ```
-GET https://docs.sodax.com/developers/how-to/bitcoin-integration.md?ask=<question>
+GET https://docs.sodax.com/developers/how-to/bitcoin-integration?ask=<question>
 ```
 
 The question should be specific, self-contained, and written in natural language.

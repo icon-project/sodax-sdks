@@ -1,6 +1,6 @@
 # Relayer API Endpoints
 
-> **Error handling conventions:** Relay-layer failures emit one of two stable strings on `error.message`: `'SUBMIT_TX_FAILED'` or `'RELAY_TIMEOUT'`, also exported as `RELAY_ERROR_CODES` from `@sodax/sdk`. Modules other than swap propagate these errors raw. The **swap module** wraps them into `SodaxError<SwapErrorCode>` with `context.relayCode` (see [SWAPS.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SWAPS.md) Error Handling).
+> **Error handling conventions:** Relay-layer failures emit one of these stable strings on `error.message`: `'SUBMIT_TX_FAILED'`, `'RELAY_TIMEOUT'`, or `'RELAY_POLLING_FAILED'`, also exported as `RELAY_ERROR_CODES` from `@sodax/sdk`. Only `dex` propagates these errors raw; every other feature module (moneyMarket, bridge, staking, migration, leverageYield, swap) routes them through `mapRelayFailure` into a typed `SodaxError` with `context.relayCode`. The **swap module** wraps them into `SodaxError<SwapErrorCode>` with `context.relayCode` (see [SWAPS.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SWAPS.md) Error Handling).
 
 The intent relay service bridges spoke-chain transactions to the SODAX hub (Sonic). All cross-chain operations — swaps, bridges, money market deposits/withdrawals, staking — submit a spoke-chain transaction hash to the relay, then poll until the hub confirms execution.
 
@@ -26,7 +26,16 @@ and test against mainnet with small amounts — see [Testing without a testnet](
 - `sodax.bridge.bridge(...)` — similarly manages the full relay lifecycle
 - `sodax.moneyMarket.*`, `sodax.staking.*`, and related methods do the same
 
-All of these methods return `Promise<Result<T>>`. On relay failure the `Result` carries an error whose `message` is `'RELAY_TIMEOUT'` or `'SUBMIT_TX_FAILED'` (CODE form — see the error handling conventions note at the top of this page).
+All of these methods return `Promise<Result<T>>`. They route relay failures through `mapRelayFailure`, so the `Result` carries a typed `SodaxError` — discriminate on `error.code`, and read the raw relay string from `context.relayCode`. Do **not** match on `error.message`: the mapper replaces it with prose.
+
+| Raw relay string | `error.code` | `context.relayCode` |
+|---|---|---|
+| `SUBMIT_TX_FAILED` | `TX_SUBMIT_FAILED` | `SUBMIT_TX_FAILED` |
+| `RELAY_TIMEOUT` | `RELAY_TIMEOUT` | `RELAY_TIMEOUT` |
+| `RELAY_POLLING_FAILED` | `RELAY_FAILED` | `RELAY_POLLING_FAILED` |
+| anything else | `RELAY_FAILED` | `UNKNOWN` |
+
+Raw `error.message` matching applies only where nothing maps the failure: the `sodax.dex.*` relay legs, and the exported helpers `relayTxAndWaitPacket`, `submitTransaction` and `waitUntilIntentExecuted` when a consumer calls them directly. Those still carry the `RELAY_ERROR_CODES` strings on `error.message`.
 
 ---
 
@@ -193,19 +202,24 @@ These are exported from `IntentRelayApiService` for callers that need direct rel
 | `relayTxAndWaitPacket` | `(params: RelayAndWaitParams) => Promise<Result<PacketData>>` | Submit + poll in one call. Handles `getIntentRelayChainId` conversion and split-tx chains automatically. |
 
 All functions return `Promise<Result<T>>` — no throws across service boundaries. Check `result.ok` before using `result.value`. On failure, `result.error` is an `Error` instance:
-- `result.error.message === 'RELAY_TIMEOUT'` — packet did not arrive within the timeout (default: 120 000 ms)
-- `result.error.message === 'SUBMIT_TX_FAILED'` — the relay rejected the submission; check `result.error.cause.message` for the relay's rejection reason
-- `result.error.message === 'HTTP_REQUEST_FAILED'` — network-level failure; check `result.error.cause` for details
+- `result.error.message === 'RELAY_TIMEOUT'` — packet did not arrive within the timeout (default: 120 000 ms); polling worked, the relay just didn't deliver in time
+- `result.error.message === 'SUBMIT_TX_FAILED'` — the relay rejected the submission (HTTP error, malformed response, or `success: false`); check `result.error.cause.message` for the relay's rejection reason
+- `result.error.message === 'RELAY_POLLING_FAILED'` — polling itself never recovered (persistent network errors or exceptions during the wait window); the packet's status is unknown. Check `result.error.cause` for details
 
 `RelayAndWaitParams`:
 
 ```ts
 type RelayAndWaitParams = {
   srcTxHash: string;
-  data: RelayExtraData;         // required for Solana/Bitcoin; ignored for all other chains
+  // `RelayExtraData` ({ address, payload }) for split-tx chains. Bitcoin on-demand
+  // borrow/withdraw instead passes the signed payload as an `OnDemandRelayData` JSON object.
+  data: RelayExtraData | OnDemandRelayData;
   chainKey: SpokeChainKey;      // e.g. ChainKeys.ETHEREUM_MAINNET
   relayerApiEndpoint: HttpUrl;  // relay base URL
   timeout: number | undefined;  // ms; defaults to DEFAULT_RELAY_TX_TIMEOUT (120 000 ms)
+  // Identity used to poll `get_transaction_packets` when it differs from the submit `srcTxHash`
+  // (Bitcoin on-demand). Defaults to `srcTxHash` for every other flow.
+  pollTxHash?: string;
 };
 ```
 

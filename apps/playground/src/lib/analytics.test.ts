@@ -55,6 +55,37 @@ describe('buildEvent', () => {
   });
 });
 
+describe('swap funnel events', () => {
+  it('reports a completed swap under the parameter names sodax.com registered', () => {
+    const event = buildEvent('swap_completed', { ...PAIR }, { embedded: false, internal: false });
+
+    expect(event).toMatchObject({
+      event: 'swap_completed',
+      source_chain: '0x2105.base',
+      destination_chain: 'solana',
+      input_token_symbol: 'ETH',
+      output_token_symbol: 'TSLAx',
+    });
+  });
+
+  it('carries a groupable reason on a failure, never a raw error', () => {
+    const event = buildEvent('swap_failed', { ...PAIR, reason: 'rejected' }, { embedded: true, internal: false });
+
+    expect(event).toMatchObject({ event: 'swap_failed', reason: 'rejected', is_embedded: true });
+  });
+
+  it('never emits a transaction hash or an address', () => {
+    for (const name of ['swap_submitted', 'swap_completed', 'swap_failed'] as const) {
+      const event = buildEvent(name, { ...PAIR, reason: 'settlement_failed' }, { embedded: true, internal: false });
+
+      expect(Object.keys(event)).not.toContain('transaction_hash');
+      expect(Object.keys(event)).not.toContain('wallet_address');
+      expect(Object.keys(event)).not.toContain('recipient');
+      expect(JSON.stringify(event)).not.toMatch(/0x[\da-f]{20,}/i);
+    }
+  });
+});
+
 describe('quoteEventKey', () => {
   it('is stable across refetches of the same configured pair', () => {
     expect(quoteEventKey(PAIR)).toBe(quoteEventKey({ ...PAIR }));

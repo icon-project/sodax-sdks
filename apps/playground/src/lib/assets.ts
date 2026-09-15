@@ -29,6 +29,13 @@ function isVaultShare(token: SwapTokenV2, chain: ChainKey): boolean {
   return chain === ChainKeys.SONIC_MAINNET && HUB_SHARE_ADDRESSES.has(token.address.toLowerCase());
 }
 
+/**
+ * Chains this widget never offers, not even for a quote. The API may keep listing one after the
+ * product has stopped routing it; dropping it here keeps it out of the pickers, the network filters
+ * and the chains a link can resolve, in one place.
+ */
+export const EXCLUDED_CHAINS: ReadonlySet<ChainKey> = new Set([ChainKeys.ICON_MAINNET]);
+
 export type SwapAssets = {
   /** Every chain the API quotes, widest token list first. */
   chains: readonly ChainKey[];
@@ -55,7 +62,7 @@ function toXToken(token: SwapTokenV2, chain: ChainKey): XToken {
 /**
  * Projects the `/swaps/tokens` response into the picker's shape. Chains the running SDK cannot name
  * or badge are dropped rather than rendered as a raw key — the API may list one before
- * `@sodax/types` carries its config.
+ * `@sodax/types` carries its config — as are the `EXCLUDED_CHAINS`.
  *
  * Addresses are deduplicated per chain, because a token that appears twice in one chain's list
  * would otherwise produce two tiles that select the same asset.
@@ -66,7 +73,7 @@ export function readSwapAssets(response: GetSwapTokensResponseV2 | undefined): S
   const perChain: { chain: ChainKey; tokens: XToken[] }[] = [];
 
   for (const [key, tokens] of Object.entries(response)) {
-    if (!isChainKey(key)) continue;
+    if (!isChainKey(key) || EXCLUDED_CHAINS.has(key)) continue;
 
     const byAddress = new Map<string, XToken>();
     for (const token of tokens) {

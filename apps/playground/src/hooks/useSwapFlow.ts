@@ -25,11 +25,11 @@ import { feeAmountOf } from '../lib/fee';
 import { parseAmount } from '../lib/format';
 import { initialUrl } from '../lib/initialUrl';
 import { assetGroups } from '../lib/pickerOptions';
-import { seedFor, toSearch } from '../lib/urlState';
+import { toSearch } from '../lib/urlState';
 
 export type SwapFlow = ReturnType<typeof useSwapFlow>;
 
-const seed = seedFor('swap', initialUrl);
+const seed = initialUrl;
 
 /** Written back with the form, so a styled widget keeps its styling across the rewrite. */
 export type SwapFlowOptions = { brand: Brand };
@@ -88,7 +88,6 @@ export function useSwapFlow({ brand }: SwapFlowOptions) {
     if (!srcChain || !dstChain) return;
 
     const search = toSearch({
-      flow: 'swap',
       srcChain,
       dstChain,
       srcToken,
@@ -246,6 +245,7 @@ export function useSwapFlow({ brand }: SwapFlowOptions) {
     inputAmount,
     minOutputAmount,
     partnerFee,
+    pair,
     ready:
       !!srcChain &&
       sourceNetworks.includes(srcChain) &&

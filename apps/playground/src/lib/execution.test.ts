@@ -6,7 +6,14 @@ import {
   type ISuiWalletProvider,
 } from '@sodax/dapp-kit';
 import { describe, expect, it, vi } from 'vitest';
-import { executeSwap, canExecute, toIntentRequest, broadcast, type ExecutionDependencies } from './execution';
+import {
+  executeSwap,
+  canExecute,
+  toIntentRequest,
+  broadcast,
+  isUserRejection,
+  type ExecutionDependencies,
+} from './execution';
 import { readActivity, submissionFor, type Activity } from './activity';
 
 const address = '0x1234567890abcdef1234567890abcdef12345678';
@@ -144,8 +151,12 @@ describe('swap execution', () => {
     expect(canExecute(ChainKeys.BASE_MAINNET)).toBe(true);
     expect(canExecute(ChainKeys.SOLANA_MAINNET)).toBe(true);
     expect(canExecute(ChainKeys.SUI_MAINNET)).toBe(true);
+    expect(canExecute(ChainKeys.STELLAR_MAINNET)).toBe(true);
+    expect(canExecute(ChainKeys.NEAR_MAINNET)).toBe(true);
+    expect(canExecute(ChainKeys.STACKS_MAINNET)).toBe(true);
+    expect(canExecute(ChainKeys.INJECTIVE_MAINNET)).toBe(true);
+    // Bitcoin settles through a funded Bound trading wallet, not a signed swaps-API payload.
     expect(canExecute(ChainKeys.BITCOIN_MAINNET)).toBe(false);
-    expect(canExecute(ChainKeys.STELLAR_MAINNET)).toBe(false);
   });
   it('refuses a transaction built for another signing account', async () => {
     const send = vi.fn();
@@ -189,6 +200,95 @@ describe('swap execution', () => {
     });
     expect(await sign.mock.calls[0]?.[0].toJSON()).toBe(tx.data);
   });
+
+  it('signs a Stellar transfer with its wallet signer', async () => {
+    const sign = vi.fn(async () => 'stellar-hash');
+    const stellarTx = { from: 'GSENDER', to: 'GVAULT', value: 0n, data: 'xdr' };
+    expect(
+      await broadcast(ChainKeys.STELLAR_MAINNET, stellarTx, {
+        chainType: 'STELLAR',
+        getWalletAddress: async () => 'GSENDER',
+        signAndSendTransaction: sign,
+        signTransaction: vi.fn(),
+        waitForTransactionReceipt: vi.fn(),
+      }),
+    ).toBe('stellar-hash');
+    expect(sign).toHaveBeenCalledWith(stellarTx);
+  });
+
+  // NEAR carries its sender as `signerId`, so the account check reads that rather than `from`.
+  it('submits a NEAR call and refuses one built for another account', async () => {
+    const sign = vi.fn(async () => 'near-hash');
+    const nearTx = { signerId: 'alice.near', params: { contractId: 'vault.near', method: 'ft_transfer', args: {} } };
+    const provider = (address: string) => ({
+      chainType: 'NEAR' as const,
+      getWalletAddress: async () => address,
+      getRawTransaction: vi.fn(),
+      signAndSubmitTxn: sign,
+    });
+    expect(await broadcast(ChainKeys.NEAR_MAINNET, nearTx, provider('alice.near'))).toBe('near-hash');
+    expect(sign).toHaveBeenCalledWith(nearTx);
+    await expect(broadcast(ChainKeys.NEAR_MAINNET, nearTx, provider('bob.near'))).rejects.toThrow(
+      'signing account changed',
+    );
+    expect(sign).toHaveBeenCalledTimes(1);
+  });
+
+  it('signs a Stacks payload and rejects an empty one', async () => {
+    const sign = vi.fn(async () => 'stacks-txid');
+    const provider = {
+      chainType: 'STACKS' as const,
+      getWalletAddress: async () => 'SP-SENDER',
+      getPublicKey: vi.fn(),
+      getBalance: vi.fn(),
+      sendTransaction: vi.fn(),
+      signAndSendTransaction: sign,
+    };
+    expect(await broadcast(ChainKeys.STACKS_MAINNET, { payload: 'deadbeef' }, provider)).toBe('stacks-txid');
+    await expect(broadcast(ChainKeys.STACKS_MAINNET, { payload: '' }, provider)).rejects.toThrow('cannot sign');
+    expect(sign).toHaveBeenCalledTimes(1);
+  });
+
+  // Injective reports a hex `from` while the wallet reports bech32, so the sender check must not run.
+  it('signs an Injective doc without comparing its hex sender to the bech32 account', async () => {
+    const sign = vi.fn(async () => 'injective-hash');
+    const injectiveTx = {
+      from: address,
+      to: address,
+      signedDoc: {
+        bodyBytes: new Uint8Array([1]),
+        authInfoBytes: new Uint8Array([2]),
+        chainId: 'injective-1',
+        accountNumber: 1n,
+      },
+    } as const;
+    expect(
+      await broadcast(ChainKeys.INJECTIVE_MAINNET, injectiveTx, {
+        chainType: 'INJECTIVE',
+        getWalletAddress: async () => 'inj1sender',
+        execute: vi.fn(),
+        signAndSendTransaction: sign,
+      }),
+    ).toBe('injective-hash');
+    expect(sign).toHaveBeenCalledWith(injectiveTx);
+  });
+
+  it('refuses a payload shaped for another family', async () => {
+    const sign = vi.fn();
+    await expect(
+      broadcast(
+        ChainKeys.NEAR_MAINNET,
+        { payload: 'stacks-only' },
+        {
+          chainType: 'NEAR',
+          getWalletAddress: async () => 'alice.near',
+          getRawTransaction: vi.fn(),
+          signAndSubmitTxn: sign,
+        },
+      ),
+    ).rejects.toThrow('cannot sign');
+    expect(sign).not.toHaveBeenCalled();
+  });
 });
 
 describe('activity recovery', () => {
@@ -215,5 +315,14 @@ describe('activity recovery', () => {
     expect(readActivity(JSON.stringify({ ...activity, srcChainKey: 'toString' }))).toBeUndefined();
     expect(readActivity(JSON.stringify({ ...activity, intent: { ...intent, inputAmount: '1.5' } }))).toBeUndefined();
     expect(readActivity(JSON.stringify({ ...activity, txHash: '<script>' }))).toBeUndefined();
+  });
+});
+
+describe('isUserRejection', () => {
+  it('separates a declined signature from a real failure, so the two do not share a reason', () => {
+    expect(isUserRejection(new Error('User rejected the request'))).toBe(true);
+    expect(isUserRejection(new Error('MetaMask Tx Signature: User denied transaction signature'))).toBe(true);
+    expect(isUserRejection(new Error('insufficient funds for gas'))).toBe(false);
+    expect(isUserRejection('not an error')).toBe(false);
   });
 });

@@ -4,7 +4,7 @@ icon: plug
 generatedFrom: packages/sdk/docs/BACKEND_API.md
 ---
 
-The `BackendApiService` provides a comprehensive HTTP client for the SODAX backend API, covering intent lookup, swap submission, solver orderbook, money market data, USD OHLC price candles, and runtime configuration. It implements `IConfigApi` so that `ConfigService` and other services can fetch dynamic chain/token configuration without coupling to a concrete HTTP implementation.
+The `BackendApiService` provides a comprehensive HTTP client for the SODAX backend API, covering intent lookup, swap submission, solver orderbook, money market data, USD OHLC price candles, and runtime configuration. It implements `IConfigApiV1` so that `ConfigService` and other services can fetch dynamic chain/token configuration without coupling to a concrete HTTP implementation.
 
 The service is automatically instantiated when you create a `Sodax` instance and is available as `sodax.backendApi`.
 
@@ -745,7 +745,7 @@ interface OracleCandlesResponse {
 
 ## Config Endpoints
 
-These methods implement `IConfigApi` and are consumed internally by `ConfigService`. You generally do not call them directly — use `sodax.config` instead. They are documented here for completeness and for custom `IConfigApi` implementations.
+These methods implement `IConfigApiV1` and are consumed internally by `ConfigService`. You generally do not call them directly — use `sodax.config` instead. They are documented here for completeness and for custom `IConfigApiV1` implementations.
 
 | Method | Endpoint | Returns |
 |---|---|---|

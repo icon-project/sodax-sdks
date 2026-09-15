@@ -34,28 +34,11 @@ export function Glyph({
 export type AssetLogoProps = {
   symbol: string;
   chain: ChainKey;
-  /** Chain-only rows (the bridge's receive leg) show the network itself, with no token to badge. */
-  chainOnly?: boolean;
 };
 
 /** The exchange's currency logo: a raised tile holding the token, with its network badged on it. */
-export function AssetLogo({ symbol, chain, chainOnly = false }: AssetLogoProps) {
+export function AssetLogo({ symbol, chain }: AssetLogoProps) {
   const network = chainLogo(chain);
-
-  if (chainOnly) {
-    return (
-      <span className="asset-logo">
-        <Glyph
-          key={network}
-          className="asset-logo-img"
-          src={network}
-          alt={chainName(chain)}
-          initial={chainName(chain)}
-        />
-      </span>
-    );
-  }
-
   const asset = tokenLogo(symbol);
 
   return (

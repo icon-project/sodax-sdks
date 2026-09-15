@@ -8,8 +8,8 @@ React layer over [`@sodax/wallet-sdk-core`](https://github.com/icon-project/soda
 
 ## Features
 
-- **Unified wallet connectivity** for 9 chain families across 21 chains
-  - EVM (Sonic hub, Ethereum, Arbitrum, Base, BSC, Optimism, Polygon, Avalanche, HyperEVM, Lightlink, Redbelly, Kaia, Hedera) — EIP-6963 + WalletConnect
+- **Unified wallet connectivity** across every supported chain family
+  - EVM (Sonic hub, Ethereum, Arbitrum, Base, BSC, Optimism, Polygon, Avalanche, HyperEVM, Lightlink, Redbelly, Kaia, Hedera, Robinhood) — EIP-6963 + WalletConnect
   - Solana, Sui, Stellar, ICON, Injective, Bitcoin, NEAR, Stacks
 - **Single-store state** — `useXAccount`, `useXConnection`, `useXAccounts` all read the same Zustand slice; persisted to `localStorage`
 - **Bridge to `@sodax/sdk`** — `useWalletProvider` returns a typed `IXxxWalletProvider` ready to plug into any SDK call
@@ -116,8 +116,13 @@ The full guide lives in [`docs/`](https://github.com/icon-project/sodax-sdks/tre
 | [Sign Message](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/SIGN_MESSAGE.md) | `useXSignMessage` cross-chain; Bitcoin BIP-322 vs ECDSA auto-detect |
 | [EVM Switch Chain](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/EVM_SWITCH_CHAIN.md) | Single wagmi connection across all configured EVM networks |
 | [Connectors](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/CONNECTORS.md) | `IXConnector` contract, deep-import concrete classes, custom connectors |
+| [Sub-path Exports](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/SUB_PATH_EXPORTS.md) | The `.` / `./xchains/*` export map, deep-import paths, and what is deliberately not exported |
 | [Architecture](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/ARCHITECTURE.md) | Zustand store, Provider/Hydrator/Actions trio, persist hydration caveat |
 | [Adding a New Chain](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/ADDING_A_NEW_CHAIN.md) | `ChainMeta` extension, chain registry, sub-path export wiring |
+
+### Chain-not-enabled warnings
+
+`useWalletProvider` and `useXConnectors` warn once per chain type when you ask for a chain that is not in `SodaxWalletProvider` `config.chains`, then return `undefined` / `[]`. The warning is a misconfiguration signal, so it is suppressed until `SodaxWalletProvider` has initialized its chain services — on the very first render `enabledChains` is still empty for every app, correctly configured or not. If you relied on seeing that warning during mount, it now arrives only once services are up, and only when the chain is genuinely absent from your config.
 
 ## AI agent docs
 
@@ -158,7 +163,7 @@ See [Connectors](https://github.com/icon-project/sodax-sdks/blob/main/packages/w
 
 ## Requirements
 
-- Node.js >= 20.12.0
+- Node.js >= 22.12.0
 - React >= 19
 - TypeScript
 

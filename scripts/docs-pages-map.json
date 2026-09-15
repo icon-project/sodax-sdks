@@ -9,7 +9,8 @@
     "packages/sdk/docs/BRIDGE_API.md",
     "packages/sdk/docs/LEVERAGE_YIELD_API.md",
     "packages/sdk/docs/ORACLE.md",
-    "packages/sdk/docs/ARCHITECTURE_REFACTOR_SUMMARY.md"
+    "packages/sdk/docs/ARCHITECTURE_REFACTOR_SUMMARY.md",
+    "packages/sdk/docs/RECOVERY.md"
   ],
   "mirrored": [
     {
