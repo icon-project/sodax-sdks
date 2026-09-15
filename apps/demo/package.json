@@ -31,6 +31,7 @@
     "@radix-ui/react-visually-hidden": "^1.1.2",
     "@sentry/react": "^8.55.0",
     "@sodax/dapp-kit": "workspace:*",
+    "@sodax/swaps-api": "workspace:*",
     "@sodax/wallet-sdk-react": "workspace:*",
     "@tanstack/react-query": "catalog:",
     "@types/node": "catalog:",
