@@ -1,4 +1,4 @@
-import { networkAllowed, type WidgetSettings } from '../lib/widgetSettings';
+import { allowedChoices, networkAllowed, type WidgetSettings } from '../lib/widgetSettings';
 import {
   type ChainKey,
   type QuoteRequestV2,
@@ -69,20 +69,46 @@ export function useSwapFlow({ brand }: SwapFlowOptions) {
     setDstToken(pickToken(tokensOn(assets, dst), seed.dstSymbol ?? DEFAULT_PAIR.dstSymbol));
   }, [assets]);
 
-  const srcTokens = useMemo(() => (srcChain ? tokensOn(assets, srcChain) : []), [assets, srcChain]);
-  const dstTokens = useMemo(() => (dstChain ? tokensOn(assets, dstChain) : []), [assets, dstChain]);
+  const sourceChoices = useMemo(
+    () =>
+      allowedChoices(
+        assets.choices,
+        widget.sourceNetworks,
+        widget.sourceTokens,
+        seed.embed && widget.lockSource ? { chain: seed.srcChain, symbol: seed.srcSymbol } : undefined,
+      ),
+    [assets, widget],
+  );
+  const destinationChoices = useMemo(
+    () =>
+      allowedChoices(
+        assets.choices,
+        widget.destinationNetworks,
+        widget.destinationTokens,
+        seed.embed && widget.lockDestination ? { chain: seed.dstChain, symbol: seed.dstSymbol } : undefined,
+      ),
+    [assets, widget],
+  );
+  const srcTokens = useMemo(
+    () => sourceChoices.filter(choice => choice.chain === srcChain).map(choice => choice.token),
+    [sourceChoices, srcChain],
+  );
+  const dstTokens = useMemo(
+    () => destinationChoices.filter(choice => choice.chain === dstChain).map(choice => choice.token),
+    [destinationChoices, dstChain],
+  );
 
   // A chain change re-resolves the token against the new chain's list, keeping the same symbol when
   // it exists there. `pickToken` always returns a member of that list, never the previous chain's
   // object — every EVM chain's native token shares the address 0x0, so an address match would
   // silently carry the old chain's decimals onto the new one.
   useEffect(() => {
-    if (srcTokens.length > 0) setSrcToken(current => pickToken(srcTokens, current?.symbol));
-  }, [srcTokens]);
+    if (srcChain) setSrcToken(current => pickToken(srcTokens, current?.symbol));
+  }, [srcTokens, srcChain]);
 
   useEffect(() => {
-    if (dstTokens.length > 0) setDstToken(current => pickToken(dstTokens, current?.symbol));
-  }, [dstTokens]);
+    if (dstChain) setDstToken(current => pickToken(dstTokens, current?.symbol));
+  }, [dstTokens, dstChain]);
 
   useEffect(() => {
     if (!srcChain || !dstChain) return;
@@ -105,22 +131,13 @@ export function useSwapFlow({ brand }: SwapFlowOptions) {
   }, [srcChain, dstChain, srcToken, dstToken, amount, slippagePercent, brand, widget]);
 
   const groups = useMemo(() => assetGroups(assets.choices), [assets]);
-  const sourceNetworks = useMemo(
-    () => assets.chains.filter(chain => networkAllowed(chain, widget.sourceNetworks)),
-    [assets, widget],
-  );
+  const sourceNetworks = useMemo(() => [...new Set(sourceChoices.map(choice => choice.chain))], [sourceChoices]);
   const destinationNetworks = useMemo(
-    () => assets.chains.filter(chain => networkAllowed(chain, widget.destinationNetworks)),
-    [assets, widget],
+    () => [...new Set(destinationChoices.map(choice => choice.chain))],
+    [destinationChoices],
   );
-  const sourceGroups = useMemo(
-    () => assetGroups(assets.choices.filter(choice => networkAllowed(choice.chain, widget.sourceNetworks))),
-    [assets, widget],
-  );
-  const destinationGroups = useMemo(
-    () => assetGroups(assets.choices.filter(choice => networkAllowed(choice.chain, widget.destinationNetworks))),
-    [assets, widget],
-  );
+  const sourceGroups = useMemo(() => assetGroups(sourceChoices), [sourceChoices]);
+  const destinationGroups = useMemo(() => assetGroups(destinationChoices), [destinationChoices]);
   useEffect(() => {
     if (!srcChain || !sourceNetworks.includes(srcChain)) {
       setSrcChain(
@@ -229,14 +246,20 @@ export function useSwapFlow({ brand }: SwapFlowOptions) {
     if (pair) trackExchangeHandoff(pair);
   }, [pair]);
 
+  const canFlip =
+    !(seed.embed && (widget.lockSource || widget.lockDestination)) &&
+    sourceChoices.some(choice => choice.chain === dstChain && choice.token.symbol === dstToken?.symbol) &&
+    destinationChoices.some(choice => choice.chain === srcChain && choice.token.symbol === srcToken?.symbol);
   const flipDirection = useCallback(() => {
+    if (!canFlip) return;
     setSrcChain(dstChain);
     setDstChain(srcChain);
     setSrcToken(dstToken);
     setDstToken(srcToken);
-  }, [srcChain, dstChain, srcToken, dstToken]);
+  }, [srcChain, dstChain, srcToken, dstToken, canFlip]);
 
   const execution = useExecution({
+    enabled: seed.embed,
     srcChain,
     dstChain,
     srcToken,
@@ -259,6 +282,21 @@ export function useSwapFlow({ brand }: SwapFlowOptions) {
 
   return {
     execution,
+    canFlip,
+    sourceChoices,
+    destinationChoices,
+    allChoices: assets.choices,
+    resetDefaults: () => {
+      setWidget({ sourceNetworks: [], destinationNetworks: [] });
+      const src = pickChain(assets, DEFAULT_PAIR.srcChain, 0);
+      const dst = pickChain(assets, DEFAULT_PAIR.dstChain, 1);
+      setSrcChain(src);
+      setDstChain(dst);
+      setSrcToken(src ? pickToken(tokensOn(assets, src), DEFAULT_PAIR.srcSymbol) : undefined);
+      setDstToken(dst ? pickToken(tokensOn(assets, dst), DEFAULT_PAIR.dstSymbol) : undefined);
+      setAmount(DEFAULT_AMOUNT);
+      setSlippagePercent(DEFAULT_SLIPPAGE_PERCENT);
+    },
     widget,
     setWidget,
     sourceNetworks,

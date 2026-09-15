@@ -40,6 +40,7 @@ export const DEFAULT_PAIR = {
 export const EXCHANGE_URL = 'https://www.sodax.com/exchange/swap';
 
 export const walletConnectProjectId = env.VITE_WALLETCONNECT_PROJECT_ID;
+export const solanaRpcUrl = env.VITE_SOLANA_RPC_URL?.trim() || undefined;
 export const deploymentFeeInput = {
   address: env.VITE_PARTNER_FEE_RECIPIENT ?? '',
   bps: env.VITE_PARTNER_FEE_BPS ?? '',

@@ -52,19 +52,34 @@ swap is confirmed.
 
 The hosted iframe has its own wallet session. Its React export wraps that iframe; it does not accept
 the host application's wallet provider. Wallet detection in iframes varies by browser/extension.
-Use **Open in a new tab** if a wallet is unavailable in the embedded context.
+Use **Open in a new tab** if a wallet is unavailable in the embedded context. The link opens the
+widget alone at the top level, without recreating the builder iframe.
 
 ## Playground
 
-- Live preview with desktop and mobile width controls.
-- Style: light/dark/auto, colors, font, radius and density, with contrast-aware derived styles.
-- Behavior: allowed source/destination networks, derived from the live API list.
-- Default pair and amount: set them directly in the preview.
-- Copy embed: exports the current appearance, restrictions and starting trade.
-- View code: collapsed by default, with HTML, React iframe wrapper and a quote-hook example.
+The builder has three panels: **Setup**, **Appearance**, and **Integrate**.
 
-Partner fees are configured by the deployment operator and displayed to users; visitors cannot edit
-the recipient or rate. There are no fee fields that silently disappear when an embed is copied.
+- Setup chooses the starting pair, amount, slippage, allowed networks and token lists per side.
+  Lock either default token and network for a fixed source or destination. An unavailable locked
+  token blocks the route rather than silently substituting another asset.
+- The live preview is a real iframe at 480px or 375px (limited by available screen width). Dialogs,
+  media queries, and wallet connections belong to that frame. Trying a different trade in the
+  preview does not change the exported defaults in Setup.
+- Appearance updates the preview without reloading it or restyling the builder. The color controls
+  show resolved theme colors and accept hex entry; font, radius, density and secondary colors sit
+  under Advanced appearance. Derived text and CTA labels are checked for contrast.
+- Integrate provides HTML, a React iframe wrapper, and a separate SDK quote example. The React
+  wrapper owns no wallet provider and supports an optional `onSwapStatus` callback.
+- Share copies a configuration URL. Reset all restores the default trade, restrictions, and theme.
+  Setup and Appearance pause while a wallet dialog, review, preparation or activity is active in
+  the preview, so an edit cannot replace an in-progress swap.
+- The compact swap form shows minimum received, estimated time, and applicable partner fees before
+  the main action. Network fees are confirmed in the wallet; no USD or gas estimates are invented.
+- Asset search matches names, symbols and addresses, with a network filter and visible network names.
+
+Partner fees remain deployment configuration, never visitor-editable URL fields. The Integrate
+panel explains the dedicated-deployment setup path. An existing host-wallet connection, partner-ID
+registry, custom recipients, exact-output quotes, and a full transaction-history list are not provided.
 
 ## Deployment configuration
 
@@ -73,13 +88,16 @@ the recipient or rate. There are no fee fields that silently disappear when an e
 | `VITE_EMBED_ORIGIN` | Stable origin for the hosted widget. Set this before distributing copied embeds. |
 | `VITE_SWAPS_API_KEY` | Optional public browser API key, sent through the SDK. Never use a privileged key. |
 | `VITE_WALLETCONNECT_PROJECT_ID` | Enables the EVM WalletConnect connector; configure allowed origins in its dashboard. |
+| `VITE_SOLANA_RPC_URL` | Browser-approved Solana mainnet RPC for both SDK balance reads and wallet signing/broadcast. Configure allowed origins and public-key restrictions with your RPC provider. |
 | `VITE_PARTNER_FEE_RECIPIENT` | Partner's Sonic fee address. Configure with the basis-point rate below. |
 | `VITE_PARTNER_FEE_BPS` | Integer basis points, within `FEE_BPS_MAX` in `src/lib/fee.ts`. Invalid fee configuration blocks execution. |
 | `VITE_GTM_ID` | Optional analytics container. Unset means no analytics container loads. |
 | `VITE_GTM_IN_EMBED` | Set to `1` only when analytics should also load inside partner frames. |
 
-All Vite variables are public browser configuration. The wallet providers use their SDK defaults for
-RPCs; production deployments should validate those endpoints against their expected traffic.
+All Vite variables are public browser configuration; never put a private RPC credential here.
+Without `VITE_SOLANA_RPC_URL`, Solana uses the SDK's public endpoint, which may reject browser traffic
+with HTTP 403 or rate-limit it. Set a browser-approved mainnet endpoint and rebuild/restart the app.
+Other networks retain their SDK RPC defaults; validate those against expected production traffic.
 
 ## Analytics
 
@@ -102,9 +120,10 @@ nothing in this app prices the input — `input_amount` carries token units inst
 widget and site swaps must account for that. `swap_failed` carries a closed `reason` set (the phase it
 broke in, `rejected`, `settlement_failed` or `abandoned`), never a raw error string.
 
-Swap dimensions are captured at signing, so editing the form while a swap settles cannot relabel it.
-The trade-off: an activity restored from local storage after a page reload has no captured
-dimensions, so its settlement reports nothing — `swap_completed` undercounts reloads.
+Swap dimensions are captured at signing and validated when restored from the activity record.
+Settlement reporting is marked in that record to avoid reporting again on the next reload. Older
+records without dimensions still recover their transaction but cannot report attributed analytics.
+Storage blocking or simultaneous tabs prevent an exactly-once analytics guarantee.
 
 ## Not yet
 
@@ -114,14 +133,13 @@ dimensions, so its settlement reports nothing — `swap_completed` undercounts r
   production build is not caught before deploy.
 - **Bundle.** The entry chunk is a single ~10.6 MB (~2.5 MB gzipped) file with no code splitting,
   and it includes wallet code for families this widget cannot execute.
-- **`swap_completed` after a reload.** See the analytics trade-off above.
 
 ## Embed parameters
 
 `?embed=1` removes the builder and page header. Use **Copy embed** for the full integration, including
 an automatic height listener that checks both the widget origin and `event.source`.
 
-Both generated embeds set `allow="ethereum; solana"` on the `<iframe>`. Brave injects wallet providers
+Both generated embeds set `allow="ethereum; solana; clipboard-write"` on the `<iframe>`. Brave injects wallet providers
 into a third-party frame only when the host page grants those features
 ([provider availability](https://wallet-docs.brave.com/provider-availability/)); other browsers ignore
 the names. Keep the attribute when moving the iframe into your own markup.
@@ -132,6 +150,8 @@ the names. Keep the attribute when moving the iframe into your own markup.
 | `srcToken`, `dstToken` | Token symbols resolved within the chosen chain |
 | `amount`, `slippage` | Decimal amount and percentage tolerance |
 | `allowedSrc`, `allowedDst` | Comma-separated SDK chain keys; absent/empty means all API-listed networks |
+| `allowedSrcTokens`, `allowedDstTokens` | Comma-separated `chainKey:symbol` identities; absent means all tokens, present but empty permits none |
+| `lockSrc`, `lockDst` | `1` locks that side to its configured default token and network; both must be explicitly supplied |
 | `theme` | `light`, `dark`, `auto` |
 | `accent`, `cta`, `surface`, `text` | Six-digit hex colors without `#` |
 | `radius`, `font`, `density` | Supported values from `src/lib/brand.ts` |
@@ -140,10 +160,34 @@ Unknown chain names are discarded. Restrictions control this UI, not access to t
 A configured restriction with no currently listed assets cannot execute a swap. Fee settings are
 never taken from URL parameters.
 
-The iframe sends only `{ type: 'sodax:resize', height }` to its host, targeted at the framing page's
-origin (from `ancestorOrigins` or the referrer) rather than `*`; without a resolvable host origin no
-message is sent. It does not expose wallet addresses or transaction details through this message. The
-generated listener limits frame height and verifies sender identity. The deployment allows framing with `frame-ancestors *`.
+### Host messages
+
+Messages target the direct host origin (from `ancestorOrigins`, then the referrer), never `*`.
+Generated embeds use `referrerpolicy="origin"` so browsers without `ancestorOrigins` can resolve the
+host without receiving its full URL. Without a resolvable origin, no message is sent. Always verify
+both `event.origin` and `event.source === frame.contentWindow` in a host listener.
+
+| Outgoing message | Meaning |
+| --- | --- |
+| `{ type: 'sodax:resize', height }` | Content height; generated listeners clamp it to 360–1600px |
+| `{ type: 'sodax:ready' }` | Widget mounted; does not assert that assets or wallets are ready |
+| `{ type: 'sodax:swap', status: 'started' }` | User confirmed a review and execution checks began |
+| `{ type: 'sodax:swap', status: 'submitted' }` | Deposit broadcast and recovery data saved or attempted; settlement remains pending |
+| `{ type: 'sodax:swap', status: 'completed' }` | Backend reports solved |
+| `{ type: 'sodax:swap', status: 'failed' }` | Execution failed before broadcast, or settlement failed/was abandoned |
+
+Lifecycle messages contain status only, no wallet addresses, amounts, hashes or raw errors. A relay
+submission error after a broadcast stays pending for recovery, rather than emitting a terminal failure.
+The HTML snippet dispatches a `sodax:swap` CustomEvent on the frame; the React wrapper calls
+`onSwapStatus`. These are UI notifications, not proof of payment: confirm settlement server-side for
+any business action. Delivery is best effort, not an exactly-once or replayable event stream.
+
+A host can send `{ type: 'sodax:theme', theme: 'light' | 'dark' | 'auto' }` to the widget origin after
+`sodax:ready`. Only messages from the direct parent with its exact resolved origin are accepted.
+Theme changes never connect wallets or request signatures. The builder additionally uses same-origin
+`sodax:preview-brand` and `sodax:preview-busy` messages for its isolated preview.
+
+The deployment allows framing with `frame-ancestors *`.
 
 ## Transaction lifecycle and recovery
 

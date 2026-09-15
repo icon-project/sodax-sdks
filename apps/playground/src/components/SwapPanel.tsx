@@ -1,7 +1,7 @@
 import { EXCHANGE_URL } from '../config';
 import type { SwapFlow } from '../hooks/useSwapFlow';
 import type { TokenChoice } from '../lib/chains';
-import { WalletControls } from './WalletControls';
+import { WalletControls, WalletButton } from './WalletControls';
 import { SwapReview } from './SwapReview';
 import { formatTokenAmount } from '../lib/format';
 import { AssetPicker } from './AssetPicker';
@@ -38,7 +38,7 @@ function PrimaryAction({ flow }: { flow: SwapFlow }) {
   if (!e.source?.address)
     return (
       <button type="button" className="btn btn-primary" onClick={() => e.openConnect(e.sourceType)}>
-        Connect wallet
+        Connect sending wallet
       </button>
     );
   if (!e.destination?.address)
@@ -134,6 +134,7 @@ export function SwapPanel({ flow }: { flow: SwapFlow }) {
         <fieldset className="swap-fields" disabled={!!flow.execution.phase || !!flow.execution.activity}>
           <div className="row-between asset-caption">
             <span>You pay</span>
+            <WalletButton execution={flow.execution} />
             {flow.execution.balanceText !== undefined && (
               <span>
                 Balance: {formatTokenAmount(flow.execution.balanceText)}
@@ -154,6 +155,7 @@ export function SwapPanel({ flow }: { flow: SwapFlow }) {
             chain={srcChain}
             emptyLabel="No assets"
             pickerLabel="Asset to send"
+            locked={flow.widget.lockSource}
             picker={state => (
               <AssetPicker
                 {...state}
@@ -169,13 +171,18 @@ export function SwapPanel({ flow }: { flow: SwapFlow }) {
             note={flow.partnerFee ? `less ${formatTokenAmount(flow.partnerFeeAmount)} fee` : undefined}
           />
 
-          <FlipButton onClick={flow.flipDirection} />
+          <FlipButton onClick={flow.flipDirection} disabled={!flow.canFlip} />
+          <div className="row-between asset-caption">
+            <span>You receive</span>
+            <WalletButton execution={flow.execution} receiving />
+          </div>
 
           <AssetPanel
             symbol={flow.dstToken?.symbol}
             chain={dstChain}
             emptyLabel="No assets"
             pickerLabel="Asset to receive"
+            locked={flow.widget.lockDestination}
             picker={state => (
               <AssetPicker
                 {...state}
@@ -190,39 +197,44 @@ export function SwapPanel({ flow }: { flow: SwapFlow }) {
             note={flow.hasQuote ? (flow.isQuoting ? 'refreshing…' : 'Live quote') : undefined}
           />
         </fieldset>
-        <details className="disclosure swap-details">
-          <summary>Swap details &amp; settings</summary>
-          <div className="summary">
-            <div className="row-between">
-              <span className="muted">Slippage</span>
-              <span className="slippage">
-                <input
-                  className="input slip"
-                  aria-label="Slippage tolerance, percent"
-                  inputMode="decimal"
-                  value={flow.slippagePercent}
-                  onChange={event => flow.setSlippagePercent(event.target.value)}
-                />
-                %
-              </span>
-            </div>
-            {flow.partnerFee && (
-              <div className="row-between">
-                <span className="muted">Partner fee ({flow.partnerFee.percentage / 100}%)</span>
-                <Amount value={flow.partnerFeeAmount} symbol={flow.srcToken?.symbol} />
-              </div>
-            )}
-            <div className="row-between">
-              <span className="muted">Minimum received</span>
-              <Amount value={flow.minReceived} symbol={flow.dstToken?.symbol} />
-            </div>
-            {flow.speedTier && (
-              <div className="row-between">
-                <span className="muted">Estimated time</span>
-                <span>~{flow.speedTier.estimatedSeconds}s</span>
-              </div>
-            )}
+        <section className="quote-summary" aria-label="Quote summary">
+          <div className="row-between">
+            <span className="muted">Minimum received</span>
+            <Amount value={flow.minReceived} symbol={flow.dstToken?.symbol} />
           </div>
+          {flow.speedTier && (
+            <div className="row-between">
+              <span className="muted">Estimated time</span>
+              <span>~{flow.speedTier.estimatedSeconds}s</span>
+            </div>
+          )}
+          {flow.partnerFee && (
+            <div className="row-between">
+              <span className="muted">Partner fee ({flow.partnerFee.percentage / 100}%, included)</span>
+              <Amount value={flow.partnerFeeAmount} symbol={flow.srcToken?.symbol} />
+            </div>
+          )}
+          <div className="row-between">
+            <span className="muted">Network fees</span>
+            <span>Confirmed in your wallet</span>
+          </div>
+        </section>
+        <details className="disclosure swap-details">
+          <summary>Slippage settings · {flow.slippagePercent}%</summary>
+          <label className="row-between">
+            <span className="muted">Slippage tolerance</span>
+            <span className="slippage">
+              <input
+                className="input slip"
+                aria-label="Slippage tolerance, percent"
+                inputMode="decimal"
+                value={flow.slippagePercent}
+                disabled={!!flow.execution.phase || !!flow.execution.review || !!flow.execution.activity}
+                onChange={event => flow.setSlippagePercent(event.target.value)}
+              />
+              %
+            </span>
+          </label>
         </details>
         {flow.execution.balanceError && (
           <p className="muted small">Balance unavailable. Check your balance and network fees in your wallet.</p>
@@ -230,7 +242,6 @@ export function SwapPanel({ flow }: { flow: SwapFlow }) {
 
         <div className="action-dock">
           <PrimaryAction flow={flow} />
-          {/* Reserve space so quote errors do not move the action. */}
           <div className="action-message" role="status" aria-live="polite">
             {message && <p className="alert">{message}</p>}
           </div>

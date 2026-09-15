@@ -194,6 +194,8 @@ export function isUserRejection(error: unknown): boolean {
 
 export function executionError(error: unknown): string {
   const message = error instanceof Error ? error.message : 'Could not complete this step. Please try again.';
+  if (/\b403\b|access forbidden/i.test(message))
+    return 'The network connection refused this request (403). Please try again once the connection is restored.';
   if (isUserRejection(error)) return 'Request declined in your wallet. You can try again.';
   return message;
 }

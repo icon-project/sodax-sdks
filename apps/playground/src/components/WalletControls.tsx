@@ -13,74 +13,76 @@ export function WalletControls({ execution }: { execution: Execution }) {
   const e = execution;
   const connected = e.connectType === e.sourceType ? e.source : e.destination;
   return (
-    <>
-      <div className="wallet-row">
-        <button
-          type="button"
-          className="btn"
-          onClick={() => e.openConnect(e.sourceType)}
-          disabled={!e.signable || !!e.phase}
-        >
-          {e.source?.address ? shortAddress(e.source.address) : 'Connect wallet'}
-        </button>
-        {e.sourceType !== e.destinationType && e.signable && (
-          <button type="button" className="btn" onClick={() => e.openConnect(e.destinationType)} disabled={!!e.phase}>
-            {e.destination?.address
-              ? `Receive: ${shortAddress(e.destination.address)}`
-              : `Connect ${familyName(e.destinationType)} to receive`}
+    <Modal
+      title={`Connect ${familyName(e.connectType ?? '')} wallet`}
+      open={e.connectType !== undefined}
+      onClose={e.closeConnect}
+    >
+      {connected?.address ? (
+        <div className="modal-body">
+          <p className="address-text">{connected.address}</p>
+          <button
+            type="button"
+            className="btn"
+            onClick={() => {
+              if (e.connectType) e.disconnect({ xChainType: e.connectType });
+              e.closeConnect();
+            }}
+          >
+            Disconnect
           </button>
-        )}
-      </div>
-      <Modal
-        title={`Connect ${familyName(e.connectType ?? '')} wallet`}
-        open={e.connectType !== undefined}
-        onClose={e.closeConnect}
-      >
-        {connected?.address ? (
-          <div className="modal-body">
-            <p className="address-text">{connected.address}</p>
+        </div>
+      ) : (
+        <div className="wallet-list">
+          <p className="muted small">Choose a wallet. Connecting does not move funds.</p>
+          {e.connectors.length === 0 && (
+            <p>
+              No compatible wallet detected. Open this widget in your wallet’s browser or install a compatible wallet.
+            </p>
+          )}
+          {e.connectors.map(connector => (
             <button
               type="button"
-              className="btn"
-              onClick={() => {
-                if (e.connectType) e.disconnect({ xChainType: e.connectType });
-                e.closeConnect();
-              }}
+              className="btn wallet-option"
+              key={connector.id}
+              disabled={e.connection.status === 'connecting'}
+              onClick={() => e.connection.connect(connector)}
             >
-              Disconnect
+              {connector.icon && <img src={connector.icon} alt="" width="28" height="28" />}
+              {connector.name}
+              {e.connection.activeConnector?.id === connector.id &&
+                e.connection.status === 'connecting' &&
+                ' — waiting for wallet…'}
             </button>
-          </div>
-        ) : (
-          <div className="wallet-list">
-            <p className="muted small">Choose a wallet. Connecting does not move funds.</p>
-            {e.connectors.length === 0 && (
-              <p>
-                No compatible wallet detected. Open this widget in your wallet’s browser or install a compatible wallet.
-              </p>
-            )}
-            {e.connectors.map(connector => (
-              <button
-                type="button"
-                className="btn wallet-option"
-                key={connector.id}
-                disabled={e.connection.status === 'connecting'}
-                onClick={() => e.connection.connect(connector)}
-              >
-                {connector.icon && <img src={connector.icon} alt="" width="28" height="28" />}
-                {connector.name}
-                {e.connection.activeConnector?.id === connector.id &&
-                  e.connection.status === 'connecting' &&
-                  ' — waiting for wallet…'}
-              </button>
-            ))}
-            {e.connection.status === 'error' && (
-              <p className="alert" role="alert">
-                {e.connection.error?.message}
-              </p>
-            )}
-          </div>
-        )}
-      </Modal>
-    </>
+          ))}
+          {e.connection.status === 'error' && (
+            <p className="alert" role="alert">
+              {e.connection.error?.message}
+            </p>
+          )}
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+export function WalletButton({ execution: e, receiving = false }: { execution: Execution; receiving?: boolean }) {
+  const account = receiving ? e.destination : e.source;
+  const type = receiving ? e.destinationType : e.sourceType;
+  if (!e.signable || (!account?.address && (!receiving || !e.source?.address))) return null;
+  return (
+    <button
+      type="button"
+      className="btn wallet-inline"
+      disabled={!!e.phase || !!e.activity}
+      onClick={() => e.openConnect(type)}
+      aria-label={
+        account?.address
+          ? `${receiving ? 'Receiving' : 'Sending'} wallet ${account.address}`
+          : `Connect ${familyName(type)} receiving wallet`
+      }
+    >
+      {account?.address ? shortAddress(account.address) : `Connect ${familyName(type)} wallet`}
+    </button>
   );
 }

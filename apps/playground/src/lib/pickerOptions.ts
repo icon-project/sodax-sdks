@@ -70,3 +70,21 @@ export function previewNetworks<K extends ChainKey>(networks: readonly K[], coun
   const rest = networks.filter(key => !preferred.includes(key));
   return [...preferred, ...rest].slice(0, count);
 }
+
+/** Search resolved API assets, retaining the network on every result. */
+export function searchChoices<K extends ChainKey>(
+  choices: readonly TokenChoice<K>[],
+  query: string,
+  network?: K,
+): TokenChoice<K>[] {
+  const needle = query.trim().toLowerCase();
+  return choices
+    .filter(
+      choice =>
+        (!network || choice.chain === network) &&
+        [choice.token.symbol, choice.token.name, choice.token.address].some(value =>
+          value.toLowerCase().includes(needle),
+        ),
+    )
+    .sort((a, b) => Number(b.token.symbol.toLowerCase() === needle) - Number(a.token.symbol.toLowerCase() === needle));
+}

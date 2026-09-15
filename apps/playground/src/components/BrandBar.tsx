@@ -1,13 +1,6 @@
+import { useState } from 'react';
 import type { BrandControls } from '../hooks/useBrand';
-import {
-  BRAND_DEFAULTS,
-  type Brand,
-  type ColorField,
-  DENSITIES,
-  FONT_STACKS,
-  RADIUS_SCALES,
-  readBrandField,
-} from '../lib/brand';
+import { type Brand, type ColorField, DENSITIES, FONT_STACKS, RADIUS_SCALES, readBrandField } from '../lib/brand';
 import { PRESETS, SODAX_SWATCH, activePreset } from '../lib/presets';
 
 /** Hints are `title` tooltips, not a line under each cell: eight of those cost ~90px of height. */
@@ -72,16 +65,17 @@ function Swatch({ colors }: { colors: readonly (string | undefined)[] }) {
 
 /** Edits the same validated brand state carried by the exported embed. */
 export function BrandBar({ controls }: { controls: BrandControls }) {
-  const { brand, notes, isBranded, update, apply, reset } = controls;
+  const { brand, colors, notes, isBranded, update, apply, reset } = controls;
+  const [advanced, setAdvanced] = useState(false);
   const active = activePreset(brand);
 
   return (
     <section className="brand-card card">
       <header className="brand-head">
-        <h3 className="brand-title">Theme &amp; brand</h3>
+        <h3 className="brand-title">Appearance</h3>
       </header>
 
-      <p className="brand-lead small">Pick a preset or set your own. It all carries into your embed.</p>
+      <p className="brand-lead small">Start with a preset, then make it yours.</p>
 
       {/* SODAX sits in the shelf rather than beside it: it is the default look, a peer of the other
           five, and as a chip it can show itself selected — which a "Reset" button never could. */}
@@ -112,7 +106,7 @@ export function BrandBar({ controls }: { controls: BrandControls }) {
       </fieldset>
 
       <div className="brand-grid">
-        {COLOR_FIELDS.map(field => (
+        {COLOR_FIELDS.filter(field => advanced || field.key === 'cta' || field.key === 'surface').map(field => (
           <label className="brand-cell" key={field.key} title={field.hint}>
             <span className="brand-label">{field.label}</span>
             <span className="brand-control">
@@ -120,10 +114,24 @@ export function BrandBar({ controls }: { controls: BrandControls }) {
                 type="color"
                 className="brand-swatch"
                 aria-label={field.label}
-                value={brand[field.key] ?? BRAND_DEFAULTS[field.key]}
+                value={colors[field.key]}
                 onChange={event => update(field.key, readBrandField(field.key, event.target.value))}
               />
-              <code className="brand-value">{brand[field.key]?.slice(1) ?? 'default'}</code>
+              <input
+                key={colors[field.key]}
+                className="input brand-hex"
+                aria-label={`${field.label} hex color`}
+                defaultValue={colors[field.key]}
+                maxLength={7}
+                onBlur={event => {
+                  const value = readBrandField(field.key, event.target.value);
+                  if (value) update(field.key, value);
+                  else event.target.value = colors[field.key];
+                }}
+                onKeyDown={event => {
+                  if (event.key === 'Enter') event.currentTarget.blur();
+                }}
+              />
               {brand[field.key] && (
                 <button
                   type="button"
@@ -138,7 +146,7 @@ export function BrandBar({ controls }: { controls: BrandControls }) {
           </label>
         ))}
 
-        {CHOICE_FIELDS.map(field => (
+        {CHOICE_FIELDS.filter(field => advanced || field.key === 'theme').map(field => (
           <label className="brand-cell" key={field.key} title={field.hint}>
             <span className="brand-label">{field.label}</span>
             <select
@@ -156,6 +164,14 @@ export function BrandBar({ controls }: { controls: BrandControls }) {
         ))}
       </div>
 
+      <button
+        className="btn advanced-toggle"
+        type="button"
+        aria-expanded={advanced}
+        onClick={() => setAdvanced(!advanced)}
+      >
+        {advanced ? 'Fewer options' : 'Advanced appearance'}
+      </button>
       {notes.length > 0 && (
         <ul className="brand-notes small">
           {notes.map(note => (
