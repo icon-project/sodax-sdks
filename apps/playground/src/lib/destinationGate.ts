@@ -1,3 +1,6 @@
+import type { Result } from '@sodax/dapp-kit';
+import { executionError } from './execution';
+
 /**
  * Some destinations can accept a swap the recipient cannot actually receive: a Stellar account that
  * is not activated or lacks a trustline, or a NEAR account with no NEP-141 storage registered. The
@@ -5,7 +8,10 @@
  * after. Every field mirrors the dapp-kit gate hooks; this reduces them to one thing the UI renders.
  */
 
-export type GateAction = { label: string; run: () => Promise<unknown> };
+/** Never rejects: the SDK result, or `undefined` when the hook had no inputs to act on. */
+export type Preparation = () => Promise<Result<unknown> | undefined>;
+
+export type GateAction = { label: string; run: Preparation };
 
 export type DestinationGate = {
   /** Execution must stay disabled: the gate is unmet, or still resolving. */
@@ -26,8 +32,8 @@ export type StellarGateView = {
   isChecking: boolean;
   isActivating: boolean;
   isRequestingTrustline: boolean;
-  activate: () => Promise<unknown>;
-  requestTrustline: () => Promise<unknown>;
+  activate: Preparation;
+  requestTrustline: Preparation;
 };
 
 export type NearGateView = {
@@ -36,7 +42,7 @@ export type NearGateView = {
   blocksAction: boolean;
   isChecking: boolean;
   isRegistering: boolean;
-  registerStorage: () => Promise<unknown>;
+  registerStorage: Preparation;
 };
 
 const OPEN: DestinationGate = { blocked: false, notice: undefined, action: undefined, busy: false };
@@ -77,7 +83,7 @@ function nearNotice(gate: NearGateView): Pick<DestinationGate, 'notice' | 'actio
   return { notice: gate.isChecking ? 'Checking the receiving NEAR account…' : undefined, action: undefined };
 }
 
-export function resolveDestinationGate(stellar: StellarGateView, near: NearGateView): DestinationGate {
+function resolvePrerequisite(stellar: StellarGateView, near: NearGateView): DestinationGate {
   if (stellar.isStellar) {
     return {
       blocked: stellar.blocksAction,
@@ -89,4 +95,18 @@ export function resolveDestinationGate(stellar: StellarGateView, near: NearGateV
     return { blocked: near.blocksAction, busy: near.isRegistering, ...nearNotice(near) };
   }
   return OPEN;
+}
+
+/**
+ * `lastPreparation` is what the most recent `action.run` resolved to. A failure — a declined wallet
+ * prompt, a rejected transaction — takes the notice for as long as the same remedy is still offered.
+ */
+export function resolveDestinationGate(
+  stellar: StellarGateView,
+  near: NearGateView,
+  lastPreparation?: Result<unknown>,
+): DestinationGate {
+  const gate = resolvePrerequisite(stellar, near);
+  const failure = lastPreparation && !lastPreparation.ok ? executionError(lastPreparation.error) : undefined;
+  return failure && gate.action ? { ...gate, notice: failure } : gate;
 }

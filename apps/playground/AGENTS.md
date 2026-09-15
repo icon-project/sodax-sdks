@@ -56,13 +56,17 @@ pnpm check:ai-dev-files
   or NEAR's `signerId`. Injective states a hex sender while its wallet reports bech32; comparing
   those rejects every valid swap, so it is exempt by design.
 - A destination whose receiving account is not ready blocks execution before signing, including
-  while the check is still in flight. Never let a swap leave the source chain to strand.
+  while the check is still in flight. Never let a swap leave the source chain to strand. The form
+  offers the remedy only once a quote exists, surfaces the remedy's own failure, and `confirm`
+  re-checks the gate against the reviewed minimum.
 
 ## Embed and UI
 
 - `?embed=1` renders only the widget; URL rewrites preserve embed mode, branding and restrictions.
 - Network and token options come from the swaps API; names/logos/explorers come from SDK exports.
-  Do not hardcode network inventories or promise exclusivity for assets.
+  Do not hardcode network inventories or promise exclusivity for assets. The one client-side
+  exception is `EXCLUDED_CHAINS` in `lib/assets.ts`: chains the API still lists but the product no
+  longer routes. Add there, never filter in the UI.
 - `VITE_EMBED_ORIGIN` selects the stable hosted deployment used by exported snippets. Vite variables
   are public. WalletConnect requires the deployment operator's project ID.
 - The hosted iframe owns its wallet session. Do not describe its React wrapper as a native component

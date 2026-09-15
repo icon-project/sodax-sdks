@@ -15,6 +15,7 @@ import {
   type XToken,
   type CreateIntentParamsV2,
   type PartnerFeePercentage,
+  type Result,
 } from '@sodax/dapp-kit';
 import {
   useWalletProvider,
@@ -95,12 +96,15 @@ export function useExecution(input: ExecutionInput) {
   const canMax = !!srcKey && !!input.srcToken && !isNativeToken(srcKey, input.srcToken) && balance !== undefined;
   const insufficientBalance = balance !== undefined && input.inputAmount !== undefined && input.inputAmount > balance;
 
+  const [review, setReview] = useState<CreateIntentParamsV2>();
   // Stellar and NEAR can accept a swap the recipient cannot receive: an unactivated account, a
   // missing trustline, or unregistered NEP-141 storage. Both gates go inert off their own chain.
   const stellarGate = useStellarGate({
     dstChainKey: dstKey,
     token: input.dstToken?.address,
-    amount: input.minOutputAmount,
+    // The reviewed minimum while a review is open: it is what the swap will deliver at least, and
+    // it keeps a quote refresh from re-querying the trustline underneath the confirm button.
+    amount: review ? BigInt(review.minOutputAmount) : input.minOutputAmount,
     address: destination?.address,
     walletProvider: destinationWallet,
   });
@@ -110,12 +114,12 @@ export function useExecution(input: ExecutionInput) {
     accountId: destination?.address,
     walletProvider: destinationWallet,
   });
-  const destinationGate = resolveDestinationGate(stellarGate, nearGate);
+  const [preparation, setPreparation] = useState<Result<unknown>>();
+  const destinationGate = resolveDestinationGate(stellarGate, nearGate, preparation);
   const [activity, setActivity] = useState<Activity | undefined>(loadActivity);
   const [storageAvailable, setStorageAvailable] = useState(true);
   const [phase, setPhase] = useState<ExecutionPhase>();
   const [error, setError] = useState<string>();
-  const [review, setReview] = useState<CreateIntentParamsV2>();
   const busyRef = useRef(false);
   const phaseRef = useRef<ExecutionPhase>('checking');
   // Dimensions as they were at signing, so a form edited while the swap settles cannot relabel it.
@@ -147,12 +151,19 @@ export function useExecution(input: ExecutionInput) {
   const fingerprint = `${input.srcChain}|${input.dstChain}|${input.srcToken?.address}|${input.dstToken?.address}|${input.amount}|${input.partnerFee?.address}|${input.partnerFee?.percentage}|${source?.address}|${destination?.address}`;
   useEffect(() => {
     void fingerprint;
+    setPreparation(undefined);
     if (!busyRef.current) setReview(undefined);
   }, [fingerprint]);
 
   const openConnect = (type: ChainType) => {
     connection.reset();
     setConnectType(type);
+  };
+  const prepareDestination = async () => {
+    const action = destinationGate.action;
+    if (!action || destinationGate.busy) return;
+    setPreparation(undefined);
+    setPreparation(await action.run());
   };
   const openReview = () => {
     setError(undefined);
@@ -205,6 +216,7 @@ export function useExecution(input: ExecutionInput) {
       ) {
         throw new Error('The connected account changed. Review the swap again.');
       }
+      if (destinationGate.blocked) throw new Error('The receiving account is not ready. Review the swap again.');
       const srcChainKey = input.srcChain;
       const dstChainKey = input.dstChain;
       await executeSwap(review, {
@@ -289,6 +301,7 @@ export function useExecution(input: ExecutionInput) {
     isWrongChain,
     handleSwitchChain,
     destinationGate,
+    prepareDestination,
     review,
     openReview,
     confirm,

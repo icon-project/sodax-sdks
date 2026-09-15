@@ -54,16 +54,6 @@ function PrimaryAction({ flow }: { flow: SwapFlow }) {
       </button>
     );
   if (e.insufficientBalance) return disabled('Insufficient balance');
-  // The receiving account cannot hold the asset yet; the notice beneath says why.
-  if (e.destinationGate.blocked) {
-    const { action, busy } = e.destinationGate;
-    if (!action) return disabled('Receiving account not ready');
-    return (
-      <button type="button" className="btn btn-primary" onClick={() => void action.run()} disabled={busy}>
-        {busy ? 'Working…' : action.label}
-      </button>
-    );
-  }
   if (flow.quoteError)
     return (
       <button type="button" className="btn btn-primary" onClick={flow.refreshQuote}>
@@ -72,6 +62,17 @@ function PrimaryAction({ flow }: { flow: SwapFlow }) {
     );
   if (flow.hasQuote && Number(flow.minReceived) <= 0) return disabled('Amount too small');
   if (!flow.hasQuote) return disabled(flow.isQuoting ? 'Finding a quote…' : 'Enter an amount');
+  // The receiving account cannot hold the asset yet; the notice beneath says why. Only after a quote:
+  // the trustline check needs the minimum amount, and without one it would mask the quote's retry.
+  if (e.destinationGate.blocked) {
+    const { action, busy } = e.destinationGate;
+    if (!action) return disabled('Receiving account not ready');
+    return (
+      <button type="button" className="btn btn-primary" onClick={() => void e.prepareDestination()} disabled={busy}>
+        {busy ? 'Working…' : action.label}
+      </button>
+    );
+  }
   return (
     <button type="button" className="btn btn-primary" onClick={e.openReview}>
       Review swap

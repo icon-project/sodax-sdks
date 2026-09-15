@@ -46,7 +46,9 @@ form renders, and execution stays blocked while a gate is unmet **or still resol
 | NEAR | NEP-141 storage registered for the token | **Register storage** |
 
 Activation is checked before the trustline: an unactivated account also reports a missing trustline,
-and offering the trustline first would fail.
+and offering the trustline first would fail. The remedy is offered once a quote exists; a remedy the
+wallet declines or that fails reports why beneath the button, and the gate is checked again when the
+swap is confirmed.
 
 The hosted iframe has its own wallet session. Its React export wraps that iframe; it does not accept
 the host application's wallet provider. Wallet detection in iframes varies by browser/extension.

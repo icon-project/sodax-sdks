@@ -109,4 +109,34 @@ describe('resolveDestinationGate', () => {
     expect(resolveDestinationGate(stellar({}), nearOff).blocked).toBe(false);
     expect(resolveDestinationGate(stellarOff, near({})).blocked).toBe(false);
   });
+
+  // The remedy's own failure is the one thing the visitor cannot see otherwise: the button stays
+  // the same and the gate stays blocked, so the notice has to carry it.
+  it('reports a failed preparation in place of the prerequisite notice and keeps the action', () => {
+    const declined = resolveDestinationGate(stellar({ blocksAction: true, needsTrustline: true }), nearOff, {
+      ok: false,
+      error: new Error('User rejected the request'),
+    });
+    expect(declined.blocked).toBe(true);
+    expect(declined.notice).toBe('Request declined in your wallet. You can try again.');
+    expect(declined.action?.label).toBe('Add trustline');
+
+    const failed = resolveDestinationGate(stellarOff, near({ blocksAction: true, needsRegistration: true }), {
+      ok: false,
+      error: new Error('storage_deposit failed'),
+    });
+    expect(failed.notice).toBe('storage_deposit failed');
+    expect(failed.action?.label).toBe('Register storage');
+  });
+
+  it('ignores a successful preparation, and a failure once no remedy is offered', () => {
+    const unmet = stellar({ blocksAction: true, needsTrustline: true });
+    expect(resolveDestinationGate(unmet, nearOff, { ok: true, value: 'tx' }).notice).toContain('trustline');
+
+    const failure = { ok: false, error: new Error('boom') } as const;
+    expect(resolveDestinationGate(stellar({}), nearOff, failure).notice).toBeUndefined();
+    expect(
+      resolveDestinationGate(stellar({ blocksAction: true, needsFunding: true }), nearOff, failure).notice,
+    ).toContain('spendable XLM');
+  });
 });
