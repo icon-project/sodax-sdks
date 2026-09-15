@@ -18,7 +18,7 @@ const CHOICE_FIELDS = [
     label: 'Theme',
     choices: { auto: null, light: null, dark: null },
     fallback: 'auto',
-    hint: 'auto follows the visitor',
+    hint: 'auto follows the visitor; a surface colour sets the starting theme',
   },
   {
     key: 'radius',

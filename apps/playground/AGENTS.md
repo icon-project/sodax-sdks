@@ -84,8 +84,13 @@ pnpm check:ai-dev-files
 - Preview appearance changes must not restyle the builder or reload an active swap. Setup edits are
   blocked while its preview has a wallet dialog, review, preparation or activity.
 - Preserve the SODAX B2B palette and semantic CSS roles. Brand overrides validate values and derive
-  contrast. Theme resolves pre-paint in `index.html` and must agree with `useBrand`. A preset seeds
+  contrast. Theme resolves pre-paint in `index.html` and must agree with `useBrand`; that script does
+  no colour maths, which is why `writeBrand` spells out the theme a surface implies. A preset seeds
   that same state; it must not name a real third-party brand or load a font outside `FONT_STACKS`.
+- A brand states one surface and both themes derive from it: the theme that surface already is renders
+  it exactly, the other gets a ground derived from it, so `?theme=` and `sodax:theme` reach a branded
+  embed. With no `theme` the surface decides — never invert a ground a partner chose. Corrections are
+  reported per theme; pooling them reports one the theme on screen did not make.
 - No UI framework or icon-library dependency. Import SDK/types through `@sodax/dapp-kit`.
 - `polyfill.ts` must remain the first entry import; the SDK graph needs `Buffer` during evaluation.
 - Swap is the only flow. Do not turn the swap widget into a multi-product dashboard; another product
