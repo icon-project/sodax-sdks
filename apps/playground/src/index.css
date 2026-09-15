@@ -1051,7 +1051,8 @@ code,
 }
 
 .picker::backdrop {
-  background: rgb(29 20 20 / 40%);
+  background: var(--border-strong);
+  backdrop-filter: blur(6px);
 }
 
 .picker-body {
@@ -1348,10 +1349,22 @@ code,
   overflow-wrap: anywhere;
 }
 
+/* Dismisses an open flyout or network sheet; sits under both and over the grid they cover. */
+.picker-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: default;
+}
+
 /* Two centred columns floating over the blurred grid, as the exchange's chain selector does. */
 .network-overlay {
   position: absolute;
   inset: 0;
+  z-index: 2;
   display: grid;
   grid-template-columns: repeat(2, max-content);
   gap: 4px var(--space-16);
@@ -1456,6 +1469,13 @@ code,
 
 .network-row-active {
   font-weight: 600;
+}
+
+.network-row-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.2;
 }
 
 .network-logo {
@@ -2074,9 +2094,17 @@ body:has(.app-embed) {
 .studio-heading p {
   margin: 4px 0;
 }
+.studio-action-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 320px;
+  max-width: 100%;
+}
 .studio-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 8px;
 }
 .studio-actions .btn-primary {
@@ -2084,10 +2112,11 @@ body:has(.app-embed) {
   height: 40px;
   padding: 0 20px;
 }
-.studio-status {
-  flex-basis: 100%;
-  min-height: 18px;
+.studio-heading .studio-status {
+  min-height: 36px;
   margin: 0;
+  line-height: 18px;
+  text-align: right;
 }
 .share-link {
   width: 100%;
@@ -2122,8 +2151,7 @@ body:has(.app-embed) {
   padding: 16px;
 }
 .setup-card h3,
-.integration-card h3,
-.asset-picker-list h3 {
+.integration-card h3 {
   margin: 0;
 }
 .setup-side {
@@ -2198,15 +2226,17 @@ body:has(.app-embed) {
   padding: 12px;
   border: 1px solid var(--border-subtle);
   border-radius: 20px;
-  background: radial-gradient(var(--border-strong) 1px, transparent 1px) 0 0 / 12px 12px;
   min-height: 540px;
 }
+/* Overflow alone leaves the frame's corners square once the widget opens a modal; the clip path
+   rounds everything the iframe paints, backdrop blur included. */
 .preview-frame {
   width: 100%;
   max-width: 480px;
   margin: auto;
   overflow: hidden;
   border-radius: 24px;
+  clip-path: inset(0 round 24px);
   border: 1px solid var(--border-strong);
   box-shadow: 0 12px 36px var(--logo-shadow);
 }
@@ -2282,55 +2312,6 @@ body:has(.app-embed) {
 .asset-id:disabled {
   opacity: 1;
   cursor: default;
-}
-.asset-picker-list .picker-body {
-  padding: 16px;
-  gap: 12px;
-}
-.asset-picker-list .picker-close {
-  width: 36px;
-  height: 36px;
-  align-self: center;
-}
-.asset-results {
-  overflow-y: auto;
-  min-height: 0;
-}
-.asset-result {
-  display: flex;
-  width: 100%;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 4px;
-  border: 0;
-  border-bottom: 1px solid var(--border-subtle);
-  color: var(--text-heading);
-  background: transparent;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.asset-result:hover,
-.asset-result[aria-pressed="true"] {
-  background: var(--surface-inset);
-}
-.asset-result-name {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  flex: 1;
-  overflow-wrap: anywhere;
-}
-.asset-result-network {
-  display: flex;
-  flex-direction: column;
-  font-size: 12px;
-  text-align: right;
-  max-width: 90px;
-}
-.asset-result .asset-logo {
-  width: 36px;
-  height: 36px;
 }
 @media (min-width: 981px) and (min-height: 720px) {
   .app-studio {

@@ -73,6 +73,7 @@ The builder has three panels: **Setup**, **Appearance**, and **Integrate**.
   wrapper owns no wallet provider and supports an optional `onSwapStatus` callback. Its info tooltip
   uses the frontend bubble style above the icon, with viewport positioning outside the scrolling panel.
 - Share copies a configuration URL. Reset all restores the default trade, restrictions, and theme.
+  Action confirmations appear in reserved space below the header buttons so the configuration tabs stay put.
   Setup and Appearance pause while a wallet dialog, review, preparation or activity is active in
   the preview, so an edit cannot replace an in-progress swap.
 - The compact swap form shows minimum received, estimated time, and applicable partner fees before

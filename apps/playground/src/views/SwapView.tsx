@@ -89,30 +89,32 @@ export function SwapView({ flow, brandControls }: { flow: SwapFlow; brandControl
           <h2>Build your swap widget.</h2>
           <p className="muted">Set the trade, make it yours, and embed it in your app.</p>
         </div>
-        <div className="studio-actions">
-          <button
-            type="button"
-            className="btn"
-            disabled={previewBusy}
-            onClick={() => {
-              flow.resetDefaults();
-              brandControls.reset();
-              setMessage('Configuration reset');
-              setShareFallback('');
-            }}
-          >
-            Reset all
-          </button>
-          <button type="button" className="btn" disabled={!configured} onClick={share}>
-            Share
-          </button>
-          <button type="button" className="btn btn-primary" disabled={!configured} onClick={copy}>
-            Copy embed
-          </button>
+        <div className="studio-action-group">
+          <div className="studio-actions">
+            <button
+              type="button"
+              className="btn"
+              disabled={previewBusy}
+              onClick={() => {
+                flow.resetDefaults();
+                brandControls.reset();
+                setMessage('Configuration reset');
+                setShareFallback('');
+              }}
+            >
+              Reset all
+            </button>
+            <button type="button" className="btn" disabled={!configured} onClick={share}>
+              Share
+            </button>
+            <button type="button" className="btn btn-primary" disabled={!configured} onClick={copy}>
+              Copy embed
+            </button>
+          </div>
+          <p className="studio-status small" role="status">
+            {message}
+          </p>
         </div>
-        <p className="studio-status small" role="status" hidden={!message}>
-          {message}
-        </p>
         {shareFallback && (
           <input
             className="input share-link"
