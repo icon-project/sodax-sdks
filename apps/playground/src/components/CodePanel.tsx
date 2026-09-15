@@ -53,6 +53,7 @@ export function CodePanel({ snippets, initialId }: { snippets: Snippet[]; initia
           </a>
         </div>
       </header>
+      {active.note && <p className="muted small snippet-note">{active.note}</p>}
       {copyError && (
         <p role="status" className="muted small">
           {copyError}

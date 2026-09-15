@@ -29,7 +29,10 @@ const PANELS = { setup: 'Setup', appearance: 'Appearance', integrate: 'Integrate
 export function SwapView({ flow, brandControls }: { flow: SwapFlow; brandControls: BrandControls }) {
   const [panel, setPanel] = useState<keyof typeof PANELS>('setup');
   const [mobile, setMobile] = useState(false);
-  const [message, setMessage] = useState('');
+  // Success is confirmed on the button that was pressed; the line below is for the paths that need
+  // an instruction, so nothing reserves space for a message that is usually absent.
+  const [copied, setCopied] = useState<'share' | 'embed'>();
+  const [notice, setNotice] = useState('');
   const [shareFallback, setShareFallback] = useState('');
   const [previewBusy, setPreviewBusy] = useState(false);
   const { srcChain, dstChain, srcToken, dstToken, amount, slippagePercent, partnerFee, brand, widget } = flow;
@@ -58,15 +61,21 @@ export function SwapView({ flow, brandControls }: { flow: SwapFlow; brandControl
     flow.isSlippageValid,
   ]);
 
+  const confirm = (button: 'share' | 'embed') => {
+    setCopied(button);
+    window.setTimeout(() => setCopied(undefined), 1500);
+  };
+
   const share = async () => {
     if (!configured) return;
     try {
       await navigator.clipboard.writeText(configured.share);
       setShareFallback('');
-      setMessage('Configuration link copied');
+      setNotice('');
+      confirm('share');
     } catch {
       setShareFallback(configured.share);
-      setMessage('Select and copy your configuration link below.');
+      setNotice('Select and copy your configuration link below.');
     }
   };
   const copy = async () => {
@@ -75,10 +84,11 @@ export function SwapView({ flow, brandControls }: { flow: SwapFlow; brandControl
     try {
       await navigator.clipboard.writeText(snippet.code);
       trackSnippetCopied('embed');
-      setMessage('HTML embed copied');
+      setNotice('');
+      confirm('embed');
     } catch {
       setPanel('integrate');
-      setMessage('Select and copy the code in Integrate.');
+      setNotice('Select and copy the code in Integrate.');
     }
   };
 
@@ -98,21 +108,21 @@ export function SwapView({ flow, brandControls }: { flow: SwapFlow; brandControl
               onClick={() => {
                 flow.resetDefaults();
                 brandControls.reset();
-                setMessage('Configuration reset');
+                setNotice('');
                 setShareFallback('');
               }}
             >
               Reset all
             </button>
             <button type="button" className="btn" disabled={!configured} onClick={share}>
-              Share
+              {copied === 'share' ? 'Copied' : 'Share'}
             </button>
             <button type="button" className="btn btn-primary" disabled={!configured} onClick={copy}>
-              Copy embed
+              {copied === 'embed' ? 'Copied' : 'Copy embed'}
             </button>
           </div>
           <p className="studio-status small" role="status">
-            {message}
+            {notice}
           </p>
         </div>
         {shareFallback && (
@@ -148,8 +158,8 @@ export function SwapView({ flow, brandControls }: { flow: SwapFlow; brandControl
             <section className="card integration-card">
               <h3>Add it to your app</h3>
               <p className="muted small">
-                Choose HTML or React below. Both embed the hosted widget, with its own wallet connection. No SODAX
-                package installation needed.
+                Take the HTML or React embed, or hand the agent prompt to your coding agent. All three install the
+                hosted widget, with its own wallet connection. No SODAX package installation needed.
               </p>
               {configured ? (
                 <CodePanel snippets={configured.snippets} initialId="embed" />
