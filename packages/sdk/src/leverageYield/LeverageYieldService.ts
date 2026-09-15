@@ -11,6 +11,8 @@ import {
   SonicSpokeService,
   isSonicChainKeyType,
   isHubChainKeyType,
+  isEvmSpokeOnlyChainKeyType,
+  isStellarChainKeyType,
   isEvmWalletProviderType,
   isBitcoinChainKeyType,
   isBitcoinWalletProviderType,
@@ -35,6 +37,7 @@ import type {
   Address,
   EvmContractCall,
   EvmRawTransaction,
+  EvmSpokeOnlyChainKey,
   FeeAmount,
   GetAddressType,
   GetTokenAddressType,
@@ -60,6 +63,7 @@ import type {
   SonicChainKey,
   SpokeChainKey,
   SpokeExecActionParams,
+  StellarChainKey,
   TxReturnType,
   XToken,
 } from '@sodax/types';
@@ -67,7 +71,7 @@ import type { BackendApiService } from '../backendApi/index.js';
 import { runBackendSubmitTx } from '../backendApi/runBackendSubmitTx.js';
 import { createSubmitTxAttempt, type SubmitTxAttempt } from '../backendApi/submitTxAttempt.js';
 import { resolveTimeoutMs } from '../shared/utils/resolveTimeoutMs.js';
-import { encodeFunctionData, erc20Abi, parseAbi, zeroAddress } from 'viem';
+import { encodeFunctionData, erc20Abi, isAddress, parseAbi, zeroAddress } from 'viem';
 import type { ConfigService } from '../shared/config/ConfigService.js';
 import type { CreateIntentParams, Intent } from '../shared/types/intent-types.js';
 import { EvmSolverService } from '../swap/EvmSolverService.js';
@@ -2774,14 +2778,22 @@ export class LeverageYieldService {
     const baseCtx = { srcChainKey: params.srcChainKey, action: 'allowanceCheck' satisfies LeverageYieldAction };
     try {
       leverageYieldInvariant(params.amount > 0n, 'amount must be greater than 0', { ...baseCtx, field: 'amount' });
-      const spender = await this.resolveFundingSpender(params.srcChainKey, params.srcAddress);
-      const inner = await this.spoke.isAllowanceValid({
-        srcChainKey: params.srcChainKey,
-        token: params.token,
-        amount: params.amount,
-        owner: params.srcAddress,
-        ...(spender !== undefined && { spender }),
-      } as Parameters<SpokeService['isAllowanceValid']>[0]);
+      const srcChainKey: SpokeChainKey = params.srcChainKey;
+      const inner =
+        isHubChainKeyType(srcChainKey) || isEvmSpokeOnlyChainKeyType(srcChainKey)
+          ? await this.spoke.isAllowanceValid({
+              srcChainKey,
+              token: params.token,
+              amount: params.amount,
+              owner: params.srcAddress,
+              spender: await this.resolveFundingSpender(srcChainKey, params.srcAddress),
+            })
+          : await this.spoke.isAllowanceValid({
+              srcChainKey,
+              token: params.token,
+              amount: params.amount,
+              owner: params.srcAddress,
+            });
       if (inner.ok) return inner;
       return { ok: false, error: allowanceCheckFailed('leverageYield', inner.error, baseCtx) };
     } catch (error) {
@@ -2810,16 +2822,33 @@ export class LeverageYieldService {
     const baseCtx = { srcChainKey: params.srcChainKey, action: 'approve' satisfies LeverageYieldAction };
     try {
       leverageYieldInvariant(params.amount > 0n, 'amount must be greater than 0', { ...baseCtx, field: 'amount' });
-      const spender = await this.resolveFundingSpender(params.srcChainKey, params.srcAddress);
-      const inner = await this.spoke.approve({
-        srcChainKey: params.srcChainKey,
-        token: params.token,
-        amount: params.amount,
-        owner: params.srcAddress,
-        ...(spender !== undefined && { spender }),
-        raw: false,
-        walletProvider: params.walletProvider,
-      } as Parameters<SpokeService['approve']>[0]);
+      const srcChainKey: SpokeChainKey = params.srcChainKey;
+      let inner: Result<TxReturnType<SpokeChainKey, false>> = {
+        ok: false,
+        error: new Error(`[LeverageYieldService.approvePositionFunding] approve is unsupported on ${srcChainKey}`),
+      };
+      if (isHubChainKeyType(srcChainKey) || isEvmSpokeOnlyChainKeyType(srcChainKey)) {
+        leverageYieldInvariant(isAddress(params.token), 'Invalid token address', { ...baseCtx, field: 'token' });
+        inner = await this.spoke.approve<HubChainKey | EvmSpokeOnlyChainKey, false>({
+          srcChainKey,
+          token: params.token,
+          amount: params.amount,
+          owner: params.srcAddress as Address,
+          spender: await this.resolveFundingSpender(srcChainKey, params.srcAddress),
+          raw: false,
+          // `K` stays open here, so the provider is only checkable against the chain key inside `spoke.approve`.
+          walletProvider: params.walletProvider as GetWalletProviderType<HubChainKey>,
+        });
+      } else if (isStellarChainKeyType(srcChainKey)) {
+        inner = await this.spoke.approve<StellarChainKey, false>({
+          srcChainKey,
+          token: params.token,
+          amount: params.amount,
+          owner: params.srcAddress as GetAddressType<StellarChainKey>,
+          raw: false,
+          walletProvider: params.walletProvider as GetWalletProviderType<StellarChainKey>,
+        });
+      }
       if (!inner.ok) return { ok: false, error: approveFailed('leverageYield', inner.error, baseCtx) };
 
       /**
@@ -2851,15 +2880,18 @@ export class LeverageYieldService {
   }
 
   /**
-   * Who pulls the deposit on a given source chain.
+   * Who pulls the deposit on an EVM source chain.
    *
-   * `undefined` lets the spoke layer apply its own default, which for an EVM spoke is that spoke's
-   * asset manager. Only the hub needs naming: there the pull happens inside the routed batch, so the
-   * spender is the user's own hub wallet rather than any protocol contract.
+   * On the hub the pull happens inside the routed batch, so the spender is the user's own hub wallet
+   * rather than any protocol contract; on an EVM spoke it is that spoke's asset manager. Chains with
+   * no ERC-20 allowance never reach here.
    */
-  private async resolveFundingSpender(srcChainKey: SpokeChainKey, srcAddress: string): Promise<Address | undefined> {
-    if (!isHubChainKeyType(srcChainKey)) return undefined;
-    return await this.hubProvider.getUserHubWalletAddress(srcAddress, srcChainKey);
+  private async resolveFundingSpender(
+    srcChainKey: HubChainKey | EvmSpokeOnlyChainKey,
+    srcAddress: string,
+  ): Promise<Address> {
+    if (isHubChainKeyType(srcChainKey)) return await this.hubProvider.getUserHubWalletAddress(srcAddress, srcChainKey);
+    return this.config.getChainConfig(srcChainKey).addresses.assetManager;
   }
 
   /**

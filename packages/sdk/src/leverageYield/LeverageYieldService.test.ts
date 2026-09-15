@@ -2104,6 +2104,129 @@ describe('LeverageYieldService — position partner fee', () => {
   });
 });
 
+describe('LeverageYieldService — the funding spender per source chain', () => {
+  const ARB_ASSET_MANAGER = sodax.config.getChainConfig(ARBITRUM).addresses.assetManager;
+
+  it('approves the user hub wallet on the hub', async () => {
+    const approve = vi.spyOn(sodax.spoke, 'approve').mockResolvedValue({ ok: true, value: '0xapproveTx' } as never);
+    (mockEvmProvider.waitForTransactionReceipt as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      status: 'success',
+    } as never);
+
+    await sodax.leverageYield.approvePositionFunding({
+      srcChainKey: 'sonic',
+      srcAddress: SAMPLE_USER,
+      token: POS_COLLATERAL,
+      amount: 100n,
+      walletProvider: mockEvmProvider as never,
+    });
+
+    expect(approve.mock.calls[0]?.[0]).toEqual(expect.objectContaining({ spender: HUB_WALLET }));
+  });
+
+  /**
+   * The regression: the spoke asset manager was left to a default that only the allowance-read side
+   * has, so the approval was encoded with no spender at all and threw before reaching the wallet.
+   * Deliberately does NOT stub `spoke.approve` — the assertion is on what the ERC-20 layer receives.
+   */
+  it('approves the spoke asset manager on an EVM spoke, all the way down to the ERC-20 call', async () => {
+    mocks.erc20Approve.mockResolvedValueOnce('0xapproveTx');
+    (mockEvmProvider.waitForTransactionReceipt as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      status: 'success',
+    } as never);
+
+    const result = await sodax.leverageYield.approvePositionFunding({
+      srcChainKey: ARBITRUM,
+      srcAddress: SAMPLE_USER,
+      token: POS_COLLATERAL,
+      amount: 100n,
+      walletProvider: mockEvmProvider as never,
+    });
+
+    expect(result).toEqual({ ok: true, value: '0xapproveTx' });
+    expect(mocks.erc20Approve.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({ spender: ARB_ASSET_MANAGER, token: POS_COLLATERAL, amount: 100n }),
+    );
+  });
+
+  it('asks for no spender on Stellar, where the approval is a trustline', async () => {
+    const approve = vi.spyOn(sodax.spoke, 'approve').mockResolvedValue({ ok: true, value: '0xtrustline' } as never);
+
+    await sodax.leverageYield.approvePositionFunding({
+      srcChainKey: ChainKeys.STELLAR_MAINNET,
+      srcAddress: SAMPLE_USER,
+      token: POS_COLLATERAL,
+      amount: 100n,
+      walletProvider: mockBitcoinProvider as never,
+    });
+
+    expect(approve.mock.calls[0]?.[0]).not.toHaveProperty('spender');
+  });
+
+  it('fails a chain with no approval concept as APPROVE_FAILED, without reaching the spoke', async () => {
+    const approve = vi.spyOn(sodax.spoke, 'approve');
+
+    const result = await sodax.leverageYield.approvePositionFunding({
+      srcChainKey: ChainKeys.SOLANA_MAINNET,
+      srcAddress: SAMPLE_USER,
+      token: POS_COLLATERAL,
+      amount: 100n,
+      walletProvider: mockBitcoinProvider as never,
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('APPROVE_FAILED');
+    expect(approve).not.toHaveBeenCalled();
+  });
+
+  it('reads the allowance against the same spender the approval uses', async () => {
+    const isAllowanceValid = vi.spyOn(sodax.spoke, 'isAllowanceValid').mockResolvedValue({ ok: true, value: true });
+
+    await sodax.leverageYield.isPositionFundingAllowanceValid({
+      srcChainKey: 'sonic',
+      srcAddress: SAMPLE_USER,
+      token: POS_COLLATERAL,
+      amount: 100n,
+    });
+    await sodax.leverageYield.isPositionFundingAllowanceValid({
+      srcChainKey: ARBITRUM,
+      srcAddress: SAMPLE_USER,
+      token: POS_COLLATERAL,
+      amount: 100n,
+    });
+
+    expect(isAllowanceValid.mock.calls[0]?.[0]).toEqual(expect.objectContaining({ spender: HUB_WALLET }));
+    expect(isAllowanceValid.mock.calls[1]?.[0]).toEqual(expect.objectContaining({ spender: ARB_ASSET_MANAGER }));
+  });
+
+  it('reports a chain with no allowance concept as allowed, with no spender asked for', async () => {
+    const isAllowanceValid = vi.spyOn(sodax.spoke, 'isAllowanceValid');
+
+    const result = await sodax.leverageYield.isPositionFundingAllowanceValid({
+      srcChainKey: ChainKeys.SOLANA_MAINNET,
+      srcAddress: SAMPLE_USER,
+      token: POS_COLLATERAL,
+      amount: 100n,
+    });
+
+    expect(result).toEqual({ ok: true, value: true });
+    expect(isAllowanceValid.mock.calls[0]?.[0]).not.toHaveProperty('spender');
+  });
+
+  it('rejects a non-positive amount before resolving any spender', async () => {
+    const isAllowanceValid = vi.spyOn(sodax.spoke, 'isAllowanceValid');
+    const result = await sodax.leverageYield.isPositionFundingAllowanceValid({
+      srcChainKey: ARBITRUM,
+      srcAddress: SAMPLE_USER,
+      token: POS_COLLATERAL,
+      amount: 0n,
+    });
+    expect(result.ok).toBe(false);
+    expect(isAllowanceValid).not.toHaveBeenCalled();
+  });
+});
+
 describe('LeverageYieldService.approvePositionFunding — waiting for the approve to land', () => {
   /**
    * The whole point of this method over a bare `spoke.approve`. `spoke.verifyTxHash` returns
