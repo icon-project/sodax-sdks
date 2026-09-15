@@ -26,7 +26,16 @@ and test against mainnet with small amounts — see [Testing without a testnet](
 - `sodax.bridge.bridge(...)` — similarly manages the full relay lifecycle
 - `sodax.moneyMarket.*`, `sodax.staking.*`, and related methods do the same
 
-All of these methods return `Promise<Result<T>>`. On relay failure the `Result` carries an error whose `message` is `'RELAY_TIMEOUT'`, `'SUBMIT_TX_FAILED'`, or `'RELAY_POLLING_FAILED'` (CODE form — see the error handling conventions note at the top of this page).
+All of these methods return `Promise<Result<T>>`. They route relay failures through `mapRelayFailure`, so the `Result` carries a typed `SodaxError` — discriminate on `error.code`, and read the raw relay string from `context.relayCode`. Do **not** match on `error.message`: the mapper replaces it with prose.
+
+| Raw relay string | `error.code` | `context.relayCode` |
+|---|---|---|
+| `SUBMIT_TX_FAILED` | `TX_SUBMIT_FAILED` | `SUBMIT_TX_FAILED` |
+| `RELAY_TIMEOUT` | `RELAY_TIMEOUT` | `RELAY_TIMEOUT` |
+| `RELAY_POLLING_FAILED` | `RELAY_FAILED` | `RELAY_POLLING_FAILED` |
+| anything else | `RELAY_FAILED` | `UNKNOWN` |
+
+Raw `error.message` matching applies only where nothing maps the failure: the `sodax.dex.*` relay legs, and the exported helpers `relayTxAndWaitPacket`, `submitTransaction` and `waitUntilIntentExecuted` when a consumer calls them directly. Those still carry the `RELAY_ERROR_CODES` strings on `error.message`.
 
 ---
 
