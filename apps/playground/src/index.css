@@ -1607,6 +1607,12 @@ code,
   padding: 0;
 }
 
+.copied-glyph {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
 .btn-on-cherry.btn-icon {
   background: transparent;
   border: 2px solid var(--hero-ctl-bg);

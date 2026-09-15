@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { BrandBar } from '../components/BrandBar';
+import { CheckGlyph } from '../components/CheckGlyph';
 import { CodePanel } from '../components/CodePanel';
 import { SetupPanel } from '../components/SetupPanel';
 import { WidgetPreview } from '../components/WidgetPreview';
@@ -115,10 +116,22 @@ export function SwapView({ flow, brandControls }: { flow: SwapFlow; brandControl
               Reset all
             </button>
             <button type="button" className="btn" disabled={!configured} onClick={share}>
-              {copied === 'share' ? 'Copied' : 'Share'}
+              {copied === 'share' ? (
+                <>
+                  <CheckGlyph /> Copied
+                </>
+              ) : (
+                'Share'
+              )}
             </button>
             <button type="button" className="btn btn-primary" disabled={!configured} onClick={copy}>
-              {copied === 'embed' ? 'Copied' : 'Copy embed'}
+              {copied === 'embed' ? (
+                <>
+                  <CheckGlyph /> Copied
+                </>
+              ) : (
+                'Copy embed'
+              )}
             </button>
           </div>
           <p className="studio-status small" role="status">
