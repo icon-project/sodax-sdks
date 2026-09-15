@@ -44,3 +44,6 @@ drift-comment.md
 
 # Local SDK audit scratch — the shared Audits/ reports are tracked; the sdk/ subdir stays local.
 Audits/sdk
+
+# Agent session working notes (plans, per-task checklists) — local only, never part of a diff.
+tasks/

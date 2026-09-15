@@ -40,7 +40,7 @@ How to setup local development
 
 <a href="https://docs.sodax.com/developers/packages/foundation/sdk/functional-modules/swaps" class="button secondary" data-icon="rotate">Swaps (Solver)</a> -  Cross-chain intent-based swaps
 
-* EVM (Sonic, Ethereum, Arbitrum, Avalanche, Base, BSC, Optimism, Polygon, HyperEVM, Lightlink, Redbelly, Kaia, Hedera) ✅
+* EVM (Sonic, Ethereum, Arbitrum, Avalanche, Base, BSC, Optimism, Polygon, HyperEVM, Lightlink, Redbelly, Kaia, Hedera, Robinhood) ✅
 * Sui ✅
 * Stellar ✅
 * ICON ✅
@@ -52,7 +52,7 @@ How to setup local development
 
 <a href="https://docs.sodax.com/developers/packages/foundation/sdk/functional-modules/money_market" class="button secondary" data-icon="sack-dollar">Lend / Borrow (Money Market)</a>- Cross-chain lending and borrowing
 
-* EVM (Sonic, Ethereum, Arbitrum, Avalanche, Base, BSC, Optimism, Polygon, HyperEVM, Lightlink, Redbelly, Kaia, Hedera) ✅
+* EVM (Sonic, Ethereum, Arbitrum, Avalanche, Base, BSC, Optimism, Polygon, HyperEVM, Lightlink, Redbelly, Kaia, Hedera, Robinhood) ✅
 * Sui ✅
 * Stellar ✅
 * ICON ✅ (bnUSD only)
@@ -64,7 +64,7 @@ How to setup local development
 
 <a href="https://docs.sodax.com/developers/packages/foundation/sdk/functional-modules/bridge" class="button secondary" data-icon="bridge-suspension">Bridge</a>- Cross-chain token bridging
 
-* EVM (Sonic, Ethereum, Arbitrum, Avalanche, Base, BSC, Optimism, Polygon, HyperEVM, Lightlink, Redbelly, Kaia, Hedera) ✅
+* EVM (Sonic, Ethereum, Arbitrum, Avalanche, Base, BSC, Optimism, Polygon, HyperEVM, Lightlink, Redbelly, Kaia, Hedera, Robinhood) ✅
 * Sui ✅
 * Stellar ✅
 * ICON ✅
@@ -80,9 +80,13 @@ How to setup local development
 * BALN → SODA: source chain ICON only
 * bnUSD: between legacy chains (ICON, Sui, Stellar) and the new bnUSD on any other supported chain
 
+<a href="https://docs.sodax.com/developers/packages/foundation/sdk/functional-modules/leverage_yield" class="button secondary" data-icon="chart-line">Leverage Yield</a>- Leveraged-yield vaults on the Sonic hub
+
+<a href="https://docs.sodax.com/developers/packages/foundation/sdk/functional-modules/leverage_yield_apr" class="button secondary" data-icon="percent">Leverage Yield APR</a>- Steady-state APR for those vaults
+
 <a href="https://docs.sodax.com/developers/packages/foundation/sdk/functional-modules/staking" class="button secondary" data-icon="seedling">Staking</a>- SODA token staking
 
-* EVM (Sonic, Ethereum, Arbitrum, Avalanche, Base, BSC, Optimism, Polygon, HyperEVM, Lightlink, Redbelly, Kaia, Hedera) ✅
+* EVM (Sonic, Ethereum, Arbitrum, Avalanche, Base, BSC, Optimism, Polygon, HyperEVM, Lightlink, Redbelly, Kaia, Hedera, Robinhood) ✅
 * Sui ✅
 * Stellar ✅
 * Solana ✅
@@ -92,9 +96,11 @@ How to setup local development
 
 ### Tooling Modules inside the SDK
 
-<a href="https://docs.sodax.com/developers/packages/foundation/sdk/tooling-modules/backend_api" class="button secondary" data-icon="plug">Backend API</a>- Solver API endpoint documentation
+<a href="https://docs.sodax.com/developers/packages/foundation/sdk/tooling-modules/backend_api" class="button secondary" data-icon="plug">Backend API</a>- SODAX backend data and submit-tx endpoints
 
 <a href="https://docs.sodax.com/developers/packages/foundation/sdk/tooling-modules/intent_relay_api" class="button secondary" data-icon="envelope">Intent Relay API</a>- Relayer API endpoint documentation
+
+<a href="https://docs.sodax.com/developers/packages/foundation/swaps-api" class="button secondary" data-icon="code">Swaps API</a>- Standalone `@sodax/swaps-api` HTTP client
 
 ## AI agent docs
 

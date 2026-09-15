@@ -84,7 +84,7 @@ Each registered vault carries four static fields:
 | `asset` | Underlying collateral (a SODAX vault token) | `SodaTokens.sodaWEETH` (symbol `weETH`) |
 | `borrowToken` | Token borrowed against `asset` | `sodaETH` |
 
-The registry lives in `@sodax/types` (`leverageYieldConfig`) and derives every address from the canonical `LsodaTokens` / `SodaTokens` registries, so a deployment-address change lives in exactly one place. Look vaults up with `listVaults()`, `getVault(name)`, or `getVaultByAddress(address)`.
+The registry lives in `@sodax/types` — the `leverageYieldVaults` array (surfaced through `leverageYieldConfig`) is the source of truth for which vaults exist. It spans ETH-, SOL- and stablecoin-collateral vaults, and derives every address from the canonical `LsodaTokens` / `SodaTokens` registries, so a deployment-address change lives in exactly one place. Look vaults up with `listVaults()`, `getVault(name)`, or `getVaultByAddress(address)`.
 
 ## The SDK model: shares as solver-tradeable tokens
 

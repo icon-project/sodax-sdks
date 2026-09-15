@@ -5,6 +5,10 @@ if command -v gitleaks >/dev/null 2>&1; then
 else
   echo "warn: gitleaks not installed (brew install gitleaks); skipping staged secret scan"
 fi
+# `git commit` exports GIT_INDEX_FILE (the index.lock it is holding) to its hooks. The suites that
+# drive git in a temp repo inherit it and die on `index.lock.lock: File exists`, so drop it here.
+unset GIT_INDEX_FILE GIT_DIR GIT_WORK_TREE
+
 pnpm checkTs
 pnpm build
 pnpm test
