@@ -1,6 +1,8 @@
 # Leverage Yield — `@sodax/dapp-kit`
 
-Leveraged-yield ERC-4626 vaults on the Sonic hub. Deposit any token → `lsoda*` vault shares, withdraw shares → any token; plus position / APR / TVL / share-balance reads. New in v2 (no v1 equivalent).
+Leveraged-yield ERC-4626 vaults on the Sonic hub. Deposit any token → `lsoda*` vault shares, withdraw shares → any token; plus vault-position / APR / TVL / share-balance reads. New in v2 (no v1 equivalent).
+
+> **Vaults and leverage positions are two different products on one hook namespace.** Everything up to "Leverage positions" below is the pooled ERC-4626 **vault** (`useLeverageYield*`). The `useLeveragePosition*` / `useOpenLeveragePosition` hooks drive **leverage positions** — one AAVE account per position. Do not mix the two: `useLeverageYieldPosition` is the vault's snapshot, not a leverage position's.
 
 > **Backend-API variant:** the hooks below drive the on-chain `LeverageYieldService` (wallet → hub). To call the backend **Leverage Yield API v2** HTTP client (`sodax.api.leverageYield`) directly instead, use the `useLeverageYieldApi*` hooks — typed React Query wrappers over each endpoint (`useLeverageYieldApiVaults`, `useLeverageYieldApiEffectiveApr`, `useLeverageYieldApiDepositQuote` / `useLeverageYieldApiWithdrawQuote`, `useLeverageYieldApiAllowance` / `useLeverageYieldApiApprove`, `useLeverageYieldApiCreateDepositIntent` / `useLeverageYieldApiCreateWithdrawIntent`, `useLeverageYieldApiSubmitTx` / `useLeverageYieldApiSubmitTxStatus`, and the intent-lifecycle/vault-read hooks). Their `queryKey`/`mutationKey` namespace is `leverageYieldApi`. For the endpoint contract, load the `sodax-sdk` skill's leverage-yield-api feature doc.
 
@@ -114,6 +116,64 @@ Read hooks here are **already unwrapped** — they throw on SDK `!ok` so `isErro
 5. **Quote vault flows with `useLeverageYieldQuote`, never `useQuote`.** `useQuote` deducts the effective *swap* fee (`swaps.partnerFee ?? fee`) while a vault intent charges the effective *leverage-yield* fee (`leverageYield.partnerFee ?? fee`) — they disagree whenever the two feature fees differ, and when the leverage-yield one is larger the `minOutputAmount` you derive is unfillable and the intent never settles. Pass the same per-intent `partnerFee` to `useLeverageYieldQuote` and to `useLeverageYieldDeposit` / `useLeverageYieldVaultSwap`, or omit it on both — either way the two sides resolve the same fee.
 6. **`useLeverageYieldVaultSwap` invalidates xBalances on both chains** (`['shared', 'xBalances', srcChainKey]` and `dstChainKey`) on success. Compose your own `onSuccess` after the hook's — it runs first.
 7. **`useLeverageYieldNotifySolver` is for the manual flow only.** `useLeverageYieldVaultSwap` already notifies the solver internally — only reach for the standalone notify hook when you built the intent with `sodax.leverageYield.createVaultIntent` and relayed it yourself. It does NOT invalidate any queries: its only var is `{ intent_tx_hash }` (no chain context), and the fill lands asynchronously afterward.
+
+## Leverage positions (separate from vaults)
+
+A vault is one shared ERC-4626 position at a single target LTV. A **leverage position** is one AAVE account per position, cloned by `LeveragePositionFactory`, so an owner can hold several at different eMode categories and leverage tiers at once. Different hooks, different reads — `useLeverageYieldPosition` is the **vault's** snapshot and is unrelated to `useLeveragePosition*`.
+
+> **`@experimental` off the hub.** Position writes are proven end to end on Sonic only; from a spoke the inbound half is verified by a fork replay and the outbound half has never run on mainnet. **Bitcoin is refused outright** — a Bitcoin `srcChainKey` returns `VALIDATION_FAILED` rather than funding the wrong hub wallet. The deployed `positionFactory` ships as a packaged default, so positions work from `new Sodax()` with no configuration.
+
+```ts
+// @ai-snippets-skip
+// Reads — data already unwrapped, read it directly
+useLeveragePositions({ params: { owner } });                       // readonly Address[]  key: ['leverageYield','positions',owner]
+useLeveragePositionsForUser({ params: { spokeChainKey, spokeAddress } }); // same, via the hub wallet — note spoke*, NOT src*
+useLeveragePositionInfo({ params: { position } });                 // LeveragePosition — static descriptor
+useLeveragePositionAccount({ params: { position } });              // LeveragePositionAccount (30s)
+useLeveragePositionCollateral({ params: { position, collateral } });// LeveragePositionCollateral (30s)
+useLeveragePositionPending({ params: { position } });              // LeveragePositionPendingState (15s)
+useLeveragePositionFundingAllowance({ params: { srcChainKey, srcAddress, token, amount } }); // boolean
+
+// NOT a query — returns synchronously, no data/isLoading
+useLeveragePositionPayoutAddress({ params: { chainKey, signerAddress, owner } }); // Address | undefined
+
+// Mutations
+useOpenLeveragePosition();          // key: ['leverageYield','openPosition']         → LeveragePositionIntentResult
+useSubmitLeveragePositionIntent();  // key: ['leverageYield','submitPositionIntent'] → LeveragePositionIntentResult
+useRunLeveragePositionOperation();  // key: ['leverageYield','runPositionOperation'] → TxHashPair
+useApproveLeveragePositionFunding();// key: ['leverageYield','approvePositionFunding']
+```
+
+| Type | Fields |
+|---|---|
+| `LeveragePosition` | `{ address, owner, collateral, borrowToken, eModeCategory, feeBps, feeReceiver }` |
+| `LeveragePositionAccount` | `{ totalCollateralBase, totalDebtBase, availableBorrowsBase, currentLiquidationThreshold, ltv, healthFactor }` — bigint; `healthFactor` is WAD, `*Base` is the oracle's 8-dp unit |
+| `LeveragePositionCollateral` | `{ aToken, balance }` |
+| `LeveragePositionPendingState` | `{ kind: number, isLive: boolean, needsSettle: boolean }` |
+| `LeveragePositionIntentResult` | `{ txHashes: TxHashPair, notified: boolean, notifyError?: string }` |
+
+### Which mutation — decided by the operation, not by preference
+
+`addLeverage` / `decreaseLeverage` only **post** a solver intent, and an intent the solver was never told about expires unfilled — leaving the owner funded with leverage that never arrives. `withdraw`, `settle` and `cancel` are synchronous on the hub and need no notification.
+
+| operation | hook | notifies |
+|---|---|---|
+| open (collateral or debt side) | `useOpenLeveragePosition` | yes |
+| `buildAddLeverage` / `buildDecreaseLeverage` | `useSubmitLeveragePositionIntent` | yes |
+| `buildPositionWithdraw` / `buildSettlePosition` / `buildCancelPositionOperation` | `useRunLeveragePositionOperation` | no |
+
+TypeScript enforces the rows: the first two builders return `PositionIntentCall`, the last three `PositionDirectCall`, and each hook accepts only its own.
+
+### Position gotchas
+
+1. **Resolving ≠ the position is open.** The mutations unwrap the SDK `Result`, so `mutateAsync` gives you `LeveragePositionIntentResult` directly — check **`result.notified`** (not `result.value.notified`, which is the SDK-level shape). `false` means the intent is live but nothing will fill it before it expires. A failed notification deliberately still resolves: the money has moved, and a caller that retried on failure would open a second position.
+2. **`useLeverageYieldPosition` is the VAULT, not a leverage position.** Reading vault LTV/health for a position, or vice versa, silently shows the wrong numbers.
+3. **`useLeveragePositionPayoutAddress` is not a query.** It returns `Address | undefined` synchronously — no `data`, no `isLoading`. Off the hub a withdrawal pays to an address on the hub, which is **not** the signer, and this is what resolves it.
+4. **Size an exit from `useLeveragePositionCollateral`, never from `totalCollateralBase`.** The base-currency figures are display-only; dividing one back out by a price lands *near* the balance, and a `decreaseLeverage` asking for more than the position holds reverts at fill time and the intent silently expires.
+5. **Fees come from `useLeveragePositionInfo` for an existing position.** `getEffectivePositionFee()` is what a NEW position would carry; a position's fee is fixed at creation, so the two disagree once config changes.
+6. **Approve with `useApproveLeveragePositionFunding`, gated on `useLeveragePositionFundingAllowance`.** The spender differs per chain — the hub wallet on Sonic, the spoke asset manager elsewhere — so a hand-rolled approval picks the wrong one half the time. Nothing is ever approved to the factory.
+7. **Poll `useLeveragePositionPending`, don't trust the receipt.** A leverage change is filled by a solver afterwards, and a position refuses a second operation while one is in flight.
+8. **Size the leg with `sizeLeverageBorrow` + `projectLeverageLeg`, never oracle parity.** The hook borrows against what the solver actually paid, so parity sizing gets the borrow rejected with Aave `'36'` after the fill. `exceedsMaxLtv` is a hard gate. Display `exposureLeverage`, not the leverage the user chose — the position reports more. Read `ltv` / `liquidationThreshold` from `useEModes` whenever the position sets an `eModeCategory`. Full treatment in [`../recipes/leverage-yield.md`](../recipes/leverage-yield.md).
 
 ## Cross-references
 
