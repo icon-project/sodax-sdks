@@ -25,6 +25,7 @@ import {
   sanitizeSubject,
   versionAdvanceErrors,
 } from './release.mjs';
+import { configVersionFor, configVersionForOrThrow } from './config-version.mjs';
 
 const REPO_ROOT = join(import.meta.dirname, '..');
 const MAIN = 'a'.repeat(40);
@@ -33,12 +34,28 @@ const ROOT_COMMIT = 'r'.repeat(40);
 const ALL_DIRS = ['types', 'libs', 'swaps-api', 'skills', 'wallet-sdk-core', 'sdk', 'wallet-sdk-react', 'dapp-kit'];
 const writeJson = (path, value) => writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`);
 
+// bump-versions.sh derives CONFIG_VERSION through config-version.mjs, so both must land in the fixture.
+const copyReleaseScripts = root => {
+  writeFileSync(join(root, 'scripts/bump-versions.sh'), readFileSync(join(import.meta.dirname, 'bump-versions.sh')), {
+    mode: 0o755,
+  });
+  writeFileSync(
+    join(root, 'scripts/config-version.mjs'),
+    readFileSync(join(import.meta.dirname, 'config-version.mjs')),
+  );
+};
+
 const createWorkspace = (t, directories = ALL_DIRS, version = '2.1.0') => {
   const root = mkdtempSync(join(tmpdir(), 'release-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   mkdirSync(join(root, 'scripts'), { recursive: true });
   mkdirSync(join(root, 'packages/types/src'), { recursive: true });
-  writeFileSync(join(root, 'packages/types/src/index.ts'), 'export const CONFIG_VERSION = 231;\n');
+  writeFileSync(
+    join(root, 'packages/types/src/index.ts'),
+    // ?? 0: some fixtures sit at 0.0.0 to exercise the no-tags guards, and a 0.x version is
+    // deliberately outside the encoding. Those tests never reach the CONFIG_VERSION assertion.
+    `export const CONFIG_VERSION = ${configVersionFor(version) ?? 0}; // ${version}\n`,
+  );
   writeFileSync(join(root, 'scripts/bump-versions.sh'), `PACKAGES=(${directories.join(' ')})\n`);
   mkdirSync(join(root, '.github/workflows'), { recursive: true });
   writeFileSync(
@@ -70,10 +87,9 @@ const fakeBump =
       const path = join(root, 'packages', directory, 'package.json');
       writeJson(path, { ...JSON.parse(readFileSync(path, 'utf8')), version });
     }
-    const indexPath = join(root, 'packages/types/src/index.ts');
     writeFileSync(
-      indexPath,
-      readFileSync(indexPath, 'utf8').replace(/CONFIG_VERSION = (\d+)/, (_, n) => `CONFIG_VERSION = ${Number(n) + 1}`),
+      join(root, 'packages/types/src/index.ts'),
+      `export const CONFIG_VERSION = ${configVersionFor(version) ?? 0}; // ${version}\n`,
     );
     return '';
   };
@@ -332,9 +348,9 @@ test('preflight refuses a branch that has current main but not the newest releas
 });
 
 test('a repository with no release branch yet skips the release-branch checks', async t => {
-  const root = createWorkspace(t, ALL_DIRS, '0.0.0');
-  const result = await run(root, { stub: { remoteRelease: '', tags: [] }, version: '0.0.1' });
-  assert.equal(result.version, '0.0.1');
+  const root = createWorkspace(t, ALL_DIRS, '1.0.0');
+  const result = await run(root, { stub: { remoteRelease: '', tags: [] }, version: '1.0.1' });
+  assert.equal(result.version, '1.0.1');
 });
 
 test('the notes range anchors on the newest stable tag, not the newest tag of any kind', async t => {
@@ -350,9 +366,9 @@ test('the notes range anchors on the newest stable tag, not the newest tag of an
 });
 
 test('with no tags at all the range falls back to the root commit and the tag guard relaxes', async t => {
-  const root = createWorkspace(t, ALL_DIRS, '0.0.0');
+  const root = createWorkspace(t, ALL_DIRS, '1.0.0');
   const calls = [];
-  const result = await run(root, { stub: { calls, tags: [] }, version: '0.0.1' });
+  const result = await run(root, { stub: { calls, tags: [] }, version: '1.0.1' });
 
   assert.ok(calls.includes('rev-list --max-parents=0 origin/main'));
   assert.ok(
@@ -465,9 +481,7 @@ test('end-to-end run bumps every package, writes notes, and never invokes pnpm',
   skip: process.platform === 'win32',
 }, async t => {
   const root = createWorkspace(t, ALL_DIRS, '2.1.0');
-  writeFileSync(join(root, 'scripts/bump-versions.sh'), readFileSync(join(import.meta.dirname, 'bump-versions.sh')), {
-    mode: 0o755,
-  });
+  copyReleaseScripts(root);
 
   const commands = [];
   const lines = [];
@@ -488,7 +502,10 @@ test('end-to-end run bumps every package, writes notes, and never invokes pnpm',
   for (const directory of ALL_DIRS) {
     assert.equal(JSON.parse(readFileSync(join(root, 'packages', directory, 'package.json'), 'utf8')).version, '2.2.0');
   }
-  assert.match(readFileSync(join(root, 'packages/types/src/index.ts'), 'utf8'), /CONFIG_VERSION = 232/);
+  assert.match(
+    readFileSync(join(root, 'packages/types/src/index.ts'), 'utf8'),
+    new RegExp(`CONFIG_VERSION = ${configVersionForOrThrow('2.2.0')};`),
+  );
 
   const notes = readFileSync(join(root, 'release-notes.md'), 'utf8');
   assert.match(notes, /## @sdks@2\.2\.0/);
@@ -503,9 +520,7 @@ test('an rc version prints the prerelease flag in the handoff', {
   skip: process.platform === 'win32',
 }, async t => {
   const root = createWorkspace(t, ALL_DIRS, '2.1.0');
-  writeFileSync(join(root, 'scripts/bump-versions.sh'), readFileSync(join(import.meta.dirname, 'bump-versions.sh')), {
-    mode: 0o755,
-  });
+  copyReleaseScripts(root);
   const lines = [];
   await run(root, {
     stub: { status: ['', porcelainFor(ALL_DIRS)] },
@@ -570,7 +585,10 @@ const gitFixture = root => {
   commit('fix(sdk): patch the relay client');
   writeFileSync(join(root, 'packages/sdk/README.md'), 'docs only\n');
   commit('docs(sdk): release-branch readme touch-up');
-  writeFileSync(join(root, 'packages/types/src/index.ts'), 'export const CONFIG_VERSION = 232;\n');
+  writeFileSync(
+    join(root, 'packages/types/src/index.ts'),
+    `export const CONFIG_VERSION = ${configVersionForOrThrow('2.2.0-rc.1')}; // 2.2.0-rc.1\n`,
+  );
   commit('chore: bump CONFIG_VERSION on release');
   git('update-ref', 'refs/remotes/origin/release', sha('HEAD'));
   return { main, release: sha('HEAD') };

@@ -20,4 +20,74 @@ export * from './swap/index.js';
 export * from './utils/index.js';
 export * from './wallet/index.js';
 
-export const CONFIG_VERSION = 100; // bumped once per release by scripts/bump-versions.sh, on the release branch
+/**
+ * Identifies the SDK release a SODAX config belongs to. Derived from this package's version by
+ * `scripts/bump-versions.sh` — never hand-edit it. The backend serves this same constant from the SDK
+ * release it has installed, so comparing it against `GetAllConfigResponseV2.version` answers "do the
+ * SDK and the API run the same release?".
+ *
+ * Encoding: `major * 1e6 + minor * 1e4 + patch * 100 + (rc ?? 99)`, where the 99 rc slot is the
+ * sentinel for a stable release. Use {@link configVersionFor} and {@link formatConfigVersion} rather
+ * than unpacking it by hand.
+ */
+export const CONFIG_VERSION = 2_000_017; // 2.0.0-rc.17
+
+/** Highest rc slot, reserved for a stable release so it outranks every rc of the same triple. */
+const RC_STABLE = 99;
+const MIN_CONFIG_VERSION = 1_000_000;
+const MAX_CONFIG_VERSION = 99_999_999;
+const VERSION_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-rc\.(0|[1-9]\d*))?$/;
+
+/** A version decoded from a config version number. `rc` is `null` for a stable release. */
+export type ParsedConfigVersion = {
+  major: number;
+  minor: number;
+  patch: number;
+  rc: number | null;
+};
+
+/**
+ * Encodes an `X.Y.Z` / `X.Y.Z-rc.N` version as its config version number, or `null` when the version
+ * is outside the grammar (`2.3.0-beta.1`) or the domain (major outside 1..99, minor or patch above
+ * 99, rc above 98). Total by design: the release tooling throws on these, application code should not.
+ */
+export function configVersionFor(version: string): number | null {
+  const match = typeof version === 'string' ? version.match(VERSION_PATTERN) : null;
+  if (!match) return null;
+  const major = Number(match[1]);
+  const minor = Number(match[2]);
+  const patch = Number(match[3]);
+  const rc = match[4] === undefined ? null : Number(match[4]);
+  if (major < 1 || major > 99 || minor > 99 || patch > 99) return null;
+  if (rc !== null && rc > 98) return null;
+  return major * 1_000_000 + minor * 10_000 + patch * 100 + (rc === null ? RC_STABLE : rc);
+}
+
+/**
+ * Decodes a config version number, or `null` when it is not one — which includes the small counter
+ * values an API running an older SDK still serves, and any non-integer or out-of-range input.
+ */
+export function parseConfigVersion(value: number): ParsedConfigVersion | null {
+  if (!Number.isInteger(value) || value < MIN_CONFIG_VERSION || value > MAX_CONFIG_VERSION) return null;
+  const slot = value % 100;
+  return {
+    major: Math.floor(value / 1_000_000),
+    minor: Math.floor(value / 10_000) % 100,
+    patch: Math.floor(value / 100) % 100,
+    rc: slot === RC_STABLE ? null : slot,
+  };
+}
+
+/** Renders a config version number as its version string, or `null` when it is not one. */
+export function formatConfigVersion(value: number): string | null {
+  const parsed = parseConfigVersion(value);
+  if (!parsed) return null;
+  const { major, minor, patch, rc } = parsed;
+  return `${major}.${minor}.${patch}${rc === null ? '' : `-rc.${rc}`}`;
+}
+
+/**
+ * This package's version, projected from {@link CONFIG_VERSION} rather than written separately, so the
+ * two cannot disagree. `null` only if the constant were hand-edited outside the encoding.
+ */
+export const SDK_VERSION = formatConfigVersion(CONFIG_VERSION);
