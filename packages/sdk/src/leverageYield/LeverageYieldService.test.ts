@@ -31,6 +31,7 @@ import {
   type IBitcoinWalletProvider,
   type IEvmWalletProvider,
   isSodaxError,
+  MAX_POSITION_FEE_BPS,
   type PartnerFee,
   RELAY_FALLBACK_FLOOR_MS,
   type Result,
@@ -2086,8 +2087,8 @@ describe('LeverageYieldService — position partner fee', () => {
    * is every operation the position will ever run. `50_000` is the case that motivated this: 500%,
    * but it fits a `uint16`, so nothing downstream rejected it and the batch encoded cleanly.
    */
-  it('rejects a fee percentage that is fractional, negative, or above FEE_PERCENTAGE_SCALE', () => {
-    for (const percentage of [0.5, -100, 10_001, 50_000]) {
+  it('rejects a fee percentage that is fractional, negative, or above MAX_POSITION_FEE_BPS', () => {
+    for (const percentage of [0.5, -100, 101, 10_000, 50_000]) {
       const result = build(sodax, { address: PARTNER, percentage });
       expect(result.ok).toBe(false);
       if (result.ok) continue;
@@ -2096,11 +2097,11 @@ describe('LeverageYieldService — position partner fee', () => {
   });
 
   /** The ceiling itself stays valid — this asserts the guard rejects, and does not move the bound. */
-  it('accepts the FEE_PERCENTAGE_SCALE boundary unchanged', () => {
-    const result = build(sodax, { address: PARTNER, percentage: 10_000 });
+  it('accepts the MAX_POSITION_FEE_BPS boundary unchanged', () => {
+    const result = build(sodax, { address: PARTNER, percentage: MAX_POSITION_FEE_BPS });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(feeOf(result.value.data).bps).toBe(10_000);
+    expect(feeOf(result.value.data).bps).toBe(MAX_POSITION_FEE_BPS);
   });
 });
 
@@ -2668,6 +2669,165 @@ describe('LeverageYieldService — combined create + leverage', () => {
   });
 });
 
+/** The address a position will be created at — what funding is transferred to. */
+const PREDICTED_POSITION = '0x00000000000000000000000000000000000000ff' as Address;
+
+/**
+ * Stubs the two factory reads the data builders make to resolve the predicted address.
+ *
+ * `ids` may be a queue, so a caller can advance `nextPositionIdFor` between builds; `predicted`
+ * may be a function of the id, so each id maps to its own address.
+ */
+function stubFactoryPrediction(
+  sodaxInstance: Sodax,
+  ids: bigint | bigint[],
+  predicted: Address | ((id: bigint) => Address),
+): void {
+  const queue = Array.isArray(ids) ? [...ids] : null;
+  let current = Array.isArray(ids) ? 0n : ids;
+  vi.spyOn(sodaxInstance.hubProvider.publicClient, 'readContract').mockImplementation((async (call: {
+    functionName: string;
+    args: readonly unknown[];
+  }) => {
+    if (call.functionName === 'nextPositionIdFor') {
+      current = queue ? (queue.shift() ?? current) : current;
+      return current;
+    }
+    if (call.functionName === 'predictPosition') {
+      const id = call.args[2] as bigint;
+      return typeof predicted === 'function' ? predicted(id) : predicted;
+    }
+    throw new Error(`unexpected read: ${call.functionName}`);
+  }) as never);
+}
+
+/** Decodes an `encodeContractCalls` payload back into the batch it represents. */
+function decodeBatchCalls(payload: Hex): { address: Address; value: bigint; data: Hex }[] {
+  const [calls] = decodeAbiParameters(
+    [
+      {
+        name: 'calls',
+        type: 'tuple[]',
+        components: [
+          { name: 'address', type: 'address' },
+          { name: 'value', type: 'uint256' },
+          { name: 'data', type: 'bytes' },
+        ],
+      },
+    ],
+    payload,
+  );
+  return calls as { address: Address; value: bigint; data: Hex }[];
+}
+
+/**
+ * The cap has to hold on every path that writes `PositionConfig.feeBps`, not just the one the fee
+ * tests drive: a builder that skipped `resolvePositionFee` would bake a permanent fee above 1%.
+ */
+describe('LeverageYieldService — MAX_POSITION_FEE_BPS on every create path', () => {
+  const PARTNER = '0x9999999999999999999999999999999999999999' as Address;
+  const FEE_ABI = parseAbi([
+    'function createPositionAndLeverage((address owner, address collateral, address borrowToken, uint8 eModeCategory, uint256 originChainId, bytes originAddress, address originAsset, address feeReceiver, uint16 feeBps) cfg, uint256 initialAssets, uint256 borrowAmount, uint256 minCollateralOut) returns (address)',
+    'function createPositionFromDebtToken((address owner, address collateral, address borrowToken, uint8 eModeCategory, uint256 originChainId, bytes originAddress, address originAsset, address feeReceiver, uint16 feeBps) cfg, uint256 contribution, uint256 totalInput, uint256 minCollateralOut) returns (address)',
+  ]);
+  const feeBpsOf = (data: Hex): number => {
+    const { args } = decodeFunctionData({ abi: FEE_ABI, data });
+    return (args[0] as { feeBps: number }).feeBps;
+  };
+
+  /** The four builders that encode a create call, each reduced to `(partnerFee) => create calldata`. */
+  const paths: [string, (percentage: number) => Promise<Result<Hex, { code: string }>>][] = [
+    [
+      'buildCreatePositionAndLeverage',
+      async percentage => {
+        const result = sodaxWithFactory().leverageYield.buildCreatePositionAndLeverage({
+          from: POSITION_OWNER,
+          owner: POSITION_OWNER,
+          collateral: POS_COLLATERAL,
+          borrowToken: POS_BORROW_TOKEN,
+          eModeCategory: 0,
+          origin: { chainKey: 'sonic', address: POSITION_OWNER },
+          initialAssets: 10n ** 18n,
+          borrowAmount: 1_000n,
+          minCollateralOut: 1n,
+          partnerFee: { address: PARTNER, percentage },
+        });
+        return result.ok ? { ok: true, value: result.value.data } : result;
+      },
+    ],
+    [
+      'buildCreatePositionFromDebtToken',
+      async percentage => {
+        const result = sodaxWithFactory().leverageYield.buildCreatePositionFromDebtToken({
+          from: POSITION_OWNER,
+          owner: POSITION_OWNER,
+          collateral: POS_COLLATERAL,
+          borrowToken: POS_BORROW_TOKEN,
+          eModeCategory: 0,
+          origin: { chainKey: 'sonic', address: POSITION_OWNER },
+          contribution: 10n ** 18n,
+          totalInput: 2n * 10n ** 18n,
+          minCollateralOut: 1n,
+          partnerFee: { address: PARTNER, percentage },
+        });
+        return result.ok ? { ok: true, value: result.value.data } : result;
+      },
+    ],
+    [
+      'buildOpenPositionData',
+      async percentage => {
+        const configured = sodaxWithFactory();
+        stubFactoryPrediction(configured, 0n, PREDICTED_POSITION);
+        const result = await configured.leverageYield.buildOpenPositionData({
+          srcChainKey: ARBITRUM,
+          srcAddress: SAMPLE_USER,
+          token: SPOKE_TOKEN,
+          amount: 10n ** 18n,
+          owner: HUB_WALLET,
+          borrowToken: POS_BORROW_TOKEN,
+          borrowAmount: 1n,
+          minCollateralOut: 1n,
+          partnerFee: { address: PARTNER, percentage },
+        });
+        return result.ok ? { ok: true, value: decodeBatchCalls(result.value).at(-1)?.data as Hex } : result;
+      },
+    ],
+    [
+      'buildOpenPositionFromDebtTokenData',
+      async percentage => {
+        const configured = sodaxWithFactory();
+        stubFactoryPrediction(configured, 0n, PREDICTED_POSITION);
+        const result = await configured.leverageYield.buildOpenPositionFromDebtTokenData({
+          srcChainKey: ARBITRUM,
+          srcAddress: SAMPLE_USER,
+          token: SPOKE_TOKEN,
+          amount: 10n ** 18n,
+          owner: HUB_WALLET,
+          collateral: POS_COLLATERAL,
+          totalInput: 2n * 10n ** 18n,
+          minCollateralOut: 1n,
+          partnerFee: { address: PARTNER, percentage },
+        });
+        return result.ok ? { ok: true, value: decodeBatchCalls(result.value).at(-1)?.data as Hex } : result;
+      },
+    ],
+  ];
+
+  it.each(paths)('%s rejects one basis point over the cap', async (_name, build) => {
+    const result = await build(MAX_POSITION_FEE_BPS + 1);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('LOOKUP_FAILED');
+  });
+
+  it.each(paths)('%s encodes the cap itself', async (_name, build) => {
+    const result = await build(MAX_POSITION_FEE_BPS);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(feeBpsOf(result.value)).toBe(MAX_POSITION_FEE_BPS);
+  });
+});
+
 // ─── Positions from any chain: payload shape + transport ───────────────────────────────
 //
 // The payload is what the hub wallet executes, so these assert the sequence it encodes rather
@@ -2675,38 +2835,9 @@ describe('LeverageYieldService — combined create + leverage', () => {
 // looks fine and reverts on the hub, after the user has already paid for the deposit.
 
 describe('LeverageYieldService — opening a position from any chain', () => {
-  /** The address a position will be created at — what funding is transferred to. */
-  const PREDICTED = '0x00000000000000000000000000000000000000ff' as Address;
-
-  /** Stubs the two factory reads the data builders make to resolve the predicted address. */
-  function stubPrediction(sodaxInstance: Sodax): void {
-    vi.spyOn(sodaxInstance.hubProvider.publicClient, 'readContract').mockImplementation((async (call: {
-      functionName: string;
-    }) => {
-      if (call.functionName === 'nextPositionIdFor') return 0n;
-      if (call.functionName === 'predictPosition') return PREDICTED;
-      throw new Error(`unexpected read: ${call.functionName}`);
-    }) as never);
-  }
-
-  /** Decodes an `encodeContractCalls` payload back into the batch it represents. */
-  function decodeCalls(payload: Hex): { address: Address; value: bigint; data: Hex }[] {
-    const [calls] = decodeAbiParameters(
-      [
-        {
-          name: 'calls',
-          type: 'tuple[]',
-          components: [
-            { name: 'address', type: 'address' },
-            { name: 'value', type: 'uint256' },
-            { name: 'data', type: 'bytes' },
-          ],
-        },
-      ],
-      payload,
-    );
-    return calls as { address: Address; value: bigint; data: Hex }[];
-  }
+  const PREDICTED = PREDICTED_POSITION;
+  const decodeCalls = decodeBatchCalls;
+  const stubPrediction = (sodaxInstance: Sodax): void => stubFactoryPrediction(sodaxInstance, 0n, PREDICTED_POSITION);
 
   it('encodes wrap → transfer to the predicted position → create, and never approves the factory', async () => {
     const configured = sodaxWithFactory();
@@ -2742,6 +2873,39 @@ describe('LeverageYieldService — opening a position from any chain', () => {
       ),
     ).toBe(false);
     expect(calls.every(c => c.value === 0n)).toBe(true);
+  });
+
+  /**
+   * The id is read per build, never cached: the owner's own concurrent open is the one thing that can
+   * advance it, and a cached prediction would fund an address the second position is not created at.
+   */
+  it('re-reads the position id on every build, so a second open funds its own address', async () => {
+    const configured = sodaxWithFactory();
+    const addressForId = (id: bigint): Address =>
+      `0x${id.toString(16).padStart(40, '0')}`.replace('0x', '0xaa').slice(0, 42) as Address;
+    stubFactoryPrediction(configured, [0n, 1n], addressForId);
+
+    const params = {
+      srcChainKey: ARBITRUM,
+      srcAddress: SAMPLE_USER,
+      token: SPOKE_TOKEN,
+      amount: 10n ** 18n,
+      owner: HUB_WALLET,
+      borrowToken: POS_BORROW_TOKEN,
+      borrowAmount: 1n,
+      minCollateralOut: 1n,
+    } as const;
+    const first = await configured.leverageYield.buildOpenPositionData(params);
+    const second = await configured.leverageYield.buildOpenPositionData(params);
+    expect(first.ok && second.ok).toBe(true);
+    if (!first.ok || !second.ok) return;
+
+    const transferTarget = (payload: Hex): string => {
+      const transfer = decodeBatchCalls(payload).find(c => c.data.slice(0, 10) === '0xa9059cbb');
+      return `0x${transfer?.data.slice(34, 74)}`.toLowerCase();
+    };
+    expect(transferTarget(first.value)).toBe(addressForId(0n).toLowerCase());
+    expect(transferTarget(second.value)).toBe(addressForId(1n).toLowerCase());
   });
 
   it('fails closed on a token with no hub asset, rather than encoding a batch that reverts on the hub', async () => {

@@ -262,7 +262,7 @@ type PositionFundingParams<K> = {
   amount: bigint;           // in `token`'s OWN decimals — wrapping to the 18-dp hub reserve happens in the batch
   eModeCategory?: number;   // fixed for the life of the position; defaults to 0
   minCollateralOut: bigint; // slippage floor on what the solver must deliver
-  partnerFee?: PartnerFee;  // percentage variant only; FIXED AT CREATION, defaults to leverageYield.partnerFee
+  partnerFee?: PartnerFee;  // percentage variant only; FIXED AT CREATION, capped (see `MAX_POSITION_FEE_BPS` in `packages/sdk/src/leverageYield/LeverageYieldService.ts`); rate and receiver must be set together or not at all; defaults to leverageYield.partnerFee
 };
 type OpenPositionParams<K>              = PositionFundingParams<K> & { borrowToken: Address; borrowAmount: bigint };
 type OpenPositionFromDebtTokenParams<K> = PositionFundingParams<K> & { collateral: Address; totalInput: bigint };
@@ -273,7 +273,7 @@ There is **no `owner`**: the factory requires `cfg.owner == msg.sender` and the 
 
 ### Funding approval
 
-**Nothing is ever approved to the factory** — it pulls from nobody. Funding is a transfer to `predictPosition(...)` and the clone supplies whatever it finds, batched with the create so a stale prediction reverts and takes the transfer with it rather than stranding tokens. The one approval that does exist has a spender that **differs by chain** — the user's own hub wallet on the hub (the pull happens inside the routed batch), the spoke asset manager elsewhere:
+**Nothing is ever approved to the factory** — it pulls from nobody. Funding is a transfer to `predictPosition(...)` and the clone supplies whatever it finds, batched with the create so a stale prediction reverts and takes the transfer with it rather than stranding tokens. Do not open two positions for one owner concurrently: the owner's own second open is the only thing that can advance the id, and off the hub the deposit has already reached the hub wallet when the batch reverts — recover it with `sodax.recovery`. The one approval that does exist has a spender that **differs by chain** — the user's own hub wallet on the hub (the pull happens inside the routed batch), the spoke asset manager elsewhere:
 
 ```ts
 sodax.leverageYield.isPositionFundingAllowanceValid({ srcChainKey, srcAddress, token, amount }): Promise<Result<boolean, …>>;

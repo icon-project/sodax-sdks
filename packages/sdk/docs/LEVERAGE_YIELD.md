@@ -505,7 +505,11 @@ position created *now* would carry, which is what an open needs. An existing pos
 at creation, so config changes and per-call overrides make the two disagree — `getPositionInfo`
 returns that position's own `feeBps` and `feeReceiver`, and an adjust or exit has to charge those. The
 fee is given up on top of what the solver is paid, so at a non-zero fee an exit sized at the whole
-collateral balance leaves nothing for it and cannot settle.
+collateral balance leaves nothing for it and cannot settle. A position fee is capped at
+`MAX_POSITION_FEE_BPS` (100 bps = 1%), mirroring `LeveragePosition.MAX_FEE_BPS` — the contract reverts
+above it, and the SDK rejects a higher configured or per-call fee before anything is signed. The rate
+and the receiver must also be set together or not at all: the position rejects a rate with no receiver
+(borrowed for, paid to nobody) and a receiver with no rate, so the SDK rejects both pairings too.
 
 ```ts
 const result = await sodax.leverageYield.openLeveragePosition({
@@ -541,6 +545,8 @@ Positions are driven by direct Sonic transactions rather than solver intents, so
 The two create builders return a `Result` because they need the factory address; the rest target the position directly and return the transaction unwrapped.
 
 **The factory never moves anyone's tokens.** It holds no allowance and pulls from nobody: fund a position by transferring to the address it will be created at — `predictPosition(creator, owner, nextPositionIdFor(owner))` — and the clone supplies whatever it finds. So no approval to a shared contract exists anywhere in the flow. Do the transfer and the create in one batch; if the prediction is stale the create reverts on the missing balance and takes the transfer with it rather than stranding the tokens. `openPosition` / `openPositionFromDebtToken` build that batch for you.
+
+**Do not open two positions for one owner concurrently.** The id is per-owner, so the owner's own second open is the only thing that can advance it between building a payload and executing it. The stale batch's create lands on a fresh, unfunded address and reverts on the factory's `balanceOf(position) < initialAssets` check; on the hub that takes the transfer with it and nothing is lost. Funded from a spoke, the deposit has already landed in the user's hub wallet by the time the relayed batch reverts, and it stays there — recover it with `sodax.recovery` ([RECOVERY.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/RECOVERY.md)).
 
 **You can only create a position you own.** The factory requires `cfg.owner == msg.sender`, and the caller there is always the funder's own hub wallet, so there is nothing to choose — which is why `openPosition` takes no `owner`. The binding is what makes the refund address safe: `originAddress` decides where a cancelled operation's funds go and past a deadline anyone may trigger that cancel, so a third-party creator picking it was a standing claim on whatever the owner later contributed. It also means nobody else can advance the id your funding address is predicted from. To fund someone else, supply into a position they already own — `pool.supply(collateral, amount, position, 0)` — which sets no origin and takes nothing away.
 

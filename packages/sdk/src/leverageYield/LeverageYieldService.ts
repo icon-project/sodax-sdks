@@ -71,7 +71,7 @@ import type { BackendApiService } from '../backendApi/index.js';
 import { runBackendSubmitTx } from '../backendApi/runBackendSubmitTx.js';
 import { createSubmitTxAttempt, type SubmitTxAttempt } from '../backendApi/submitTxAttempt.js';
 import { resolveTimeoutMs } from '../shared/utils/resolveTimeoutMs.js';
-import { encodeFunctionData, erc20Abi, isAddress, parseAbi, zeroAddress } from 'viem';
+import { encodeFunctionData, erc20Abi, isAddress, isAddressEqual, parseAbi, zeroAddress } from 'viem';
 import type { ConfigService } from '../shared/config/ConfigService.js';
 import type { CreateIntentParams, Intent } from '../shared/types/intent-types.js';
 import { EvmSolverService } from '../swap/EvmSolverService.js';
@@ -125,6 +125,9 @@ const leverageYieldVaultAbi = parseAbi([
   'function borrowToken() view returns (address)',
   'function targetLTV() view returns (uint256)',
 ]);
+
+/** Mirrors `LeveragePosition.MAX_FEE_BPS`. Unlike a vault quote's bound, this one is permanent. */
+export const MAX_POSITION_FEE_BPS = 100;
 
 // Leverage positions are the unpooled counterpart to the vaults above: one owner-controlled
 // AAVE account per position, cloned by the factory. Neither contract keeps accounting of its
@@ -2248,16 +2251,29 @@ export class LeverageYieldService {
         ),
       };
     }
-    // The bounds `getQuote` already asserts, repeated because a position's fee is fixed at creation:
-    // an out-of-range or fractional `uint16` is baked in permanently, not just mispriced once.
-    if (!Number.isInteger(fee.percentage) || fee.percentage < 0 || fee.percentage > Number(FEE_PERCENTAGE_SCALE)) {
+    // Bounded tighter than `getQuote`'s because a position's fee is baked in permanently at creation.
+    if (!Number.isInteger(fee.percentage) || fee.percentage < 0 || fee.percentage > MAX_POSITION_FEE_BPS) {
       return {
         ok: false,
         error: lookupFailed(
           'leverageYield',
           method,
           new Error(
-            `a position partner fee must be a whole number of basis points between 0 and ${FEE_PERCENTAGE_SCALE} (got ${fee.percentage})`,
+            `a position partner fee must be a whole number of basis points between 0 and MAX_POSITION_FEE_BPS (${MAX_POSITION_FEE_BPS}) (got ${fee.percentage})`,
+          ),
+        ),
+      };
+    }
+    // `LeveragePosition.initialize` rejects a half-configured fee: a rate with no receiver is
+    // borrowed for and paid to nobody, a receiver with no rate is never paid.
+    if ((fee.percentage === 0) !== isAddressEqual(fee.address, zeroAddress)) {
+      return {
+        ok: false,
+        error: lookupFailed(
+          'leverageYield',
+          method,
+          new Error(
+            `a position partner fee needs a rate and a receiver together, or neither (got ${fee.percentage} bps for ${fee.address})`,
           ),
         ),
       };
@@ -2685,6 +2701,11 @@ export class LeverageYieldService {
    * whatever it finds. The id is per-owner, so an unrelated user creating a position cannot move the
    * address out from under this batch — and because the transfer and the create are in the same batch,
    * a stale prediction reverts both rather than stranding the tokens.
+   *
+   * The owner's OWN concurrent opens are the one thing that can still advance the id between building
+   * this payload and executing it. On the hub that reverts atomically and nothing is lost; funded from
+   * a spoke the deposit has already landed in the user's hub wallet when the batch reverts, and is
+   * recovered with `sodax.recovery` (see RECOVERY.md). Do not open two positions for one owner at once.
    *
    * The origin recorded on the position is `srcChainKey` / `srcAddress` / the deposited hub asset,
    * so a leverage intent that never fills refunds to the user on the chain they funded from — not to
