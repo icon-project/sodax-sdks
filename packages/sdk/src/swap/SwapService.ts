@@ -1834,7 +1834,7 @@ export class SwapService {
   /**
    * Offline, rule-based estimate of how fast a `srcToken`→`dstToken` swap will settle.
    *
-   * Derived purely from SDK config (no network / on-chain / backend call): tokens tied to a
+   * Derived purely from SDK config (no network / on-chain / backend call): tokens whose vault is a
    * money-market-reserve sodaAsset settle faster, and an Ethereum leg adds a fixed penalty. See
    * {@link estimateSwapSpeedTier} for the rules.
    *
@@ -1842,6 +1842,6 @@ export class SwapService {
    * @returns the estimated `tier` bucket and `estimatedSeconds`
    */
   public getSwapSpeedTier(params: SwapSpeedTierParams): SwapSpeedTierResult {
-    return estimateSwapSpeedTier(params, hubAsset => this.config.isMoneyMarketReserveHubAsset(hubAsset));
+    return estimateSwapSpeedTier(params, vault => this.config.isMoneyMarketReserveAsset(vault));
   }
 }

@@ -185,7 +185,6 @@ fails too, as an orphan. The URL only resolves once merged to `main`. See
 - `chains.ts` map body — the new entry flows in by reference.
 - `SpokeTokenSymbols` union, `isSwapSupportedToken`, `getSupportedSolverTokens`, `getStagingSolverTokens` — derive from the lists/map.
 - `chains/tokens-dedup.test.ts` — don't edit it; but it only checks tokens **already in the swap (production + staging) / money-market lists** (per chain), **not** the raw `<chain>SupportedTokens` map (see the dedup caveat in step 2c).
-- `packages/sdk/src/shared/constants.ts` `hubAssets` registry — commented out; not a touch point.
 - SDK `src/` — Token-2022 mints (xStocks) are handled generically in `SolanaSpokeService`; no runtime change.
 
 ## 4. Preconditions (off-SDK — not code edits)
