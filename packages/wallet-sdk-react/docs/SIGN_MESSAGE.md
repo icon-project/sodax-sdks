@@ -70,27 +70,27 @@ Bitcoin's signing flow inspects the connected address and picks the right method
 | P2SH (legacy multi-sig, `3…`) | ECDSA | Unisat, Xverse, OKX, Hana |
 | P2PKH (legacy, `1…`) | ECDSA | Unisat, Xverse, OKX, Hana |
 
-The dispatch happens inside [`chainRegistry.ts`](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/src/chainRegistry.ts) using `detectBitcoinAddressType(address)` + the `hasSignBip322` / `hasSignEcdsa` type guards from [`bitcoinSignGuards.ts`](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/src/xchains/bitcoin/bitcoinSignGuards.ts):
+The dispatch happens inside [`chainRegistry.ts`](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/src/chainRegistry.ts) using `detectBitcoinAddressType(address)` + the `hasSignBip322` / `hasSignEcdsa` guards from [`bitcoinSignGuards.ts`](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/src/xchains/bitcoin/bitcoinSignGuards.ts). Signing lives on the wallet provider, not on the connector, so the action resolves the provider first — the live one from `connect()`, falling back to `recreateWalletProvider` after a page reload:
 
 ```typescript
-switch (addressType) {
-  case 'P2WPKH':
-  case 'P2TR':
-    if (!hasSignBip322(connector)) {
-      throw new Error(`${connector.id} does not support BIP-322 signing`);
-    }
-    return connector.signBip322Message(message);
-
-  case 'P2SH':
-  case 'P2PKH':
-    if (!hasSignEcdsa(connector)) {
-      throw new Error(`${connector.id} does not support ECDSA signing`);
-    }
-    return connector.signEcdsaMessage(message);
+const walletProvider = connector.getWalletProvider() ?? connector.recreateWalletProvider(connection.xAccount);
+if (!walletProvider) {
+  throw new Error(`${connector.id} has no wallet provider`);
 }
+
+if (usesBip322MessageSigning(detectBitcoinAddressType(address))) {
+  if (!hasSignBip322(walletProvider)) {
+    throw new Error(`${connector.id} does not support BIP-322 signing`);
+  }
+  return walletProvider.signBip322Message(message);
+}
+if (!hasSignEcdsa(walletProvider)) {
+  throw new Error(`${connector.id} does not support ECDSA signing`);
+}
+return walletProvider.signEcdsaMessage(message);
 ```
 
-The same logic mirrors the SDK's `RadfiProvider.authenticateWithWallet` — the React layer doesn't reinvent the dispatch. If a custom connector implements only one of the two methods, calling `signMessage` from a wrongly-typed address surfaces the error inline.
+The same logic mirrors the SDK's `RadfiProvider.authenticateWithWallet` — the React layer doesn't reinvent the dispatch. `IBitcoinWalletProvider` declares both methods as required, so the guards exist for custom providers that do not honour the whole contract: calling `signMessage` from a wrongly-typed address surfaces the error inline instead of a `TypeError`.
 
 **Why BIP-322 for segwit/taproot?** Legacy ECDSA message signing (`signEcdsaMessage`) doesn't have a standard for non-P2PKH addresses. BIP-322 added a generic verification framework that works across address types — most modern Bitcoin wallets implement it for segwit/taproot specifically.
 
