@@ -9,7 +9,7 @@ Key design points:
 - [Concept 3: Raw Transaction Handling](#concept-3-raw-transaction-handling) — `raw: true / false` is a discriminated union that enforces wallet-provider rules at compile time.
 - [Concept 4: Chain Keys](#concept-4-chain-keys) — All chain constants live under a single `ChainKeys.*` namespace.
 - [Concept 5: Result\<T\>](#concept-5-resultt) — Every public async method returns `Promise<Result<T>>` — no throws across service boundaries.
-- [Concept 6: Error convention](#concept-6-error-convention) — every public failure is a `SodaxError`; discriminate on `error.code`.
+- [Concept 6: Error convention](#concept-6-error-convention) — most public failures are a `SodaxError`; check `isSodaxError(error)` before reading `error.code`.
 
 For a direct mapping of old `*_CHAIN_ID` constants to `ChainKeys.*`, see [`packages/sdk/CHAIN_ID_MIGRATION.md`](../CHAIN_ID_MIGRATION.md).
 

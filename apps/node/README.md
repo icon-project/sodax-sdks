@@ -5,8 +5,8 @@ extension. Each script is one file under
 [`src/`](https://github.com/icon-project/sodax-sdks/tree/main/apps/node/src) driven by its own
 `pnpm` script.
 
-Most of these sign with a real key and broadcast to **mainnet**. Three do not, and they are the
-place to start.
+Most of these sign with a real key and broadcast to **mainnet**. A handful do not — they need no
+key at all, and they are the place to start.
 
 ## Prerequisites
 
@@ -26,16 +26,31 @@ TypeScript directly.
 
 ## Start here — no key, no funds
 
+Two scripts need no `.env`, no key and no network access at all:
+
 ```bash
 pnpm logging
+pnpm test-libs
 ```
 
 [`src/logging.ts`](https://github.com/icon-project/sodax-sdks/blob/main/apps/node/src/logging.ts)
-is the only script here that needs no `.env`, no key and no network access. It points the backend
-base URL at a closed local port, so a real internal SDK failure travels through a custom
-`SodaxLogger` immediately. See [Logging](https://docs.sodax.com/developers/how-to/logging).
+points the backend base URL at a closed local port, so a real internal SDK failure travels through a
+custom `SodaxLogger` immediately. See [Logging](https://docs.sodax.com/developers/how-to/logging).
+[`src/test-libs.ts`](https://github.com/icon-project/sodax-sdks/blob/main/apps/node/src/test-libs.ts)
+encodes addresses and payloads locally to catch a broken `@sodax/libs` dist before a consumer hits it.
 
-Everything else signs with a real key.
+These also run without a key, but do read from mainnet:
+
+| Command | What it does |
+| --- | --- |
+| `pnpm approve-guard-check` | Read-only allowance check for the USDT-class approve guard |
+| `pnpm bitcoin-raw-intent` | Encodes the `createIntent` calldata offline from a source address |
+| `pnpm bitcoin-raw-intent-check` `pnpm stacks-raw-intent` `pnpm injective-raw-intent` `pnpm sui-raw-intent` `pnpm bridge-raw` | Build the **unsigned** source tx via `raw: true` — never signed, never broadcast |
+
+The six regression scripts under `src/tests/` are commented out in full, so they are inert too (see
+[below](#regression-scripts--currently-inert)).
+
+Every other command needs a real key.
 
 ## Configuration
 
@@ -92,14 +107,16 @@ see [Bitcoin Integration](https://docs.sodax.com/developers/how-to/bitcoin-integ
 
 ## Raw intent scripts
 
-Build and submit an intent without the spoke-provider abstraction, for debugging a wallet or signing
-integration:
+Build an unsigned intent without the spoke-provider abstraction, for debugging a wallet or signing
+integration. `raw: true` returns the transaction — these never sign and never broadcast:
 
 ```bash
 pnpm bitcoin-raw-intent
 pnpm bitcoin-raw-intent-check
 pnpm stacks-raw-intent
 pnpm injective-raw-intent
+pnpm sui-raw-intent
+pnpm bridge-raw
 ```
 
 Swap native S on Sonic into Ethereum USDC and deposit it into the Flint RWA vault via the

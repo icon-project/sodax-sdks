@@ -30,7 +30,7 @@ Every chain family has a named interface that `@sodax/sdk` exports:
 
 | Interface | `chainType` literal | Chains covered |
 |---|---|---|
-| `IEvmWalletProvider` | `'EVM'` | Sonic (hub), Ethereum, Arbitrum, Base, BSC, Optimism, Polygon, Avalanche, HyperEVM, Lightlink, Redbelly, Kaia, Hedera |
+| `IEvmWalletProvider` | `'EVM'` | Sonic (hub), Ethereum, Arbitrum, Base, BSC, Optimism, Polygon, Avalanche, HyperEVM, Lightlink, Redbelly, Kaia, Hedera, Robinhood |
 | `ISolanaWalletProvider` | `'SOLANA'` | Solana |
 | `ISuiWalletProvider` | `'SUI'` | Sui |
 | `IIconWalletProvider` | `'ICON'` | ICON |

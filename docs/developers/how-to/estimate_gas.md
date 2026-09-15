@@ -46,7 +46,7 @@ The return type is conditional on the source chain's chain family. The concrete 
 
 | Chain family | Type | Notes |
 |---|---|---|
-| EVM (Ethereum, Arbitrum, Base, BSC, Optimism, Polygon, Avalanche, HyperEVM, Lightlink, Redbelly, Kaia, Hedera) | `bigint` (`EvmGasEstimate`) | Gas units |
+| EVM (Ethereum, Arbitrum, Base, BSC, Optimism, Polygon, Avalanche, HyperEVM, Lightlink, Redbelly, Kaia, Hedera, Robinhood) | `bigint` (`EvmGasEstimate`) | Gas units |
 | EVM hub (Sonic) | `bigint` (`EvmGasEstimate`) | Gas units |
 | Solana | `number \| undefined` (`SolanaGasEstimate`) | Compute units; `undefined` if simulation unavailable |
 | Stellar | `bigint` (`StellarGasEstimate`) | Fee in stroops |
