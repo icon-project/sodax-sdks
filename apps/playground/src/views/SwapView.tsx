@@ -159,8 +159,8 @@ export function SwapView({ flow, brandControls }: { flow: SwapFlow; brandControl
             <section className="card integration-card">
               <h3>Add it to your app</h3>
               <p className="muted small">
-                Take the HTML or React embed, or hand the agent prompt to your coding agent. All three install the
-                hosted widget, with its own wallet connection. No SODAX package installation needed.
+                Take the HTML or React embed, or hand the prompt to your coding agent — each installs the hosted widget
+                with its own wallet connection, and no SODAX package.
               </p>
               {configured ? (
                 <CodePanel snippets={configured.snippets} initialId="embed" />

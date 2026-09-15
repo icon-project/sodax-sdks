@@ -196,17 +196,35 @@ the configured pair, amount, slippage and theme. The widget connects its own wal
 
 /**
  * The hosted embed owns execution; the quote tab is an optional lower-level integration example.
+ *
+ * Labels are one word so four tabs hold one row in the builder's column; the note carries what the
+ * label used to, and every tab has one so the panel does not resize as the reader moves between them.
  */
 export function buildSnippets(state: SnippetState, embedUrl: string): Snippet[] {
   return [
-    { id: 'embed', label: 'HTML embed', code: embedSnippet(embedUrl) },
-    { id: 'widget', label: 'React iframe', code: widgetSnippet(embedUrl) },
+    {
+      id: 'embed',
+      label: 'HTML',
+      code: embedSnippet(embedUrl),
+      note: 'One iframe and a listener, for any page that serves HTML.',
+    },
+    {
+      id: 'widget',
+      label: 'React',
+      code: widgetSnippet(embedUrl),
+      note: 'The same embed as a component, for a React host.',
+    },
     {
       id: 'agent',
-      label: 'Agent prompt',
+      label: 'Agent',
       code: agentPrompt(state, embedUrl),
       note: 'Paste this prompt into your coding agent to get the widget installed.',
     },
-    { id: 'quote', label: 'SDK quote', code: quoteSnippet(state) },
+    {
+      id: 'quote',
+      label: 'SDK',
+      code: quoteSnippet(state),
+      note: 'The lower-level route: install @sodax/dapp-kit and quote the swap yourself.',
+    },
   ];
 }

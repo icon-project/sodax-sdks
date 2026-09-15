@@ -978,8 +978,26 @@ code,
   opacity: 1;
 }
 
+/* `appearance: none` drops the OS chevron and metrics, which sat a browser widget next to our own
+   controls. Redrawn on the design system's clay ink — one variant per theme, since a data URI
+   cannot read a custom property. */
 .select {
   flex: 1;
+  appearance: none;
+  height: 36px;
+  padding: 0 32px 0 12px;
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="none"><path d="M2.5 4.5 6 8l3.5-3.5" stroke="%238E7E7D" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>');
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  cursor: pointer;
+}
+
+:root[data-theme="dark"] .select {
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="none"><path d="M2.5 4.5 6 8l3.5-3.5" stroke="%23B9ACAB" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>');
+}
+
+.select:hover {
+  border-color: var(--border-strong);
 }
 
 .slip {
@@ -2034,7 +2052,6 @@ code,
 /* `.select` grows to fill a row by default, which in this column would stretch its height. */
 .brand-cell .select {
   flex: none;
-  padding: 5px 8px;
 }
 
 .brand-label {
@@ -2106,8 +2123,10 @@ body:has(.app-embed) {
   margin-bottom: 12px;
   gap: 12px;
 }
+/* One width for all three tabs: the snippets want it, the widget never fills the column it gives up,
+   and a column that resized per tab read as the layout moving under you. */
 .app-main {
-  grid-template-columns: minmax(340px, 430px) minmax(0, 1fr);
+  grid-template-columns: minmax(340px, 560px) minmax(0, 1fr);
   gap: 20px;
 }
 .studio-heading {
@@ -2167,8 +2186,10 @@ body:has(.app-embed) {
   border-radius: 12px;
   background: var(--surface-inset);
 }
+/* The inset is the group's own edge; outlining every tab inside it reads as a border in a border. */
 .builder-tabs .btn {
   flex: 1;
+  border-color: transparent;
 }
 .segmented .btn[aria-pressed="true"] {
   background: var(--surface-card);
@@ -2253,9 +2274,10 @@ body:has(.app-embed) {
 .preview-toolbar .btn {
   padding: 8px 12px;
 }
+/* No edge of its own: the stage frames this column already, and the widget below carries the border
+   a host page would see. Three nested outlines around one widget was two too many. */
 .preview-canvas {
   padding: 12px;
-  border: 1px solid var(--border-subtle);
   border-radius: 20px;
   min-height: 540px;
 }
@@ -2299,8 +2321,14 @@ body:has(.app-embed) {
   max-height: 400px;
   font-size: 11px;
 }
+/* Four tabs in a 340px column: equal cells on one row, the shape the builder's own tab row uses. */
 .integration-card .tabs {
-  flex-wrap: wrap;
+  flex: 1;
+  flex-wrap: nowrap;
+}
+.integration-card .tab {
+  flex: 1;
+  text-align: center;
 }
 .widget-heading {
   display: flex;
