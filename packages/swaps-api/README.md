@@ -18,8 +18,10 @@ the full SDK.
 ## Install
 
 ```bash
-pnpm add @sodax/swaps-api valibot
+pnpm add @sodax/swaps-api
 ```
+
+`valibot` is a regular dependency of this package, not a peer — installing it separately is unnecessary.
 
 ## Usage
 
@@ -45,6 +47,36 @@ environment URLs. Optionally set `timeout` (ms — an overall per-call deadline 
 includes retries; on expiry the call throws `TIMEOUT_ERROR`), a custom `fetch` (for
 tests or non-standard runtimes; it receives the timeout `AbortSignal`), extra `headers`,
 and an `apiKey`.
+
+## Methods
+
+One method per Swaps API v2 endpoint, mirroring `ISwapsApiV2`:
+
+| Method | Endpoint |
+|---|---|
+| `getTokens()` | `GET /swaps/tokens` |
+| `getTokensByChain(chainKey)` | `GET /swaps/tokens/:chainKey` |
+| `getQuote(body, query?)` | `POST /swaps/quote` |
+| `getDeadline(query?)` | `GET /swaps/deadline` |
+| `checkAllowance(body)` | `POST /swaps/allowance/check` |
+| `approve(body)` | `POST /swaps/approve` |
+| `createIntent(body)` | `POST /swaps/intents` |
+| `submitIntent(body)` | `POST /swaps/intents/submit` |
+| `getStatus(body)` | `POST /swaps/intents/status` |
+| `cancelIntent(body)` | `POST /swaps/intents/cancel` |
+| `getIntentHash(body)` | `POST /swaps/intents/hash` |
+| `getSolvedIntentPacket(body)` | `POST /swaps/intents/packet` |
+| `getIntentSubmitTxExtraData(body)` | `POST /swaps/intents/extra-data` |
+| `getFilledIntent(txHash)` | `GET /swaps/intents/:txHash/fill` |
+| `getIntent(txHash)` | `GET /swaps/intents/:txHash` |
+| `createLimitOrderIntent(body)` | `POST /swaps/limit-orders` |
+| `estimateGas(body)` | `POST /swaps/gas/estimate` |
+| `getPartnerFee(query)` | `GET /swaps/fees/partner` |
+| `getSolverFee(query)` | `GET /swaps/fees/solver` |
+| `submitTx(body)` | `POST /swaps/submit-tx` |
+| `getSubmitTxStatus(query)` | `GET /swaps/submit-tx/status` |
+
+`quoteType` is `'exact_input'` — exact-output quoting is not supported.
 
 ## API key
 
@@ -128,3 +160,8 @@ const approve = v.parse(schema, await someOtherTransport('/approve'));
 ```
 
 These are the response shapes only — request bodies are typed, not schema-validated.
+
+## Reference app
+
+[`apps/swap-api-example`](https://github.com/icon-project/sodax-sdks/tree/main/apps/swap-api-example)
+drives this client end to end against a live Swaps API host.

@@ -16,7 +16,7 @@ import { Sodax } from '@sodax/sdk';
 const sodax = new Sodax();
 ```
 
-The constructor signature is `new Sodax(config?: SodaxOptions)`, where `SodaxOptions = DeepPartial<SodaxDefaultConfig> & SodaxOptionalConfig` — a deep-partial override of the `SodaxDefaultConfig` data contract plus the client-side options: the `logger` sink (see [LOGGING.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/LOGGING.md)), the global partner `fee`, per-feature options on `swaps` / `bridge` / `moneyMarket` / `leverageYield` (including `partnerFee` and `useBackendSubmitTx` — see [Backend submit-tx 2-step](#backend-submit-tx-2-step-swapsusebackendsubmittx)), and `radfi` (see [RadFi/Bound request signer](#radfibound-request-signer-radfisignrequest)). The `logger`, global `fee`, and `radfi` are kept off the data contract: they are resolved once and never fetched from or overwritten by the backend config. `useBackendSubmitTx` lives on the feature option slots (`swaps` / `bridge` / `leverageYield`) alongside `partnerFee`; the effective value is resolved on `ConfigService` — `sodax.config.swapUseBackendSubmitTx` / `sodax.config.bridgeUseBackendSubmitTx` (both default `true`) and `sodax.config.leverageYieldUseBackendSubmitTx` (default `false`). When called with no arguments the SDK merges your overrides with the packaged static defaults ([`sodaxConfig`](https://github.com/icon-project/sodax-sdks/blob/main/packages/types/src/sodax-config/sodax-config.ts)) using a recursive `deepMerge`. Omitted keys keep their default values.
+The constructor signature is `new Sodax(config?: SodaxOptions)`, where `SodaxOptions = DeepPartial<SodaxDefaultConfig> & SodaxOptionalConfig` — a deep-partial override of the `SodaxDefaultConfig` data contract plus the client-side options: the `logger` sink (see [LOGGING.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/LOGGING.md)), the opt-in `analytics` tracker (see [Analytics](#analytics)), the global partner `fee`, per-feature options on `swaps` / `bridge` / `moneyMarket` / `leverageYield` (including `partnerFee` and `useBackendSubmitTx` — see [Backend submit-tx 2-step](#backend-submit-tx-2-step-swapsusebackendsubmittx)), and `radfi` (see [RadFi/Bound request signer](#radfibound-request-signer-radfisignrequest)). The `logger`, `analytics`, global `fee`, and `radfi` are kept off the data contract: they are resolved once and never fetched from or overwritten by the backend config. `useBackendSubmitTx` lives on the feature option slots (`swaps` / `bridge` / `leverageYield`) alongside `partnerFee`; the effective value is resolved on `ConfigService` — `sodax.config.swapUseBackendSubmitTx` / `sodax.config.bridgeUseBackendSubmitTx` (both default `true`) and `sodax.config.leverageYieldUseBackendSubmitTx` (default `false`). When called with no arguments the SDK merges your overrides with the packaged static defaults ([`sodaxConfig`](https://github.com/icon-project/sodax-sdks/blob/main/packages/types/src/sodax-config/sodax-config.ts)) using a recursive `deepMerge`. Omitted keys keep their default values.
 
 ### Dynamic Configuration
 
@@ -157,6 +157,32 @@ Rotating a key at runtime with `backendApi.setHeaders({ 'x-api-key': next })` re
 **Security note.** The configured key follows the roots you configure — the data / swaps / bridge `baseURL` and `solver.solverApiEndpoint` — and it equally follows a per-call `RequestOverrideConfig.baseURL` on data / swaps / bridge, plaintext local targets such as `http://localhost:3008` included: those three bake the key into their headers, so retargeting a single call carries it to that host. Sponsoring is the one gated exception described above. Point all of them — configured root and per-call override alike — only at trusted SODAX-related deployments.
 
 Like the global `fee`, the global `apiKey` is a `SodaxOptions` client-side option, never part of the backend-fetched data contract. Keys bundled into a browser app are public by nature. Auth failures come back as `EXTERNAL_API_ERROR` results with `context.status` `401` (missing/invalid key) or `403` (suspended organisation / missing scope) — terminal until the key is fixed — while the transient verification `503` is retried automatically by the wire client.
+## Analytics
+
+The SDK can emit **structured, opt-in user-action events** to a tracker you supply. This is separate from `logger`: `logger` is developer-facing free-form diagnostics that is **on by default** (`console`), whereas `analytics` is a product-facing event stream that is **off by default** — the SDK emits nothing (and never even builds an event payload) unless you enable it.
+
+`analytics` is a `SodaxOptions` client-side option (like `logger` and `fee`): it is resolved once at construction and never fetched from or overwritten by the backend config. Enable it by passing an `AnalyticsConfig`; omit it (or pass `false`) to stay disabled.
+
+```typescript
+import { Sodax } from '@sodax/sdk';
+
+const sodax = new Sodax({
+  analytics: {
+    // Required: called once per emitted event; forward it to your analytics backend.
+    tracker: (event) => amplitude.track(event.action, event.data),
+    // Optional: highest detail level to emit. Defaults to 'basic'; 'detailed' adds richer `data` payloads.
+    level: 'detailed',
+    // Optional allowlist of features/actions to track. Omit to track everything.
+    features: {
+      swap: true,                                     // all swap actions
+      moneyMarket: { actions: ['supply', 'borrow'] }, // only these actions
+      // a feature omitted from the object is OFF
+    }, // or the array shorthand: features: ['swap', 'moneyMarket']
+  },
+});
+```
+
+Each event carries `feature` + `action` + `phase` (`'start' | 'success' | 'failure'`) + `level` + an optional `data` payload — the same `(feature, action)` taxonomy the error layer uses, so events line up with `SodaxError`s downstream. The `tracker` is treated as fire-and-forget: it is not awaited, and any **synchronous** exception it throws is swallowed, so a throwing tracker cannot break a feature flow. The `AnalyticsTracker` contract requires the tracker to be cheap and non-throwing — if your adapter is `async`, handle rejections inside it, because the SDK does not observe the returned promise. Types (`AnalyticsConfig`, `AnalyticsTracker`, `AnalyticsEvent`, `AnalyticsFeatures`, `AnalyticsOption`) live in [`@sodax/types`](https://github.com/icon-project/sodax-sdks/blob/main/packages/types/src/shared/analytics.ts).
 
 ## Custom configuration
 
@@ -431,12 +457,13 @@ After construction, the `Sodax` instance exposes the following read-only service
 | `sodax.bridge` | `BridgeService` | Cross-chain token transfers |
 | `sodax.staking` | `StakingService` | SODA token staking operations |
 | `sodax.dex` | `DexService` | Concentrated liquidity / AMM |
+| `sodax.leverageYield` | `LeverageYieldService` | Leveraged-yield ERC-4626 vault deposits / withdrawals on the Sonic hub |
 | `sodax.migration` | `MigrationService` | ICX / bnUSD / BALN token migration |
 | `sodax.partners` | `PartnerService` | Partner fee claiming and operations |
 | `sodax.recovery` | `RecoveryService` | Withdraw stuck hub-wallet assets to a spoke chain |
 | `sodax.backendApi` | `BackendApiService` | Raw backend API access |
 | `sodax.config` | `ConfigService` | Chain/token config and lookup helpers |
-| `sodax.hubProvider` | `EvmHubProvider` | Hub chain (Sonic) contract interactions |
+| `sodax.hubProvider` | `HubProvider` | Hub chain (Sonic) contract interactions |
 | `sodax.spoke` | `SpokeService` | Spoke chain routing facade |
 | `sodax.instanceConfig` | `SodaxConfig` | Resolved config after merging with defaults |
 
@@ -451,10 +478,10 @@ ChainKeys.SONIC_MAINNET;
 ChainKeys.ETHEREUM_MAINNET;
 ChainKeys.ARBITRUM_MAINNET;
 ChainKeys.SOLANA_MAINNET;
-// … and so on for all 20 supported chains
+// … and so on for all supported chains
 ```
 
-`SpokeChainKey` is the union type of all `ChainKeys` values. Use it to type any parameter that accepts a chain identifier.
+The full set of chain constants is defined by [`ChainKeys`](https://github.com/icon-project/sodax-sdks/blob/main/packages/types/src/chains/chain-keys.ts) in `@sodax/types` — treat it as the source of truth rather than any fixed count here. `SpokeChainKey` is the union type of all `ChainKeys` values. Use it to type any parameter that accepts a chain identifier.
 
 ## Additional Resources
 

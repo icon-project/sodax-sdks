@@ -1,8 +1,8 @@
 import { afterEach, describe, it, expect, vi } from 'vitest';
-import { ChainKeys } from '@sodax/types';
+import { ChainKeys, type IBitcoinWalletProvider } from '@sodax/types';
 import { XConnector } from './core/index.js';
 import type { SodaxWalletConfig } from './types/config.js';
-import { BitcoinXService } from './xchains/bitcoin/index.js';
+import { BitcoinXConnector, BitcoinXService } from './xchains/bitcoin/index.js';
 import { IconXService } from './xchains/icon/index.js';
 import { InjectiveXService } from './xchains/injective/index.js';
 import { NearXService } from './xchains/near/NearXService.js';
@@ -521,5 +521,84 @@ describe('chainRegistry — rpcUrl/network forwarding to XService.getInstance', 
       STACKS: { chains: { [ChainKeys.STACKS_MAINNET]: entry } },
     });
     expect(spy).toHaveBeenCalledWith(entry);
+  });
+});
+
+// ─── chainRegistry: BITCOIN signMessage dispatch ────────────────────────────
+
+describe('chainRegistry — BITCOIN signMessage dispatches to the wallet provider', () => {
+  const makeProvider = (overrides: Record<string, unknown> = {}): IBitcoinWalletProvider =>
+    ({
+      signBip322Message: vi.fn(async () => 'sig-bip322'),
+      signEcdsaMessage: vi.fn(async () => 'sig-ecdsa'),
+      ...overrides,
+      // Only the message-signing surface is exercised; the rest of IBitcoinWalletProvider is unused.
+    }) as unknown as IBitcoinWalletProvider;
+
+  class FakeBitcoinXConnector extends BitcoinXConnector {
+    constructor(
+      private readonly live: IBitcoinWalletProvider | undefined,
+      private readonly restored: IBitcoinWalletProvider | undefined = undefined,
+    ) {
+      super('Fake Bitcoin Wallet', 'fake-btc');
+    }
+    async connect() {
+      return undefined;
+    }
+    async disconnect() {}
+    getWalletProvider() {
+      return this.live;
+    }
+    recreateWalletProvider() {
+      return this.restored;
+    }
+  }
+
+  const signWith = (address: string, connector: BitcoinXConnector) => {
+    const store: StoreAccessor = vi.fn(() => ({
+      xConnections: { BITCOIN: { xAccount: { address, xChainType: 'BITCOIN' as const }, xConnectorId: 'fake-btc' } },
+      xConnectorsByChain: {},
+      xServices: {},
+      setXConnectors: vi.fn(),
+      unsetXConnection: vi.fn(),
+      setWalletProvider: vi.fn(),
+      walletConfig: undefined,
+    }));
+    const { chainActions } = createChainServices({ BITCOIN: { connectors: [connector] } }, store);
+    const signMessage = chainActions.BITCOIN?.signMessage;
+    if (!signMessage) throw new Error('BITCOIN signMessage not registered');
+    return signMessage('hello');
+  };
+
+  it.each([
+    ['bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh', 'P2WPKH', 'signBip322Message', 'sig-bip322'],
+    ['bc1pxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh', 'P2TR', 'signBip322Message', 'sig-bip322'],
+    ['3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy', 'P2SH', 'signEcdsaMessage', 'sig-ecdsa'],
+    ['1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2', 'P2PKH', 'signEcdsaMessage', 'sig-ecdsa'],
+  ])('%s (%s) signs via %s', async (address, _type, method, expected) => {
+    const provider = makeProvider();
+    await expect(signWith(address, new FakeBitcoinXConnector(provider))).resolves.toBe(expected);
+    expect(provider[method as 'signBip322Message' | 'signEcdsaMessage']).toHaveBeenCalledWith('hello');
+  });
+
+  it('falls back to recreateWalletProvider when the live provider is gone (post-reload)', async () => {
+    const restored = makeProvider();
+    await expect(
+      signWith('bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh', new FakeBitcoinXConnector(undefined, restored)),
+    ).resolves.toBe('sig-bip322');
+    expect(restored.signBip322Message).toHaveBeenCalledWith('hello');
+  });
+
+  it('throws when the connector yields no wallet provider', async () => {
+    await expect(
+      signWith('bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh', new FakeBitcoinXConnector(undefined)),
+    ).rejects.toThrow('fake-btc has no wallet provider');
+  });
+
+  it('throws when the wallet provider does not implement the scheme the address needs', async () => {
+    const provider = makeProvider({ signBip322Message: undefined });
+    await expect(
+      signWith('bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh', new FakeBitcoinXConnector(provider)),
+    ).rejects.toThrow('fake-btc does not support BIP-322 signing');
   });
 });

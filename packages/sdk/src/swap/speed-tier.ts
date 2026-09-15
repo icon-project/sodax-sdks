@@ -3,8 +3,9 @@ import { ChainKeys, type Address, type XToken } from '@sodax/types';
 /**
  * Estimated settlement-speed bucket for a swap token pair.
  *
- * TODO: confirm the label set (slow / normal / fast) against the referenced spec doc, which
- * mentions "slow, normal, fast, etc." without pinning the exact enum.
+ * TODO: the sodax-contracts wiki (Mainnet) says "slow, normal, fast, etc." without pinning the
+ * enum, so this three-label set is our reading of it. Widening it later is a breaking change for
+ * consumers switching on `tier` — settle the set with the contracts team before 2.2.0 ships.
  */
 export type SwapSpeedTier = 'fast' | 'normal' | 'slow';
 
@@ -32,10 +33,12 @@ export type SwapSpeedTierParams = {
  * behavior, NOT measured at runtime. The optional future enhancement (analyzing public intents
  * data) would refine them; for the base feature they are intentionally hardcoded.
  *
- * TODO: confirm the exact numbers against the referenced spec doc.
+ * TODO: these came from the sodax-contracts wiki (Mainnet) via #280 and have not been re-confirmed
+ * against it since. Re-read that page before 2.2.0 ships; the exhaustive table in the test file
+ * pins the resulting tiers, so any correction surfaces there.
  */
 export const SPEED_TIER_SECONDS = {
-  /** Either token maps to a money-market-reserve (sodaAsset) hub asset. */
+  /** Either token's vault is a money-market-reserve (sodaAsset). */
   sodaAsset: 15,
   /** Anything else / default. */
   default: 35,
@@ -44,10 +47,11 @@ export const SPEED_TIER_SECONDS = {
 } as const;
 
 /**
- * Provisional second→tier boundaries (inclusive upper bounds).
+ * Second→tier boundaries (inclusive upper bounds).
  *
- * TODO: confirm labels and boundaries — the possible totals under the current rules are
- * 15 / 25 / 35 / 45, so these thresholds bucket them as fast(15) · normal(25) · slow(35, 45).
+ * The rules produce exactly four totals — 15 / 25 / 35 / 45 — which these bucket as
+ * fast(15) · normal(25) · slow(35, 45). That mapping is locked by the exhaustive table in
+ * `speed-tier.test.ts`; the boundaries only need revisiting if the seconds above change.
  */
 export const SPEED_TIER_THRESHOLDS = {
   fast: 20,
@@ -67,17 +71,20 @@ const secondsToTier = (seconds: number): SwapSpeedTier => {
  * network or on-chain call — it classifies the pair from SDK config alone.
  *
  * @param params `{ srcToken, dstToken }` spoke token pair to classify
- * @param isSodaAssetRelated predicate answering "is this hub asset a money-market-reserve
- *   (sodaAsset)?". In the service this is wired to `config.isMoneyMarketReserveHubAsset`; the
- *   predicate is injected so this function stays pure and unit-testable without a ConfigService.
+ * @param isSodaAssetRelated predicate answering "is this vault a money-market-reserve
+ *   (sodaAsset)?". It is queried with `XToken.vault`, not `XToken.hubAsset`: the reserve set is
+ *   built from `moneyMarketHubVaults` addresses, so a hub asset only matches for the Sonic vault
+ *   shares themselves, where `hubAsset === vault`. In the service this is wired to
+ *   `config.isMoneyMarketReserveAsset`. The predicate is injected so this function stays pure and
+ *   unit-testable without a ConfigService.
  *
  * The fast 15s base applies when either token is sodaAsset-related; otherwise the base is 35s.
  */
 export function estimateSwapSpeedTier(
   { srcToken, dstToken }: SwapSpeedTierParams,
-  isSodaAssetRelated: (hubAsset: Address) => boolean,
+  isSodaAssetRelated: (vault: Address) => boolean,
 ): SwapSpeedTierResult {
-  const eitherSodaAsset = isSodaAssetRelated(srcToken.hubAsset) || isSodaAssetRelated(dstToken.hubAsset);
+  const eitherSodaAsset = isSodaAssetRelated(srcToken.vault) || isSodaAssetRelated(dstToken.vault);
 
   let estimatedSeconds = eitherSodaAsset ? SPEED_TIER_SECONDS.sodaAsset : SPEED_TIER_SECONDS.default;
 
