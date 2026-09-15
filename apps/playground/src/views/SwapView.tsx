@@ -17,7 +17,6 @@ export function SwapWidget({ flow }: { flow: SwapFlow }) {
     <div className="flow-column">
       <header className="widget-heading">
         <h2>Swap</h2>
-        <span className="network-label">Live on mainnet</span>
       </header>
       <SwapPanel flow={flow} />
       <SwapActivity execution={flow.execution} />
@@ -236,7 +235,7 @@ export function SwapView({ flow, brandControls }: { flow: SwapFlow; brandControl
           )}
         </div>
         <p className="preview-caption muted small">
-          Try the widget here. Your exported starting trade is set in Setup.
+          Swaps in this preview use real funds. Your exported starting trade is set in Setup.
         </p>
       </div>
     </>

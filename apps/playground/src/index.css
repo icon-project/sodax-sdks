@@ -1787,12 +1787,6 @@ code,
   font-weight: 500;
 }
 
-/* Bare glyph plus a CSS-only bubble — the note it replaces was a standing paragraph nobody needed twice. */
-.hint {
-  position: relative;
-  display: inline-flex;
-}
-
 .hint-trigger {
   display: inline-flex;
   padding: 0;
@@ -1808,62 +1802,37 @@ code,
   color: var(--text-heading);
 }
 
-/* The stake page's tooltip, in plain CSS: a white pill centred above the trigger, px-4 py-2 at
-   12px. The shadow is ours — that surface is cream on sodax.com and white here. */
+/* Match the frontend's bubble and curved pointer; the portal escapes the builder's scrolling panel. */
 .hint-bubble {
-  position: absolute;
-  bottom: calc(100% + 10px);
-  left: 50%;
-  z-index: 5;
+  position: fixed;
+  z-index: 50;
   width: max-content;
-  padding: var(--space-8) var(--space-16);
-  border-radius: var(--radius-pill);
-  background: var(--tooltip-bg);
+  max-width: min(480px, calc(100vw - 24px));
+  padding: 8px 16px;
+  border-radius: 9999px;
+  background: var(--white);
   box-shadow:
     0 10px 15px -3px rgb(0 0 0 / 10%),
     0 4px 6px -4px rgb(0 0 0 / 10%);
-  color: var(--tooltip-fg);
+  color: var(--espresso);
   font-size: 12px;
   line-height: 16px;
-  white-space: nowrap;
-  opacity: 0;
-  visibility: hidden;
-  transform: translateX(-50%) scale(0.95);
-  transform-origin: bottom center;
-  transition:
-    opacity 120ms,
-    transform 120ms;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
 }
 
-/* The frontend's pointer, masked rather than filled so it follows the pill into dark mode. */
-.hint-bubble::after {
-  content: "";
+.hint-arrow {
   position: absolute;
-  top: calc(100% - 16px);
-  left: calc(50% - 4px);
-  width: 8px;
-  height: 40px;
-  background: var(--tooltip-bg);
-  transform: rotate(-90deg);
-  mask:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 80'%3E%3Cpath d='M0 40C0 38.125 0.9411 37.1741 1.8824 36.6667C11.1437 31.6736 16 18.033 16 0L16 80C16 61.967 11.1437 48.3264 1.8824 43.3333C0.9411 42.8259 0 41.875 0 40Z'/%3E%3C/svg%3E")
-    no-repeat center / contain;
+  bottom: -24px;
+  color: var(--white);
+  transform: translateX(-50%) rotate(-90deg);
 }
 
-/* No popper here to detect collisions, so the one line wraps rather than overflow a phone. */
-@media (width < 640px) {
-  .hint-bubble {
-    max-width: 240px;
-    white-space: normal;
-    text-wrap: pretty;
-  }
-}
-
-.hint:hover .hint-bubble,
-.hint:focus-within .hint-bubble {
-  opacity: 1;
-  visibility: visible;
-  transform: translateX(-50%) scale(1);
+.hint-bubble[data-side="bottom"] .hint-arrow {
+  top: -24px;
+  bottom: auto;
+  transform: translateX(-50%) rotate(90deg);
 }
 
 /* The one outbound CTA on the page, so it reads as accent rather than another ghost control. */
@@ -2279,13 +2248,6 @@ body:has(.app-embed) {
   margin: 0;
   font-size: 24px;
   color: var(--text-heading);
-}
-.network-label {
-  font-size: 11px;
-  color: var(--text-muted);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-small);
-  padding: 4px 8px;
 }
 .wallet-inline {
   font-size: 11px;
