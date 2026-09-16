@@ -8,6 +8,7 @@ import { SwapPanel } from '../components/SwapPanel';
 import { SwapActivity } from '../components/SwapActivity';
 import { embedOrigin } from '../config';
 import type { BrandControls } from '../hooks/useBrand';
+import { useContentHeight } from '../hooks/useContentHeight';
 import type { SwapFlow } from '../hooks/useSwapFlow';
 import { buildSnippets } from '../lib/snippet';
 import { embedUrl, toSearch } from '../lib/urlState';
@@ -36,6 +37,9 @@ export function SwapView({ flow, brandControls }: { flow: SwapFlow; brandControl
   const [notice, setNotice] = useState('');
   const [shareFallback, setShareFallback] = useState('');
   const [previewBusy, setPreviewBusy] = useState(false);
+  // Setup's height, held across every tab: the preview ends level with it so the pair reads as one
+  // row. Only the side-by-side layout uses it; stacked, the widget's own height decides.
+  const [builderCard, builderHeight] = useContentHeight<HTMLDivElement>();
   const confirmTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const { srcChain, dstChain, srcToken, dstToken, amount, slippagePercent, partnerFee, brand, widget } = flow;
 
@@ -159,7 +163,13 @@ export function SwapView({ flow, brandControls }: { flow: SwapFlow; brandControl
           ))}
         </fieldset>
         <fieldset className="builder-controls" disabled={previewBusy && panel !== 'integrate'}>
-          {panel === 'setup' && <SetupPanel flow={flow} />}
+          {/* Only Setup is measured, and the wrapper exists to measure it: the preview keeps that one
+              height on every tab rather than resizing as a partner moves between them. */}
+          {panel === 'setup' && (
+            <div className="builder-measure" ref={builderCard}>
+              <SetupPanel flow={flow} />
+            </div>
+          )}
           {panel === 'appearance' && <BrandBar controls={brandControls} />}
           {panel === 'integrate' && (
             <section className="card integration-card">
@@ -239,6 +249,7 @@ export function SwapView({ flow, brandControls }: { flow: SwapFlow; brandControl
               setupUrl={configured.preview}
               brand={brand}
               mobile={mobile}
+              matchHeight={builderHeight}
               onBusy={setPreviewBusy}
             />
           ) : (

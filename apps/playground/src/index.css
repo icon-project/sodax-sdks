@@ -433,7 +433,7 @@ code,
   color: var(--text-muted);
 }
 /* Stretched to the row, so the preview ends where the builder's card does rather than hanging past
-   it. The frame takes what that leaves, and a widget needing more than that grows the row instead. */
+   it. The frame keeps its own height inside that and the canvas scrolls once it needs more. */
 .preview-column {
   display: flex;
   flex-direction: column;
@@ -2510,11 +2510,12 @@ body:has(.app-embed) {
 .preview-frame-mobile {
   max-width: 375px;
 }
-/* Fills the frame, floored at the height the widget reported: the preview follows the builder's
-   column, and a widget that needs more than the column has grows the row instead of scrolling. */
+/* Floored at the height the widget reported, which is the whole box where the preview stacks under
+   the builder and has no column to answer to. The desktop builder lifts that floor. */
 .preview-frame iframe {
   display: block;
   flex: 1;
+  min-height: var(--widget-height, 360px);
   width: 100%;
   border: 0;
 }
@@ -2627,15 +2628,32 @@ body:has(.app-embed) {
   .preview-caption {
     flex: none;
   }
+  /* No block padding: it comes off the height the frame is allowed, and the frame is trying to end
+     level with a card that answers to no such inset. */
   .preview-canvas {
     flex: 1;
     min-height: 0;
-    padding-block: 8px;
+    padding-block: 0;
     overflow-y: auto;
     scrollbar-width: thin;
   }
+  /* Ends level with the builder's card rather than with the column, which is the viewport here and
+     would leave the frame's border far below it. Capped at the column, which scrolls past that. */
+  .preview-frame {
+    flex: none;
+    height: min(var(--builder-height, 100%), 100%);
+  }
+  .preview-frame iframe {
+    min-height: 0;
+  }
+  /* Both headers are 44px, so matching this to the build column's gap starts the frame on the same
+     line as the card. The caption gives up its margin for the same reason: it is height the frame
+     is trying to reach the card with, and the column has none to spare. */
+  .preview-toolbar {
+    margin-bottom: 16px;
+  }
   .preview-caption {
-    margin: 8px 0 0;
+    margin: 0;
   }
 }
 @media (max-width: 980px) {

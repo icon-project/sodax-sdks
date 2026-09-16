@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { type CSSProperties, useEffect, useRef, useState } from 'react';
 import { type Brand, writeBrand } from '../lib/brand';
 import { fromHost } from '../lib/embedMessages';
 
@@ -7,11 +7,14 @@ export function WidgetPreview({
   setupUrl,
   brand,
   mobile,
+  matchHeight,
   onBusy,
 }: {
   setupUrl: string;
   brand: Brand;
   mobile: boolean;
+  /** The builder card's height, which the side-by-side layout ends the frame level with. */
+  matchHeight: number | undefined;
   onBusy: (busy: boolean) => void;
 }) {
   const frame = useRef<HTMLIFrameElement>(null);
@@ -60,8 +63,14 @@ export function WidgetPreview({
   useEffect(() => {
     if (loaded) frame.current?.contentWindow?.postMessage({ type: 'sodax:preview-brand', search }, origin);
   }, [search, loaded, origin]);
+  // Both carried as properties rather than heights, because which one applies is a layout question:
+  // stacked, the widget's own height wins; side by side, the card beside it does.
+  const sizing: CSSProperties & Record<'--widget-height' | '--builder-height', string> = {
+    '--widget-height': `${height}px`,
+    '--builder-height': matchHeight === undefined ? '100%' : `${matchHeight}px`,
+  };
   return (
-    <div className={`preview-frame${mobile ? ' preview-frame-mobile' : ''}`}>
+    <div className={`preview-frame${mobile ? ' preview-frame-mobile' : ''}`} style={sizing}>
       {!loaded && (
         <p className="muted small" role="status">
           Loading widget…
@@ -73,7 +82,6 @@ export function WidgetPreview({
         src={src}
         allow="ethereum; solana; clipboard-write"
         onLoad={() => setLoaded(true)}
-        style={{ minHeight: height }}
       />
     </div>
   );

@@ -92,8 +92,14 @@ pnpm check:ai-dev-files
   it, and a max- one leaves it indefinite, so each list grows past the dialog instead of scrolling in it.
   Centre a list that can overflow with `safe center`, or its first rows land where no scroll reaches.
   It opens inside the frame the host gives the widget, so an exported embed reserves `EMBED_MIN_HEIGHT`
-  and its resize handler never drops below it; the widget's ground fills the surplus, and the builder's
-  preview sizes to its own column so it never outgrows the panel beside it.
+  and its resize handler never drops below it; the widget's ground fills the surplus. The builder's
+  preview answers to the Setup card instead: `useContentHeight` measures that card and keeps the last
+  measurement once it unmounts, so the frame ends level with it on Appearance and Integrate too rather
+  than resizing per tab. The studio column is the viewport, never the card, so sizing the frame to the
+  column is what once left its border hanging below the widget. Both are carried as custom properties
+  because which one applies is a layout question: `--widget-height` floors the stacked layouts,
+  `--builder-height` sets the side-by-side one, capped at the column. Its header gap and caption
+  margin are load-bearing — they are the height the frame reaches the card with.
 - The picker names what the wallet holds, as the exchange does: an asset's total across its networks
   under the hovered tile, and the hovered network's own amount in place of the flyout's caption.
   Balances are read per chain while the dialog is open, never on a timer behind a closed one.
