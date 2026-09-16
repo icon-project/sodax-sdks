@@ -2366,10 +2366,13 @@ body:has(.app-embed) {
   justify-content: flex-end;
   gap: 8px;
 }
+/* One size across the row: `.btn-primary` is sized for the widget's full-width CTA, and carrying
+   that scale into a group of three peers read as a mistake rather than as emphasis. Colour leads. */
 .studio-actions .btn-primary {
   width: auto;
-  height: 40px;
-  padding: 0 20px;
+  height: 36px;
+  padding: 0 16px;
+  font-size: var(--text-body-small);
 }
 /* Empty on every ordinary run — the buttons confirm themselves — so it reserves no height. */
 .studio-heading .studio-status {
