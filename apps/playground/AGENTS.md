@@ -97,6 +97,11 @@ pnpm check:ai-dev-files
 - The picker names what the wallet holds, as the exchange does: an asset's total across its networks
   under the hovered tile, and the hovered network's own amount in place of the flyout's caption.
   Balances are read per chain while the dialog is open, never on a timer behind a closed one.
+- `lib/pickerOptions.ts` owns the grid's order and nothing else decides it: what the wallet holds,
+  that holding's USD total, then `lib/pickerRanking.ts`'s curated tiers, then alphabetical. Review
+  the tiers against the exchange's list rather than editing them here. `sortAssetGroups` takes prices
+  as an optional argument and nothing in the widget supplies them — adding a price source is the one
+  change that turns the value rule on, and it puts a third-party host in a partner's page.
 - `components/Dropdown.tsx` is the design system's navigation menu as a form control; use it rather
   than `<select>`, whose popup the OS draws in its own colours. Its panel is a top-layer popover
   because the builder's cards and scrolling column would clip an anchored one, so its position is a

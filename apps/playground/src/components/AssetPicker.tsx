@@ -1,10 +1,10 @@
 import { type ChainKey, tokenLogo } from '@sodax/dapp-kit';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useAssetBalances } from '../hooks/useAssetBalances';
 import { groupBalanceText, tokenBalanceText } from '../lib/balances';
 import { type TokenChoice, chainLogo, chainName } from '../lib/chains';
 import { canExecute } from '../lib/execution';
-import { type AssetGroup, filterGroups, previewNetworks } from '../lib/pickerOptions';
+import { type AssetGroup, filterGroups, previewNetworks, sortAssetGroups } from '../lib/pickerOptions';
 import { Glyph } from './AssetLogo';
 import { Chevron } from './Dropdown';
 
@@ -161,7 +161,9 @@ export function AssetPicker<K extends ChainKey>({
   }, [expanded]);
 
   const balances = useAssetBalances(groups, open);
-  const visible = useMemo(() => filterGroups(groups, query, network), [groups, query, network]);
+  // Balances are a fresh object every render, so a memo over them would store work it always redoes.
+  // Both passes are one step per symbol, small enough to run with the render that reads them.
+  const visible = filterGroups(sortAssetGroups(groups, balances), query, network);
   // Held amounts are read across the whole list, not the filtered view: the line the grid reserves
   // for them must not come and go as a search narrows the tiles.
   const heldBySymbol = new Map(groups.map(group => [group.symbol, groupBalanceText(balances, group.choices)]));

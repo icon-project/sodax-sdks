@@ -1,7 +1,16 @@
 import { CHAIN_KEYS, ChainKeys, type ChainKey, getSupportedSolverTokens } from '@sodax/dapp-kit';
 import { describe, expect, it } from 'vitest';
+import type { BalanceMap } from './balances';
 import type { TokenChoice } from './chains';
-import { assetGroups, filterGroups, previewNetworks, tokenOptionId } from './pickerOptions';
+import {
+  type PriceMap,
+  assetGroups,
+  filterGroups,
+  previewNetworks,
+  sortAssetGroups,
+  tokenOptionId,
+} from './pickerOptions';
+import { PICKER_GROUP_A, PICKER_GROUP_B } from './pickerRanking';
 
 // The packaged solver list stands in for the API's here: same shape, offline, and it already spans
 // EVM and non-EVM families, which is what the grouping has to survive.
@@ -43,18 +52,10 @@ describe('assetGroups', () => {
     }
   });
 
-  // Chain count stands in for the exchange's value sort, so the widest-reaching assets lead.
-  it('orders by reach, then alphabetically', () => {
-    const groups = assetGroups(CHOICES);
-
-    for (let i = 1; i < groups.length; i++) {
-      const previous = groups[i - 1];
-      const current = groups[i];
-      expect(previous.choices.length).toBeGreaterThanOrEqual(current.choices.length);
-      if (previous.choices.length === current.choices.length) {
-        expect(previous.symbol.localeCompare(current.symbol)).toBeLessThan(0);
-      }
-    }
+  // Grouping states no preference: the wallet decides the order, and only the picker has read it.
+  it('leaves the grid in a canonical alphabetical order', () => {
+    const symbols = assetGroups(CHOICES).map(group => group.symbol);
+    expect(symbols).toEqual([...symbols].sort((a, b) => a.localeCompare(b)));
   });
 });
 
@@ -112,8 +113,7 @@ describe('filterGroups', () => {
     expect(filterGroups(groups, 'not-a-real-asset', undefined)).toHaveLength(0);
   });
 
-  // Reach sorts the grid, so an exactly-typed symbol on few chains would otherwise rank last among
-  // the wider-reaching symbols containing it.
+  // An exactly-typed symbol outranks the longer ones containing it, whatever the grid's own order.
   it('leads with an exact symbol match', () => {
     const buried = groups.find(group =>
       groups.some(
@@ -125,12 +125,134 @@ describe('filterGroups', () => {
     expect(filterGroups(groups, buried?.symbol ?? '', undefined)[0]?.symbol).toBe(buried?.symbol);
   });
 
-  it('keeps the reach order among equally relevant matches', () => {
-    const matched = filterGroups(groups, 'usd', undefined);
+  it('keeps the incoming order among equally relevant matches', () => {
+    const matched = filterGroups(groups, 'usd', undefined).map(group => group.symbol);
+    const incoming = groups.map(group => group.symbol).filter(symbol => matched.includes(symbol));
 
-    for (let i = 1; i < matched.length; i++) {
-      expect(matched[i - 1].choices.length).toBeGreaterThanOrEqual(matched[i].choices.length);
-    }
+    expect(matched.filter(symbol => symbol.toLowerCase() !== 'usd')).toEqual(
+      incoming.filter(symbol => symbol.toLowerCase() !== 'usd'),
+    );
+  });
+});
+
+/** One whole token of each choice, so a group's value is its price times the networks funded. */
+function fund(choices: readonly TokenChoice[]): BalanceMap {
+  const balances: Record<string, Record<string, bigint>> = {};
+
+  for (const { chain, token } of choices) {
+    balances[chain] = { ...balances[chain], [token.address]: 10n ** BigInt(token.decimals) };
+  }
+
+  return balances;
+}
+
+function priced(entries: readonly (readonly [TokenChoice, number])[]): PriceMap {
+  return Object.fromEntries(entries.map(([{ chain, token }, usd]) => [tokenOptionId(chain, token.symbol), usd]));
+}
+
+const isCurated = (symbol: string): boolean =>
+  [...PICKER_GROUP_A, ...PICKER_GROUP_B].some(ranked => ranked.toLowerCase() === symbol.toLowerCase());
+
+describe('sortAssetGroups', () => {
+  const groups = assetGroups(CHOICES);
+  const symbols = (ranked: readonly { symbol: string }[]) => ranked.map(group => group.symbol);
+
+  it('leads with the curated tiers in their fixed order, then runs alphabetically', () => {
+    const ranked = symbols(sortAssetGroups(groups, {}));
+    const curated = [...PICKER_GROUP_A, ...PICKER_GROUP_B]
+      .map(listed => ranked.find(symbol => symbol.toLowerCase() === listed.toLowerCase()))
+      .filter((symbol): symbol is string => symbol !== undefined);
+
+    expect(curated.length).toBeGreaterThan(0);
+    expect(ranked.slice(0, curated.length)).toEqual(curated);
+
+    const rest = ranked.slice(curated.length);
+    expect(rest).toEqual([...rest].sort((a, b) => a.localeCompare(b)));
+  });
+
+  // The whole point of the order: an asset you hold outranks one the list merely likes.
+  it('lifts a held asset above every curated tier', () => {
+    const held = groups.find(group => !isCurated(group.symbol));
+    if (!held) throw new Error('Every symbol is curated — pick another fixture');
+
+    expect(symbols(sortAssetGroups(groups, fund(held.choices)))[0]).toBe(held.symbol);
+  });
+
+  it('orders held assets by USD value, over the curated order either way round', () => {
+    const [first, second] = groups.filter(group => isCurated(group.symbol));
+    if (!first || !second) throw new Error('Need two curated groups');
+
+    const balances = fund([...first.choices, ...second.choices]);
+    const lead = (firstUsd: number, secondUsd: number) =>
+      symbols(
+        sortAssetGroups(
+          groups,
+          balances,
+          priced([
+            ...first.choices.map(c => [c, firstUsd] as const),
+            ...second.choices.map(c => [c, secondUsd] as const),
+          ]),
+        ),
+      )[0];
+
+    expect(lead(100, 1)).toBe(first.symbol);
+    expect(lead(1, 100)).toBe(second.symbol);
+  });
+
+  it('sums a holding across every network the asset reaches', () => {
+    const spread = groups.find(group => group.choices.length > 1);
+    const single = groups.find(group => group.choices.length === 1);
+    if (!spread || !single) throw new Error('Need one multi-chain and one single-chain group');
+
+    const [onlyOfSpread] = spread.choices;
+    const [onlyOfSingle] = single.choices;
+    // The single-chain asset wins on one network and loses once the other networks are counted.
+    const prices = priced([...spread.choices.map(c => [c, 1] as const), [onlyOfSingle, 1.5]]);
+
+    expect(symbols(sortAssetGroups(groups, fund([onlyOfSpread, onlyOfSingle]), prices))[0]).toBe(single.symbol);
+    expect(symbols(sortAssetGroups(groups, fund([...spread.choices, onlyOfSingle]), prices))[0]).toBe(spread.symbol);
+  });
+
+  // A price refetch nudges every value a little. Tiles must not swap under a cursor because of it.
+  it('treats values within a percent as equal, whichever way the nudge lands', () => {
+    const [first, second] = groups.filter(group => isCurated(group.symbol));
+    if (!first?.choices[0] || !second?.choices[0]) throw new Error('Need two curated groups');
+
+    const a = first.choices[0];
+    const b = second.choices[0];
+    const order = (aUsd: number, bUsd: number) =>
+      symbols(
+        sortAssetGroups(
+          groups,
+          fund([a, b]),
+          priced([
+            [a, aUsd],
+            [b, bUsd],
+          ]),
+        ),
+      ).slice(0, 2);
+
+    expect(order(100, 100.5)).toEqual(order(100.5, 100));
+    expect(order(100, 100.5)).toEqual(order(100, 100));
+  });
+
+  // Without prices the held assets still have to land somewhere deliberate, not in arrival order.
+  it('falls through to the curated order among held assets when nothing prices them', () => {
+    const [first, second] = groups.filter(group => isCurated(group.symbol));
+    if (!first || !second) throw new Error('Need two curated groups');
+
+    const place = (symbol: string) =>
+      [...PICKER_GROUP_A, ...PICKER_GROUP_B].findIndex(ranked => ranked.toLowerCase() === symbol.toLowerCase());
+    const expected = [first.symbol, second.symbol].sort((a, b) => place(a) - place(b));
+
+    expect(symbols(sortAssetGroups(groups, fund([...first.choices, ...second.choices]))).slice(0, 2)).toEqual(expected);
+  });
+
+  it('ranks without touching the grid it was given', () => {
+    const before = symbols(groups);
+    sortAssetGroups(groups, fund(CHOICES.slice(0, 5)));
+
+    expect(symbols(groups)).toEqual(before);
   });
 });
 
