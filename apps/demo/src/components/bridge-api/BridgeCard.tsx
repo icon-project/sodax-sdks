@@ -55,7 +55,7 @@ import { formatUnits, parseUnits } from 'viem';
 import { PartnerFeeFields, usePartnerFeeDraft } from '@/components/shared/PartnerFeeFields';
 import { useAppStore } from '@/zustand/useAppStore';
 import { BitcoinSetupPanel } from '@/components/bitcoin/BitcoinSetupPanel';
-import { formatMutationFailureMessage } from '@/lib/utils';
+import { formatMutationFailureMessage, rescaleTokenAmount } from '@/lib/utils';
 import type { BridgeApiOrder } from '@/components/bridge-api/OrderStatus';
 import { BRIDGE_API_MAX_PARTNER_FEE_BPS, DEFAULT_BRIDGE_API_BASE_URL, envBridgeApiBaseUrl } from '@/lib/sodaxSettings';
 import { isSignableBridgeApiChain, signAndBroadcastBridgeApiTx } from '@/components/bridge-api/lib/signAndBroadcast';
@@ -234,10 +234,20 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
   // Client-side destination prerequisites the API doesn't cover: Stellar trustline + NEAR storage.
   const stellarWalletProvider =
     toChainType === 'STELLAR' ? (toWalletProvider as IStellarWalletProvider | undefined) : undefined;
+  // Trustline capacity is denominated in the destination asset (Stellar works in stroops, 7dp), but
+  // `parsedAmount` is in the source token's decimals — an 18dp source would overstate it by 1e11.
+  const dstAmount = useMemo(
+    () =>
+      fromToken && toToken && parsedAmount !== undefined
+        ? rescaleTokenAmount(parsedAmount, fromToken.decimals, toToken.decimals)
+        : undefined,
+    [parsedAmount, fromToken, toToken],
+  );
+
   const { data: hasSufficientTrustline, isPending: isTrustlineLoading } = useStellarTrustlineCheck({
     params: {
       token: toToken?.address,
-      amount: parsedAmount,
+      amount: dstAmount,
       chainId: toChainKey,
       walletAddress: toChainType === 'STELLAR' ? toAccount.address : undefined,
     },
@@ -375,10 +385,10 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
   };
 
   const handleRequestTrustline = async () => {
-    if (toChainType !== 'STELLAR' || !stellarWalletProvider || !toToken || parsedAmount === undefined) return;
+    if (toChainType !== 'STELLAR' || !stellarWalletProvider || !toToken || dstAmount === undefined) return;
     await requestTrustline({
       token: toToken.address,
-      amount: parsedAmount,
+      amount: dstAmount,
       srcChainKey: toChainKey as StellarChainKey,
       walletProvider: stellarWalletProvider,
     });
