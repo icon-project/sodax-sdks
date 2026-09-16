@@ -25,7 +25,7 @@ import {
 } from '@sodax/dapp-kit';
 import { useEvmSwitchChain, useWalletProvider, useXAccount } from '@sodax/wallet-sdk-react';
 import { BitcoinSetupPanel } from '@/components/bitcoin/BitcoinSetupPanel';
-import { formatMutationFailureMessage } from '@/lib/utils';
+import { formatMutationFailureMessage, rescaleTokenAmount } from '@/lib/utils';
 import { ArrowLeftRight, Loader2 } from 'lucide-react';
 import { formatUnits } from 'viem';
 
@@ -82,10 +82,17 @@ export function BridgeDialog({
   const toBtcWalletProvider =
     toWalletProvider?.chainType === 'BITCOIN' ? (toWalletProvider as IBitcoinWalletProvider) : undefined;
 
+  // The gate checks the DESTINATION asset, so the amount must be in its decimals too — Stellar's
+  // trustline check works in stroops (7dp). `order.amount` is source-denominated, so an 18dp source
+  // would overstate it by 1e11 and block on a healthy trustline. Left undefined while either side's
+  // decimals are unknown: `resolveStellarGate` reads that as unresolved and fails closed.
+  const dstAmount =
+    fromToken && toToken ? rescaleTokenAmount(order.amount, fromToken.decimals, toToken.decimals) : undefined;
+
   const stellar = useStellarGate({
     dstChainKey: toChainKey,
     token: order.dstToken,
-    amount: order.amount,
+    amount: dstAmount,
     address: toAccount.address,
     walletProvider: toWalletProvider,
   });
