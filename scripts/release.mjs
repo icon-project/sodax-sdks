@@ -3,8 +3,19 @@ import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { basename, join, relative, resolve } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
+import {
+  compareVersions,
+  configVersionErrors,
+  configVersionForOrThrow,
+  decodeConfigVersion,
+  parseVersion,
+  readConfigVersion,
+} from './config-version.mjs';
 
-const VERSION_PATTERN = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-rc\.(0|[1-9]\d*))?$/;
+// Re-exported: config-version.mjs owns the version grammar, but these are long-standing release.mjs
+// exports and its tests import them from here.
+export { compareVersions, parseVersion };
+
 const SDK_TAG_PATTERN = /^@sdks@(.+)$/;
 const PACKAGE_TAG_PATTERN = /^@sodax\/[^@]+@(.+)$/;
 const PR_SUFFIX_PATTERN = /\(#(\d+)\)$/;
@@ -27,33 +38,6 @@ export class ReleaseError extends Error {
 
 const fail = message => {
   throw new ReleaseError([message]);
-};
-
-export const parseVersion = value => {
-  if (typeof value !== 'string') return null;
-  const match = value.match(VERSION_PATTERN);
-  if (!match) return null;
-  return {
-    raw: value,
-    major: Number(match[1]),
-    minor: Number(match[2]),
-    patch: Number(match[3]),
-    rc: match[4] === undefined ? null : Number(match[4]),
-  };
-};
-
-export const compareVersions = (leftValue, rightValue) => {
-  const left = typeof leftValue === 'string' ? parseVersion(leftValue) : leftValue;
-  const right = typeof rightValue === 'string' ? parseVersion(rightValue) : rightValue;
-  if (!left || !right) fail('cannot compare invalid versions');
-
-  for (const key of ['major', 'minor', 'patch']) {
-    if (left[key] !== right[key]) return left[key] - right[key];
-  }
-  if (left.rc === right.rc) return 0;
-  if (left.rc === null) return 1;
-  if (right.rc === null) return -1;
-  return left.rc - right.rc;
 };
 
 export const parseSdksTag = tag => {
@@ -272,7 +256,8 @@ const highestTagVersion = parsed =>
 
 export const versionAdvanceErrors = ({ version, currentVersion, tags, packageTags = [], requireTagAdvance = true }) => {
   if (!parseVersion(version)) return [`${version || '(empty)'} is not a valid version; expected X.Y.Z or X.Y.Z-rc.N`];
-  const errors = [];
+  // The field limits belong here, not only in the bump: past this guard the notes file is written.
+  const errors = [...configVersionErrors(version)];
   if (tags.includes(`@sdks@${version}`)) errors.push(`tag @sdks@${version} already exists`);
   // The unified flow republishes every package, so one backported tag makes the whole version unusable.
   const claimed = packageTags.find(tag => parsePackageTag(tag)?.version === version);
@@ -329,6 +314,14 @@ const verifyMutation = (git, workspaceRoot, packages, version) => {
     const manifest = JSON.parse(readFileSync(join(workspaceRoot, directory, 'package.json'), 'utf8'));
     if (manifest.version !== version) errors.push(`${name} is ${manifest.version}, expected ${version}`);
   }
+  // The bump script derives this; assert the value that actually landed, not just that the file moved.
+  const expectedConfigVersion = configVersionForOrThrow(version);
+  const actualConfigVersion = readConfigVersion(workspaceRoot);
+  if (actualConfigVersion !== expectedConfigVersion) {
+    errors.push(
+      `CONFIG_VERSION is ${actualConfigVersion} (${decodeConfigVersion(actualConfigVersion) ?? 'not a config version'}), expected ${expectedConfigVersion} for ${version}`,
+    );
+  }
   if (errors.length > 0) throw new ReleaseError(errors);
 };
 
@@ -352,7 +345,8 @@ export const cutRelease = async ({
   const remoteMain = remoteHead(git, 'refs/heads/main');
   if (remoteMain && remoteMain !== localMain) fail(`origin/main is stale; ${FETCH_HINT}`);
 
-  // A stale release branch would bump from the wrong base and reuse the previous CONFIG_VERSION.
+  // A stale release branch would bump from the wrong base, cutting the wrong version and writing
+  // release notes against it. CONFIG_VERSION itself is safe — it is derived from the version now.
   const remoteRelease = remoteHead(git, 'refs/heads/release');
   if (remoteRelease) {
     let localRelease = '';
