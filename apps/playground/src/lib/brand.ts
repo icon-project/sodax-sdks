@@ -312,9 +312,9 @@ function colorRoles(brand: Brand, theme: 'light' | 'dark'): { decls: Declaration
       '--border-subtle': step(surface, 0.12),
       '--border-inset': step(surface, 0.08),
       '--border-strong': step(surface, 0.22),
-      '--flip-bg': step(surface, 0.08),
-      '--flip-bg-hover': step(surface, 0.15),
-      '--flip-fg': mix(surface, onSurface, 0.8),
+      '--flip-bg': step(surface, 0.12),
+      '--flip-bg-hover': step(surface, 0.2),
+      '--flip-fg': onSurface,
       '--chip-shadow': step(surface, 0.28),
       '--logo-shadow': step(surface, 0.2),
     });

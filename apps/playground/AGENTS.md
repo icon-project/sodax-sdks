@@ -76,11 +76,21 @@ pnpm check:ai-dev-files
 - The builder does not restore or report execution activity; its iframe owns the swap lifecycle.
 - The hosted iframe owns its wallet session. Do not describe its React wrapper as a native component
   sharing the host wallet. Keep the standalone-opening fallback for wallets unavailable in frames.
+  Unframed, embed mode is that tab: the widget keeps its embed width centred in the window rather than
+  filling it, and the link that opens a new tab is not drawn in the tab it opens.
 - Analytics in partner frames remains opt-in through `VITE_GTM_IN_EMBED`; no wallet addresses or hashes.
   Swap events reuse sodax.com's GA4 parameter names but must keep omitting `transaction_hash`, and
   `input_amount_usd` while nothing here prices the input. Failure reasons stay a closed set.
 - Use native dialogs, keyboard-operable controls, readable errors and responsive layouts. Keep partner
   controls and technical setup in the builder, not inside the user's swap form.
+- The form is the exchange's currency panel: the symbol and its chevron open the picker, the network
+  and the connected balance share the line beneath it, and the flip disc centres on the seam between
+  the two panels. Wallet chips name their side and sit above the form, never between the legs.
+- `index.css` is ordered, not specific. A `.btn` variant declared before `.btn` silently loses every
+  property the two share — keep variants below it, and check the computed style, not the rule.
+- The asset picker's dialog states a height, not a max-height: its grid and network sheet size against
+  it, and a max- one leaves it indefinite, so each list grows past the dialog instead of scrolling in it.
+  Centre a list that can overflow with `safe center`, or its first rows land where no scroll reaches.
 - `components/Dropdown.tsx` is the design system's navigation menu as a form control; use it rather
   than `<select>`, whose popup the OS draws in its own colours. Its panel is a top-layer popover
   because the builder's cards and scrolling column would clip an anchored one, so its position is a

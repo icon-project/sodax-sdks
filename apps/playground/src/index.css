@@ -95,6 +95,7 @@
   --radius-regular: 16px;
   --radius-inset: 12px;
   --radius-small: 8px;
+  --asset-logo-size: 52px;
   /* Buttons, badges and the search field. A round image keeps its own 9999px — see RADIUS_SCALES. */
   --radius-pill: 9999px;
 }
@@ -162,7 +163,8 @@
      it — which is the stage, not the page. */
   --form-surface: var(--stage-2);
   --surface-embed: var(--stage-2);
-  --flip-bg: var(--cream-white);
+  /* Two rungs off the form surface, not the exchange's one: there the disc sits on a white card. */
+  --flip-bg: var(--cream-cherry);
   --flip-bg-hover: var(--cherry-grey);
   --flip-fg: var(--espresso);
   --logo-shadow: var(--clay-light-veil);
@@ -239,8 +241,8 @@
   --panel-halo-hover: var(--night-600);
 
   --form-surface: var(--surface-page);
-  --flip-bg: var(--night-700);
-  --flip-bg-hover: var(--night-600);
+  --flip-bg: var(--night-600);
+  --flip-bg-hover: var(--night-700);
   --flip-fg: var(--cream-cherry);
   --logo-shadow: rgb(0 0 0 / 35%);
   --chip-shadow: rgb(0 0 0 / 55%);
@@ -523,16 +525,19 @@ code,
 .swap-fields:disabled {
   opacity: 0.65;
 }
-.asset-caption {
-  font-size: 12px;
-  margin: 8px 8px 10px;
-  color: var(--text-muted);
+/* The exchange keeps wallet state out of the form and above it; the panels label their own sides. */
+.wallet-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-8);
+  margin: 0 var(--space-8) var(--space-8);
 }
-.max-button {
-  padding: 2px 6px;
-  margin-left: 6px;
-  font-size: 11px;
+
+.wallet-chips:empty {
+  display: none;
 }
+
 .wallet-row .btn {
   font-size: 12px;
 }
@@ -568,13 +573,6 @@ code,
 }
 .modal-body p {
   margin: 0;
-}
-.wallet-option {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 12px;
-  padding: 12px;
 }
 .address-text {
   overflow-wrap: anywhere;
@@ -616,6 +614,19 @@ code,
 .app-embed {
   justify-content: flex-start;
   min-height: 0;
+}
+
+/* The widget in its own tab: the same width a host frame gives it, centred in the window. */
+.app-standalone {
+  justify-content: safe center;
+  min-height: 100vh;
+  padding-block: var(--space-24);
+}
+
+.app-standalone .flow-column {
+  width: 100%;
+  max-width: 480px;
+  margin-inline: auto;
 }
 
 .standalone-link {
@@ -789,11 +800,10 @@ code,
   gap: 12px;
 }
 
-/* The whole identity cluster is the picker trigger, as on the exchange. */
+/* The symbol and its chevron are the picker trigger, as on the exchange. */
 .asset-id {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-16);
   min-width: 0;
   padding: 0;
   border: 0;
@@ -810,10 +820,27 @@ code,
   border-radius: var(--radius-small);
 }
 
+.asset-identity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-16);
+  min-width: 0;
+}
+
 .asset-id-text {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 2px;
+  min-width: 0;
+}
+
+/* The exchange's second line: the network, and what this side knows about the wallet. */
+.asset-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  margin: 0;
   min-width: 0;
 }
 
@@ -837,12 +864,16 @@ code,
   color: var(--text-heading);
 }
 
+.asset-meta,
 .asset-chain {
   color: var(--text-faint);
   font-size: var(--text-body-small);
   font-weight: 500;
   line-height: 1.3;
   white-space: nowrap;
+}
+
+.asset-chain {
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -887,8 +918,8 @@ code,
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 52px;
-  height: 52px;
+  width: var(--asset-logo-size);
+  height: var(--asset-logo-size);
   flex: none;
   border-radius: 9999px;
   background: linear-gradient(135deg, var(--surface-card), var(--surface-inset));
@@ -1125,28 +1156,6 @@ code,
   margin: -16px 0;
 }
 
-/* The exchange's neutral disc, ringed in the page tone so it punches a hole through the seam. */
-.flip-btn {
-  width: 44px;
-  height: 44px;
-  background: var(--flip-bg);
-  border: 4px solid var(--form-surface);
-  color: var(--flip-fg);
-  transition: transform 200ms;
-}
-
-.flip-btn svg {
-  width: 16px;
-  height: 16px;
-}
-
-.flip-btn:hover:not(:disabled) {
-  background: var(--flip-bg-hover);
-  border-color: var(--form-surface);
-  color: var(--flip-fg);
-  transform: scale(1.1);
-}
-
 .summary {
   margin-top: 12px;
   padding-top: 12px;
@@ -1155,9 +1164,11 @@ code,
 
 /* ── Asset picker ───────────────────────────────────────────────────────── */
 /* The exchange's picker: a grid of assets rather than a list of every token-chain pair. */
+/* A height, not a max-height: the grid below sizes against it, and a max- one leaves it indefinite,
+   so the list grew past the dialog instead of scrolling inside it. */
 .picker {
   width: min(480px, 92vw);
-  max-height: min(600px, 86vh);
+  height: min(600px, 86vh);
   padding: 0;
   border: 0;
   border-radius: var(--radius-large);
@@ -1174,7 +1185,7 @@ code,
   display: flex;
   flex-direction: column;
   gap: var(--space-16);
-  max-height: inherit;
+  height: 100%;
   min-height: 0;
   padding: var(--space-24);
 }
@@ -1299,7 +1310,7 @@ code,
 .picker-stage {
   position: relative;
   flex: 1;
-  min-height: 240px;
+  min-height: 0;
   overflow: visible;
 }
 
@@ -1316,9 +1327,11 @@ code,
   overflow-y: auto;
   min-height: 0;
   height: 100%;
-  padding: var(--space-8) var(--space-16);
+  padding: var(--space-8) var(--space-16) var(--space-24);
   align-content: start;
-  mask-image: linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 56px), transparent);
+  /* Bottom only, and the padding above scrolls the last row clear of it: a fade at the top veiled
+     the first row of a list that starts there. */
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent);
 }
 
 .tile-grid-behind {
@@ -1476,7 +1489,8 @@ code,
   cursor: default;
 }
 
-/* Two centred columns floating over the blurred grid, as the exchange's chain selector does. */
+/* Two centred columns floating over the blurred grid, as the exchange's chain selector does. A plain
+   `center` pushed the first rows of a long list above the scroll box, where nothing could reach them. */
 .network-overlay {
   position: absolute;
   inset: 0;
@@ -1484,7 +1498,7 @@ code,
   display: grid;
   grid-template-columns: repeat(2, max-content);
   gap: 4px var(--space-16);
-  align-content: center;
+  align-content: safe center;
   justify-content: center;
   overflow-y: auto;
   padding: 4px var(--space-8);
@@ -1721,6 +1735,60 @@ code,
 .btn-icon {
   width: 36px;
   padding: 0;
+}
+
+/* The exchange's neutral disc, ringed in the page tone so it punches a hole through the seam. Below
+   `.btn`, not up with the form it sits in: at equal specificity the generic ghost style wins. */
+.flip-btn {
+  width: 40px;
+  height: 40px;
+  background: var(--flip-bg);
+  border: 4px solid var(--form-surface);
+  color: var(--flip-fg);
+  transition: transform 200ms;
+}
+
+.flip-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.flip-btn:hover:not(:disabled) {
+  background: var(--flip-bg-hover);
+  border-color: var(--form-surface);
+  color: var(--flip-fg);
+  transform: scale(1.1);
+}
+
+/* `.btn:disabled` outranks the fill above, so the ring is restated here or the seam shows through. */
+.flip-btn:disabled {
+  border-color: var(--form-surface);
+}
+
+/* The exchange's tiny filled pill on the balance line — also below `.btn`, for the same reason. */
+.max-button {
+  height: 18px;
+  padding: 0 8px;
+  border-color: transparent;
+  background: var(--panel-halo);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.max-button:hover:not(:disabled) {
+  background: var(--panel-halo-hover);
+  border-color: transparent;
+  color: var(--text-heading);
+}
+
+/* A row in the connect sheet: icon then name, left-aligned, and tall enough to hold the icon. */
+.wallet-option {
+  justify-content: flex-start;
+  gap: 12px;
+  height: auto;
+  padding: 12px;
 }
 
 /* Label and confirmation share one cell: the button sizes to the wider of the two and holds it. */
@@ -2438,11 +2506,6 @@ body:has(.app-embed) {
   padding: 4px 8px;
   height: auto;
 }
-.asset-caption {
-  min-height: 20px;
-  margin: 4px 8px 6px;
-  flex-wrap: wrap;
-}
 .quote-summary {
   padding: 10px 0 4px;
 }
@@ -2551,7 +2614,7 @@ body:has(.app-embed) {
   .asset-row {
     gap: 10px;
   }
-  .asset-id {
+  .asset-identity {
     gap: 8px;
     max-width: 52%;
   }
@@ -2563,9 +2626,8 @@ body:has(.app-embed) {
     font-size: 26px;
     width: 100%;
   }
-  .asset-logo {
-    width: 36px;
-    height: 36px;
+  :root {
+    --asset-logo-size: 36px;
   }
   .asset-logo-img {
     width: 24px;

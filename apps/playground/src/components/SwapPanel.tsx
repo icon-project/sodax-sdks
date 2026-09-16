@@ -132,23 +132,9 @@ export function SwapPanel({ flow }: { flow: SwapFlow }) {
       <WalletControls execution={flow.execution} />
       <section className="card swap-card">
         <fieldset className="swap-fields" disabled={!!flow.execution.phase || !!flow.execution.activity}>
-          <div className="row-between asset-caption">
-            <span>You pay</span>
+          <div className="wallet-chips">
             <WalletButton execution={flow.execution} />
-            {flow.execution.balanceText !== undefined && (
-              <span>
-                Balance: {formatTokenAmount(flow.execution.balanceText)}
-                {flow.execution.canMax && (
-                  <button
-                    className="btn max-button"
-                    type="button"
-                    onClick={() => flow.setAmount(flow.execution.balanceText ?? '')}
-                  >
-                    MAX
-                  </button>
-                )}
-              </span>
-            )}
+            <WalletButton execution={flow.execution} receiving />
           </div>
           <AssetPanel
             symbol={flow.srcToken?.symbol}
@@ -156,6 +142,22 @@ export function SwapPanel({ flow }: { flow: SwapFlow }) {
             emptyLabel="No assets"
             pickerLabel="Asset to send"
             locked={flow.widget.lockSource}
+            meta={
+              flow.execution.balanceText !== undefined && (
+                <>
+                  <span>Balance: {formatTokenAmount(flow.execution.balanceText)}</span>
+                  {flow.execution.canMax && (
+                    <button
+                      className="btn max-button"
+                      type="button"
+                      onClick={() => flow.setAmount(flow.execution.balanceText ?? '')}
+                    >
+                      MAX
+                    </button>
+                  )}
+                </>
+              )
+            }
             picker={state => (
               <AssetPicker
                 {...state}
@@ -172,10 +174,6 @@ export function SwapPanel({ flow }: { flow: SwapFlow }) {
           />
 
           <FlipButton onClick={flow.flipDirection} disabled={!flow.canFlip} />
-          <div className="row-between asset-caption">
-            <span>You receive</span>
-            <WalletButton execution={flow.execution} receiving />
-          </div>
 
           <AssetPanel
             symbol={flow.dstToken?.symbol}

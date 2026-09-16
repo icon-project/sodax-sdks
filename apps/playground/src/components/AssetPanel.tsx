@@ -18,6 +18,8 @@ export type AssetPanelProps = {
   onAmountChange?: (value: string) => void;
   note?: ReactNode;
   locked?: boolean;
+  /** Joins the network on the line under the symbol — what this side knows: a balance, a MAX action. */
+  meta?: ReactNode;
 };
 
 /**
@@ -35,33 +37,46 @@ export function AssetPanel({
   onAmountChange,
   note,
   locked,
+  meta,
 }: AssetPanelProps) {
   const [isOpen, setOpen] = useState(false);
 
   return (
     <div className="asset-panel">
       <div className="asset-row">
-        <button
-          type="button"
-          className="asset-id"
-          onClick={() => setOpen(true)}
-          disabled={locked}
-          aria-haspopup={locked ? undefined : 'dialog'}
-          aria-label={pickerLabel}
-        >
+        {/* The logo sits outside the trigger so the meta line can hold a MAX button, which cannot
+            nest in one, and so the logo still centres across both lines. */}
+        <div className="asset-identity">
           <AssetLogo symbol={symbol ?? '?'} chain={chain} />
-          <span className="asset-id-text">
-            <span className="asset-symbol">
-              {symbol ?? emptyLabel}
-              {!locked && (
-                <svg className="asset-chevron" viewBox="0 0 16 16" aria-hidden="true">
-                  <path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                </svg>
+          <div className="asset-id-text">
+            <button
+              type="button"
+              className="asset-id"
+              onClick={() => setOpen(true)}
+              disabled={locked}
+              aria-haspopup={locked ? undefined : 'dialog'}
+              aria-label={pickerLabel}
+            >
+              <span className="asset-symbol">
+                {symbol ?? emptyLabel}
+                {!locked && (
+                  <svg className="asset-chevron" viewBox="0 0 16 16" aria-hidden="true">
+                    <path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                  </svg>
+                )}
+              </span>
+            </button>
+            <p className="asset-meta">
+              <span className="asset-chain">{chainName(chain)}</span>
+              {meta && (
+                <>
+                  <span aria-hidden="true">·</span>
+                  {meta}
+                </>
               )}
-            </span>
-            <span className="asset-chain">{chainName(chain)}</span>
-          </span>
-        </button>
+            </p>
+          </div>
+        </div>
 
         <span className="asset-amount">
           {onAmountChange ? (
@@ -103,9 +118,10 @@ export function FlipButton({ onClick, disabled = false }: { onClick: () => void;
         aria-label="Reverse direction"
         title="Reverse direction"
       >
-        <svg viewBox="0 0 16 16" aria-hidden="true">
+        {/* The exchange's switch mark: two short staggered arrows, not mirrored full-height twins. */}
+        <svg viewBox="0 0 12 12" aria-hidden="true">
           <path
-            d="M5 2v12M5 14l-2.5-2.5M5 14l2.5-2.5M11 14V2M11 2L8.5 4.5M11 2l2.5 2.5"
+            d="M1.5 8.5L3.5 10.5L5.5 8.5M3.5 10.5V4.5M6.5 3.5L8.5 1.5L10.5 3.5M8.5 1.5V7.5"
             fill="none"
             stroke="currentColor"
             strokeWidth="1.5"

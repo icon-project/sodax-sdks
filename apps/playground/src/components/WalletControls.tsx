@@ -82,7 +82,11 @@ export function WalletButton({ execution: e, receiving = false }: { execution: E
           : `Connect ${familyName(type)} receiving wallet`
       }
     >
-      {account?.address ? shortAddress(account.address) : `Connect ${familyName(type)} wallet`}
+      {/* The side is on the chip now: the captions that used to carry it are gone, and both sides
+          report the same address whenever the two chains share a wallet family. */}
+      {account?.address
+        ? `${receiving ? 'Receiving' : 'Sending'} ${shortAddress(account.address)}`
+        : `Connect ${familyName(type)} wallet`}
     </button>
   );
 }
