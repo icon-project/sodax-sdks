@@ -591,29 +591,167 @@ code,
   font-family: var(--font-mono);
   font-size: 12px;
 }
-.review-amount {
-  font-size: 24px;
-  color: var(--text-heading);
+/* ── Confirm dialog ─────────────────────────────────────────────────────── */
+/* The exchange's: both legs either side of the wait, and one action carrying the whole lifecycle. */
+.modal-header-bare {
+  display: flex;
+  justify-content: flex-end;
+  min-height: 16px;
 }
-.review-details {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  font-size: 13px;
+.modal-close {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-faint);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+.modal-close:hover:not(:disabled) {
+  color: var(--text-body);
+}
+.modal-close:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+.review {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  padding-top: var(--space-8);
+}
+.review p {
   margin: 0;
 }
-.review-details dd {
-  text-align: right;
-  margin: 0;
+/* Two lines of room, kept whether or not there is anything to say. */
+.review-message {
+  min-height: 36px;
+  color: var(--alert-fg);
+  font-size: var(--text-caption);
+  line-height: 1.5;
+  text-align: center;
   overflow-wrap: anywhere;
 }
-.recipient-box {
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-inset);
-  padding: 12px;
+.review-legs {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: var(--space-8);
+  padding-bottom: var(--space-8);
+}
+.review-leg {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-8);
+  text-align: center;
+}
+/* Sent and gone: the source asset greys out once the destination has been paid. */
+.review-leg-spent .asset-logo {
+  filter: grayscale(1);
+  opacity: 0.5;
+}
+.review-leg-amount {
+  font-size: var(--text-lead);
+  line-height: 1.3;
+  color: var(--text-heading);
+  overflow-wrap: anywhere;
+}
+.review-least {
+  display: block;
+  min-height: 12px;
+  font-size: 10px;
+  line-height: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.review-leg-where {
+  display: flex;
+  max-width: 100%;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.review-chip {
+  max-width: 100%;
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-inset);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.review-eta {
+  display: flex;
+  flex: none;
+  width: 56px;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding-top: 16px;
+  color: var(--text-faint);
+}
+.review-glyph {
+  width: 16px;
+  height: 16px;
+}
+.review-recipient {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  text-align: center;
+}
+.review-fees > summary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: var(--text-body-small);
+  cursor: pointer;
+}
+.review-fees > summary::-webkit-details-marker {
+  display: none;
+}
+.review-fees > summary:hover {
+  color: var(--text-body);
+}
+.review-fees[open] .review-chevron {
+  transform: rotate(180deg);
+}
+.review-fees-rows {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-inset);
+}
+.spinner {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  animation: spin 900ms linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+  }
 }
 .activity-card {
   margin-top: 12px;
+}
+/* A relay's own words, unwrappable by nature. */
+.failure-reason {
+  overflow-wrap: anywhere;
 }
 .activity-links {
   justify-content: flex-start;
@@ -669,6 +807,10 @@ code,
   }
   .widget-modal {
     padding: 18px;
+  }
+  /* The same sentence needs a third line in a narrow frame, and it must already be reserved. */
+  .review-message {
+    min-height: 54px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1755,6 +1897,14 @@ code,
   background: var(--cta-disabled-bg);
   border-color: var(--cta-disabled-bg);
   color: var(--cta-disabled-fg);
+}
+
+/* Working, not dead: a swap in flight keeps the CTA's colour and lets the spinner carry the state. */
+.btn-primary.btn-working:disabled {
+  background: var(--cta-bg);
+  border-color: var(--cta-bg);
+  color: var(--cta-fg);
+  opacity: 0.8;
 }
 
 .btn-on-cherry {

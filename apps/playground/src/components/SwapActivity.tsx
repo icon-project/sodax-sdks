@@ -1,12 +1,11 @@
 import type { Execution } from '../hooks/useExecution';
 import { txExplorerUrl } from '../lib/chains';
-import { PHASE_LABELS } from './SwapReview';
+import { PHASE_LABELS, failureMessage, refundAccounted } from '../lib/progress';
 
 export function SwapActivity({ execution: e }: { execution: Execution }) {
   const activity = e.activity;
   if (!activity) return null;
-  const solved = e.status?.status === 'solved';
-  const failed = e.status?.status === 'failed' || !!e.status?.abandonedAt;
+  const { solved, failed } = e;
   return (
     <section className="activity-card card" aria-label="Latest swap">
       <p className="eyebrow">Latest swap</p>
@@ -18,8 +17,7 @@ export function SwapActivity({ execution: e }: { execution: Execution }) {
           : solved
             ? 'Your destination transfer is complete.'
             : failed
-              ? (e.status?.userMessage ??
-                'Check the transaction and contact support for recovery. Do not repeat this swap.')
+              ? failureMessage(e.status)
               : e.statusError
                 ? 'Tracking is temporarily unavailable. Your transaction may still be processing.'
                 : 'Waiting for cross-chain settlement. You can keep tracking here.'}
@@ -49,6 +47,13 @@ export function SwapActivity({ execution: e }: { execution: Execution }) {
         <p className="address-text small">{activity.txHash}</p>
         <p className="muted small">Receiving wallet</p>
         <p className="address-text small">{activity.recipient}</p>
+        {/* Which step gave out, for whoever is triaging it. Never part of what the visitor is told. */}
+        {failed && (
+          <>
+            <p className="muted small">Failed at {e.status?.failedAtStep ?? 'an unreported step'}</p>
+            {e.status?.failureReason && <p className="small failure-reason">{e.status.failureReason}</p>}
+          </>
+        )}
       </details>
       {!e.storageAvailable && (
         <p className="alert">
@@ -66,7 +71,9 @@ export function SwapActivity({ execution: e }: { execution: Execution }) {
             Retry tracking
           </button>
         )}
-        {failed && (
+        {/* Only while the funds are unaccounted for. Nobody needs a help desk to read "they're back",
+            and a partner's frame should send their customer to SODAX as rarely as it honestly can. */}
+        {failed && !refundAccounted(e.status) && (
           <a className="btn" href="https://support.sodax.com" target="_blank" rel="noreferrer">
             SODAX support ↗
           </a>

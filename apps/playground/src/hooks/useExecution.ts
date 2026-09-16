@@ -13,7 +13,6 @@ import {
   type ChainType,
   type SpokeChainKey,
   type XToken,
-  type CreateIntentParamsV2,
   type PartnerFeePercentage,
   type Result,
 } from '@sodax/dapp-kit';
@@ -25,7 +24,7 @@ import {
   useXDisconnect,
   useEvmSwitchChain,
 } from '@sodax/wallet-sdk-react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatUnits } from 'viem';
 import { loadActivity, saveActivity, submissionFor, type Activity } from '../lib/activity';
 import {
@@ -35,8 +34,10 @@ import {
   trackSwapSubmitted,
   type SwapFailureReason,
 } from '../lib/analytics';
+import type { TokenChoice } from '../lib/chains';
 import { postEmbedEvent } from '../lib/embedMessages';
 import { resolveDestinationGate } from '../lib/destinationGate';
+import { type ReviewSnapshot, reviewFromActivity } from '../lib/review';
 import {
   broadcast,
   canExecute,
@@ -64,6 +65,8 @@ type ExecutionInput = {
   minOutputAmount: bigint | undefined;
   partnerFee: PartnerFeePercentage | undefined;
   pair: PairDimensions | undefined;
+  /** Every asset the API quotes — what a restored swap resolves its own tokens against. */
+  choices: readonly TokenChoice[];
   ready: boolean;
 };
 
@@ -98,7 +101,7 @@ export function useExecution(input: ExecutionInput) {
   const canMax = !!srcKey && !!input.srcToken && !isNativeToken(srcKey, input.srcToken) && balance !== undefined;
   const insufficientBalance = balance !== undefined && input.inputAmount !== undefined && input.inputAmount > balance;
 
-  const [review, setReview] = useState<CreateIntentParamsV2>();
+  const [review, setReview] = useState<ReviewSnapshot>();
   // Stellar and NEAR can accept a swap the recipient cannot receive: an unactivated account, a
   // missing trustline, or unregistered NEP-141 storage. Both gates go inert off their own chain.
   const stellarGate = useStellarGate({
@@ -106,7 +109,7 @@ export function useExecution(input: ExecutionInput) {
     token: input.dstToken?.address,
     // The reviewed minimum while a review is open: it is what the swap will deliver at least, and
     // it keeps a quote refresh from re-querying the trustline underneath the confirm button.
-    amount: review ? BigInt(review.minOutputAmount) : input.minOutputAmount,
+    amount: review ? BigInt(review.intent.minOutputAmount) : input.minOutputAmount,
     address: destination?.address,
     walletProvider: destinationWallet,
   });
@@ -132,8 +135,14 @@ export function useExecution(input: ExecutionInput) {
     params: { txHash: activity?.txHash, srcChainKey: activity?.srcChainKey },
   });
   const status = statusQuery.data?.data;
-  const terminal = status?.status === 'solved' || status?.status === 'failed' || !!status?.abandonedAt;
+  const solved = status?.status === 'solved';
+  const failed = status?.status === 'failed' || !!status?.abandonedAt;
+  const terminal = solved || failed;
   const signable = canExecute(input.srcChain) && canExecute(input.dstChain) && !!srcKey;
+  // The confirm dialog carries the swap to settlement, and the fingerprint effect below does not
+  // re-run as it advances — so what it must not close is read from a ref.
+  const inFlightRef = useRef(false);
+  inFlightRef.current = !!activity && !terminal;
 
   useEffect(() => {
     if (connection.status === 'success') setConnectType(undefined);
@@ -159,8 +168,22 @@ export function useExecution(input: ExecutionInput) {
   useEffect(() => {
     void fingerprint;
     setPreparation(undefined);
-    if (!busyRef.current) setReview(undefined);
+    if (!busyRef.current && !inFlightRef.current) setReview(undefined);
   }, [fingerprint]);
+
+  const speedTier = useCallback(
+    (from: XToken, to: XToken) => sodax.swaps.getSwapSpeedTier({ srcToken: from, dstToken: to })?.estimatedSeconds,
+    [sodax],
+  );
+
+  // A reload leaves the swap running with no dialog on it, because the record outlives the state
+  // that opened one. Rebuild it, once, unless the visitor has already dismissed this swap's dialog.
+  const dismissedRef = useRef(false);
+  useEffect(() => {
+    if (!activity || review || dismissedRef.current) return;
+    const restored = reviewFromActivity(activity, input.choices, speedTier);
+    if (restored) setReview(restored);
+  }, [activity, review, input.choices, speedTier]);
 
   const openConnect = (type: ChainType) => {
     connection.reset();
@@ -195,23 +218,29 @@ export function useExecution(input: ExecutionInput) {
     )
       return;
     setReview({
-      srcChainKey: input.srcChain,
-      dstChainKey: input.dstChain,
-      inputToken: input.srcToken.address,
-      outputToken: input.dstToken.address,
-      inputAmount: input.inputAmount.toString(),
-      minOutputAmount: input.minOutputAmount.toString(),
-      srcAddress: source.address,
-      dstAddress: destination.address,
-      deadline: '0',
-      allowPartialFill: false,
-      ...(input.partnerFee ? { partnerFee: input.partnerFee } : {}),
+      intent: {
+        srcChainKey: input.srcChain,
+        dstChainKey: input.dstChain,
+        inputToken: input.srcToken.address,
+        outputToken: input.dstToken.address,
+        inputAmount: input.inputAmount.toString(),
+        minOutputAmount: input.minOutputAmount.toString(),
+        srcAddress: source.address,
+        dstAddress: destination.address,
+        deadline: '0',
+        allowPartialFill: false,
+        ...(input.partnerFee ? { partnerFee: input.partnerFee } : {}),
+      },
+      srcChain: input.srcChain,
+      dstChain: input.dstChain,
+      srcToken: input.srcToken,
+      dstToken: input.dstToken,
+      estimatedSeconds: speedTier(input.srcToken, input.dstToken),
     });
   };
 
   const confirm = async () => {
-    if (!input.enabled || !review || !wallet || !input.srcChain || !input.dstChain || busyRef.current || activity)
-      return;
+    if (!input.enabled || !review || !wallet || busyRef.current || activity) return;
     busyRef.current = true;
     phaseRef.current = 'checking';
     setPhase('checking');
@@ -221,16 +250,15 @@ export function useExecution(input: ExecutionInput) {
     try {
       const currentAddress = await wallet.getWalletAddress();
       if (
-        currentAddress !== review.srcAddress ||
-        source?.address !== review.srcAddress ||
-        destination?.address !== review.dstAddress
+        currentAddress !== review.intent.srcAddress ||
+        source?.address !== review.intent.srcAddress ||
+        destination?.address !== review.intent.dstAddress
       ) {
         throw new Error('The connected account changed. Review the swap again.');
       }
       if (destinationGate.blocked) throw new Error('The receiving account is not ready. Review the swap again.');
-      const srcChainKey = input.srcChain;
-      const dstChainKey = input.dstChain;
-      await executeSwap(review, {
+      const { srcChain: srcChainKey, dstChain: dstChainKey } = review;
+      await executeSwap(review.intent, {
         api: sodax.api.swaps,
         approve: async body => {
           await approve({ body, walletProvider: wallet });
@@ -246,9 +274,9 @@ export function useExecution(input: ExecutionInput) {
             txHash: request.txHash,
             srcChainKey,
             dstChainKey,
-            walletAddress: review.srcAddress,
-            recipient: review.dstAddress,
-            summary: `${input.amount} ${input.srcToken?.symbol} → ${input.dstToken?.symbol}`,
+            walletAddress: review.intent.srcAddress,
+            recipient: review.intent.dstAddress,
+            summary: `${input.amount} ${review.srcToken.symbol} → ${review.dstToken.symbol}`,
             createdAt: Date.now(),
             intent,
             relayData: request.relayData,
@@ -257,7 +285,6 @@ export function useExecution(input: ExecutionInput) {
           setStorageAvailable(saveActivity(next));
           setActivity(next);
           postEmbedEvent({ type: 'sodax:swap', status: 'submitted' });
-          setReview(undefined);
           if (input.pair) {
             submittedPair.current = input.pair;
             trackSwapSubmitted(input.pair);
@@ -276,6 +303,25 @@ export function useExecution(input: ExecutionInput) {
       busyRef.current = false;
       setPhase(undefined);
     }
+  };
+
+  const clearActivity = () => {
+    if (!terminal) return;
+    saveActivity(undefined);
+    setActivity(undefined);
+    setError(undefined);
+    dismissedRef.current = false;
+  };
+
+  // Closable from the moment the deposit is broadcast, never during a step the widget is driving:
+  // tracking can stall for reasons neither end controls, and a dialog nobody can dismiss is worse
+  // than one left early. A settled swap leaves with its dialog; any other keeps its record and stays
+  // dismissed, so the card below carries it rather than the dialog reopening on top.
+  const closeReview = () => {
+    if (busyRef.current) return;
+    if (solved) clearActivity();
+    else if (activity) dismissedRef.current = true;
+    setReview(undefined);
   };
 
   const retrySubmission = async () => {
@@ -320,24 +366,19 @@ export function useExecution(input: ExecutionInput) {
     review,
     openReview,
     confirm,
-    closeReview: () => {
-      if (!busyRef.current) setReview(undefined);
-    },
+    closeReview,
     phase,
     error,
     activity,
     status,
+    solved,
+    failed,
     terminal,
     storageAvailable,
     retrySubmission,
     statusError: statusQuery.isError,
     refreshStatus: () => statusQuery.refetch(),
-    clearActivity: () => {
-      if (!terminal) return;
-      saveActivity(undefined);
-      setActivity(undefined);
-      setError(undefined);
-    },
+    clearActivity,
   };
 }
 

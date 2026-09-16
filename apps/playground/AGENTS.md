@@ -24,6 +24,9 @@ pnpm check:ai-dev-files
 - `lib/execution.ts`: testable execution sequencing and validated wallet-family dispatch.
 - `lib/destinationGate.ts`: Stellar/NEAR receiving-account prerequisites reduced to one UI state.
 - `lib/activity.ts`: validated local recovery record and reconstruction of relay submissions.
+- `lib/progress.ts`: one wording per lifecycle step, shared by the confirm dialog and the activity card.
+- `lib/review.ts`: the frozen snapshot the confirm dialog renders, built from the form or from a
+  restored record.
 - `lib/analytics.ts`: GA4 event vocabulary and the tag policy that keeps partner frames opt-in.
 - `lib/widgetSettings.ts`, `lib/urlState.ts`: validated public embed configuration.
 - `lib/brand.ts`, `hooks/useBrand.ts`: theme validation and derived semantic styles.
@@ -46,6 +49,12 @@ pnpm check:ai-dev-files
 - Save the broadcast transaction and relay payload before calling `submitTx`. Recovery resubmits
   that same transaction; it must never create or sign a second deposit. Failed/abandoned statuses
   need a recovery/support path, not a success label or silent retry of the trade.
+- What a failed swap tells the visitor is ours to write, never the backend's `userMessage`. Every
+  intent the widget creates is timed — `executeSwap` takes its deadline from the API — so an unfilled
+  one expires and refunds itself; `userMessage` says to cancel on-chain to recover, which is the
+  limit-order case (`deadline = 0`) and sends a widget user hunting for a button they never need.
+  `intentCancelled` and `relayedForRefundAt` say the refund has landed or is moving. Which step gave
+  out (`failedAtStep`, `failureReason`) is support's detail, kept to the activity disclosure.
 - Treat local storage as untrusted and optional. Do not store credentials or private keys. The
   activity record contains public transaction details; do not send those through analytics.
 - Integrator fees come from deployment configuration, not the URL or a visitor-editable input.
@@ -86,6 +95,24 @@ pnpm check:ai-dev-files
 - The form is the exchange's currency panel: the symbol and its chevron open the picker, the network
   and the connected balance share the line beneath it, and the flip disc centres on the seam between
   the two panels. Wallet chips name their side and sit above the form, never between the legs.
+- The confirm dialog is the exchange's too: both legs either side of the wait, one action carrying
+  every step from the wallet prompt to settlement, and the fee lines behind a disclosure. It is where
+  a swap lives, so it stays open through settlement and a restored record reopens it — the activity
+  card is what remains after someone dismisses it, not a second home for the same swap. Closing a
+  completed one clears its record; any other keeps it, and stays dismissed for the session. It is
+  closable from the moment the deposit is broadcast, because tracking can stall for reasons neither
+  end controls. The exchange's follow-us line is the exchange's; a partner's users never see it.
+- The dialog renders a snapshot taken when it opened, never the live form: the form re-quotes behind
+  it and a reload reseeds it from the URL, and neither may restate a swap that is already signed. A
+  restored snapshot resolves its decimals and symbols from the live asset list rather than from the
+  stored record, and renders no dialog at all when it cannot — an amount scaled by trusted-from-
+  storage decimals is worse than the card.
+- The destination leg states the reviewed minimum, not the live quote: it is the one number that is
+  still true after the deposit is broadcast, and it satisfies the review's minimum-amount duty at the
+  same time. The complete receiving address stays beside it, out of the disclosure.
+- The message slot above the legs is always rendered, empty or not. A dialog carrying a swap must not
+  jump when a step reports back, and its reserved height is per width — the same sentence needs a
+  third line in a narrow frame.
 - `index.css` is ordered, not specific. A `.btn` variant declared before `.btn` silently loses every
   property the two share — keep variants below it, and check the computed style, not the rule.
 - The asset picker's dialog states a height, not a max-height: its grid and network sheet size against
