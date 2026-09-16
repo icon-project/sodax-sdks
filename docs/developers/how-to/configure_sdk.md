@@ -121,7 +121,7 @@ const partnerFeeAmount: PartnerFee = {
 
 ### API key
 
-The backend guards its API-keyed routes (starting with the Swaps API v2, `POST /swaps/*`) with an `x-api-key` header check; keys are minted through the partner portal. There is **one** key for every backend request — set it once at construction and the SDK sends it as `x-api-key` on the data API, the swaps API, the bridge API, the solver API, and the backend submit-tx legs of `sodax.swaps.swap()` / `sodax.bridge.bridge()`:
+The backend guards its API-keyed routes (starting with the Swaps API, `POST /swaps/*`) with an `x-api-key` header check; keys are minted through the partner portal. There is **one** key for every backend request — set it once at construction and the SDK sends it as `x-api-key` on the data API, the swaps API, the bridge API, the solver API, and the backend submit-tx legs of `sodax.swaps.swap()` / `sodax.bridge.bridge()`:
 
 ```typescript
 import { Sodax } from '@sodax/sdk';

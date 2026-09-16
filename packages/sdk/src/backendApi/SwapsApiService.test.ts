@@ -1,5 +1,5 @@
 /**
- * Tests for the SwapsApiService HTTP client (backend Swaps API v2).
+ * Tests for the SwapsApiService HTTP client (backend Swaps API).
  *
  * Mirrors BackendApiService.test.ts:
  *   1. A single module-scope `new Sodax()` backs every test — `sodax.api.swaps` is the

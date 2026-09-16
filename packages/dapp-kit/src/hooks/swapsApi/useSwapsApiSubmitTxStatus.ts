@@ -17,7 +17,7 @@ export type UseSwapsApiSubmitTxStatusParams = ReadHookParams<
 /**
  * React hook for polling the processing status of a submitted swap transaction via the swaps API —
  * `sodax.api.swaps.getSubmitTxStatus`. Both `txHash` and `srcChainKey` are required for the query
- * to run (the swaps API v2 status query requires the source chain key).
+ * to run (the swaps API status query requires the source chain key).
  *
  * @example
  * const { data: status } = useSwapsApiSubmitTxStatus({
@@ -41,7 +41,7 @@ export const useSwapsApiSubmitTxStatus = ({
   return useQuery({
     queryKey: ['swapsApi', 'submitTx', 'status', txHash, srcChainKey],
     queryFn: async (): Promise<SubmitTxStatusResponseV2 | undefined> => {
-      // `srcChainKey` is required by the swaps API v2 status query. The `enabled` gate below
+      // `srcChainKey` is required by the swaps API status query. The `enabled` gate below
       // ensures both are present; this guard also narrows the types for the call.
       if (!txHash || !srcChainKey) return undefined;
       return unwrapResult(await sodax.api.swaps.getSubmitTxStatus({ txHash, srcChainKey }, apiConfig));

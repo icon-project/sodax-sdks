@@ -157,7 +157,7 @@ Backend read hooks (`useBackendIntentByTxHash`, `useBackendIntentByHash`, `useBa
 
 ### Swaps API (`sodax.api.swaps`)
 
-Typed wrappers over `sodax.api.swaps.*` (one per Swaps API v2 endpoint), all keyed `['swapsApi', action, ...]`.
+Typed wrappers over `sodax.api.swaps.*` (one per Swaps API endpoint), all keyed `['swapsApi', action, ...]`.
 
 | Key | Hook |
 |---|---|
@@ -186,7 +186,7 @@ Typed wrappers over `sodax.api.swaps.*` (one per Swaps API v2 endpoint), all key
 
 ### Bridge API (`sodax.api.bridge`)
 
-Typed wrappers over `sodax.api.bridge.*` (one per Bridge API v2 endpoint), all keyed `['bridgeApi', action, ...]`.
+Typed wrappers over `sodax.api.bridge.*` (one per Bridge API endpoint), all keyed `['bridgeApi', action, ...]`.
 
 | Key | Hook |
 |---|---|
@@ -204,7 +204,7 @@ Typed wrappers over `sodax.api.bridge.*` (one per Bridge API v2 endpoint), all k
 
 ### Leverage Yield API (`sodax.api.leverageYield`)
 
-Typed wrappers over `sodax.api.leverageYield.*` (one per Leverage Yield API v2 endpoint), all keyed `['leverageYieldApi', action, ...]`.
+Typed wrappers over `sodax.api.leverageYield.*` (one per Leverage Yield API endpoint), all keyed `['leverageYieldApi', action, ...]`.
 
 | Key | Hook |
 |---|---|

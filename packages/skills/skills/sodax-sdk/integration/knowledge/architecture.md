@@ -138,7 +138,7 @@ Sodax
  ├── partners        — PartnerService         (partner fee claiming)
  ├── recovery        — RecoveryService        (withdraw stuck hub-wallet assets)
  ├── backendApi      — BackendApiService      (intent lookup, orderbook, money-market reads, config fetching)
- ├── api             — alias for backendApi; `api.swaps` is SwapsApiService (typed Swaps API v2 client)
+ ├── api             — alias for backendApi; `api.swaps` is SwapsApiService (typed Swaps API client)
  ├── config          — ConfigService          (dynamic config; see § 4)
  ├── hubProvider     — HubProvider            (hub contract interactions; concrete impl `EvmHubProvider`)
  └── spoke           — SpokeService           (per-chain-family router; see § 2)

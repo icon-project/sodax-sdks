@@ -2,7 +2,7 @@
 
 Import everything from `@sodax/sdk`. The barrel re-exports the entire `@sodax/types` surface — you don't need a separate `@sodax/types` dependency.
 
-`sodax.api` is an alias for `sodax.backendApi`; `sodax.api.swaps` is the typed Swaps API v2 client (`SwapsApiService`) — see [`../features/swaps-api.md`](../features/swaps-api.md).
+`sodax.api` is an alias for `sodax.backendApi`; `sodax.api.swaps` is the typed Swaps API client (`SwapsApiService`) — see [`../features/swaps-api.md`](../features/swaps-api.md).
 
 ### Top-level exports
 

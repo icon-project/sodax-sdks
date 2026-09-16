@@ -1,7 +1,7 @@
 import { DEFAULT_API_BASE_URL, type HttpUrl, type RequestOverrideConfig } from '@sodax/dapp-kit';
 
 /**
- * Leverage Yield API v2 host, passed per-call via each `useLeverageYieldApi*` hook's `apiConfig` so
+ * Leverage Yield API host, passed per-call via each `useLeverageYieldApi*` hook's `apiConfig` so
  * this showcase can retarget the backend without touching the app-wide SDK config. Point at a local
  * leverage-yield API with `VITE_LEVERAGE_YIELD_API_BASE_URL` (e.g. `http://localhost:3008`, which
  * serves `/leverage-yield/*` with no `/v1` prefix). Unset or invalid values use the SDK's packaged

@@ -149,7 +149,7 @@ export type MakeRequestParams = {
 };
 
 /**
- * `JSON.stringify` that is safe for request bodies containing `bigint` values (e.g. the Bridge API v2
+ * `JSON.stringify` that is safe for request bodies containing `bigint` values (e.g. the Bridge API
  * quote/fee bodies whose numeric amounts are serialized as decimal strings). Plain `JSON.stringify`
  * throws `TypeError` on a `bigint`; this serializes each `bigint` to its decimal string form, matching
  * the wire shape the backend expects.

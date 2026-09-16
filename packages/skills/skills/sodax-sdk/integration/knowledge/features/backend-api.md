@@ -103,7 +103,7 @@ The `IConfigApiV1` interface itself still matters for both patterns — every me
 
 - v1 → v2 migration of `BackendApiService` (the load-bearing change: every method now returns `Promise<Result<T>>`): [`features/backend-api.md`](../../../migration-v1-to-v2/knowledge/features/backend-api.md).
 - The full submit-tx flow with `createIntent` upstream: [`./swap.md`](swap.md) § "Backend submit-tx flow".
-- The full typed Swaps API v2 client (`sodax.api.swaps`, 21 endpoints — quote, create-intent, submit-tx, fees, status, …): [`./swaps-api.md`](swaps-api.md).
+- The full typed Swaps API client (`sodax.api.swaps`, 21 endpoints — quote, create-intent, submit-tx, fees, status, …): [`./swaps-api.md`](swaps-api.md).
 - Partner-fee handling (separate service): [`./partner.md`](partner.md).
 - Stuck-asset recovery (separate service): [`./recovery.md`](recovery.md).
 - Error model context fields (`error.context.api`, `error.context.method`): [`../reference/`](../reference/) § 3.

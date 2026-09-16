@@ -1,5 +1,5 @@
 /**
- * Tests for the LeverageYieldApiService HTTP client (backend Leverage Yield API v2).
+ * Tests for the LeverageYieldApiService HTTP client (backend Leverage Yield API).
  *
  * Mirrors SwapsApiService.test.ts / BridgeApiService.test.ts:
  *   1. A single module-scope `new Sodax()` backs every test — `sodax.api.leverageYield` is the
