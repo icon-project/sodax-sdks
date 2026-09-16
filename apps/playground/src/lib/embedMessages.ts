@@ -3,6 +3,13 @@ import { resolveHostOrigin } from './embedOrigin';
 export type SwapEventStatus = 'started' | 'submitted' | 'completed' | 'failed';
 export type EmbedEvent = { type: 'sodax:ready' } | { type: 'sodax:swap'; status: SwapEventStatus };
 
+/**
+ * The height an exported embed reserves, and the floor its resize handler keeps. The asset picker is
+ * a dialog inside that frame, so a frame trimmed to the form leaves it too short for its grid; the
+ * widget's ground fills whatever is left over. The builder's own preview sizes to its column instead.
+ */
+export const EMBED_MIN_HEIGHT = 760;
+
 export function fromHost(
   event: { source: unknown; origin: string },
   parent: unknown,

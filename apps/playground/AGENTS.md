@@ -91,6 +91,12 @@ pnpm check:ai-dev-files
 - The asset picker's dialog states a height, not a max-height: its grid and network sheet size against
   it, and a max- one leaves it indefinite, so each list grows past the dialog instead of scrolling in it.
   Centre a list that can overflow with `safe center`, or its first rows land where no scroll reaches.
+  It opens inside the frame the host gives the widget, so an exported embed reserves `EMBED_MIN_HEIGHT`
+  and its resize handler never drops below it; the widget's ground fills the surplus, and the builder's
+  preview sizes to its own column so it never outgrows the panel beside it.
+- The picker names what the wallet holds, as the exchange does: an asset's total across its networks
+  under the hovered tile, and the hovered network's own amount in place of the flyout's caption.
+  Balances are read per chain while the dialog is open, never on a timer behind a closed one.
 - `components/Dropdown.tsx` is the design system's navigation menu as a form control; use it rather
   than `<select>`, whose popup the OS draws in its own colours. Its panel is a top-layer popover
   because the builder's cards and scrolling column would clip an anchored one, so its position is a

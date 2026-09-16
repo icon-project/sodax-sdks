@@ -314,13 +314,20 @@ code,
   padding: 12px var(--space-24) 0;
 }
 
-/* Framed by a host page: the widget alone, on its own surface, with none of our chrome. The full
-   height keeps the cherry ground off an iframe taller than the form. */
+/* Framed by a host page: the widget alone, on its own surface, with none of our chrome. The ground
+   fills the frame the host gives us — the room the asset picker opens into — and the widget stays at
+   the top of it, where it was before there was any room to spare. */
 .app-embed {
   min-height: 100vh;
   background: var(--surface-embed);
+  padding: 0;
+  justify-content: flex-start;
+}
+
+/* The widget's own box, and the one the resize message measures. */
+.app-embed-content {
+  width: 100%;
   padding: var(--space-24);
-  justify-content: center;
 }
 
 /* ── Header bar ─────────────────────────────────────────────────────────── */
@@ -425,7 +432,12 @@ code,
   font-weight: 600;
   color: var(--text-muted);
 }
+/* Stretched to the row, so the preview ends where the builder's card does rather than hanging past
+   it. The frame takes what that leaves, and a widget needing more than that grows the row instead. */
 .preview-column {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
   min-width: 0;
 }
 .preview-toolbar,
@@ -611,16 +623,10 @@ code,
 .hero-note a {
   color: var(--text-on-hero);
 }
-.app-embed {
-  justify-content: flex-start;
-  min-height: 0;
-}
-
 /* The widget in its own tab: the same width a host frame gives it, centred in the window. */
 .app-standalone {
   justify-content: safe center;
   min-height: 100vh;
-  padding-block: var(--space-24);
 }
 
 .app-standalone .flow-column {
@@ -648,7 +654,7 @@ code,
   .app {
     padding: 8px 8px 0;
   }
-  .app-embed {
+  .app-embed-content {
     padding: 16px;
   }
   .stage {
@@ -1318,7 +1324,8 @@ code,
   overflow: hidden;
 }
 
-/* 72px columns and 16px of side padding give the exchange's five-per-row grid at this width. */
+/* 72px columns, and only 8px of side padding: the dialog is at most as wide as the frame around it,
+   and 16px each side cost the fifth column the exchange fits. */
 .tile-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, 72px);
@@ -1327,7 +1334,7 @@ code,
   overflow-y: auto;
   min-height: 0;
   height: 100%;
-  padding: var(--space-8) var(--space-16) var(--space-24);
+  padding: var(--space-8) var(--space-8) var(--space-24);
   align-content: start;
   /* Bottom only, and the padding above scrolls the last row clear of it: a fade at the top veiled
      the first row of a list that starts there. */
@@ -1366,7 +1373,9 @@ code,
   pointer-events: none;
 }
 
-.tile-cell-open .tile-label {
+/* An open flyout speaks for the tile: its caption replaces the symbol and the amount held. */
+.tile-cell-open .tile-label,
+.tile-cell-open .tile-balance {
   visibility: hidden;
 }
 
@@ -1471,11 +1480,36 @@ code,
   object-fit: contain;
 }
 
+.tile-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+}
+
 .tile-label {
   color: var(--text-heading);
   font-size: var(--text-body-small);
   text-align: center;
   overflow-wrap: anywhere;
+}
+
+/* The exchange shows what you hold of an asset under the tile you are pointing at. The line is
+   reserved across the grid, so the rows do not reflow as each chain's balance arrives. */
+.tile-balance {
+  min-height: 14px;
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+  line-height: 14px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0;
+  transition: opacity 150ms ease-out;
+}
+
+.tile:hover .tile-balance,
+.tile:focus-visible .tile-balance {
+  opacity: 1;
 }
 
 /* Dismisses an open flyout or network sheet; sits under both and over the grid they cover. */
@@ -1504,6 +1538,8 @@ code,
   padding: 4px var(--space-8);
 }
 
+/* Exactly as wide as its row of networks: a caption sized to its own text pushed the flyout past the
+   grid, which scrolls, and a scroller clips — so the name was cut off rather than wrapped. */
 .chain-flyout {
   position: absolute;
   top: 64px;
@@ -1513,18 +1549,25 @@ code,
   flex-direction: column;
   align-items: center;
   gap: 4px;
-  width: max-content;
-  min-width: 150px;
+  width: 150px;
   transform: translateX(-50%);
   pointer-events: auto;
 }
 
+/* Two lines' worth, reserved: the caption answers the pointer, and a line of it appearing must not
+   move the networks out from under the cursor that asked. */
 .chain-flyout-caption {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
   margin: 0;
   color: var(--text-heading);
   font-size: var(--text-caption);
   font-weight: 500;
-  white-space: nowrap;
+  line-height: 1.25;
+  text-align: center;
+  text-wrap: balance;
 }
 
 .chain-flyout-row {
@@ -1570,6 +1613,11 @@ code,
   background: var(--surface-card);
   outline: 2px solid var(--surface-card);
   box-shadow: -2px 0 8px var(--chip-shadow);
+}
+
+/* A network you hold the asset on wears a thicker collar, as the exchange's picker marks it. */
+.chain-flyout-icon-funded .chain-flyout-logo {
+  outline-width: 5px;
 }
 
 .network-row {
@@ -2437,6 +2485,9 @@ body:has(.app-embed) {
 /* No edge of its own: the stage frames this column already, and the widget below carries the border
    a host page would see. Three nested outlines around one widget was two too many. */
 .preview-canvas {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
   padding: 12px;
   border-radius: 20px;
   min-height: 540px;
@@ -2444,9 +2495,12 @@ body:has(.app-embed) {
 /* Overflow alone leaves the frame's corners square once the widget opens a modal; the clip path
    rounds everything the iframe paints, backdrop blur included. */
 .preview-frame {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
   width: 100%;
   max-width: 480px;
-  margin: auto;
+  margin-inline: auto;
   overflow: hidden;
   border-radius: 24px;
   clip-path: inset(0 round 24px);
@@ -2456,8 +2510,11 @@ body:has(.app-embed) {
 .preview-frame-mobile {
   max-width: 375px;
 }
+/* Fills the frame, floored at the height the widget reported: the preview follows the builder's
+   column, and a widget that needs more than the column has grows the row instead of scrolling. */
 .preview-frame iframe {
   display: block;
+  flex: 1;
   width: 100%;
   border: 0;
 }
@@ -2605,7 +2662,7 @@ body:has(.app-embed) {
   .preview-toolbar {
     flex-wrap: wrap;
   }
-  .app-embed {
+  .app-embed-content {
     padding: 16px;
   }
   .asset-panel {

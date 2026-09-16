@@ -31,12 +31,15 @@ export default function App() {
   if (initialUrl.embed) {
     return (
       <div className={framed ? 'app app-embed' : 'app app-embed app-standalone'}>
-        <SwapWidget flow={flow} />
-        {framed && (
-          <a className="link standalone-link" href={window.location.href} target="_blank" rel="noreferrer">
-            Open in a new tab ↗
-          </a>
-        )}
+        {/* The widget's own box: the ground around it fills the frame, this is what gets measured. */}
+        <div className="app-embed-content">
+          <SwapWidget flow={flow} />
+          {framed && (
+            <a className="link standalone-link" href={window.location.href} target="_blank" rel="noreferrer">
+              Open in a new tab ↗
+            </a>
+          )}
+        </div>
       </div>
     );
   }

@@ -1,6 +1,7 @@
 import type { ChainKey, PartnerFeePercentage, XToken } from '@sodax/dapp-kit';
 import { DENSITIES, FONT_STACKS, RADIUS_SCALES } from './brand';
 import { chainKeyExpression } from './chains';
+import { EMBED_MIN_HEIGHT } from './embedMessages';
 
 export type SnippetState = {
   srcChain: ChainKey;
@@ -26,7 +27,7 @@ function embedSnippet(embedUrl: string): string {
   src="${embedUrl}"
   title="SODAX swap"
   width="480"
-  height="760"
+  height="${EMBED_MIN_HEIGHT}"
   loading="lazy"
   referrerpolicy="origin"
   allow="ethereum; solana; clipboard-write"
@@ -44,7 +45,7 @@ function embedSnippet(embedUrl: string): string {
         frame.dispatchEvent(new CustomEvent('sodax:swap', { detail: { status: data.status } }));
       }
       if (data.type === 'sodax:resize' && 'height' in data && typeof data.height === 'number' && Number.isFinite(data.height)) {
-        frame.height = String(Math.max(360, Math.min(1600, data.height)));
+        frame.height = String(Math.max(${EMBED_MIN_HEIGHT}, Math.min(1600, data.height)));
       }
     });
   })();
@@ -59,7 +60,7 @@ import { useEffect, useRef } from 'react';
 type SwapStatus = 'started' | 'submitted' | 'completed' | 'failed';
 type SodaxSwapWidgetProps = { src?: string; height?: number; onSwapStatus?: (status: SwapStatus) => void };
 
-export function SodaxSwapWidget({ src = '${embedUrl}', height = 760, onSwapStatus }: SodaxSwapWidgetProps) {
+export function SodaxSwapWidget({ src = '${embedUrl}', height = ${EMBED_MIN_HEIGHT}, onSwapStatus }: SodaxSwapWidgetProps) {
   const frame = useRef<HTMLIFrameElement>(null);
   useEffect(() => {
     const onMessage = (event: MessageEvent<unknown>) => {
@@ -72,7 +73,7 @@ export function SodaxSwapWidget({ src = '${embedUrl}', height = 760, onSwapStatu
         onSwapStatus?.(status);
       }
       if (data.type === 'sodax:resize' && 'height' in data && typeof data.height === 'number' && Number.isFinite(data.height)) {
-        element.style.height = String(Math.max(360, Math.min(1600, data.height))) + 'px';
+        element.style.height = String(Math.max(${EMBED_MIN_HEIGHT}, Math.min(1600, data.height))) + 'px';
       }
     };
     window.addEventListener('message', onMessage);
@@ -171,7 +172,7 @@ the configured pair, amount, slippage and theme. The widget connects its own wal
   src="${embedUrl}"
   title="SODAX swap"
   width="480"
-  height="760"
+  height="${EMBED_MIN_HEIGHT}"
   loading="lazy"
   referrerpolicy="origin"
   allow="ethereum; solana; clipboard-write"
@@ -184,7 +185,7 @@ the configured pair, amount, slippage and theme. The widget connects its own wal
 
 3. Optional, and worth doing: listen for the widget's messages on window, and ignore any whose
    event.source is not that iframe's contentWindow or whose event.origin is not the URL's origin.
-   - { type: 'sodax:resize', height } — set the iframe height, clamped to 360-1600.
+   - { type: 'sodax:resize', height } — set the iframe height, clamped to ${EMBED_MIN_HEIGHT}-1600.
    - { type: 'sodax:swap', status } — 'started', 'submitted', 'completed' or 'failed'. Status only:
      no addresses and no transaction hashes, so do not expect them.
    - Post { type: 'sodax:theme', theme: 'light' | 'dark' | 'auto' } to it to follow this app's theme.

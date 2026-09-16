@@ -1,5 +1,7 @@
 import { type ChainKey, tokenLogo } from '@sodax/dapp-kit';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useAssetBalances } from '../hooks/useAssetBalances';
+import { groupBalanceText, tokenBalanceText } from '../lib/balances';
 import { type TokenChoice, chainLogo, chainName } from '../lib/chains';
 import { canExecute } from '../lib/execution';
 import { type AssetGroup, filterGroups, previewNetworks } from '../lib/pickerOptions';
@@ -8,6 +10,13 @@ import { Chevron } from './Dropdown';
 
 /** A tile's corner mark: how many chains carry the asset, or — when only one does — which chain. */
 type Mark = { kind: 'count'; value: number } | { kind: 'chain'; chain: ChainKey };
+
+/** What a network in the flyout is, spoken: the chain, what is held there, and whether it executes. */
+function networkLabel(chain: ChainKey, symbol: string, held: string | undefined): string {
+  return [chainName(chain), ...(held ? [`${held} ${symbol}`] : []), ...(canExecute(chain) ? [] : ['quote only'])].join(
+    ' — ',
+  );
+}
 
 function SearchGlyph() {
   return (
@@ -46,6 +55,8 @@ function Tile({
   mark,
   active,
   note,
+  held,
+  showHeld,
   onClick,
 }: {
   logo: string;
@@ -54,6 +65,10 @@ function Tile({
   mark: Mark;
   active?: boolean;
   note?: string;
+  /** The wallet's holding across every network this asset reaches, revealed on hover. */
+  held?: string;
+  /** Reserved for the whole grid at once, so a row does not change height as balances land. */
+  showHeld: boolean;
   onClick: () => void;
 }) {
   return (
@@ -74,7 +89,10 @@ function Tile({
           />
         )}
       </span>
-      <span className="tile-label">{label}</span>
+      <span className="tile-text">
+        <span className="tile-label">{label}</span>
+        {showHeld && <span className="tile-balance">{held}</span>}
+      </span>
     </button>
   );
 }
@@ -103,10 +121,15 @@ export function AssetPicker<K extends ChainKey>({
 }: AssetPickerProps<K>) {
   const dialog = useRef<HTMLDialogElement>(null);
   const searchInput = useRef<HTMLInputElement>(null);
+  const grid = useRef<HTMLDivElement>(null);
+  const openCell = useRef<HTMLDivElement>(null);
+  const flyout = useRef<HTMLDivElement>(null);
+  const [flyoutShift, setFlyoutShift] = useState(0);
   const [query, setQuery] = useState('');
   const [network, setNetwork] = useState<K>();
   const [isNetworkOpen, setNetworkOpen] = useState(false);
   const [expanded, setExpanded] = useState<string>();
+  const [hovered, setHovered] = useState<K>();
 
   useEffect(() => {
     if (open) {
@@ -114,12 +137,35 @@ export function AssetPicker<K extends ChainKey>({
       setNetwork(undefined);
       setNetworkOpen(false);
       setExpanded(undefined);
+      setHovered(undefined);
       if (!dialog.current?.open) dialog.current?.showModal();
       searchInput.current?.focus();
     } else dialog.current?.close();
   }, [open]);
 
+  // A flyout is centred on its tile, and the grid it sits in scrolls — so a tile in an outer column
+  // would open half outside the scroller, which clips it. Measure the tile, never the flyout: the
+  // flyout already carries the last nudge, and measuring that would compound it.
+  useLayoutEffect(() => {
+    const cell = openCell.current?.getBoundingClientRect();
+    const bounds = grid.current?.getBoundingClientRect();
+    const width = flyout.current?.getBoundingClientRect().width;
+    if (!expanded || !cell || !bounds || !width) {
+      setFlyoutShift(0);
+      return;
+    }
+
+    const left = cell.left + cell.width / 2 - width / 2;
+    const right = left + width;
+    setFlyoutShift(left < bounds.left ? bounds.left - left : right > bounds.right ? bounds.right - right : 0);
+  }, [expanded]);
+
+  const balances = useAssetBalances(groups, open);
   const visible = useMemo(() => filterGroups(groups, query, network), [groups, query, network]);
+  // Held amounts are read across the whole list, not the filtered view: the line the grid reserves
+  // for them must not come and go as a search narrows the tiles.
+  const heldBySymbol = new Map(groups.map(group => [group.symbol, groupBalanceText(balances, group.choices)]));
+  const showHeld = [...heldBySymbol.values()].some(Boolean);
 
   // An open flyout or network sheet is a layer over the grid: dismissing it must not close the picker.
   const layered = isNetworkOpen || expanded !== undefined;
@@ -140,6 +186,7 @@ export function AssetPicker<K extends ChainKey>({
       return;
     }
     setNetworkOpen(false);
+    setHovered(undefined);
     setExpanded(current => (current === group.symbol ? undefined : group.symbol));
   };
 
@@ -201,7 +248,10 @@ export function AssetPicker<K extends ChainKey>({
         </div>
 
         <div className={`picker-stage${isNetworkOpen ? ' picker-stage-sheet' : ''}`}>
-          <div className={`tile-grid${isNetworkOpen ? ' tile-grid-behind' : ''}${layered ? ' tile-grid-locked' : ''}`}>
+          <div
+            ref={grid}
+            className={`tile-grid${isNetworkOpen ? ' tile-grid-behind' : ''}${layered ? ' tile-grid-locked' : ''}`}
+          >
             {visible.length === 0 ? (
               <p className="muted small picker-empty">No matching assets. Try another network or search.</p>
             ) : (
@@ -210,9 +260,12 @@ export function AssetPicker<K extends ChainKey>({
                 if (!first) return null;
                 const isOpen = expanded === group.symbol;
                 const spread = group.choices.length > 1;
+                const onNetwork = isOpen ? group.choices.find(choice => choice.chain === hovered) : undefined;
+                const onNetworkHeld = onNetwork && tokenBalanceText(balances, onNetwork);
                 return (
                   <div
                     key={group.symbol}
+                    ref={isOpen ? openCell : undefined}
                     className={`tile-cell${isOpen ? ' tile-cell-open' : ''}${expanded && !isOpen ? ' tile-cell-dim' : ''}`}
                   >
                     <Tile
@@ -224,37 +277,53 @@ export function AssetPicker<K extends ChainKey>({
                       }
                       active={selected?.symbol === group.symbol}
                       note={!spread && !canExecute(first.chain) ? `Quote only on ${chainName(first.chain)}` : undefined}
+                      held={heldBySymbol.get(group.symbol)}
+                      showHeld={showHeld}
                       onClick={() => openGroup(group)}
                     />
                     {isOpen && (
-                      <div className="chain-flyout">
-                        <p className="chain-flyout-caption">Choose a network</p>
+                      <div
+                        ref={flyout}
+                        className="chain-flyout"
+                        style={{ transform: `translateX(calc(-50% + ${flyoutShift}px))` }}
+                      >
+                        {/* The caption is the network's own line: what is held there, or the asset on it. */}
+                        <p className="chain-flyout-caption">
+                          {!onNetwork
+                            ? 'Choose a network'
+                            : onNetworkHeld
+                              ? `${onNetworkHeld} ${group.symbol}`
+                              : `${group.symbol} on ${chainName(onNetwork.chain)}`}
+                        </p>
                         <div className="chain-flyout-row">
-                          {group.choices.map(choice => (
-                            <button
-                              key={choice.chain}
-                              type="button"
-                              className={`chain-flyout-icon${
-                                selected?.chain === choice.chain && selected.symbol === group.symbol
-                                  ? ' chain-flyout-icon-active'
-                                  : ''
-                              }`}
-                              aria-label={
-                                canExecute(choice.chain)
-                                  ? chainName(choice.chain)
-                                  : `${chainName(choice.chain)} — quote only`
-                              }
-                              onClick={() => pick(choice)}
-                            >
-                              <Glyph
-                                key={chainLogo(choice.chain)}
-                                className="chain-flyout-logo"
-                                src={chainLogo(choice.chain)}
-                                alt=""
-                                initial={chainName(choice.chain)}
-                              />
-                            </button>
-                          ))}
+                          {group.choices.map(choice => {
+                            const chainHeld = tokenBalanceText(balances, choice);
+                            return (
+                              <button
+                                key={choice.chain}
+                                type="button"
+                                className={`chain-flyout-icon${chainHeld ? ' chain-flyout-icon-funded' : ''}${
+                                  selected?.chain === choice.chain && selected.symbol === group.symbol
+                                    ? ' chain-flyout-icon-active'
+                                    : ''
+                                }`}
+                                aria-label={networkLabel(choice.chain, group.symbol, chainHeld)}
+                                onMouseEnter={() => setHovered(choice.chain)}
+                                onMouseLeave={() => setHovered(undefined)}
+                                onFocus={() => setHovered(choice.chain)}
+                                onBlur={() => setHovered(undefined)}
+                                onClick={() => pick(choice)}
+                              >
+                                <Glyph
+                                  key={chainLogo(choice.chain)}
+                                  className="chain-flyout-logo"
+                                  src={chainLogo(choice.chain)}
+                                  alt=""
+                                  initial={chainName(choice.chain)}
+                                />
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
                     )}

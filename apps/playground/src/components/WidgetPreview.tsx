@@ -73,7 +73,7 @@ export function WidgetPreview({
         src={src}
         allow="ethereum; solana; clipboard-write"
         onLoad={() => setLoaded(true)}
-        style={{ height }}
+        style={{ minHeight: height }}
       />
     </div>
   );
