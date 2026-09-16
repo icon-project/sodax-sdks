@@ -5,6 +5,7 @@ import { createInterface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
 import {
   compareVersions,
+  configVersionErrors,
   configVersionForOrThrow,
   decodeConfigVersion,
   parseVersion,
@@ -255,7 +256,8 @@ const highestTagVersion = parsed =>
 
 export const versionAdvanceErrors = ({ version, currentVersion, tags, packageTags = [], requireTagAdvance = true }) => {
   if (!parseVersion(version)) return [`${version || '(empty)'} is not a valid version; expected X.Y.Z or X.Y.Z-rc.N`];
-  const errors = [];
+  // The field limits belong here, not only in the bump: past this guard the notes file is written.
+  const errors = [...configVersionErrors(version)];
   if (tags.includes(`@sdks@${version}`)) errors.push(`tag @sdks@${version} already exists`);
   // The unified flow republishes every package, so one backported tag makes the whole version unusable.
   const claimed = packageTags.find(tag => parsePackageTag(tag)?.version === version);

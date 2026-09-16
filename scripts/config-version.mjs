@@ -72,16 +72,21 @@ export const configVersionFor = version => {
 };
 
 /**
- * The release-time front door: a bad number must stop a release, and the message is the operator's
- * only guidance mid-cut, so it names the offending field and the remedy rather than just failing.
+ * Every reason `version` cannot become a CONFIG_VERSION, empty when it can. The message is the
+ * operator's only guidance mid-cut, so it names the offending field and the remedy rather than just
+ * failing; release.mjs surfaces these in the version guard, before anything is written.
  */
-export const configVersionForOrThrow = version => {
+export const configVersionErrors = version => {
   const parsed = parseVersion(version);
-  if (!parsed) {
-    throw new Error(`${JSON.stringify(version)} is not a valid version; expected X.Y.Z or X.Y.Z-rc.N`);
-  }
+  if (!parsed) return [`${JSON.stringify(version)} is not a valid version; expected X.Y.Z or X.Y.Z-rc.N`];
   const errors = rangeErrors(parsed);
-  if (errors.length > 0) throw new Error(`${version} cannot be encoded: ${errors.join('; ')}`);
+  return errors.length === 0 ? [] : [`${version} cannot be encoded: ${errors.join('; ')}`];
+};
+
+/** The release-time front door: a bad number must stop a release rather than ship a colliding one. */
+export const configVersionForOrThrow = version => {
+  const errors = configVersionErrors(version);
+  if (errors.length > 0) throw new Error(errors.join('\n'));
   return configVersionFor(version);
 };
 

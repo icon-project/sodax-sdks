@@ -77,8 +77,9 @@ It stops before changing anything if:
 `version` or `CONFIG_VERSION` — the latter is a pure function of the former
 (`major * 1e6 + minor * 1e4 + patch * 100 + (rc ?? 99)`, see
 [`packages/types/README.md`](types/README.md#config-version)), and three checks enforce it: `pnpm
-release` asserts the landed value, `node scripts/config-version.mjs --check` runs in the publish
-workflows, and `scripts/config-version.test.mjs` asserts it on every pull request.
+release` asserts the landed value, `node scripts/config-version.mjs --check` runs in the unified
+publish workflow and in every per-package workflow that ships the constant, and
+`scripts/config-version.test.mjs` asserts it on every pull request.
 
 One consequence worth knowing before you pick a number: the encoding caps minor and patch at 99 and
 rc at 98, and has no 0.x range. `pnpm release` refuses anything outside that rather than shipping a

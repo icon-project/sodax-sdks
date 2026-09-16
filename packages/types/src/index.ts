@@ -63,12 +63,9 @@ export function configVersionFor(version: string): number | null {
   return major * 1_000_000 + minor * 10_000 + patch * 100 + (rc === null ? RC_STABLE : rc);
 }
 
-/**
- * Decodes a config version number, or `null` when it is not one — which includes the small counter
- * values an API running an older SDK still serves, and any non-integer or out-of-range input.
- */
-export function parseConfigVersion(value: number): ParsedConfigVersion | null {
-  if (!Number.isInteger(value) || value < MIN_CONFIG_VERSION || value > MAX_CONFIG_VERSION) return null;
+// Total on purpose: the domain check lives in parseConfigVersion, so SDK_VERSION can project the
+// committed constant without routing through a nullable step it would then have to narrow.
+const unpack = (value: number): ParsedConfigVersion => {
   const slot = value % 100;
   return {
     major: Math.floor(value / 1_000_000),
@@ -76,18 +73,29 @@ export function parseConfigVersion(value: number): ParsedConfigVersion | null {
     patch: Math.floor(value / 100) % 100,
     rc: slot === RC_STABLE ? null : slot,
   };
+};
+
+const render = ({ major, minor, patch, rc }: ParsedConfigVersion): string =>
+  `${major}.${minor}.${patch}${rc === null ? '' : `-rc.${rc}`}`;
+
+/**
+ * Decodes a config version number, or `null` when it is not one — which includes the small counter
+ * values an API running an older SDK still serves, and any non-integer or out-of-range input.
+ */
+export function parseConfigVersion(value: number): ParsedConfigVersion | null {
+  if (!Number.isInteger(value) || value < MIN_CONFIG_VERSION || value > MAX_CONFIG_VERSION) return null;
+  return unpack(value);
 }
 
 /** Renders a config version number as its version string, or `null` when it is not one. */
 export function formatConfigVersion(value: number): string | null {
   const parsed = parseConfigVersion(value);
-  if (!parsed) return null;
-  const { major, minor, patch, rc } = parsed;
-  return `${major}.${minor}.${patch}${rc === null ? '' : `-rc.${rc}`}`;
+  return parsed === null ? null : render(parsed);
 }
 
 /**
  * This package's version, projected from {@link CONFIG_VERSION} rather than written separately, so the
- * two cannot disagree. `null` only if the constant were hand-edited outside the encoding.
+ * two cannot disagree. Always a version string: `scripts/bump-versions.sh` derives the constant, and
+ * `config-version.test.ts` asserts it against the manifest.
  */
-export const SDK_VERSION = formatConfigVersion(CONFIG_VERSION);
+export const SDK_VERSION: string = render(unpack(CONFIG_VERSION));

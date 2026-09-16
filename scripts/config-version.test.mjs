@@ -11,6 +11,7 @@ import {
   MIN_CONFIG_VERSION,
   compareVersions,
   configVersionDriftErrors,
+  configVersionErrors,
   configVersionFor,
   configVersionForOrThrow,
   decodeConfigVersion,
@@ -149,6 +150,18 @@ test('A3: configVersionForOrThrow rejects out-of-grammar and out-of-domain versi
 test('A3: configVersionFor returns null for the same inputs, never throwing', () => {
   for (const [version] of REJECTED) {
     assert.equal(configVersionFor(version), null, String(version));
+  }
+});
+
+// release.mjs reads these in its version guard, so the messages are the operator's re-prompt.
+test('A3: configVersionErrors reports the same reasons without throwing', () => {
+  for (const [version, message] of REJECTED) {
+    const errors = configVersionErrors(version);
+    assert.equal(errors.length, 1, String(version));
+    assert.match(errors[0], new RegExp(escapeRegExp(message)), String(version));
+  }
+  for (const [version] of [...NORMAL, ...BORDER]) {
+    assert.deepEqual(configVersionErrors(version), [], version);
   }
 });
 

@@ -177,8 +177,27 @@ test('the version guard refuses anything that does not advance, and allows rc to
   );
   assert.ok(versionAdvanceErrors({ version: '2.2.0-rc.1', ...base }).includes('tag @sdks@2.2.0-rc.1 already exists'));
   assert.deepEqual(
-    versionAdvanceErrors({ version: '0.0.1', currentVersion: '0.0.0', tags: [], requireTagAdvance: false }),
+    versionAdvanceErrors({ version: '1.0.1', currentVersion: '1.0.0', tags: [], requireTagAdvance: false }),
     [],
+  );
+});
+
+// Grammatical but unencodable: without this the guard passes and bump-versions.sh fails instead,
+// after release-notes.md is on disk. config-version.test.mjs owns the full message table.
+test('the version guard refuses what the encoding cannot carry', () => {
+  const base = { currentVersion: '2.2.0-rc.1', tags: ['@sdks@2.2.0-rc.1'] };
+  const unencodable = [
+    ['2.100.0', 'minor 100 outside 0..99'],
+    ['2.2.100', 'patch 100 outside 0..99 (bump the minor instead)'],
+    ['2.2.0-rc.99', 'rc 99 outside 0..98 (99 is reserved for stable)'],
+    ['100.0.0', 'major 100 outside 1..99'],
+  ];
+  for (const [version, message] of unencodable) {
+    assert.deepEqual(versionAdvanceErrors({ version, ...base }), [`${version} cannot be encoded: ${message}`], version);
+  }
+  assert.deepEqual(
+    versionAdvanceErrors({ version: '0.0.1', currentVersion: '0.0.0', tags: [], requireTagAdvance: false }),
+    ['0.0.1 cannot be encoded: major 0 outside 1..99'],
   );
 });
 
@@ -438,6 +457,32 @@ test('the prompt re-asks after a rejected version and applies the accepted one',
 
   assert.deepEqual(asked, ['New version: ', 'New version: ', 'New version: ']);
   assert.equal(result.version, '2.2.0');
+});
+
+test('an unencodable version is re-prompted, not left for the bump to reject', async t => {
+  const root = createWorkspace(t);
+  const answers = ['2.100.0', '2.2.0'];
+  const shown = [];
+  const result = await run(root, {
+    prompt: async () => answers.shift(),
+    log: line => shown.push(line),
+  });
+
+  assert.equal(result.version, '2.2.0');
+  assert.ok(shown.some(line => line.includes('2.100.0 cannot be encoded: minor 100 outside 0..99')));
+});
+
+test('an unencodable version passed as an argument is refused before the notes are written', async t => {
+  const root = createWorkspace(t);
+  await assert.rejects(run(root, { version: '2.2.100' }), error => {
+    assert.ok(error instanceof ReleaseError);
+    assert.ok(error.errors.includes('2.2.100 cannot be encoded: patch 100 outside 0..99 (bump the minor instead)'));
+    return true;
+  });
+  assert.throws(() => readFileSync(join(root, 'release-notes.md')), /ENOENT/);
+  for (const directory of ALL_DIRS) {
+    assert.equal(JSON.parse(readFileSync(join(root, 'packages', directory, 'package.json'), 'utf8')).version, '2.1.0');
+  }
 });
 
 test('the prompt gives up after three rejected versions', async t => {
