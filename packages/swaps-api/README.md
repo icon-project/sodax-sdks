@@ -123,10 +123,12 @@ Every method **throws** a `SwapsApiError` on failure — a single typed error wh
 `code` is one of `NETWORK_ERROR` / `TIMEOUT_ERROR` / `HTTP_ERROR` / `PARSE_ERROR` /
 `VALIDATION_ERROR`, with diagnostic `context` (endpoint, method, path, HTTP status,
 validation issues) and the underlying failure on `.cause`. Idempotent calls (reads,
-polls, pure-compute POSTs like `getQuote`) are retried a few times on transient HTTP /
-network failures; a `timeout` and mutating calls are never retried — except the
-apiguard's verification `503` (see "API key" above), which is replay-safe and retried
-for every call.
+polls, pure-compute POSTs like `getQuote`) retry transient HTTP / network failures up to
+3 attempts in total — the first try plus two retries, back to back with no delay; a
+`timeout` and mutating calls are never retried — except the apiguard's verification
+`503` (see "API key" above), which is replay-safe, retried for every call, and the one
+retry that backs off. The budget is per call, so a caller that retries too (a React
+Query hook, say) multiplies against it.
 
 > Note: this throwing contract is intentional and distinct from `@sodax/sdk`'s
 > `sodax.api.swaps`, which wraps these calls and returns `Result<T>` instead of throwing.

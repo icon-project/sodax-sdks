@@ -351,9 +351,18 @@ the same split as `sodax.api.swaps` over `@sodax/swaps-api` — so the wire beha
   `error.context.code`, with `context.status` set for HTTP failures. Discriminate on `context.code`, not
   on the message. `BridgeApiError` and `BridgeApiErrorCode` are re-exported from `@sodax/sdk`.
 - **Retries.** Idempotent calls — reads, `getSubmitTxStatus` polls, and pure-compute POSTs like `getFee` —
-  replay transient failures (network errors and 408/429/5xx). Mutations (`approve`, `createBridgeIntent`,
-  `submitTx`) never retry, except on the API-key guard's transient verification `503`: that one is
-  rejected before the route handler runs, so replaying it cannot double-apply anything.
+  replay transient failures (network errors and 408/429/5xx), up to **3 attempts** (the first try plus two
+  retries) issued back to back with no delay. Mutations (`approve`, `createBridgeIntent`, `submitTx`) never
+  retry, except on the API-key guard's transient verification `503`: that one is rejected before the route
+  handler runs, so replaying it cannot double-apply anything, and it is the one case that backs off.
+  A `timeout` bounds the whole call, retries included, and is never replayed.
+- **Budgets multiply.** This wire budget is *per call*, so a caller that also retries multiplies against it.
+  The `@sodax/dapp-kit` backend hooks default to three React Query retries, which is four executions of a
+  query — against three wire attempts each, a persistently failing idempotent endpoint can cost up to 12
+  requests before the error surfaces. A terminal API-key rejection (401/403) is never replayed at the wire
+  level, and the `swapsApi` hooks stop retrying it at the query level too (`retryUnlessAuthFailure`); the
+  `bridgeApi` hooks still spend their full `retry: 3`. Lower either with `queryOptions.retry` (or
+  `mutationOptions.retry`) when you want a tighter ceiling.
 
 ## Leverage Yield Endpoints
 

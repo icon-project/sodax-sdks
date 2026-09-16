@@ -88,9 +88,12 @@ Every method **throws** a `BridgeApiError` on failure — a single typed error w
 `code` is one of `NETWORK_ERROR` / `TIMEOUT_ERROR` / `HTTP_ERROR` / `PARSE_ERROR` /
 `VALIDATION_ERROR`, with diagnostic `context` (endpoint, method, path, HTTP status,
 validation issues) and the underlying failure on `.cause`. Idempotent calls (reads,
-polls, pure-compute POSTs like `getFee`) are retried a few times on transient HTTP /
-network failures; mutations are not, with one exception — the apiguard `503` above, which is
-replay-safe. A `timeout` is never retried: it bounds the whole call, retries included.
+polls, pure-compute POSTs like `getFee`) retry transient HTTP / network failures up to
+3 attempts in total — the first try plus two retries, back to back with no delay;
+mutations are not, with one exception — the apiguard `503` above, which is replay-safe
+and the one retry that backs off. A `timeout` is never retried: it bounds the whole
+call, retries included. The budget is per call, so a caller that retries too (a React
+Query hook, say) multiplies against it.
 
 > Note: this throwing contract is intentional and distinct from `@sodax/sdk`'s
 > `sodax.api.bridge`, which wraps these calls and returns `Result<T>` instead of throwing.
