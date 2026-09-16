@@ -1,9 +1,10 @@
 import type { ChainKey, XToken } from '@sodax/dapp-kit';
 import { formatUnits } from 'viem';
+import type { Execution } from '../hooks/useExecution';
 import type { SwapFlow } from '../hooks/useSwapFlow';
 import { chainName } from '../lib/chains';
 import { formatTokenAmount } from '../lib/format';
-import { STATUS_LABELS, failureMessage, progressLabel } from '../lib/progress';
+import { STATUS_LABELS, failureMessage, progressLabel, refundAccounted } from '../lib/progress';
 import { AssetLogo } from './AssetLogo';
 import { Chevron } from './Dropdown';
 import { Modal } from './Modal';
@@ -97,6 +98,16 @@ function Leg({
   );
 }
 
+/** One slot, one line: the failure first, then whatever makes tracking less than it looks. */
+function reviewMessage(e: Execution): string | undefined {
+  if (e.failed) return failureMessage(e.status);
+  if (e.error) return e.error;
+  if (!e.activity) return undefined;
+  if (e.statusError) return 'Tracking is temporarily unavailable. Your transaction may still be processing.';
+  if (!e.storageAvailable) return 'This browser blocked saving progress. Keep this page open until the swap settles.';
+  return undefined;
+}
+
 function ConfirmAction({ flow, token, chain }: { flow: SwapFlow; token: XToken; chain: ChainKey }) {
   const e = flow.execution;
 
@@ -146,7 +157,7 @@ function ConfirmAction({ flow, token, chain }: { flow: SwapFlow; token: XToken; 
 export function SwapReview({ flow }: { flow: SwapFlow }) {
   const e = flow.execution;
   const review = e.review;
-  const problem = e.failed ? failureMessage(e.status) : e.error;
+  const problem = reviewMessage(e);
 
   return (
     <Modal title="Confirm swap" open={!!review} onClose={e.closeReview} busy={!!e.phase} bare>
@@ -183,6 +194,13 @@ export function SwapReview({ flow }: { flow: SwapFlow }) {
             <span className="address-text">{review.intent.dstAddress}</span>
           </p>
           <ConfirmAction flow={flow} token={review.dstToken} chain={review.dstChain} />
+          {/* Offered only while the funds are unaccounted for: beside "your funds are back" it
+              invents a problem, and a partner's frame sends their customer on as rarely as it can. */}
+          {e.failed && !refundAccounted(e.status) && (
+            <a className="link review-support" href="https://support.sodax.com" target="_blank" rel="noreferrer">
+              SODAX support ↗
+            </a>
+          )}
           {!e.activity && (
             <details className="review-fees">
               <summary>

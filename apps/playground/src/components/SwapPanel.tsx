@@ -24,7 +24,13 @@ function PrimaryAction({ flow }: { flow: SwapFlow }) {
       {text}
     </button>
   );
-  if (e.activity) return disabled(e.terminal ? 'See your latest swap below' : 'Swap in progress');
+  // A dismissed swap has nowhere else to be: this reopens the dialog holding it.
+  if (e.activity)
+    return (
+      <button type="button" className="btn btn-primary" onClick={e.resumeReview}>
+        {e.terminal ? 'See your swap' : 'Track your swap'}
+      </button>
+    );
   if (!flow.srcToken || !flow.dstToken) return disabled('Choose assets');
   if (!flow.isAmountValid) return disabled('Enter an amount');
   if (!flow.isSlippageValid) return disabled('Check slippage');

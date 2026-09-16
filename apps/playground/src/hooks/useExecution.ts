@@ -315,13 +315,23 @@ export function useExecution(input: ExecutionInput) {
 
   // Closable from the moment the deposit is broadcast, never during a step the widget is driving:
   // tracking can stall for reasons neither end controls, and a dialog nobody can dismiss is worse
-  // than one left early. A settled swap leaves with its dialog; any other keeps its record and stays
-  // dismissed, so the card below carries it rather than the dialog reopening on top.
+  // than one left early. A finished swap leaves with its record; one still running keeps it and
+  // stays dismissed until the form's action asks for it back.
   const closeReview = () => {
     if (busyRef.current) return;
-    if (solved) clearActivity();
+    if (terminal) clearActivity();
     else if (activity) dismissedRef.current = true;
     setReview(undefined);
+  };
+
+  // The dialog is the only place a swap lives, so the way back into it is also the way out of a
+  // record nothing can render: assets the list no longer resolves leave a finished swap unopenable.
+  const resumeReview = () => {
+    if (!activity || review) return;
+    dismissedRef.current = false;
+    const restored = reviewFromActivity(activity, input.choices, speedTier);
+    if (restored) setReview(restored);
+    else if (terminal) clearActivity();
   };
 
   const retrySubmission = async () => {
@@ -367,6 +377,7 @@ export function useExecution(input: ExecutionInput) {
     openReview,
     confirm,
     closeReview,
+    resumeReview,
     phase,
     error,
     activity,

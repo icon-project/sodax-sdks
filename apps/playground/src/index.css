@@ -442,8 +442,7 @@ code,
 }
 .preview-toolbar,
 .wallet-row,
-.integration-actions,
-.activity-links {
+.integration-actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -488,8 +487,7 @@ code,
   gap: 16px;
 }
 .integration-card h3,
-.behavior-card h3,
-.activity-card h3 {
+.behavior-card h3 {
   color: var(--text-heading);
   margin: 10px 0;
 }
@@ -707,6 +705,10 @@ code,
   gap: 2px;
   text-align: center;
 }
+.review-support {
+  align-self: center;
+  font-size: var(--text-body-small);
+}
 .review-fees > summary {
   display: flex;
   align-items: center;
@@ -745,18 +747,6 @@ code,
   .spinner {
     animation: none;
   }
-}
-.activity-card {
-  margin-top: 12px;
-}
-/* A relay's own words, unwrappable by nature. */
-.failure-reason {
-  overflow-wrap: anywhere;
-}
-.activity-links {
-  justify-content: flex-start;
-  margin: 16px 0 0;
-  font-size: 13px;
 }
 .hero-note a {
   color: var(--text-on-hero);

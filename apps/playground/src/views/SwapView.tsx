@@ -5,7 +5,6 @@ import { CopyLabel } from '../components/CopyLabel';
 import { SetupPanel } from '../components/SetupPanel';
 import { WidgetPreview } from '../components/WidgetPreview';
 import { SwapPanel } from '../components/SwapPanel';
-import { SwapActivity } from '../components/SwapActivity';
 import { embedOrigin } from '../config';
 import type { BrandControls } from '../hooks/useBrand';
 import { useContentHeight } from '../hooks/useContentHeight';
@@ -21,7 +20,6 @@ export function SwapWidget({ flow }: { flow: SwapFlow }) {
         <h2>Swap</h2>
       </header>
       <SwapPanel flow={flow} />
-      <SwapActivity execution={flow.execution} />
     </div>
   );
 }

@@ -24,7 +24,7 @@ pnpm check:ai-dev-files
 - `lib/execution.ts`: testable execution sequencing and validated wallet-family dispatch.
 - `lib/destinationGate.ts`: Stellar/NEAR receiving-account prerequisites reduced to one UI state.
 - `lib/activity.ts`: validated local recovery record and reconstruction of relay submissions.
-- `lib/progress.ts`: one wording per lifecycle step, shared by the confirm dialog and the activity card.
+- `lib/progress.ts`: one wording per lifecycle step, worn by the confirm dialog's single action.
 - `lib/review.ts`: the frozen snapshot the confirm dialog renders, built from the form or from a
   restored record.
 - `lib/analytics.ts`: GA4 event vocabulary and the tag policy that keeps partner frames opt-in.
@@ -54,7 +54,7 @@ pnpm check:ai-dev-files
   one expires and refunds itself; `userMessage` says to cancel on-chain to recover, which is the
   limit-order case (`deadline = 0`) and sends a widget user hunting for a button they never need.
   `intentCancelled` and `relayedForRefundAt` say the refund has landed or is moving. Which step gave
-  out (`failedAtStep`, `failureReason`) is support's detail, kept to the activity disclosure.
+  out (`failedAtStep`, `failureReason`) is support's detail and the widget does not show it.
 - Treat local storage as untrusted and optional. Do not store credentials or private keys. The
   activity record contains public transaction details; do not send those through analytics.
 - Integrator fees come from deployment configuration, not the URL or a visitor-editable input.
@@ -96,12 +96,16 @@ pnpm check:ai-dev-files
   and the connected balance share the line beneath it, and the flip disc centres on the seam between
   the two panels. Wallet chips name their side and sit above the form, never between the legs.
 - The confirm dialog is the exchange's too: both legs either side of the wait, one action carrying
-  every step from the wallet prompt to settlement, and the fee lines behind a disclosure. It is where
-  a swap lives, so it stays open through settlement and a restored record reopens it — the activity
-  card is what remains after someone dismisses it, not a second home for the same swap. Closing a
-  completed one clears its record; any other keeps it, and stays dismissed for the session. It is
-  closable from the moment the deposit is broadcast, because tracking can stall for reasons neither
-  end controls. The exchange's follow-us line is the exchange's; a partner's users never see it.
+  every step from the wallet prompt to settlement, and the fee lines behind a disclosure. It is the
+  only place a swap lives — there is no activity card, and nothing below the form restates a swap,
+  lists its transactions or names the step that failed. It stays open through settlement, a restored
+  record reopens it, and the form's primary action asks a dismissed one back. Closing a finished swap,
+  settled or failed, clears its record and frees the form; one still running keeps its record and
+  stays dismissed until asked for. It is closable from the moment the deposit is broadcast, because
+  tracking can stall for reasons neither end controls. What the card used to carry alone lives in the
+  dialog now: stalled tracking and blocked storage take the message slot when there is no failure to
+  report, and support is offered only on a failure whose funds are still unaccounted for. The
+  exchange's follow-us line is the exchange's; a partner's users never see it.
 - The dialog renders a snapshot taken when it opened, never the live form: the form re-quotes behind
   it and a reload reseeds it from the URL, and neither may restate a swap that is already signed. A
   restored snapshot resolves its decimals and symbols from the live asset list rather than from the
