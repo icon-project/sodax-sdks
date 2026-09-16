@@ -69,11 +69,15 @@ The builder has three panels: **Setup**, **Appearance**, and **Integrate**.
 - Appearance updates the preview without reloading it or restyling the builder. The color controls
   show resolved theme colors and accept hex entry; font, radius, density and secondary colors sit
   under Advanced appearance. Derived text and CTA labels are checked for contrast.
-- Integrate provides HTML, a React iframe wrapper, and a separate SDK quote example. The React
-  wrapper owns no wallet provider and supports an optional `onSwapStatus` callback. Its info tooltip
-  uses the frontend bubble style above the icon, with viewport positioning outside the scrolling panel.
+- Integrate provides HTML, a React iframe wrapper, an Agent prompt, and a separate SDK quote example.
+  The React wrapper owns no wallet provider and supports an optional `onSwapStatus` callback. The
+  Agent tab is the configured embed written as a prompt for a coding agent, stating what the markup
+  cannot: the query string is the configuration, `allow` is load-bearing, there is no `@sodax/*`
+  package to install, and the widget moves real funds. Its info tooltip uses the frontend bubble
+  style above the icon, with viewport positioning outside the scrolling panel.
 - Share copies a configuration URL. Reset all restores the default trade, restrictions, and theme.
-  Action confirmations appear in reserved space below the header buttons so the configuration tabs stay put.
+  A copy confirms itself on the button that was pressed, so nothing resizes and the configuration
+  tabs stay put; the line below the buttons carries only the paths that need an instruction.
   Setup and Appearance pause while a wallet dialog, review, preparation or activity is active in
   the preview, so an edit cannot replace an in-progress swap.
 - The compact swap form shows minimum received, estimated time, and applicable partner fees before
@@ -162,6 +166,12 @@ the names. Keep the attribute when moving the iframe into your own markup.
 Unknown chain names are discarded. Restrictions control this UI, not access to the public API.
 A configured restriction with no currently listed assets cannot execute a swap. Fee settings are
 never taken from URL parameters.
+
+A `surface` with no `theme` decides the theme itself, and both themes derive from it. Every link
+this builder writes spells out that implied `theme` as well, because the pre-paint script in
+`index.html` reads the URL without doing colour maths. Keep both parameters when hand-writing an
+embed URL: with only `surface`, the first paint uses the visitor's stored or system theme and flips
+to the surface's own once the widget mounts.
 
 ### Host messages
 

@@ -19,10 +19,8 @@
     />
     <title>SODAX Swap Widget</title>
     <script>
-      // Resolve the theme before first paint so an embed never flashes the wrong one. Owns the
-      // initial value; src/hooks/useBrand.ts reads it back and takes over from there. Mirrors
-      // resolveTheme() there, which is why writeBrand() spells out the theme a surface implies:
-      // this runs before any stylesheet and does no colour maths of its own.
+      // Resolves the theme before first paint so an embed never flashes the wrong one; then
+      // src/hooks/useBrand.ts takes over. Mirrors resolveTheme() there, minus its colour maths.
       try {
         var params = new URLSearchParams(location.search);
         var pinned = params.get('theme');

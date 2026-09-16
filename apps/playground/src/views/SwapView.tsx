@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { BrandBar } from '../components/BrandBar';
 import { CodePanel } from '../components/CodePanel';
 import { CopyLabel } from '../components/CopyLabel';
@@ -36,7 +36,11 @@ export function SwapView({ flow, brandControls }: { flow: SwapFlow; brandControl
   const [notice, setNotice] = useState('');
   const [shareFallback, setShareFallback] = useState('');
   const [previewBusy, setPreviewBusy] = useState(false);
+  const confirmTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const { srcChain, dstChain, srcToken, dstToken, amount, slippagePercent, partnerFee, brand, widget } = flow;
+
+  useEffect(() => () => clearTimeout(confirmTimer.current), []);
+
   const configured = useMemo(() => {
     if (!srcChain || !dstChain || !srcToken || !dstToken || !flow.isAmountValid || !flow.isSlippageValid)
       return undefined;
@@ -62,9 +66,11 @@ export function SwapView({ flow, brandControls }: { flow: SwapFlow; brandControl
     flow.isSlippageValid,
   ]);
 
+  // Clearing the pending timer first: without it the earlier button's timer ends this confirmation.
   const confirm = (button: 'share' | 'embed') => {
+    clearTimeout(confirmTimer.current);
     setCopied(button);
-    window.setTimeout(() => setCopied(undefined), 1500);
+    confirmTimer.current = setTimeout(() => setCopied(undefined), 1500);
   };
 
   const share = async () => {

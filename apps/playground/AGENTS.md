@@ -89,7 +89,8 @@ pnpm check:ai-dev-files
   blocked while its preview has a wallet dialog, review, preparation or activity.
 - Preserve the SODAX B2B palette and semantic CSS roles. Brand overrides validate values and derive
   contrast. Theme resolves pre-paint in `index.html` and must agree with `useBrand`; that script does
-  no colour maths, which is why `writeBrand` spells out the theme a surface implies. A preset seeds
+  no colour maths, which is why `writeBrand` spells out the theme a surface implies; a hand-written
+  URL carrying only `surface` paints the stored theme until `useBrand` mounts. A preset seeds
   that same state; it must not name a real third-party brand or load a font outside `FONT_STACKS`.
 - A brand states one surface and both themes derive from it: the theme that surface already is renders
   it exactly, the other gets a ground derived from it, so `?theme=` and `sodax:theme` reach a branded

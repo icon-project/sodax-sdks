@@ -66,9 +66,7 @@ describe('buildSnippets', () => {
     expect(react).toContain('referrerPolicy="origin"');
   });
 
-  // An agent reads the prompt and edits the host app unattended, so the constraints it cannot infer
-  // from the markup have to be stated: the query string is the configuration, allow is load-bearing,
-  // there is no package to install, and the thing spends real money.
+  // An agent edits the host app unattended, so the prompt has to state what the markup cannot show.
   describe('the agent prompt', () => {
     it('carries the configured embed and the constraints an agent would otherwise tidy away', () => {
       const prompt = codeFor(base, 'agent');

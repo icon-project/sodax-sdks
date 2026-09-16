@@ -1,5 +1,5 @@
 import { type CSSProperties, type KeyboardEvent, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
-import { TYPEAHEAD_RESET_MS, navigateIndex, typeaheadIndex } from '../lib/dropdown';
+import { navigateIndex, typeaheadIndex, typeaheadText } from '../lib/dropdown';
 
 /** Tallest the panel grows before it scrolls; also what decides whether it opens up or down. */
 const PANEL_MAX = 264;
@@ -137,7 +137,7 @@ export function Dropdown<T extends string>({
 
     if (event.key.length !== 1 || event.metaKey || event.ctrlKey || event.altKey) return;
     const now = Date.now();
-    const text = (now - typed.current.at < TYPEAHEAD_RESET_MS ? typed.current.text : '') + event.key;
+    const text = typeaheadText(typed.current.text, event.key, now - typed.current.at);
     typed.current = { text, at: now };
     const hit = typeaheadIndex(
       options.map(option => option.label),

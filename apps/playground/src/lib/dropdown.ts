@@ -1,6 +1,12 @@
 /** A printable key extends the buffer only while the previous one is still recent. */
 export const TYPEAHEAD_RESET_MS = 600;
 
+/** The buffer a printable key leaves behind; a repeat of the same key stays a one-letter search. */
+export function typeaheadText(previous: string, key: string, elapsed: number): string {
+  if (elapsed >= TYPEAHEAD_RESET_MS || previous === key) return key;
+  return previous + key;
+}
+
 /** The option a navigation key moves to, or undefined when the key does not navigate. */
 export function navigateIndex(key: string, from: number, count: number): number | undefined {
   if (count <= 0) return undefined;

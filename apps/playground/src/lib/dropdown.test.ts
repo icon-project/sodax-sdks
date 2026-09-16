@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { navigateIndex, typeaheadIndex } from './dropdown';
+import { TYPEAHEAD_RESET_MS, navigateIndex, typeaheadIndex, typeaheadText } from './dropdown';
 
 describe('navigateIndex', () => {
   it('steps within bounds without wrapping', () => {
@@ -23,6 +23,19 @@ describe('navigateIndex', () => {
     expect(navigateIndex('a', 0, 3)).toBeUndefined();
     expect(navigateIndex('Enter', 0, 3)).toBeUndefined();
     expect(navigateIndex('ArrowDown', 0, 0)).toBeUndefined();
+  });
+});
+
+describe('typeaheadText', () => {
+  it('grows while the previous key is recent and restarts once it is stale', () => {
+    expect(typeaheadText('s', 'o', 100)).toBe('so');
+    expect(typeaheadText('so', 'l', 100)).toBe('sol');
+    expect(typeaheadText('sol', 'a', TYPEAHEAD_RESET_MS)).toBe('a');
+  });
+
+  it('keeps a repeated key a one-letter search so it cycles instead of matching nothing', () => {
+    expect(typeaheadText('s', 's', 100)).toBe('s');
+    expect(typeaheadText('', 's', 100)).toBe('s');
   });
 });
 
