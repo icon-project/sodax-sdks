@@ -17,6 +17,7 @@ export type AssetPanelProps = {
   /** Omitted on a receive leg, which shows a derived amount rather than taking one. */
   onAmountChange?: (value: string) => void;
   note?: ReactNode;
+  locked?: boolean;
 };
 
 /**
@@ -33,6 +34,7 @@ export function AssetPanel({
   amountLabel,
   onAmountChange,
   note,
+  locked,
 }: AssetPanelProps) {
   const [isOpen, setOpen] = useState(false);
 
@@ -43,16 +45,19 @@ export function AssetPanel({
           type="button"
           className="asset-id"
           onClick={() => setOpen(true)}
-          aria-haspopup="dialog"
+          disabled={locked}
+          aria-haspopup={locked ? undefined : 'dialog'}
           aria-label={pickerLabel}
         >
           <AssetLogo symbol={symbol ?? '?'} chain={chain} />
           <span className="asset-id-text">
             <span className="asset-symbol">
               {symbol ?? emptyLabel}
-              <svg className="asset-chevron" viewBox="0 0 16 16" aria-hidden="true">
-                <path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
+              {!locked && (
+                <svg className="asset-chevron" viewBox="0 0 16 16" aria-hidden="true">
+                  <path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                </svg>
+              )}
             </span>
             <span className="asset-chain">{chainName(chain)}</span>
           </span>
@@ -82,18 +87,19 @@ export function AssetPanel({
         </span>
       </div>
 
-      {picker({ open: isOpen, onClose: () => setOpen(false) })}
+      {!locked && picker({ open: isOpen, onClose: () => setOpen(false) })}
     </div>
   );
 }
 
-export function FlipButton({ onClick }: { onClick: () => void }) {
+export function FlipButton({ onClick, disabled = false }: { onClick: () => void; disabled?: boolean }) {
   return (
     <div className="flip">
       <button
         type="button"
         className="btn btn-icon flip-btn"
         onClick={onClick}
+        disabled={disabled}
         aria-label="Reverse direction"
         title="Reverse direction"
       >

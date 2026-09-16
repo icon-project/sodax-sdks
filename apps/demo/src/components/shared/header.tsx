@@ -36,6 +36,7 @@ const navEntries: NavEntry[] = [
     items: [
       { to: ROUTES.LEVERAGE_YIELD, label: 'Leverage Yield (SDK)' },
       { to: ROUTES.LEVERAGE_YIELD_API, label: 'Leverage Yield (API)' },
+      { to: ROUTES.LEVERAGE_POSITIONS, label: 'Leverage Positions' },
     ],
   },
   { to: ROUTES.ORACLE, label: 'Oracle' },

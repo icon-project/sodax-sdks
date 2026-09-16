@@ -1,6 +1,7 @@
 import { CHAIN_KEYS, Sodax, getSupportedSolverTokens } from '@sodax/dapp-kit';
 import { describe, expect, it } from 'vitest';
-import { chainKeyExpression, chainName, isChainKey } from './chains';
+import { chainKeyExpression, chainName, executableFamilies, isChainKey } from './chains';
+import { EXECUTABLE_CHAIN_TYPES } from './execution';
 
 // A chain key reaches this app from the swaps API and from the URL, and both are strings. Anything
 // that gets past this predicate is indexed straight into `baseChainInfo` for a name and a logo.
@@ -29,6 +30,19 @@ describe('chainName', () => {
     for (const key of CHAIN_KEYS) {
       expect(chainName(key)).toBeTruthy();
     }
+  });
+});
+
+// The Behavior panel once hardcoded "EVM, Solana and Sui" and kept saying it after four more
+// families shipped. The sentence now reads off the executable list, so it cannot lag it again.
+describe('executableFamilies', () => {
+  it('names every family the widget signs for, and none it does not', () => {
+    const sentence = executableFamilies();
+    for (const type of EXECUTABLE_CHAIN_TYPES) {
+      expect(sentence).toMatch(new RegExp(type, 'i'));
+    }
+    expect(sentence).not.toMatch(/bitcoin|icon/i);
+    expect(sentence).toMatch(/, and \w+$/);
   });
 });
 

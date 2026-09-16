@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { trackSnippetCopied } from '../lib/analytics';
 import type { Snippet } from '../lib/snippet';
 
-const SNIPPET_HINT = 'Updates with the form. Addresses and decimals come from the SODAX swaps API';
+const SNIPPET_HINT = 'Exports the defaults in Setup. Addresses and decimals come from the SODAX swaps API';
 
 /** Renders whichever flow's snippets it is handed — the view decides what those are. */
 export function CodePanel({ snippets, initialId }: { snippets: Snippet[]; initialId: string }) {
@@ -27,10 +27,6 @@ export function CodePanel({ snippets, initialId }: { snippets: Snippet[]; initia
 
   return (
     <section className="card code-card">
-      <p className="code-lead">
-        <strong>Take it with you.</strong> The first tab is this widget on your own page, opened on the pair the form
-        currently shows. The rest is the code behind it.
-      </p>
       <header className="code-header">
         <div className="tabs">
           {snippets.map(snippet => (
@@ -38,7 +34,11 @@ export function CodePanel({ snippets, initialId }: { snippets: Snippet[]; initia
               type="button"
               key={snippet.id}
               className={snippet.id === activeId ? 'tab tab-active' : 'tab'}
-              onClick={() => setActiveId(snippet.id)}
+              onClick={() => {
+                setActiveId(snippet.id);
+                setCopied(false);
+              }}
+              aria-pressed={snippet.id === activeId}
             >
               {snippet.label}
             </button>

@@ -23,7 +23,8 @@
       // initial value; src/hooks/useBrand.ts reads it back and takes over from there. `?theme=`
       // wins because a partner's page has already decided — mirrors resolveTheme() there.
       try {
-        var pinned = new URLSearchParams(location.search).get('theme');
+        var params = new URLSearchParams(location.search);
+        var pinned = params.get('embed') === '1' ? params.get('theme') : 'auto';
         var system = matchMedia('(prefers-color-scheme: dark)').matches;
         var stored = pinned === 'auto' ? null : localStorage.getItem('sodax-playground-theme');
         var dark = pinned === 'dark' || pinned === 'light' ? pinned === 'dark' : stored ? stored === 'dark' : system;

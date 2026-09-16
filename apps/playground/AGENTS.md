@@ -3,7 +3,7 @@
 An embeddable SODAX swap widget and its integration playground. The widget supports wallet-backed
 execution where `src/lib/execution.ts` implements the family; the API's wider asset list remains
 available for quotes with an explicit exchange handoff. The playground provides style controls,
-network restrictions, preview widths, and collapsed integration code.
+network and token restrictions, token locks, an isolated iframe preview, and integration exports.
 
 ## Commands
 
@@ -13,7 +13,7 @@ pnpm --filter @sodax/playground dev
 pnpm --filter @sodax/playground test
 pnpm --filter @sodax/playground checkTs
 pnpm --filter @sodax/playground build
-pnpm exec biome check apps/playground
+pnpm --filter @sodax/playground exec biome check .
 pnpm check:ai-dev-files
 ```
 
@@ -28,9 +28,11 @@ pnpm check:ai-dev-files
 - `lib/widgetSettings.ts`, `lib/urlState.ts`: validated public embed configuration.
 - `lib/brand.ts`, `hooks/useBrand.ts`: theme validation and derived semantic styles.
 - `lib/presets.ts`: named starting brands, declared as query strings and parsed by `readBrand`.
-- `views/SwapView.tsx`: standalone widget plus separate builder controls; code starts collapsed.
+- `views/SwapView.tsx`, `components/SetupPanel.tsx`: compact widget and Setup/Appearance/Integrate builder.
+- `components/WidgetPreview.tsx`: actual iframe preview; Setup owns export defaults, trial trades stay in-frame.
 - `lib/snippet.ts`: HTML and React iframe integration, plus an optional quote example.
-- `hooks/useEmbedSize.ts`: height-only messages to the host; exports check origin and frame identity.
+- `hooks/useEmbedSize.ts`, `hooks/useEmbedMessages.ts`, `lib/embedMessages.ts`: height, lifecycle and theme
+  messages; validate direct parent and origin. Lifecycle payloads contain status only.
 
 ## Execution invariants
 
@@ -63,12 +65,15 @@ pnpm check:ai-dev-files
 ## Embed and UI
 
 - `?embed=1` renders only the widget; URL rewrites preserve embed mode, branding and restrictions.
+- Token allowlists use chain-and-symbol identities; empty explicit lists and unavailable locked defaults
+  permit no route. Flip must respect both sides’ restrictions.
 - Network and token options come from the swaps API; names/logos/explorers come from SDK exports.
   Do not hardcode network inventories or promise exclusivity for assets. The one client-side
   exception is `EXCLUDED_CHAINS` in `lib/assets.ts`: chains the API still lists but the product no
   longer routes. Add there, never filter in the UI.
 - `VITE_EMBED_ORIGIN` selects the stable hosted deployment used by exported snippets. Vite variables
   are public. WalletConnect requires the deployment operator's project ID.
+- The builder does not restore or report execution activity; its iframe owns the swap lifecycle.
 - The hosted iframe owns its wallet session. Do not describe its React wrapper as a native component
   sharing the host wallet. Keep the standalone-opening fallback for wallets unavailable in frames.
 - Analytics in partner frames remains opt-in through `VITE_GTM_IN_EMBED`; no wallet addresses or hashes.
@@ -76,6 +81,8 @@ pnpm check:ai-dev-files
   `input_amount_usd` while nothing here prices the input. Failure reasons stay a closed set.
 - Use native dialogs, keyboard-operable controls, readable errors and responsive layouts. Keep partner
   controls and technical setup in the builder, not inside the user's swap form.
+- Preview appearance changes must not restyle the builder or reload an active swap. Setup edits are
+  blocked while its preview has a wallet dialog, review, preparation or activity.
 - Preserve the SODAX B2B palette and semantic CSS roles. Brand overrides validate values and derive
   contrast. Theme resolves pre-paint in `index.html` and must agree with `useBrand`. A preset seeds
   that same state; it must not name a real third-party brand or load a font outside `FONT_STACKS`.

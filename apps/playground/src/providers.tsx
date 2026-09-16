@@ -1,13 +1,15 @@
-import { SodaxProvider, type SodaxOptions, createSodaxQueryClient } from '@sodax/dapp-kit';
+import { ChainKeys, SodaxProvider, type SodaxOptions, createSodaxQueryClient } from '@sodax/dapp-kit';
 import { QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
-import { swapsApiKey, walletConnectProjectId } from './config';
+import { solanaRpcUrl, swapsApiKey, walletConnectProjectId } from './config';
 import { SodaxWalletProvider, type SodaxWalletConfig } from '@sodax/wallet-sdk-react';
 
 const queryClient = createSodaxQueryClient();
 
-// SodaxProvider freezes its config by reference on first render, so this stays a module constant.
-const sodaxConfig: SodaxOptions = swapsApiKey ? { apiKey: swapsApiKey } : {};
+const sodaxConfig: SodaxOptions = {
+  ...(swapsApiKey ? { apiKey: swapsApiKey } : {}),
+  ...(solanaRpcUrl ? { chains: { [ChainKeys.SOLANA_MAINNET]: { rpcUrl: solanaRpcUrl } } } : {}),
+};
 
 const walletConfig: SodaxWalletConfig = {
   EVM: {
@@ -15,10 +17,12 @@ const walletConfig: SodaxWalletConfig = {
     reconnectOnMount: false,
     ...(walletConnectProjectId ? { walletConnect: { projectId: walletConnectProjectId } } : {}),
   },
-  SOLANA: { autoConnect: false },
+  SOLANA: {
+    autoConnect: false,
+    ...(solanaRpcUrl ? { chains: { [ChainKeys.SOLANA_MAINNET]: { rpcUrl: solanaRpcUrl } } } : {}),
+  },
   SUI: { autoConnect: false },
-  // RPC endpoints stay unset so each provider uses its SDK defaults; a deployment that needs its
-  // own endpoints sets them here. Bitcoin is not mounted — see `EXECUTABLE_CHAIN_TYPES`.
+  // The remaining families use SDK defaults; Bitcoin execution is not mounted.
   STELLAR: {},
   NEAR: {},
   STACKS: {},

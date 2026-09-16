@@ -220,8 +220,11 @@ jobs:
 
       # gitleaks-action needs a paid org license even on public repos; run the binary.
       - name: Install gitleaks
+        id: install-gitleaks
         run: |
-          curl -sSLo gitleaks.tar.gz "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz"
+          # --fail, or curl exits 0 on an HTTP error and the error body becomes gitleaks.tar.gz,
+          # which surfaces as a checksum mismatch rather than as the failed download it is.
+          curl -fsSL --retry 3 --retry-all-errors -o gitleaks.tar.gz "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz"
           echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  gitleaks.tar.gz" | sha256sum -c -
           tar -xzf gitleaks.tar.gz gitleaks
           ./gitleaks version
@@ -231,9 +234,10 @@ jobs:
         run: ./gitleaks dir . --config .gitleaks.toml --redact --no-banner --report-format sarif --report-path gitleaks-results.sarif
 
       # Strict private-key pass — scans docs/dev-skills too; only fake fixtures exempt.
-      # Runs even when the broad pass failed so the artifact carries both reports.
+      # Runs even when the broad pass failed so the artifact carries both reports, but not when
+      # there is no binary to run — that only buries the install failure under an exit 127.
       - name: Run gitleaks (strict private-key)
-        if: always()
+        if: always() && steps.install-gitleaks.outcome == 'success'
         run: ./gitleaks dir . --config .gitleaks-strict.toml --redact --no-banner --report-format sarif --report-path gitleaks-strict-results.sarif
 
       - name: Upload gitleaks results

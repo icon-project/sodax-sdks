@@ -9,6 +9,7 @@ import {
   readBrand,
   readBrandField,
   readColor,
+  resolvedColors,
   writeBrand,
 } from './brand';
 
@@ -206,6 +207,18 @@ describe('brandStyles', () => {
     expect(contrast(light['--text-body'], '#101828')).toBeGreaterThanOrEqual(4.5);
   });
 
+  it.each([
+    '#777777',
+    '#808080',
+    '#ffffff',
+    '#000000',
+  ])('keeps all derived text and the button label readable on %s', surface => {
+    const [roles] = blocks(brandStyles(brand({ surface, cta: surface, text: '#777777' })).css);
+    for (const role of ['--text-heading', '--text-body', '--text-muted', '--text-faint', '--cta-fg']) {
+      expect(contrast(roles[role], surface)).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
   it('accepts a readable text colour as given', () => {
     const [light] = blocks(brandStyles(brand({ surface: '#ffffff', text: '#101828' })).css);
 
@@ -248,5 +261,22 @@ describe('brandStyles', () => {
         expect(value).not.toMatch(/[;{}]/);
       }
     }
+  });
+});
+
+describe('resolved color controls', () => {
+  it('matches the dark widget instead of showing light fallback swatches', () => {
+    expect(resolvedColors(NO_BRAND, 'dark')).toEqual({
+      accent: '#ffd92f',
+      cta: '#ecc100',
+      surface: '#17100f',
+      text: '#ffffff',
+    });
+  });
+  it('shows derived button and corrected text values', () => {
+    const values = resolvedColors(brand({ accent: '#ffd92f', surface: '#ffffff', text: '#eeeeee' }), 'light');
+    expect(values.cta).toBe('#ffd92f');
+    expect(values.text).not.toBe('#eeeeee');
+    expect(contrast(values.text, values.surface)).toBeGreaterThanOrEqual(4.5);
   });
 });

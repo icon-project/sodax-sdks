@@ -39,7 +39,7 @@ export type UrlStateSource = {
 };
 
 const DECIMAL = /^\d{1,30}(\.\d{0,30})?$/;
-const SYMBOL = /^[A-Za-z0-9._-]{1,20}$/;
+const SYMBOL = /^[A-Za-z0-9 ._()-]{1,64}$/;
 const CHAIN_KEY = /^[A-Za-z0-9._-]{1,32}$/;
 
 function matching(pattern: RegExp, value: string | null): string | undefined {
@@ -50,7 +50,11 @@ export function readUrlState(search: string): UrlState {
   const params = new URLSearchParams(search);
 
   return {
-    ...(params.has('allowedSrc') || params.has('allowedDst') ? { widget: readWidgetSettings(params) } : {}),
+    ...(['allowedSrc', 'allowedDst', 'allowedSrcTokens', 'allowedDstTokens', 'lockSrc', 'lockDst'].some(key =>
+      params.has(key),
+    )
+      ? { widget: readWidgetSettings(params) }
+      : {}),
     srcChain: matching(CHAIN_KEY, params.get('srcChain')),
     dstChain: matching(CHAIN_KEY, params.get('dstChain')),
     srcSymbol: matching(SYMBOL, params.get('srcToken')),
@@ -74,6 +78,10 @@ export function toSearch(state: UrlStateSource): string {
   if (state.brand) writeBrand(params, state.brand);
   if (state.widget?.sourceNetworks.length) params.set('allowedSrc', state.widget.sourceNetworks.join(','));
   if (state.widget?.destinationNetworks.length) params.set('allowedDst', state.widget.destinationNetworks.join(','));
+  if (state.widget?.sourceTokens) params.set('allowedSrcTokens', state.widget.sourceTokens.join(','));
+  if (state.widget?.destinationTokens) params.set('allowedDstTokens', state.widget.destinationTokens.join(','));
+  if (state.widget?.lockSource) params.set('lockSrc', '1');
+  if (state.widget?.lockDestination) params.set('lockDst', '1');
   return params.toString();
 }
 

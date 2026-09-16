@@ -1,44 +1,50 @@
 import { useMemo, useState } from 'react';
 import { BrandBar } from '../components/BrandBar';
 import { CodePanel } from '../components/CodePanel';
-import { Lockup } from '../components/Lockup';
+import { SetupPanel } from '../components/SetupPanel';
+import { WidgetPreview } from '../components/WidgetPreview';
 import { SwapPanel } from '../components/SwapPanel';
 import { SwapActivity } from '../components/SwapActivity';
 import { embedOrigin } from '../config';
 import type { BrandControls } from '../hooks/useBrand';
 import type { SwapFlow } from '../hooks/useSwapFlow';
 import { buildSnippets } from '../lib/snippet';
-import { embedUrl } from '../lib/urlState';
-import { chainName } from '../lib/chains';
-import { networkAllowed } from '../lib/widgetSettings';
-import { canExecute } from '../lib/execution';
+import { embedUrl, toSearch } from '../lib/urlState';
 import { trackSnippetCopied } from '../lib/analytics';
 
-/** The widget alone. This is what an `<iframe>` frames, and what the demo page wraps. */
 export function SwapWidget({ flow }: { flow: SwapFlow }) {
   return (
     <div className="flow-column">
-      <Lockup assetCount={flow.assetCount} networkCount={flow.networkCount} />
+      <header className="widget-heading">
+        <h2>Swap</h2>
+        <span className="network-label">Live on mainnet</span>
+      </header>
       <SwapPanel flow={flow} />
       <SwapActivity execution={flow.execution} />
     </div>
   );
 }
 
+const PANELS = { setup: 'Setup', appearance: 'Appearance', integrate: 'Integrate' } as const;
+
 export function SwapView({ flow, brandControls }: { flow: SwapFlow; brandControls: BrandControls }) {
-  const [panel, setPanel] = useState<'style' | 'behavior'>('style');
+  const [panel, setPanel] = useState<keyof typeof PANELS>('setup');
   const [mobile, setMobile] = useState(false);
-  const [codeOpen, setCodeOpen] = useState(false);
-  const [copyMessage, setCopyMessage] = useState('');
+  const [message, setMessage] = useState('');
+  const [shareFallback, setShareFallback] = useState('');
+  const [previewBusy, setPreviewBusy] = useState(false);
   const { srcChain, dstChain, srcToken, dstToken, amount, slippagePercent, partnerFee, brand, widget } = flow;
-
-  const snippets = useMemo(() => {
-    if (!srcChain || !dstChain || !flow.isAmountValid || !flow.isSlippageValid) return undefined;
-
+  const configured = useMemo(() => {
+    if (!srcChain || !dstChain || !srcToken || !dstToken || !flow.isAmountValid || !flow.isSlippageValid)
+      return undefined;
     const state = { srcChain, dstChain, srcToken, dstToken, amount, slippagePercent, partnerFee };
-    const url = embedUrl(embedOrigin, { ...state, slippage: slippagePercent, brand, widget });
-
-    return buildSnippets(state, url);
+    const settings = { ...state, slippage: slippagePercent, widget };
+    const url = embedUrl(embedOrigin, { ...settings, brand });
+    return {
+      snippets: buildSnippets(state, url),
+      preview: embedUrl(window.location.origin, settings),
+      share: `${window.location.origin}${window.location.pathname}?${toSearch({ ...settings, brand })}`,
+    };
   }, [
     srcChain,
     dstChain,
@@ -53,140 +59,186 @@ export function SwapView({ flow, brandControls }: { flow: SwapFlow; brandControl
     flow.isSlippageValid,
   ]);
 
-  const copyEmbed = async () => {
-    const snippet = snippets?.find(item => item.id === 'embed');
+  const share = async () => {
+    if (!configured) return;
+    try {
+      await navigator.clipboard.writeText(configured.share);
+      setShareFallback('');
+      setMessage('Configuration link copied');
+    } catch {
+      setShareFallback(configured.share);
+      setMessage('Select and copy your configuration link below.');
+    }
+  };
+  const copy = async () => {
+    const snippet = configured?.snippets.find(item => item.id === 'embed');
     if (!snippet) return;
     try {
       await navigator.clipboard.writeText(snippet.code);
       trackSnippetCopied('embed');
-      setCopyMessage('Embed copied');
+      setMessage('HTML embed copied');
     } catch {
-      setCopyMessage('Select and copy the code below.');
-      setCodeOpen(true);
+      setPanel('integrate');
+      setMessage('Select and copy the code in Integrate.');
     }
   };
 
   return (
     <>
       <div className="studio-heading">
-        <p className="eyebrow">SODAX WIDGET</p>
-        <h2>
-          Your app. <em>Connected.</em>
-        </h2>
-        <p className="muted">Try a swap, make it yours, and take it with you.</p>
+        <div>
+          <h2>Build your swap widget.</h2>
+          <p className="muted">Set the trade, make it yours, and embed it in your app.</p>
+        </div>
+        <div className="studio-actions">
+          <button
+            type="button"
+            className="btn"
+            disabled={previewBusy}
+            onClick={() => {
+              flow.resetDefaults();
+              brandControls.reset();
+              setMessage('Configuration reset');
+              setShareFallback('');
+            }}
+          >
+            Reset all
+          </button>
+          <button type="button" className="btn" disabled={!configured} onClick={share}>
+            Share
+          </button>
+          <button type="button" className="btn btn-primary" disabled={!configured} onClick={copy}>
+            Copy embed
+          </button>
+        </div>
+        <p className="studio-status small" role="status" hidden={!message}>
+          {message}
+        </p>
+        {shareFallback && (
+          <input
+            className="input share-link"
+            aria-label="Configuration link"
+            readOnly
+            value={shareFallback}
+            onFocus={event => event.target.select()}
+          />
+        )}
+      </div>
+      <div className="build-column">
+        <fieldset className="segmented builder-tabs" aria-label="Widget configuration">
+          {Object.entries(PANELS).map(([key, label]) => (
+            <button
+              type="button"
+              className="btn"
+              key={key}
+              aria-pressed={panel === key}
+              onClick={() => {
+                if (key === 'setup' || key === 'appearance' || key === 'integrate') setPanel(key);
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </fieldset>
+        <fieldset className="builder-controls" disabled={previewBusy && panel !== 'integrate'}>
+          {panel === 'setup' && <SetupPanel flow={flow} />}
+          {panel === 'appearance' && <BrandBar controls={brandControls} />}
+          {panel === 'integrate' && (
+            <section className="card integration-card">
+              <h3>Add it to your app</h3>
+              <p className="muted small">
+                Choose HTML or React below. Both embed the hosted widget, with its own wallet connection. No SODAX
+                package installation needed.
+              </p>
+              {configured ? (
+                <CodePanel snippets={configured.snippets} initialId="embed" />
+              ) : (
+                <p className="alert">Choose available assets and valid amounts in Setup to generate code.</p>
+              )}
+              <details className="disclosure">
+                <summary>Partner fees</summary>
+                <p className="muted small">
+                  {partnerFee
+                    ? `This deployment charges a ${partnerFee.percentage / 100}% partner fee, included in every quote.`
+                    : 'This deployment has no partner fee.'}{' '}
+                  Fees belong to the deployment. To earn fees, the operator must configure your recipient and rate on a
+                  dedicated deployment.
+                </p>
+                <a
+                  className="link"
+                  href="https://docs.sodax.com/developers/how-to/monetize_sdk#swaps-api-monetization"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Partner fee guide ↗
+                </a>
+              </details>
+              <details className="disclosure">
+                <summary>Wallet connection &amp; compatibility</summary>
+                <p className="muted small">
+                  The React export is an iframe wrapper and does not reuse your app’s wallet. WalletConnect needs a
+                  project ID on the widget deployment. If a wallet is unavailable inside the frame, users can open the
+                  widget in a new tab.
+                </p>
+              </details>
+              <details className="disclosure">
+                <summary>Lifecycle events &amp; theme</summary>
+                <p className="muted small">
+                  Listen for sodax:ready and sodax:swap messages (started, submitted, completed, failed). Check both the
+                  widget’s origin and frame identity. Events contain status only, with no wallet addresses or
+                  transaction hashes.
+                </p>
+                <p className="muted small">
+                  Send sodax:theme with theme set to light, dark or auto to follow your app’s appearance. These messages
+                  never request a signature.
+                </p>
+              </details>
+            </section>
+          )}
+        </fieldset>
+        {previewBusy && (
+          <p className="muted small" role="status">
+            Finish or close the current wallet or swap flow before changing the configuration.
+          </p>
+        )}
       </div>
       <div className="preview-column">
         <div className="preview-toolbar">
           <span className="eyebrow">Live preview</span>
           <fieldset className="segmented" aria-label="Preview width">
             <button type="button" className="btn" aria-pressed={!mobile} onClick={() => setMobile(false)}>
-              Desktop
+              Desktop · 480
             </button>
             <button type="button" className="btn" aria-pressed={mobile} onClick={() => setMobile(true)}>
-              Mobile
+              Mobile · 375
             </button>
           </fieldset>
         </div>
-        <div className={`widget-preview${mobile ? ' preview-mobile' : ''}`}>
-          <SwapWidget flow={flow} />
-        </div>
-      </div>
-      <div className="build-column">
-        <fieldset className="segmented builder-tabs" aria-label="Widget configuration">
-          <button type="button" className="btn" aria-pressed={panel === 'style'} onClick={() => setPanel('style')}>
-            Style
-          </button>
-          <button
-            type="button"
-            className="btn"
-            aria-pressed={panel === 'behavior'}
-            onClick={() => setPanel('behavior')}
-          >
-            Behavior
-          </button>
-        </fieldset>
-        {panel === 'style' ? (
-          <BrandBar controls={brandControls} />
-        ) : (
-          <section className="card behavior-card">
-            <h3>Networks &amp; defaults</h3>
-            <p className="muted small">
-              Choose which networks your users can select. Set the starting assets and amount in the preview.
+        <div className="preview-canvas">
+          {configured ? (
+            <WidgetPreview
+              key={configured.preview}
+              setupUrl={configured.preview}
+              brand={brand}
+              mobile={mobile}
+              onBusy={setPreviewBusy}
+            />
+          ) : (
+            <p className="muted">
+              {flow.assetsError ??
+                (flow.isLoadingAssets ? 'Loading available assets…' : 'Complete Setup to preview your widget.')}
             </p>
-            {(['sourceNetworks', 'destinationNetworks'] as const).map(key => (
-              <fieldset className="network-settings" key={key}>
-                <legend>{key === 'sourceNetworks' ? 'Send from' : 'Receive on'}</legend>
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={() => flow.setWidget(current => ({ ...current, [key]: [] }))}
-                >
-                  All networks
-                </button>
-                <div className="network-checks">
-                  {flow.chains.map(chain => (
-                    <label key={chain}>
-                      <input
-                        type="checkbox"
-                        checked={networkAllowed(chain, widget[key])}
-                        onChange={event => {
-                          const checked = event.target.checked;
-                          flow.setWidget(current => {
-                            const active = current[key].length ? current[key] : flow.chains;
-                            const next = checked ? [...active, chain] : active.filter(value => value !== chain);
-                            return next.length ? { ...current, [key]: [...new Set(next)] } : current;
-                          });
-                        }}
-                      />
-                      <span>{chainName(chain)}</span>
-                      {!canExecute(chain) && <span className="muted small">Quote only</span>}
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
-            ))}
-            <p className="muted small">
-              In-widget execution: EVM, Solana and Sui. Other networks open the SODAX exchange.
-            </p>
-          </section>
-        )}
-        <section className="card integration-card">
-          <p className="eyebrow">READY TO EMBED</p>
-          <h3>Bring swaps to your app</h3>
-          <p className="muted small">
-            Copy the widget with your style, networks and default trade. No package installation needed.
-          </p>
-          <div className="integration-actions">
-            <button type="button" className="btn btn-primary" disabled={!snippets} onClick={copyEmbed}>
-              Copy embed
+          )}
+          {flow.assetsError && (
+            <button className="btn" type="button" onClick={flow.retryAssets}>
+              Retry loading assets
             </button>
-            <button type="button" className="btn" aria-expanded={codeOpen} onClick={() => setCodeOpen(!codeOpen)}>
-              {codeOpen ? 'Hide code' : 'View code'}
-            </button>
-          </div>
-          <p className="small" role="status">
-            {copyMessage}
-          </p>
-          <details className="disclosure">
-            <summary>Partner fees &amp; wallet setup</summary>
-            <p className="muted small">
-              {partnerFee
-                ? `This deployment charges a ${partnerFee.percentage / 100}% partner fee, included in every quote.`
-                : 'This deployment has no partner fee.'}{' '}
-              Partner fees are configured by the widget operator, not by visitors.
-            </p>
-            <p className="muted small">
-              The hosted widget uses its own wallet connection. WalletConnect requires a project ID on the deployment.
-              Injected wallet availability inside an iframe varies by wallet.
-            </p>
-          </details>
-        </section>
-      </div>
-      {codeOpen && snippets && (
-        <div className="studio-code">
-          <CodePanel snippets={snippets} initialId="embed" />
+          )}
         </div>
-      )}
+        <p className="preview-caption muted small">
+          Try the widget here. Your exported starting trade is set in Setup.
+        </p>
+      </div>
     </>
   );
 }
