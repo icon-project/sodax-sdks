@@ -149,6 +149,21 @@ hr, #sidebar, #navbar { border-color: var(--sodax-border); }
   padding-right: 0.75rem;
 }
 
+/* Mintlify renders every page of a group flush, so a nested page reads as a
+   sibling of its parent. Re-indent by path depth, over its inline padding. */
+#sidebar li[id^="/developers/packages/foundation/"] > a,
+#sidebar li[id^="/developers/packages/connection/"] > a,
+#sidebar li[id^="/developers/packages/experience/"] > a {
+  padding-left: 1.75rem !important;
+}
+/* Matched through the parent list: a collapsed group renders no child <ul>. */
+#sidebar ul:has(> li[id="/developers/packages/foundation"]) > li[data-group-tag] > button {
+  padding-left: 2.5rem !important;
+}
+#sidebar li[id^="/developers/packages/foundation/sdk/"] > a {
+  padding-left: 3.25rem !important;
+}
+
 /* ---- Homepage proof line ------------------------------------------ */
 .sodax-stat-line {
   margin: 0 0 1.25rem;
