@@ -32,22 +32,25 @@ export function tokenAt(choices: readonly TokenChoice[], chain: ChainKey, addres
  * The dialog a reload lost, rebuilt from the stored record. Amounts and addresses come from the
  * intent that was signed; decimals and symbols are resolved against the live asset list instead of
  * being trusted from storage, so an edited record cannot restate what was sent.
+ *
+ * The tokens resolve from the record's own spoke-side addresses, never the intent's: that struct is
+ * the hub's, and its `inputToken` / `outputToken` name Sonic assets no spoke chain carries.
  */
 export function reviewFromActivity(
   activity: Activity,
   choices: readonly TokenChoice[],
   estimate: (from: XToken, to: XToken) => number | undefined,
 ): ReviewSnapshot | undefined {
-  const srcToken = tokenAt(choices, activity.srcChainKey, activity.intent.inputToken);
-  const dstToken = tokenAt(choices, activity.dstChainKey, activity.intent.outputToken);
+  const srcToken = tokenAt(choices, activity.srcChainKey, activity.srcTokenAddress);
+  const dstToken = tokenAt(choices, activity.dstChainKey, activity.dstTokenAddress);
   if (!srcToken || !dstToken) return undefined;
 
   return {
     intent: {
       srcChainKey: activity.srcChainKey,
       dstChainKey: activity.dstChainKey,
-      inputToken: activity.intent.inputToken,
-      outputToken: activity.intent.outputToken,
+      inputToken: srcToken.address,
+      outputToken: dstToken.address,
       inputAmount: activity.intent.inputAmount,
       minOutputAmount: activity.intent.minOutputAmount,
       srcAddress: activity.walletAddress,

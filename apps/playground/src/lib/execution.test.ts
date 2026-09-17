@@ -297,6 +297,8 @@ describe('activity recovery', () => {
     txHash: '0x1234',
     srcChainKey: ChainKeys.BASE_MAINNET,
     dstChainKey: ChainKeys.SOLANA_MAINNET,
+    srcTokenAddress: address,
+    dstTokenAddress: 'mint',
     walletAddress: address,
     recipient: 'recipient',
     summary: '1 ETH → USDC',
@@ -334,6 +336,14 @@ describe('activity recovery', () => {
     expect(readActivity(JSON.stringify({ ...activity, srcChainKey: 'toString' }))).toBeUndefined();
     expect(readActivity(JSON.stringify({ ...activity, intent: { ...intent, inputAmount: '1.5' } }))).toBeUndefined();
     expect(readActivity(JSON.stringify({ ...activity, txHash: '<script>' }))).toBeUndefined();
+  });
+  // A record without them cannot name its tokens on a spoke chain, so it can never open a dialog.
+  it('rejects a record carrying no spoke-side token identity', () => {
+    const { srcTokenAddress: _src, ...noSource } = activity;
+    const { dstTokenAddress: _dst, ...noDestination } = activity;
+    expect(readActivity(JSON.stringify(noSource))).toBeUndefined();
+    expect(readActivity(JSON.stringify(noDestination))).toBeUndefined();
+    expect(readActivity(JSON.stringify({ ...activity, dstTokenAddress: '' }))).toBeUndefined();
   });
 });
 

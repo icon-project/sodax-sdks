@@ -274,6 +274,8 @@ export function useExecution(input: ExecutionInput) {
             txHash: request.txHash,
             srcChainKey,
             dstChainKey,
+            srcTokenAddress: review.srcToken.address,
+            dstTokenAddress: review.dstToken.address,
             walletAddress: review.intent.srcAddress,
             recipient: review.intent.dstAddress,
             summary: `${input.amount} ${review.srcToken.symbol} → ${review.dstToken.symbol}`,

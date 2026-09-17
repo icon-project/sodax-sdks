@@ -6,6 +6,10 @@ import { reviewFromActivity, tokenAt } from './review';
 
 const checksummed = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
 const solanaMint = 'GFB938EZRVZZ52KrBJiGTsJx28YSAmLLmXZRnh9rsJUJ';
+// The hub assets the backend echoes back on the intent. Distinct from every spoke address above, as
+// they are on chain: a lookup that read the intent's token fields would find neither.
+const srcHubAsset = '0x1111111111111111111111111111111111111111';
+const dstHubAsset = '0x2222222222222222222222222222222222222222';
 
 function token(address: string, chainKey: ChainKey = ChainKeys.BASE_MAINNET, decimals = 6): XToken {
   return {
@@ -29,8 +33,8 @@ const choices: TokenChoice[] = [
 const intent: IntentResponseV2 = {
   intentId: '42',
   creator: checksummed,
-  inputToken: checksummed,
-  outputToken: solanaMint,
+  inputToken: srcHubAsset,
+  outputToken: dstHubAsset,
   inputAmount: '100000',
   minOutputAmount: '95319',
   deadline: '2000000000',
@@ -47,6 +51,8 @@ const activity: Activity = {
   txHash: '0xdeadbeef',
   srcChainKey: ChainKeys.BASE_MAINNET,
   dstChainKey: ChainKeys.SOLANA_MAINNET,
+  srcTokenAddress: checksummed,
+  dstTokenAddress: solanaMint,
   walletAddress: checksummed,
   recipient: solanaMint,
   summary: '0.1 USDC → USDC',
@@ -90,6 +96,17 @@ describe('reviewFromActivity', () => {
     expect(restored?.srcChain).toBe(ChainKeys.BASE_MAINNET);
     expect(restored?.dstChain).toBe(ChainKeys.SOLANA_MAINNET);
     expect(restored?.estimatedSeconds).toBe(15);
+  });
+
+  // The regression this guards: the intent is the hub's struct, and its token fields name Sonic
+  // assets. Reading them against a spoke list resolved nothing, so no reload could reopen a dialog.
+  it('resolves the spoke tokens although the intent carries hub assets', () => {
+    const restored = reviewFromActivity(activity, choices, seconds);
+    expect(restored?.srcToken.address).toBe(checksummed);
+    expect(restored?.dstToken.address).toBe(solanaMint);
+    expect(restored?.intent.inputToken).toBe(checksummed);
+    expect(restored?.intent.outputToken).toBe(solanaMint);
+    expect(tokenAt(choices, ChainKeys.BASE_MAINNET, srcHubAsset)).toBeUndefined();
   });
 
   // Decimals decide what the amounts read as, so they come from the live list, never from storage.

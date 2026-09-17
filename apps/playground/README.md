@@ -209,7 +209,8 @@ The deployment allows framing with `frame-ancestors *`.
 3. Review the recipient, minimum received and partner fee. Network fees are confirmed in the wallet.
 4. Recheck the quote and allowance; confirm any allowance reset/approval through dapp-kit.
 5. Recheck the price after approval, get a fresh deadline, build the intent and request a signature.
-6. Persist the broadcast hash, intent and relay payload before submitting to the backend.
+6. Persist the broadcast hash, intent, reviewed token addresses and relay payload before submitting
+   to the backend.
 7. Track settlement until solved, failed or abandoned, with explorer links and support access.
 
 **Retry tracking** resubmits the saved transaction hash and payload; it never signs a new deposit.

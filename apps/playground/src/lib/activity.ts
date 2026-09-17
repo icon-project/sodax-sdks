@@ -3,12 +3,16 @@ import type { PairDimensions } from './analytics';
 import { isChainKey } from './chains';
 import { toIntentRequest } from './execution';
 
-export const ACTIVITY_KEY = 'sodax-widget-activity-v1';
+/* v2 adds the reviewed token addresses; a v1 record has no spoke-side identity to restore from. */
+export const ACTIVITY_KEY = 'sodax-widget-activity-v2';
 
 export type Activity = {
   txHash: string;
   srcChainKey: ChainKey;
   dstChainKey: ChainKey;
+  /** Spoke-side, as reviewed: `intent`'s own token fields are hub assets and name nothing on a spoke. */
+  srcTokenAddress: string;
+  dstTokenAddress: string;
   walletAddress: string;
   recipient: string;
   summary: string;
@@ -21,6 +25,11 @@ export type Activity = {
 
 function record(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+/** Every family spells an address its own way, so only presence and a length bound are checkable. */
+function isAddressText(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0 && value.length <= 200;
 }
 
 function isIntent(value: unknown): value is IntentResponseV2 {
@@ -72,6 +81,8 @@ export function readActivity(value: string | null): Activity | undefined {
       !isChainKey(data.srcChainKey) ||
       typeof data.dstChainKey !== 'string' ||
       !isChainKey(data.dstChainKey) ||
+      !isAddressText(data.srcTokenAddress) ||
+      !isAddressText(data.dstTokenAddress) ||
       typeof data.walletAddress !== 'string' ||
       typeof data.recipient !== 'string' ||
       typeof data.summary !== 'string' ||
@@ -87,6 +98,8 @@ export function readActivity(value: string | null): Activity | undefined {
       txHash: data.txHash,
       srcChainKey: data.srcChainKey,
       dstChainKey: data.dstChainKey,
+      srcTokenAddress: data.srcTokenAddress,
+      dstTokenAddress: data.dstTokenAddress,
       walletAddress: data.walletAddress,
       recipient: data.recipient,
       summary: data.summary,

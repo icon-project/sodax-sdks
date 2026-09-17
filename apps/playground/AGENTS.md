@@ -110,7 +110,9 @@ pnpm check:ai-dev-files
   it and a reload reseeds it from the URL, and neither may restate a swap that is already signed. A
   restored snapshot resolves its decimals and symbols from the live asset list rather than from the
   stored record, and renders no dialog at all when it cannot — an amount scaled by trusted-from-
-  storage decimals is worse than the card.
+  storage decimals is worse than the card. What it resolves *by* is the record's own spoke-side token
+  addresses, which is why they are stored: the saved `IntentResponseV2` is the hub's struct, and its
+  `inputToken` / `outputToken` are Sonic assets that name nothing in a spoke chain's token list.
 - The destination leg states the reviewed minimum, not the live quote: it is the one number that is
   still true after the deposit is broadcast, and it satisfies the review's minimum-amount duty at the
   same time. The complete receiving address stays beside it, out of the disclosure.
