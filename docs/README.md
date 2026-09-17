@@ -113,13 +113,16 @@ Two lanes write to this site, and they are not equivalent.
 source file. Reviewed, and every check below runs against it.
 
 **In the Mintlify dashboard** — the docs and marketing team, on the hand-written pages.
-Publishing there commits straight to whichever branch the dashboard is pointed at, with
-**no pull request and nothing gating the publish**. On `main` or `development` the push
-trigger still runs the checks below — but after the commit has landed and the page is
-already live, so a failure is something to clean up rather than something that stopped you.
-On any other branch nothing runs until someone opens a pull request. Which branch that is, is a
-setting in the Mintlify dashboard and is recorded nowhere in this repo: point it at `main` and a
-Publish click is live on docs.sodax.com with nothing in between.
+`main` requires a pull request, so the dashboard cannot commit to it: Publish offers a branch
+and opens a pull request from it, and the checks below run there — before anything is live.
+That pull request then waits for a reviewer like any other, including for a reworded
+paragraph. [`.github/docs-publishing.md`](../.github/docs-publishing.md) replaces that
+approval with the checks for marketing's own pages, but the lane is built and not switched
+on: until its repository settings are applied, every dashboard publish is merged by hand.
+
+Which branch the dashboard targets is a setting there, recorded nowhere in this repo. Pointed
+at a branch that does not require a pull request, Publish commits straight to it, and the
+push-triggered checks report after the page is already live.
 
 Commits arrive authored as `usr-icon-foundation` ("Updated mintlify pages") — one shared account
 for everyone, so a page's history does not say who changed it. An editor who authorizes GitHub at
