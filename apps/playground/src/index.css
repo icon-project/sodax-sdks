@@ -766,7 +766,7 @@ code,
 .standalone-link {
   display: block;
   text-align: center;
-  margin-top: 8px;
+  margin-top: var(--space-16);
   font-size: 12px;
 }
 .studio-heading p {
@@ -857,7 +857,7 @@ code,
 }
 
 .action-message:empty {
-  margin: 6px 0;
+  margin: var(--space-8) 0;
 }
 
 .action-message .alert {
@@ -2707,14 +2707,17 @@ body:has(.app-embed) {
   padding: 4px 8px;
   height: auto;
 }
+/* The summary is about the trade, not part of it: it reads as its own block, off the second leg. */
 .quote-summary {
-  padding: 10px 0 4px;
+  padding: var(--space-24) 0 var(--space-8);
 }
 .app-embed .flow-column {
-  gap: 8px;
+  gap: var(--space-16);
 }
 .app-embed .swap-details {
-  margin-bottom: 12px;
+  margin-top: var(--space-24);
+  padding-top: var(--space-16);
+  margin-bottom: var(--space-16);
 }
 .app-embed .btn-primary {
   height: 52px;
@@ -2722,6 +2725,7 @@ body:has(.app-embed) {
 .quote-summary .row-between {
   font-size: 12px;
   align-items: baseline;
+  padding: 5px 0;
 }
 .quote-summary .row-between > :last-child {
   text-align: right;
