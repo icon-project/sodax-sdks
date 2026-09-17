@@ -115,9 +115,10 @@ surface with `context.status` `401`/`403` — nothing but a corrected key fixes 
 terminal in your UI; the transient verification `503` is retried by the wire client. See the
 `sodax-sdk` skill (integration mode), `swaps-api.md` § API key, for the precedence order.
 
-Every retrying `useSwapsApi*` hook already handles this: its default `retry` is `retryUnlessAuthFailure`
-(exported from `@sodax/dapp-kit`), which retries transport blips up to 3 times but never replays a
-401/403. `useSwapsApiStatus` and `useSwapsApiSubmitTxStatus` additionally stop their 1s poll on a
+Every retrying `useSwapsApi*`, `useLeverageYieldApi*` and `useBridgeApi*` hook already handles this: its
+default `retry` is `retryUnlessAuthFailure` (exported from `@sodax/dapp-kit`), which retries transport
+blips up to 3 times but never replays a 401/403. `useSwapsApiStatus`, `useSwapsApiSubmitTxStatus`,
+`useLeverageYieldApiSubmitTxStatus` and `useBridgeApiSubmitTxStatus` additionally stop their 1s poll on a
 rejected key, instead of re-requesting forever. So an invalid key surfaces once, fast, on `error`.
 
 Override or compose it through `queryOptions` / `mutationOptions` when you want different behaviour:
@@ -172,7 +173,7 @@ const { mutateAsync: submitBridgeTx } = useBridgeApiSubmitTx();
 await submitBridgeTx({ request, apiConfig: { baseURL: 'https://...' } });
 ```
 
-`useBridgeApiSubmitTxStatus` polls (1s) and returns `BridgeSubmitTxStatusResponseV2 | undefined`, running only when **both** `txHash` and `srcChainKey` are supplied; terminal states are `executed` / `failed` (no `posting_execution`). The fee / bridgeable-amount / bridgeable quotes are computable client-side (config + vault math) — prefer the on-chain `useGetBridgeableAmount` / `sodax.bridge.*` for a no-round-trip read; `useBridgeApiFee` / `useBridgeApiBridgeableAmount` / `useBridgeApiIsBridgeable` mirror the backend endpoints for HTTP parity.
+`useBridgeApiSubmitTxStatus` polls (1s) and returns `BridgeSubmitTxStatusResponseV2 | undefined`, running only when **both** `txHash` and `srcChainKey` are supplied; terminal states are `executed` / `failed` (no `posting_execution`), and it also stops on a set `abandonedAt` or once the backend rejects the API key. Every retrying `useBridgeApi*` hook defaults `retry` to `retryUnlessAuthFailure`, exactly as the swaps and leverage-yield hooks do. The fee / bridgeable-amount / bridgeable quotes are computable client-side (config + vault math) — prefer the on-chain `useGetBridgeableAmount` / `sodax.bridge.*` for a no-round-trip read; `useBridgeApiFee` / `useBridgeApiBridgeableAmount` / `useBridgeApiIsBridgeable` mirror the backend endpoints for HTTP parity.
 
 > Full list in [hooks-index.md](../reference/hooks-index.md); key shapes in [querykey-conventions.md](../reference/querykey-conventions.md). For non-React callers, `sodax.api.bridge` is documented in the `sodax-sdk` skill (integration mode).
 

@@ -225,7 +225,7 @@ Typed React Query wrappers over the backend Bridge API v2 (`sodax.api.bridge.*`)
 | `useBridgeApiFee` | Query; `{ fee }` partner fee for an amount (per-request `partnerFee` override or configured default) |
 | `useBridgeApiBridgeableAmount` | Query; `{ limit }` deposit capacity / withdrawal liquidity for a pair |
 | `useBridgeApiIsBridgeable` | Query; `{ bridgeable }` whether a (from, to) pair is bridgeable |
-| `useBridgeApiSubmitTxStatus` | Query (1s); requires `txHash` + `srcChainKey`; polls until `executed` / `failed` |
+| `useBridgeApiSubmitTxStatus` | Query (1s); requires `txHash` + `srcChainKey`; polls until `executed` / `failed` / `abandonedAt`, or the backend rejects the API key |
 | `useBridgeApiApprove` | Mutation; builds the unsigned approval txs — `{ tx, resetTx? }`, ordering is yours to handle |
 | `useBridgeApiApproveAndBroadcast` | Mutation; builds **and** signs/broadcasts/waits — preferred; `{ approveTxHash, resetTxHash? }`; optional `onProgress` per step |
 | `useBridgeApiCreateBridgeIntent` | Mutation; builds `{ tx, relayData }` (no intent) |
