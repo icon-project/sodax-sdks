@@ -34,6 +34,14 @@ export function canExecute(chain: ChainKey | undefined): boolean {
 }
 
 /**
+ * Source-chain extras the swaps API needs to build the intent. Stacks alone: a Stacks address cannot
+ * yield its signer public key, so the wallet is the only place the intent can get one.
+ */
+export function sourceExtras(type: ChainType, publicKey: string | undefined): { srcPublicKey?: string } {
+  return type === 'STACKS' && publicKey ? { srcPublicKey: publicKey } : {};
+}
+
+/**
  * The `{ from, to, value, data }` payload EVM, Solana, Sui, Stellar and Bitcoin all share. The
  * chain type — never the shape — decides which wallet signs it; these members are indistinguishable.
  */

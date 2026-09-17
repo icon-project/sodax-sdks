@@ -13,6 +13,7 @@ import {
   broadcast,
   isUserRejection,
   executionError,
+  sourceExtras,
   type ExecutionDependencies,
 } from './execution';
 import { readActivity, submissionFor, type Activity } from './activity';
@@ -77,6 +78,23 @@ function setup(allowed = true) {
   };
   return { deps, calls };
 }
+
+// A Stacks address cannot yield its signer public key, so an intent built without one is refused.
+describe('sourceExtras', () => {
+  it('carries the signer public key for a Stacks source and for nothing else', () => {
+    expect(sourceExtras('STACKS', '02deadbeef')).toEqual({ srcPublicKey: '02deadbeef' });
+    expect(sourceExtras('EVM', '02deadbeef')).toEqual({});
+    expect(sourceExtras('SOLANA', '02deadbeef')).toEqual({});
+    expect(sourceExtras('STACKS', undefined)).toEqual({});
+  });
+
+  it('reaches the intent the swaps API builds', async () => {
+    const { deps } = setup();
+    const stacks = { ...body, ...sourceExtras('STACKS', '02deadbeef') };
+    await executeSwap(stacks, deps);
+    expect(deps.api.createIntent).toHaveBeenCalledWith(expect.objectContaining({ srcPublicKey: '02deadbeef' }));
+  });
+});
 
 describe('swap execution', () => {
   it('persists the broadcast before submitting and uses the reviewed minimum and partner fee', async () => {

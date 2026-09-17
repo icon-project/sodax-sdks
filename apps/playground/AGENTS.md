@@ -66,6 +66,8 @@ pnpm check:ai-dev-files
 - Check the payload's sender against the connected account wherever the family states one — `from`,
   or NEAR's `signerId`. Injective states a hex sender while its wallet reports bech32; comparing
   those rejects every valid swap, so it is exempt by design.
+- A Stacks source carries `srcPublicKey` off the connected account (`sourceExtras`): a Stacks address
+  cannot yield its signer public key, so the API cannot build the intent without the wallet's.
 - A destination whose receiving account is not ready blocks execution before signing, including
   while the check is still in flight. Never let a swap leave the source chain to strand. The form
   offers the remedy only once a quote exists, surfaces the remedy's own failure, and `confirm`

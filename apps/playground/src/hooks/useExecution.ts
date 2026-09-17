@@ -44,6 +44,7 @@ import {
   executeSwap,
   executionError,
   isUserRejection,
+  sourceExtras,
   type ExecutionPhase,
 } from '../lib/execution';
 
@@ -230,6 +231,7 @@ export function useExecution(input: ExecutionInput) {
         deadline: '0',
         allowPartialFill: false,
         ...(input.partnerFee ? { partnerFee: input.partnerFee } : {}),
+        ...sourceExtras(sourceType, source?.publicKey),
       },
       srcChain: input.srcChain,
       dstChain: input.dstChain,
