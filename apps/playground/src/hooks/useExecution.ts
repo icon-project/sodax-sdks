@@ -24,7 +24,7 @@ import {
   useXDisconnect,
   useEvmSwitchChain,
 } from '@sodax/wallet-sdk-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatUnits } from 'viem';
 import { loadActivity, saveActivity, submissionFor, type Activity } from '../lib/activity';
 import {
@@ -173,18 +173,25 @@ export function useExecution(input: ExecutionInput) {
   }, [fingerprint]);
 
   const speedTier = useCallback(
-    (from: XToken, to: XToken) => sodax.swaps.getSwapSpeedTier({ srcToken: from, dstToken: to })?.estimatedSeconds,
+    (from: XToken, to: XToken) => sodax.swaps.getSwapSpeedTier({ srcToken: from, dstToken: to }).estimatedSeconds,
     [sodax],
+  );
+
+  // The full snapshot needs the live list to resolve its tokens. Absent it the record's own summary
+  // still states the swap, so the dialog degrades rather than disappearing — see `dismissed` below.
+  const restorable = useMemo(
+    () => (activity ? reviewFromActivity(activity, input.choices, speedTier) : undefined),
+    [activity, input.choices, speedTier],
   );
 
   // A reload leaves the swap running with no dialog on it, because the record outlives the state
   // that opened one. Rebuild it, once, unless the visitor has already dismissed this swap's dialog.
-  const dismissedRef = useRef(false);
+  // State rather than a ref: it is what decides whether the degraded dialog shows too.
+  const [dismissed, setDismissed] = useState(false);
   useEffect(() => {
-    if (!activity || review || dismissedRef.current) return;
-    const restored = reviewFromActivity(activity, input.choices, speedTier);
-    if (restored) setReview(restored);
-  }, [activity, review, input.choices, speedTier]);
+    if (!restorable || review || dismissed) return;
+    setReview(restorable);
+  }, [restorable, review, dismissed]);
 
   const openConnect = (type: ChainType) => {
     connection.reset();
@@ -248,6 +255,8 @@ export function useExecution(input: ExecutionInput) {
     setPhase('checking');
     setError(undefined);
     let broadcasted = false;
+    // The record as broadcast, so relay acceptance can be written onto it before state settles.
+    let broadcastRecord: Activity | undefined;
     postEmbedEvent({ type: 'sodax:swap', status: 'started' });
     try {
       const currentAddress = await wallet.getWalletAddress();
@@ -272,12 +281,13 @@ export function useExecution(input: ExecutionInput) {
         },
         onBroadcast: (request, intent) => {
           broadcasted = true;
-          const next: Activity = {
+          broadcastRecord = {
             txHash: request.txHash,
             srcChainKey,
             dstChainKey,
             srcTokenAddress: review.srcToken.address,
             dstTokenAddress: review.dstToken.address,
+            inputAmount: review.intent.inputAmount,
             walletAddress: review.intent.srcAddress,
             recipient: review.intent.dstAddress,
             summary: `${input.amount} ${review.srcToken.symbol} → ${review.dstToken.symbol}`,
@@ -286,13 +296,16 @@ export function useExecution(input: ExecutionInput) {
             relayData: request.relayData,
             pair: input.pair,
           };
-          setStorageAvailable(saveActivity(next));
-          setActivity(next);
+          setStorageAvailable(saveActivity(broadcastRecord));
+          setActivity(broadcastRecord);
           postEmbedEvent({ type: 'sodax:swap', status: 'submitted' });
           if (input.pair) {
             submittedPair.current = input.pair;
             trackSwapSubmitted(input.pair);
           }
+        },
+        onRelayAccepted: () => {
+          if (broadcastRecord) markRelaySubmitted(broadcastRecord);
         },
       });
       void balanceQuery.refetch();
@@ -309,33 +322,41 @@ export function useExecution(input: ExecutionInput) {
     }
   };
 
+  // Durable, unlike the error that used to stand in for it: a reload keeps the deposit but loses
+  // every in-memory reason it might still need submitting.
+  const markRelaySubmitted = (record: Activity) => {
+    if (record.relaySubmitted) return;
+    const accepted = { ...record, relaySubmitted: true };
+    setStorageAvailable(saveActivity(accepted));
+    setActivity(accepted);
+  };
+
   const clearActivity = () => {
     if (!terminal) return;
     saveActivity(undefined);
     setActivity(undefined);
     setError(undefined);
-    dismissedRef.current = false;
+    setReview(undefined);
+    setDismissed(false);
   };
 
   // Closable from the moment the deposit is broadcast, never during a step the widget is driving:
   // tracking can stall for reasons neither end controls, and a dialog nobody can dismiss is worse
-  // than one left early. A finished swap leaves with its record; one still running keeps it and
-  // stays dismissed until the form's action asks for it back.
+  // than one left early. Only a settled swap leaves with its record — a failed one keeps its hashes
+  // for support, so closing it dismisses rather than deletes, and the form's action asks it back.
   const closeReview = () => {
     if (busyRef.current) return;
-    if (terminal) clearActivity();
-    else if (activity) dismissedRef.current = true;
+    if (solved) {
+      clearActivity();
+      return;
+    }
+    if (activity) setDismissed(true);
     setReview(undefined);
   };
 
-  // The dialog is the only place a swap lives, so the way back into it is also the way out of a
-  // record nothing can render: assets the list no longer resolves leave a finished swap unopenable.
   const resumeReview = () => {
-    if (!activity || review) return;
-    dismissedRef.current = false;
-    const restored = reviewFromActivity(activity, input.choices, speedTier);
-    if (restored) setReview(restored);
-    else if (terminal) clearActivity();
+    setDismissed(false);
+    if (activity && !review && restorable) setReview(restorable);
   };
 
   const retrySubmission = async () => {
@@ -347,6 +368,7 @@ export function useExecution(input: ExecutionInput) {
       const result = await sodax.api.swaps.submitTx(submissionFor(activity));
       if (!result.ok) throw result.error;
       if (!result.value.success) throw new Error('The relay has not accepted this swap yet. Try again shortly.');
+      markRelaySubmitted(activity);
       await statusQuery.refetch();
     } catch (cause) {
       setError(executionError(cause));
@@ -382,6 +404,7 @@ export function useExecution(input: ExecutionInput) {
     confirm,
     closeReview,
     resumeReview,
+    dismissed,
     phase,
     error,
     activity,

@@ -75,6 +75,7 @@ function setup(allowed = true) {
     }),
     onPhase: vi.fn(),
     onBroadcast: vi.fn(() => calls.push('save')),
+    onRelayAccepted: vi.fn(() => calls.push('accepted')),
   };
   return { deps, calls };
 }
@@ -100,7 +101,9 @@ describe('swap execution', () => {
   it('persists the broadcast before submitting and uses the reviewed minimum and partner fee', async () => {
     const { deps, calls } = setup();
     await executeSwap(body, deps);
-    expect(calls).toEqual(['sign', 'save', 'submit']);
+    // Acceptance is reported last and only on success, so a record is never marked submitted while
+    // the relay could still refuse it — that mark is what a reload reads instead of a lost error.
+    expect(calls).toEqual(['sign', 'save', 'submit', 'accepted']);
     expect(deps.api.getQuote).toHaveBeenCalledWith(
       expect.objectContaining({ amount: body.inputAmount, partnerFee: body.partnerFee }),
     );
@@ -112,7 +115,7 @@ describe('swap execution', () => {
   it('waits for approval and rechecks the price before signing', async () => {
     const { deps, calls } = setup(false);
     await executeSwap(body, deps);
-    expect(calls).toEqual(['approve', 'sign', 'save', 'submit']);
+    expect(calls).toEqual(['approve', 'sign', 'save', 'submit', 'accepted']);
     expect(deps.api.getQuote).toHaveBeenCalledTimes(2);
   });
   it('stops before approval when the reviewed minimum is no longer available', async () => {
@@ -136,6 +139,9 @@ describe('swap execution', () => {
     expect(calls).toEqual(['sign', 'save']);
     expect(deps.onBroadcast).toHaveBeenCalledWith(expect.objectContaining({ txHash: '0x1234' }), intent);
     expect(deps.sign).toHaveBeenCalledTimes(1);
+    // The deposit is out and the relay does not have it. Leaving the record unmarked is what keeps
+    // the resubmission reachable after a reload, when the error that raised it is gone.
+    expect(deps.onRelayAccepted).not.toHaveBeenCalled();
   });
   it('does not submit or persist when a wallet declines signing', async () => {
     const { deps } = setup();
@@ -317,6 +323,7 @@ describe('activity recovery', () => {
     dstChainKey: ChainKeys.SOLANA_MAINNET,
     srcTokenAddress: address,
     dstTokenAddress: 'mint',
+    inputAmount: '1000',
     walletAddress: address,
     recipient: 'recipient',
     summary: '1 ETH → USDC',

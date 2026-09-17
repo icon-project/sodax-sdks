@@ -2,10 +2,12 @@ import type { ChainKey, XToken } from '@sodax/dapp-kit';
 import { formatUnits } from 'viem';
 import type { Execution } from '../hooks/useExecution';
 import type { SwapFlow } from '../hooks/useSwapFlow';
-import { chainName } from '../lib/chains';
+import type { Activity } from '../lib/activity';
+import { chainName, txExplorerUrl } from '../lib/chains';
 import { formatTokenAmount } from '../lib/format';
 import { STATUS_LABELS, failureMessage, progressLabel, refundAccounted } from '../lib/progress';
 import { AssetLogo } from './AssetLogo';
+import { CheckGlyph } from './CopyLabel';
 import { Chevron } from './Dropdown';
 import { Modal } from './Modal';
 import { shortAddress } from './WalletControls';
@@ -42,21 +44,6 @@ function DoneGlyph() {
         fill="none"
         stroke="currentColor"
         strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function CheckGlyph() {
-  return (
-    <svg className="copied-glyph" viewBox="0 0 16 16" aria-hidden="true">
-      <path
-        d="M3.5 8.5l3 3 6-7"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.75"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
@@ -108,7 +95,8 @@ function reviewMessage(e: Execution): string | undefined {
   return undefined;
 }
 
-function ConfirmAction({ flow, token, chain }: { flow: SwapFlow; token: XToken; chain: ChainKey }) {
+/** `token`/`chain` are absent only in the degraded dialog, which always has a swap already sent. */
+function ConfirmAction({ flow, token, chain }: { flow: SwapFlow; token?: XToken; chain?: ChainKey }) {
   const e = flow.execution;
 
   if (e.solved)
@@ -118,16 +106,18 @@ function ConfirmAction({ flow, token, chain }: { flow: SwapFlow; token: XToken; 
       </button>
     );
 
+  // Clearing is explicit for a failure: closing keeps the record, because its hashes are what
+  // support asks for and an Escape should not be the thing that discards them.
   if (e.failed)
     return (
-      <button type="button" className="btn btn-primary" onClick={e.closeReview}>
-        Close
+      <button type="button" className="btn btn-primary" onClick={e.clearActivity}>
+        Start a new swap
       </button>
     );
 
-  // The relay rejected the submission but the deposit is broadcast: resubmit that same transaction,
-  // never sign a second one.
-  if (e.activity && e.error && !e.phase)
+  // The deposit is broadcast and the relay has not taken it: resubmit that same transaction, never
+  // sign a second one. Read from the record, so a reload cannot strand a swap only an error offered.
+  if (e.activity && !e.phase && (e.error || !e.activity.relaySubmitted))
     return (
       <button type="button" className="btn btn-primary" onClick={e.retrySubmission}>
         Retry tracking
@@ -142,10 +132,62 @@ function ConfirmAction({ flow, token, chain }: { flow: SwapFlow; token: XToken; 
       </button>
     );
 
+  if (!token || !chain) return null;
   return (
     <button type="button" className="btn btn-primary" onClick={e.confirm}>
       Swap to {token.symbol} on {chainName(chain)}
     </button>
+  );
+}
+
+/** The source deposit, and the fill once one exists: on a chain whether or not tracking works. */
+function TransactionLinks({ e }: { e: Execution }) {
+  if (!e.activity) return null;
+  const fill = e.status?.result?.fillTxHash;
+  return (
+    <p className="review-links small">
+      <a
+        className="link"
+        href={txExplorerUrl(e.activity.srcChainKey, e.activity.txHash)}
+        target="_blank"
+        rel="noreferrer"
+      >
+        Source transaction ↗
+      </a>
+      {fill && (
+        <a className="link" href={txExplorerUrl(e.activity.dstChainKey, fill)} target="_blank" rel="noreferrer">
+          Destination transaction ↗
+        </a>
+      )}
+    </p>
+  );
+}
+
+/**
+ * The same dialog with the legs it cannot draw left out. A swap the live asset list cannot resolve —
+ * because it has not loaded, or no longer carries the token — still has its summary, its status, its
+ * resubmission and its hashes, and those are the parts a visitor needs when something has gone wrong.
+ */
+function RestoredSwap({ flow, activity }: { flow: SwapFlow; activity: Activity }) {
+  const e = flow.execution;
+  return (
+    <div className="review">
+      <p className="review-message" role="alert">
+        {reviewMessage(e)}
+      </p>
+      <p className="review-restored">{activity.summary}</p>
+      <p className="review-recipient small">
+        <span className="muted">Receiving wallet</span>
+        <span className="address-text">{activity.recipient}</span>
+      </p>
+      <ConfirmAction flow={flow} />
+      <TransactionLinks e={e} />
+      {e.failed && !refundAccounted(e.status) && (
+        <a className="link review-support" href="https://support.sodax.com" target="_blank" rel="noreferrer">
+          SODAX support ↗
+        </a>
+      )}
+    </div>
   );
 }
 
@@ -158,9 +200,13 @@ export function SwapReview({ flow }: { flow: SwapFlow }) {
   const e = flow.execution;
   const review = e.review;
   const problem = reviewMessage(e);
+  // A sent swap the full snapshot cannot state is still shown, from the record's own summary: the
+  // dialog is the only place a swap lives, so it degrading is the difference between that and none.
+  const restored = !review && e.activity && !e.dismissed ? e.activity : undefined;
 
   return (
-    <Modal title="Confirm swap" open={!!review} onClose={e.closeReview} busy={!!e.phase} bare>
+    <Modal title="Confirm swap" open={!!review || !!restored} onClose={e.closeReview} busy={!!e.phase} bare>
+      {restored && <RestoredSwap flow={flow} activity={restored} />}
       {review && (
         <div className="review">
           {/* Always here, usually empty: a dialog mid-swap must not jump when a step reports back. */}
@@ -193,7 +239,15 @@ export function SwapReview({ flow }: { flow: SwapFlow }) {
             <span className="muted">Receiving wallet</span>
             <span className="address-text">{review.intent.dstAddress}</span>
           </p>
+          {/* The last screen before a signature, so it is the last place this can be said. Once the
+              deposit is broadcast the warning is spent and the slot goes to the swap's own progress. */}
+          {!e.activity && (
+            <p className="muted small review-caution">
+              This is a mainnet swap using real funds. Check the receiving wallet and minimum amount before confirming.
+            </p>
+          )}
           <ConfirmAction flow={flow} token={review.dstToken} chain={review.dstChain} />
+          <TransactionLinks e={e} />
           {/* Offered only while the funds are unaccounted for: beside "your funds are back" it
               invents a problem, and a partner's frame sends their customer on as rarely as it can. */}
           {e.failed && !refundAccounted(e.status) && (

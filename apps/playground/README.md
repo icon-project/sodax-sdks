@@ -209,11 +209,13 @@ The deployment allows framing with `frame-ancestors *`.
 3. Review the recipient, minimum received and partner fee. Network fees are confirmed in the wallet.
 4. Recheck the quote and allowance; confirm any allowance reset/approval through dapp-kit.
 5. Recheck the price after approval, get a fresh deadline, build the intent and request a signature.
-6. Persist the broadcast hash, intent, reviewed token addresses and relay payload before submitting
-   to the backend.
+6. Persist the broadcast hash, intent, reviewed token addresses and amount, and relay payload before
+   submitting to the backend.
 7. Track settlement until solved, failed or abandoned, with explorer links and support access.
 
 **Retry tracking** resubmits the saved transaction hash and payload; it never signs a new deposit.
+It is offered from the record rather than from the error that raised it, so a reload between the
+broadcast and a relay that has not accepted the deposit still reaches it.
 The latest activity is restored after refresh when local storage is available. If storage is blocked,
 the widget warns the user to retain the transaction hash. Failed/abandoned swaps show a support path;
 an integrated on-chain refund workflow is not implemented in this widget.

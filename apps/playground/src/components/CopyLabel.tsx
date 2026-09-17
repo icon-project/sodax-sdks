@@ -1,4 +1,5 @@
-function CheckGlyph() {
+/** The tick a finished action wears, here and on the confirm dialog's completed swap. */
+export function CheckGlyph() {
   return (
     <svg className="copied-glyph" viewBox="0 0 16 16" aria-hidden="true">
       <path

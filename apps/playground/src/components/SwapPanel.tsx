@@ -24,7 +24,8 @@ function PrimaryAction({ flow }: { flow: SwapFlow }) {
       {text}
     </button>
   );
-  // A dismissed swap has nowhere else to be: this reopens the dialog holding it.
+  // A dismissed swap has nowhere else to be: this reopens the dialog holding it, which is always
+  // openable — without the live asset list it states the swap from the record instead of in legs.
   if (e.activity)
     return (
       <button type="button" className="btn btn-primary" onClick={e.resumeReview}>
@@ -120,13 +121,24 @@ export function SwapPanel({ flow }: { flow: SwapFlow }) {
   // Read out before the guard: inside the picker callbacks TS cannot keep a property narrowed.
   const { srcChain, dstChain } = flow;
 
-  if (flow.assetsError) return <LoadingForm message={flow.assetsError} retry={flow.retryAssets} />;
+  // The dialog rides along with both: a deposit is already broadcast when the asset service goes
+  // down, and it is the only surface holding that swap's status, resubmission and hashes.
+  if (flow.assetsError)
+    return (
+      <>
+        <LoadingForm message={flow.assetsError} retry={flow.retryAssets} />
+        <SwapReview flow={flow} />
+      </>
+    );
   if (!srcChain || !dstChain)
     return (
-      <LoadingForm
-        message={flow.isLoadingAssets ? 'Loading assets…' : 'No assets available for the configured networks.'}
-        retry={flow.retryAssets}
-      />
+      <>
+        <LoadingForm
+          message={flow.isLoadingAssets ? 'Loading assets…' : 'No assets available for the configured networks.'}
+          retry={flow.retryAssets}
+        />
+        <SwapReview flow={flow} />
+      </>
     );
 
   // One slot, so a fee error and a quote error cannot stack and resize the card between them.

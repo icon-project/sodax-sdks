@@ -34,7 +34,9 @@ export function tokenAt(choices: readonly TokenChoice[], chain: ChainKey, addres
  * being trusted from storage, so an edited record cannot restate what was sent.
  *
  * The tokens resolve from the record's own spoke-side addresses, never the intent's: that struct is
- * the hub's, and its `inputToken` / `outputToken` name Sonic assets no spoke chain carries.
+ * the hub's, and its `inputToken` / `outputToken` name Sonic assets no spoke chain carries. The
+ * source amount is the record's for the same reason — `intent.inputAmount` is net of the partner
+ * fee, so restating from it would show a smaller swap than the one the visitor confirmed.
  */
 export function reviewFromActivity(
   activity: Activity,
@@ -51,7 +53,7 @@ export function reviewFromActivity(
       dstChainKey: activity.dstChainKey,
       inputToken: srcToken.address,
       outputToken: dstToken.address,
-      inputAmount: activity.intent.inputAmount,
+      inputAmount: activity.inputAmount,
       minOutputAmount: activity.intent.minOutputAmount,
       srcAddress: activity.walletAddress,
       dstAddress: activity.recipient,

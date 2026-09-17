@@ -19,11 +19,11 @@
     />
     <title>SODAX Swap Widget</title>
     <script>
-      // Resolves the theme before first paint so an embed never flashes the wrong one; then
-      // src/hooks/useBrand.ts takes over. Mirrors resolveTheme() there, minus its colour maths.
+      // Resolves the theme before first paint so an embed never flashes the wrong one; mirrors
+      // resolveTheme() in src/hooks/useBrand.ts, minus its colour maths. `theme` is the embed's.
       try {
         var params = new URLSearchParams(location.search);
-        var pinned = params.get('theme');
+        var pinned = params.get('embed') === '1' ? params.get('theme') : null;
         var stored = localStorage.getItem('sodax-playground-theme');
         var system = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
         var resolved =

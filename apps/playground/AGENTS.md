@@ -49,6 +49,9 @@ pnpm check:ai-dev-files
 - Save the broadcast transaction and relay payload before calling `submitTx`. Recovery resubmits
   that same transaction; it must never create or sign a second deposit. Failed/abandoned statuses
   need a recovery/support path, not a success label or silent retry of the trade.
+- Whether the relay accepted the deposit is stored on the record, never inferred from the error that
+  reported it: a reload keeps the broadcast and loses the error, and a swap the relay never took can
+  only be moved by resubmitting it. Mark it after `submitTx` succeeds and nowhere else.
 - What a failed swap tells the visitor is ours to write, never the backend's `userMessage`. Every
   intent the widget creates is timed — `executeSwap` takes its deadline from the API — so an unfilled
   one expires and refunds itself; `userMessage` says to cancel on-chain to recover, which is the
@@ -104,20 +107,30 @@ pnpm check:ai-dev-files
   every step from the wallet prompt to settlement, and the fee lines behind a disclosure. It is the
   only place a swap lives — there is no activity card, and nothing below the form restates a swap,
   lists its transactions or names the step that failed. It stays open through settlement, a restored
-  record reopens it, and the form's primary action asks a dismissed one back. Closing a finished swap,
-  settled or failed, clears its record and frees the form; one still running keeps its record and
-  stays dismissed until asked for. It is closable from the moment the deposit is broadcast, because
+  record reopens it, and the form's primary action asks a dismissed one back. Only a settled swap
+  leaves with its record on close; a failed one keeps its hashes for support and frees the form from
+  its own explicit action, so an Escape is never what discards them. It is closable from the moment
+  the deposit is broadcast, because
   tracking can stall for reasons neither end controls. What the card used to carry alone lives in the
   dialog now: stalled tracking and blocked storage take the message slot when there is no failure to
   report, and support is offered only on a failure whose funds are still unaccounted for. The
-  exchange's follow-us line is the exchange's; a partner's users never see it.
+  exchange's follow-us line is the exchange's; a partner's users never see it. Once a deposit is
+  broadcast the dialog carries its explorer link, and the destination's once a fill hash exists —
+  that hash is on a chain whether or not this dialog can track it, and it is what support asks for.
 - The dialog renders a snapshot taken when it opened, never the live form: the form re-quotes behind
   it and a reload reseeds it from the URL, and neither may restate a swap that is already signed. A
   restored snapshot resolves its decimals and symbols from the live asset list rather than from the
-  stored record, and renders no dialog at all when it cannot — an amount scaled by trusted-from-
-  storage decimals is worse than the card. What it resolves *by* is the record's own spoke-side token
+  stored record, and draws no legs at all when it cannot — an amount scaled by trusted-from-storage
+  decimals is worse than the summary. What it resolves *by* is the record's own spoke-side token
   addresses, which is why they are stored: the saved `IntentResponseV2` is the hub's struct, and its
-  `inputToken` / `outputToken` are Sonic assets that name nothing in a spoke chain's token list.
+  `inputToken` / `outputToken` are Sonic assets that name nothing in a spoke chain's token list. The
+  source amount is stored for the same reason and read from the same place — that struct's
+  `inputAmount` is already net of the partner fee, so a dialog rebuilt from it restates the swap
+  lower than the visitor confirmed it. The reviewed minimum has no such twin and stays the intent's.
+- A swap the full snapshot cannot state still gets the dialog, from the record's own `summary`: the
+  stored line, the status, the resubmission and the hashes, with the legs left out. That is what the
+  summary is stored for, and it is why the dialog mounts beside the asset-loading and asset-error
+  forms rather than after them — an outage arrives when a deposit is already on a chain.
 - The destination leg states the reviewed minimum, not the live quote: it is the one number that is
   still true after the deposit is broadcast, and it satisfies the review's minimum-amount duty at the
   same time. The complete receiving address stays beside it, out of the disclosure.
@@ -151,7 +164,9 @@ pnpm check:ai-dev-files
   that holding's USD total, then `lib/pickerRanking.ts`'s curated tiers, then alphabetical. Review
   the tiers against the exchange's list rather than editing them here. `sortAssetGroups` takes prices
   as an optional argument and nothing in the widget supplies them — adding a price source is the one
-  change that turns the value rule on, and it puts a third-party host in a partner's page.
+  change that turns the value rule on, and it puts a third-party host in a partner's page. Its
+  `MARK_ORDER` is the same kind of curated list for chains: the decided non-EVM priority the all-networks
+  mark leads with, a display order and never an inventory — what a chain reaches still comes from the API.
 - `components/Dropdown.tsx` is the design system's navigation menu as a form control; use it rather
   than `<select>`, whose popup the OS draws in its own colours. Its panel is a top-layer popover
   because the builder's cards and scrolling column would clip an anchored one, so its position is a
@@ -161,7 +176,9 @@ pnpm check:ai-dev-files
 - Preserve the SODAX B2B palette and semantic CSS roles. Brand overrides validate values and derive
   contrast. Theme resolves pre-paint in `index.html` and must agree with `useBrand`; that script does
   no colour maths, which is why `writeBrand` spells out the theme a surface implies; a hand-written
-  URL carrying only `surface` paints the stored theme until `useBrand` mounts. A preset seeds
+  URL carrying only `surface` paints the stored theme until `useBrand` mounts. That script reads
+  `?theme=` only in embed mode: the builder rewrites its own URL with the brand it is previewing, and
+  `useBrand` leaves the builder's document alone, so reading it there lets a preview restyle the page. A preset seeds
   that same state; it must not name a real third-party brand or load a font outside `FONT_STACKS`.
 - A brand states one surface and both themes derive from it: the theme that surface already is renders
   it exactly, the other gets a ground derived from it, so `?theme=` and `sodax:theme` reach a branded

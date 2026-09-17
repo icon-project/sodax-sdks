@@ -145,6 +145,8 @@ export type ExecutionDependencies = {
   sign: (tx: RawTxReturnType) => Promise<string>;
   onPhase: (phase: ExecutionPhase) => void;
   onBroadcast: (request: SubmitTxRequestV2, intent: IntentResponseV2) => void;
+  /** The relay holds the deposit. Durable, because only a resubmission can move one it does not. */
+  onRelayAccepted: () => void;
 };
 
 /** Persist the broadcast before relay submission; retries must never sign a second deposit. */
@@ -193,6 +195,7 @@ export async function executeSwap(body: CreateIntentParamsV2, deps: ExecutionDep
   const submitted = await api.submitTx(request);
   if (!submitted.ok) throw submitted.error;
   if (!submitted.value.success) throw new Error('The relay has not accepted this swap yet. Retry tracking.');
+  deps.onRelayAccepted();
 }
 
 export function isUserRejection(error: unknown): boolean {

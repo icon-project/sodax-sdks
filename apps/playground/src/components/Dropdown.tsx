@@ -66,6 +66,12 @@ export function Dropdown<T extends string>({
   };
 
   const commit = (index: number) => {
+    // The panel is in the top layer, so a fieldset disabling the trigger cannot reach its rows: an
+    // open dropdown would still commit after the preview locked the builder. Ask the trigger.
+    if (trigger.current?.matches(':disabled')) {
+      setPlace(undefined);
+      return;
+    }
     const option = options[index];
     if (option) onChange(option.value);
     setPlace(undefined);

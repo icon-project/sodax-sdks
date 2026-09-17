@@ -35,7 +35,7 @@ const intent: IntentResponseV2 = {
   creator: checksummed,
   inputToken: srcHubAsset,
   outputToken: dstHubAsset,
-  inputAmount: '100000',
+  inputAmount: '99000',
   minOutputAmount: '95319',
   deadline: '2000000000',
   allowPartialFill: false,
@@ -53,6 +53,8 @@ const activity: Activity = {
   dstChainKey: ChainKeys.SOLANA_MAINNET,
   srcTokenAddress: checksummed,
   dstTokenAddress: solanaMint,
+  // The gross that was confirmed. The intent above carries 99000 — a 1% partner fee already taken.
+  inputAmount: '100000',
   walletAddress: checksummed,
   recipient: solanaMint,
   summary: '0.1 USDC → USDC',
@@ -89,7 +91,6 @@ describe('tokenAt', () => {
 describe('reviewFromActivity', () => {
   it('restates the swap from the intent that was signed', () => {
     const restored = reviewFromActivity(activity, choices, seconds);
-    expect(restored?.intent.inputAmount).toBe('100000');
     expect(restored?.intent.minOutputAmount).toBe('95319');
     expect(restored?.intent.srcAddress).toBe(checksummed);
     expect(restored?.intent.dstAddress).toBe(solanaMint);
@@ -107,6 +108,14 @@ describe('reviewFromActivity', () => {
     expect(restored?.intent.inputToken).toBe(checksummed);
     expect(restored?.intent.outputToken).toBe(solanaMint);
     expect(tokenAt(choices, ChainKeys.BASE_MAINNET, srcHubAsset)).toBeUndefined();
+  });
+
+  // The hub struct's inputAmount is net of the partner fee, so restating from it would reopen the
+  // dialog on a smaller swap than the visitor confirmed.
+  it('states the gross the visitor confirmed, not the fee-netted intent', () => {
+    const restored = reviewFromActivity(activity, choices, seconds);
+    expect(restored?.intent.inputAmount).toBe('100000');
+    expect(restored?.intent.inputAmount).not.toBe(activity.intent.inputAmount);
   });
 
   // Decimals decide what the amounts read as, so they come from the live list, never from storage.

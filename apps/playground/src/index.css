@@ -692,6 +692,24 @@ code,
   gap: 2px;
   text-align: center;
 }
+.review-caution {
+  text-align: center;
+  text-wrap: balance;
+}
+/* The record's own line, standing in for the legs when the asset list cannot draw them. */
+.review-restored {
+  font-size: var(--text-lead);
+  line-height: 1.3;
+  color: var(--text-heading);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.review-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-16);
+}
 .review-support {
   align-self: center;
   font-size: var(--text-body-small);
