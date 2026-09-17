@@ -32,13 +32,18 @@ import { SuiGrpcTransport } from './SuiGrpcTransport.js';
 
 type SuiNativeCoinResult = { $kind: 'NestedResult'; NestedResult: [number, number] };
 type SuiTxObject = { $kind: 'Input'; Input: number; type?: 'object' | undefined };
+type AssetManagerTarget = { packageId: string; moduleId: string; stateId: string };
 
 export class SuiSpokeService {
   private readonly config: ConfigService;
   public readonly transport: SuiTransport;
   /** @deprecated Renamed to `transport`, and no longer a raw `@mysten/sui` client. */
   public readonly publicClient: SuiTransport;
-  public assetManagerAddress: string | undefined;
+  /**
+   * `latest_package_id` reads still in flight, keyed by chain. An entry is dropped as soon as its
+   * read settles, so concurrent callers share one request while a later build always re-reads.
+   */
+  private readonly assetManagerLookups = new Map<SuiChainKey, Promise<AssetManagerTarget>>();
   private readonly pollingIntervalMs: number;
   private readonly maxTimeoutMs: number;
 
@@ -128,10 +133,24 @@ export class SuiSpokeService {
   }
 
   async getAssetManagerAddress(chainId: SuiChainKey): Promise<string> {
-    if (!this.assetManagerAddress) {
-      this.assetManagerAddress = await this.fetchAssetManagerAddress(chainId);
-    }
-    return this.assetManagerAddress.toString();
+    const { packageId, moduleId, stateId } = await this.resolveAssetManager(chainId);
+    return `${packageId}::${moduleId}::${stateId}`;
+  }
+
+  /**
+   * An upgraded Sui package lives at a new address and the superseded one aborts on
+   * `enforce_version`, so the id is read per call and never held between two builds.
+   */
+  private async resolveAssetManager(chainId: SuiChainKey): Promise<AssetManagerTarget> {
+    const inFlight = this.assetManagerLookups.get(chainId);
+    if (inFlight) return inFlight;
+
+    const lookup = this.fetchAssetManagerAddress(chainId)
+      .then(address => this.splitAddress(address))
+      .finally(() => this.assetManagerLookups.delete(chainId));
+
+    this.assetManagerLookups.set(chainId, lookup);
+    return lookup;
   }
 
   public async viewContract(
@@ -161,14 +180,40 @@ export class SuiSpokeService {
   async deposit<R extends boolean = false>(
     params: DepositParams<SuiChainKey, R>,
   ): Promise<TxReturnType<SuiChainKey, R>> {
+    const { tx, assetManager } = await this.buildDepositTransaction(params);
+
+    if (params.raw === true) {
+      // Serialize the unbuilt PTB as the @mysten/sui Transaction JSON. This round-trips through
+      // Transaction.from() on the consume side (signing + gas estimation). Sender and gas are left
+      // unset — the wallet provider sets the sender and selects gas at build({ client }) time.
+      return {
+        from: params.srcAddress,
+        to: `${assetManager.packageId}::${assetManager.moduleId}::transfer`,
+        value: params.amount,
+        data: tx.serialize(),
+      } satisfies TxReturnType<SuiChainKey, true> as TxReturnType<SuiChainKey, R>;
+    }
+
+    return params.walletProvider.signAndExecuteTxn(tx) satisfies Promise<TxReturnType<SuiChainKey, false>> as Promise<
+      TxReturnType<SuiChainKey, R>
+    >;
+  }
+
+  /** Both deposit paths build here, so the asset manager is resolved the same way for each. */
+  private async buildDepositTransaction<R extends boolean>(
+    params: DepositParams<SuiChainKey, R>,
+  ): Promise<{ tx: Transaction; assetManager: AssetManagerTarget }> {
     const { srcAddress: from, srcChainKey, token, to, amount, data = '0x' } = params;
     const isNative = isNativeToken(srcChainKey, token);
     const tx = new Transaction();
-    const coin: TransactionResult | SuiNativeCoinResult | SuiTxObject = isNative
-      ? await this.getNativeCoin(tx, amount)
-      : await this.getCoin(tx, token, amount, from);
     const connection = this.splitAddress(this.config.getChainConfig(srcChainKey).addresses.connection);
-    const assetManager = this.splitAddress(await this.getAssetManagerAddress(srcChainKey));
+    // Neither read needs the other, and only the coin lookup writes commands to `tx`, so running
+    // them together hides one round trip without touching the command order.
+    const [coin, assetManager]: [TransactionResult | SuiNativeCoinResult | SuiTxObject, AssetManagerTarget] =
+      await Promise.all([
+        isNative ? this.getNativeCoin(tx, amount) : this.getCoin(tx, token, amount, from),
+        this.resolveAssetManager(srcChainKey),
+      ]);
 
     // Call transfer function
     tx.moveCall({
@@ -183,21 +228,7 @@ export class SuiSpokeService {
       ],
     });
 
-    if (params.raw === true) {
-      // Serialize the unbuilt PTB as the @mysten/sui Transaction JSON. This round-trips through
-      // Transaction.from() on the consume side (signing + gas estimation). Sender and gas are left
-      // unset — the wallet provider sets the sender and selects gas at build({ client }) time.
-      return {
-        from: from,
-        to: `${assetManager.packageId}::${assetManager.moduleId}::transfer`,
-        value: amount,
-        data: tx.serialize(),
-      } satisfies TxReturnType<SuiChainKey, true> as TxReturnType<SuiChainKey, R>;
-    }
-
-    return params.walletProvider.signAndExecuteTxn(tx) satisfies Promise<TxReturnType<SuiChainKey, false>> as Promise<
-      TxReturnType<SuiChainKey, R>
-    >;
+    return { tx, assetManager };
   }
 
   public async sendMessage<Raw extends boolean>(
@@ -252,7 +283,7 @@ export class SuiSpokeService {
    * @returns {Promise<bigint>} The balance of the token.
    */
   public async getDeposit(params: GetDepositParams<SuiChainKey>): Promise<bigint> {
-    const assetmanager = this.splitAddress(await this.getAssetManagerAddress(params.srcChainKey));
+    const assetmanager = await this.resolveAssetManager(params.srcChainKey);
     const tx = new Transaction();
     const result = await this.viewContract(
       tx,
@@ -293,8 +324,7 @@ export class SuiSpokeService {
       coinType ===
       '0x03917a812fe4a6d6bc779c5ab53f8a80ba741f8af04121193fc44e0f662e2ceb::balanced_dollar::BALANCED_DOLLAR'
     ) {
-      coinType =
-        '0x3917a812fe4a6d6bc779c5ab53f8a80ba741f8af04121193fc44e0f662e2ceb::balanced_dollar::BALANCED_DOLLAR';
+      coinType = '0x3917a812fe4a6d6bc779c5ab53f8a80ba741f8af04121193fc44e0f662e2ceb::balanced_dollar::BALANCED_DOLLAR';
     }
 
     // `getCoins` is capped per page (gRPC `listCoins` limit) — the balance is a full sum across
@@ -320,9 +350,7 @@ export class SuiSpokeService {
   public async getWalletBalances(params: GetBalancesParams<SuiChainKey>): Promise<WalletBalanceMap> {
     const { srcChainKey, srcAddress, tokens } = params;
     const collector = createBalanceCollector({ logger: this.config.logger, chainKey: srcChainKey });
-    await settleWalletBalances(collector, tokens, token =>
-      this.getWalletBalance({ srcChainKey, srcAddress, token }),
-    );
+    await settleWalletBalances(collector, tokens, token => this.getWalletBalance({ srcChainKey, srcAddress, token }));
     return collector.finish();
   }
 
