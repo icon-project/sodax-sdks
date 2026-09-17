@@ -63,7 +63,7 @@ Read in order. Skipping `ai-rules.md` is the most common cause of agents reverti
 - [`../partner/SKILL.md`](../partner/SKILL.md) — partner fees on swap.
 - [`../recovery/SKILL.md`](../recovery/SKILL.md) — stuck-asset recovery for failed swaps.
 - [`../backend-api/SKILL.md`](../backend-api/SKILL.md) — `sodax.api.swaps.submitTx` and intent / orderbook lookups (step-by-step swap flow + diagnostics).
-- [`../swaps-api/SKILL.md`](../swaps-api/SKILL.md) — the typed Swaps API v2 backend client (`sodax.api.swaps`: quote, create-intent, submit-tx, fees) the swap flow calls under the hood.
+- [`../swaps-api/SKILL.md`](../swaps-api/SKILL.md) — the typed Swaps API backend client (`sodax.api.swaps`: quote, create-intent, submit-tx, fees) the swap flow calls under the hood.
 
 For tasks spanning multiple features, load the broad [`sodax-sdk` skill](../SKILL.md) instead.
 

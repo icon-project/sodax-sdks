@@ -24,14 +24,14 @@ Each route is a self-contained example of one feature:
 | Route | Feature | Guide |
 | --- | --- | --- |
 | `/swaps-sdk` | Intent-based swaps via the SDK | [Swaps](https://docs.sodax.com/developers/packages/foundation/sdk/functional-modules/swaps) |
-| `/swaps-api` | Backend Swaps API v2, called directly | [Swaps API](https://docs.sodax.com/developers/packages/foundation/swaps-api) |
+| `/swaps-api` | Backend Swaps API, called directly | [Swaps API](https://docs.sodax.com/developers/packages/foundation/swaps-api) |
 | `/money-market/:chainId` | Cross-chain lend / borrow | [Lend / Borrow](https://docs.sodax.com/developers/packages/foundation/sdk/functional-modules/money_market) |
 | `/bridge` | Cross-chain token transfers | [Bridge](https://docs.sodax.com/developers/packages/foundation/sdk/functional-modules/bridge) |
-| `/bridge-api` | Bridge API v2, called directly | [`BRIDGE_API.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/BRIDGE_API.md) |
+| `/bridge-api` | Bridge API, called directly | [`BRIDGE_API.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/BRIDGE_API.md) |
 | `/dex` | Concentrated liquidity | [`DEX.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/DEX.md) |
 | `/staking` | SODA staking | [Staking](https://docs.sodax.com/developers/packages/foundation/sdk/functional-modules/staking) |
 | `/leverage-yield` | Leveraged yield positions | [Leverage Yield](https://docs.sodax.com/developers/packages/foundation/sdk/functional-modules/leverage_yield) |
-| `/leverage-yield-api` | Leverage Yield API v2, called directly | [`LEVERAGE_YIELD_API.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/LEVERAGE_YIELD_API.md) |
+| `/leverage-yield-api` | Leverage Yield API, called directly | [`LEVERAGE_YIELD_API.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/LEVERAGE_YIELD_API.md) |
 | `/oracle` | Oracle price reads | [`ORACLE.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/ORACLE.md) |
 | `/partner-fee-claim` | Claiming accrued partner fees | [Monetize SDK](https://docs.sodax.com/developers/how-to/monetize_sdk) |
 | `/recovery` | Withdrawing stuck hub-wallet assets | [`RECOVERY.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/RECOVERY.md) |

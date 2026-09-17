@@ -174,7 +174,7 @@ Comprehensive hook table across 12 feature domains. Use this when you know the f
 
 ## Swaps API (`sodax.api.swaps`)
 
-Typed React Query wrappers over the backend Swaps API v2 (`sodax.api.swaps.*`), one per endpoint. Distinct from the on-chain `swap/` hooks (`useQuote`/`useStatus`/`useSwap`/…), which drive `sodax.swaps` (the `SwapService`).
+Typed React Query wrappers over the backend Swaps API (`sodax.api.swaps.*`), one per endpoint. Distinct from the on-chain `swap/` hooks (`useQuote`/`useStatus`/`useSwap`/…), which drive `sodax.swaps` (the `SwapService`).
 
 ### Tokens · quote · fees · gas (reads)
 
@@ -215,7 +215,7 @@ Typed React Query wrappers over the backend Swaps API v2 (`sodax.api.swaps.*`), 
 
 ## Bridge API (`sodax.api.bridge`)
 
-Typed React Query wrappers over the backend Bridge API v2 (`sodax.api.bridge.*`). Distinct from the on-chain `bridge/` hooks (`useBridge`/`useBridgeAllowance`/…), which drive `sodax.bridge` (the `BridgeService`). Smaller than the swaps family (no intent/solver surface). The fee / bridgeable-amount / bridgeable quotes are computable client-side (prefer the on-chain `useGetBridgeableAmount` / `sodax.bridge.*` — no round-trip), but are also mirrored here as HTTP hooks for parity.
+Typed React Query wrappers over the backend Bridge API (`sodax.api.bridge.*`). Distinct from the on-chain `bridge/` hooks (`useBridge`/`useBridgeAllowance`/…), which drive `sodax.bridge` (the `BridgeService`). Smaller than the swaps family (no intent/solver surface). The fee / bridgeable-amount / bridgeable quotes are computable client-side (prefer the on-chain `useGetBridgeableAmount` / `sodax.bridge.*` — no round-trip), but are also mirrored here as HTTP hooks for parity.
 
 | Hook | Type / Polling |
 |---|---|
@@ -233,7 +233,7 @@ Typed React Query wrappers over the backend Bridge API v2 (`sodax.api.bridge.*`)
 
 ## Leverage Yield API (`sodax.api.leverageYield`)
 
-Typed React Query wrappers over the backend Leverage Yield API v2 (`sodax.api.leverageYield.*`), one per endpoint. Distinct from the on-chain `leverageYield/` hooks (`useLeverageYieldDeposit`/`useLeverageYieldWithdraw`/…), which drive `sodax.leverageYield` (the `LeverageYieldService`). A vault deposit/withdraw IS an intent-based swap, so the intent / gas / fee / submit-tx hooks mirror the swaps family; the vault registry, vault reads and the split deposit/withdraw quote + create-intent hooks are leverage-yield's own.
+Typed React Query wrappers over the backend Leverage Yield API (`sodax.api.leverageYield.*`), one per endpoint. Distinct from the on-chain `leverageYield/` hooks (`useLeverageYieldDeposit`/`useLeverageYieldWithdraw`/…), which drive `sodax.leverageYield` (the `LeverageYieldService`). A vault deposit/withdraw IS an intent-based swap, so the intent / gas / fee / submit-tx hooks mirror the swaps family; the vault registry, vault reads and the split deposit/withdraw quote + create-intent hooks are leverage-yield's own.
 
 | Hook | Type / Polling |
 |---|---|

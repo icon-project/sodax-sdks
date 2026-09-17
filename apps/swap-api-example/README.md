@@ -8,7 +8,7 @@ A small Vite + React swap UI that demonstrates **`@sodax/swaps-api`** end to end
 - **`@sodax/wallet-sdk-react` is used only to connect a wallet and sign** the
   unsigned transactions the backend returns (`approve.tx`, `createIntent.tx`).
 - **No `@sodax/sdk` / `@sodax/dapp-kit`** — this proves the swaps-api client is a
-  standalone, minimal way to drive the v2 backend.
+  standalone, minimal way to drive the Swaps API.
 
 ## Flow
 

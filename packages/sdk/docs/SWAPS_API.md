@@ -1,6 +1,6 @@
 # Swaps API — `SwapsApiService`
 
-Typed HTTP client for the backend **Swaps API v2** (`/swaps/*`). Reached on the `Sodax` facade as
+Typed HTTP client for the backend **Swaps API** (`/swaps/*`). Reached on the `Sodax` facade as
 `sodax.api.swaps` — `sodax.api` is an alias for `sodax.backendApi`, and `.swaps` is the `SwapsApiService`
 instance.
 

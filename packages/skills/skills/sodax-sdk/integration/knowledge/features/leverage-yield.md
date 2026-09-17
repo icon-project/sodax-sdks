@@ -6,7 +6,7 @@ Access: `sodax.leverageYield`. Service class: `LeverageYieldService`. Feature ta
 
 > **Two products on one service.** Everything above the "Leverage positions" section is the **vault** — one shared ERC-4626 position at a single target LTV, entered and exited as an intent swap. A **leverage position** is the unpooled counterpart: one owner-controlled AAVE account per position, cloned by `LeveragePositionFactory`, with its own eMode category and leverage tier. They share the service and nothing else — vault methods take a `vault` address, position methods take a `position` address or open a new clone.
 
-> **Backend HTTP client:** for the typed `sodax.api.leverageYield` client that calls the backend Leverage Yield API v2 directly (vault reads, deposit/withdraw quotes + intents, submit-tx), see [`leverage-yield-api.md`](leverage-yield-api.md). Opting into `new Sodax({ leverageYield: { useBackendSubmitTx: true } })` routes this service's `vaultSwap` through that client's submit-tx flow (with client-side fallback).
+> **Backend HTTP client:** for the typed `sodax.api.leverageYield` client that calls the backend Leverage Yield API directly (vault reads, deposit/withdraw quotes + intents, submit-tx), see [`leverage-yield-api.md`](leverage-yield-api.md). Opting into `new Sodax({ leverageYield: { useBackendSubmitTx: true } })` routes this service's `vaultSwap` through that client's submit-tx flow (with client-side fallback).
 
 ## How it works
 

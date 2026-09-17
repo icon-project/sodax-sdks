@@ -13,7 +13,7 @@ When using the SODAX SDK, you can monetize your integration by collecting fees f
 | Configured fee, no `partnerFee` on the request | Applies automatically | Ignored — config is never read here |
 
 On the Swaps API path there is no default: omit `partnerFee` and the swap succeeds with no fee.
-See [Swaps API monetization](#swaps-api-monetization). Bridge API v2 is different — omitted
+See [Swaps API monetization](#swaps-api-monetization). The Bridge API is different — omitted
 `partnerFee` falls back to the backend's `bridgePartnerFee`.
 
 The sections immediately below describe the orchestrator path.

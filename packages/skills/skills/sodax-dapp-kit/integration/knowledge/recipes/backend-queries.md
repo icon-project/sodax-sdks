@@ -45,7 +45,7 @@ Read-only data hooks. No wallet connection required.
 | `useSwapsApiSubmitTx` | Submit swap tx to backend |
 | `useSwapsApiSubmitTxStatus` | Check submitted swap status |
 
-The full Swaps API v2 surface (quote, allowance, approve, create/submit/cancel intent, fees, gas, …) is wrapped one hook per endpoint under the `useSwapsApi*` prefix — see [hooks-index.md](../reference/hooks-index.md).
+The full Swaps API surface (quote, allowance, approve, create/submit/cancel intent, fees, gas, …) is wrapped one hook per endpoint under the `useSwapsApi*` prefix — see [hooks-index.md](../reference/hooks-index.md).
 
 ## Track Intent
 
@@ -193,7 +193,7 @@ function SubmitButton({ request, baseURL }: { request: SubmitTxRequestV2; baseUR
 }
 ```
 
-Poll the processing status with `useSwapsApiSubmitTxStatus` — it requires **both** `txHash` and `srcChainKey` (the v2 status endpoint needs the source chain key) and stops polling on `solved` / `failed`:
+Poll the processing status with `useSwapsApiSubmitTxStatus` — it requires **both** `txHash` and `srcChainKey` (the status endpoint needs the source chain key) and stops polling on `solved` / `failed`:
 
 ```tsx
 import { useSwapsApiSubmitTxStatus } from '@sodax/dapp-kit';

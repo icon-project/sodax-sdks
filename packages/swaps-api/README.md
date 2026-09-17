@@ -1,6 +1,6 @@
 # @sodax/swaps-api
 
-Minimal, type-safe HTTP client for the SODAX backend **Swaps API v2**.
+Minimal, type-safe HTTP client for the SODAX backend **Swaps API**.
 
 - Implements the `ISwapsApiV2` contract from `@sodax/types` over `fetch`.
 - Validates every response at runtime with [valibot](https://valibot.dev), and
@@ -50,7 +50,7 @@ and an `apiKey`.
 
 ## Methods
 
-One method per Swaps API v2 endpoint, mirroring `ISwapsApiV2`:
+One method per Swaps API endpoint, mirroring `ISwapsApiV2`:
 
 | Method | Endpoint |
 |---|---|

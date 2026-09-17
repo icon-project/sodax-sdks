@@ -4,7 +4,7 @@ icon: code
 generatedFrom: packages/bridge-api/README.md
 ---
 
-Minimal, type-safe HTTP client for the SODAX backend **Bridge API v2**.
+Minimal, type-safe HTTP client for the SODAX backend **Bridge API**.
 
 - Implements the `IBridgeApiV2` contract from `@sodax/types` over `fetch`.
 - Validates every response at runtime with [valibot](https://valibot.dev), and

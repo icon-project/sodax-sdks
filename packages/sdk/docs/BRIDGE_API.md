@@ -1,6 +1,6 @@
 # Bridge API — `BridgeApiService`
 
-Typed HTTP client for the backend **Bridge API v2** (`/bridge/*`). Reached on the `Sodax` facade as
+Typed HTTP client for the backend **Bridge API** (`/bridge/*`). Reached on the `Sodax` facade as
 `sodax.api.bridge` — `sodax.api` is an alias for `sodax.backendApi`, and `.bridge` is the
 `BridgeApiService` instance.
 

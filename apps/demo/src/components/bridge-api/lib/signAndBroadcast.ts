@@ -1,4 +1,4 @@
-// Sign-and-broadcast dispatcher for the unsigned transactions the Bridge API v2 returns
+// Sign-and-broadcast dispatcher for the unsigned transactions the Bridge API returns
 // (`approve.tx`, `createBridgeIntent.tx`). The API leaves signing entirely to the client, and
 // neither @sodax/dapp-kit nor @sodax/sdk ship a utility for this step. Ported from the swaps-api
 // demo dispatcher (feature-agnostic over `RawTxReturnType`); only the symbol names differ.
@@ -49,7 +49,7 @@ export class BridgeApiSignError extends Error {
 }
 
 /**
- * Sign and broadcast an unsigned transaction returned by the Bridge API v2 using only the chain's
+ * Sign and broadcast an unsigned transaction returned by the Bridge API using only the chain's
  * wallet provider. Returns the spoke-chain tx hash / signature / digest. `tx` is the typed
  * `RawTxReturnType` variant for `chainKey` (already validated + bigint-reconstructed by the SDK),
  * so narrowing it to the per-chain variant below is sound. Chains whose wallet-provider interface

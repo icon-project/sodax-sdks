@@ -5,7 +5,7 @@
     "access": "public"
   },
   "version": "2.2.0-rc.5",
-  "description": "Minimal type-safe HTTP client for the SODAX backend Bridge API v2",
+  "description": "Minimal type-safe HTTP client for the SODAX backend Bridge API",
   "license": "MIT",
   "keywords": [
     "sodax",
