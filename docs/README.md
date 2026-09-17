@@ -132,7 +132,7 @@ file `pnpm check:docs-nav` gates — a redirect edited there can strand one of t
 check holds. Only the dashboard's own Settings pages (domain, auth, add-ons, privacy, search) live
 outside git.
 
-Dashboard editing is still a normal way to work — with one exception. The 25 pages listed
+Dashboard editing is still a normal way to work — with one exception. The 26 pages listed
 below are copies. Each is generated from a file that lives next to the code it documents,
 and `pnpm docs:sync-pages` rewrites the copy from that file. An edit typed into one of
 these pages survives only until the next sync, and until then `pnpm check:docs-pages`
@@ -140,7 +140,8 @@ fails, which blocks everyone else's work too.
 
 **Do not edit these pages here.** The change has to go into the source they come from:
 
-- `/developers/packages/foundation/sdk` and `/developers/packages/foundation/swaps-api`
+- `/developers/packages/foundation/sdk`, `/developers/packages/foundation/swaps-api` and
+  `/developers/packages/foundation/bridge-api`
 - `/developers/packages/foundation/sdk/functional-modules/` — `swaps`, `money_market`,
   `bridge`, `staking`, `migration`, `leverage_yield`, `leverage_yield_apr`
 - `/developers/packages/foundation/sdk/tooling-modules/` — `backend_api`,

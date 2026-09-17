@@ -17,7 +17,7 @@ Do not hardcode supported chain counts or chain lists in agent guidance. When ex
 | `packages/types` | Shared TypeScript types, chain IDs, chain configs, wallet/API interfaces | [`packages/types/AGENTS.md`](packages/types/AGENTS.md) |
 | `packages/libs` | Internal dependency isolation and stable third-party re-export subpaths | [`packages/libs/AGENTS.md`](packages/libs/AGENTS.md) |
 | `packages/sdk` | Core `Sodax` facade, hub-and-spoke services, intent relay | [`packages/sdk/AGENTS.md`](packages/sdk/AGENTS.md) |
-| `packages/swaps-api` | Standalone type-safe HTTP client for the backend Swaps API v2; the wire source the SDK's `sodax.api.swaps` wraps | [`packages/swaps-api/README.md`](packages/swaps-api/README.md) |
+| `packages/swaps-api`, `packages/bridge-api` | Standalone type-safe HTTP clients for the backend Swaps / Bridge API v2; the wire sources the SDK's `sodax.api.swaps` / `sodax.api.bridge` wrap | [`swaps-api`](packages/swaps-api/README.md), [`bridge-api`](packages/bridge-api/README.md) |
 | `packages/wallet-sdk-core` | Multi-chain wallet providers for signing and broadcasting | [`packages/wallet-sdk-core/AGENTS.md`](packages/wallet-sdk-core/AGENTS.md) |
 | `packages/wallet-sdk-react` | React wallet state layer, connectors, providers, wallet modal primitives | [`packages/wallet-sdk-react/AGENTS.md`](packages/wallet-sdk-react/AGENTS.md) |
 | `packages/dapp-kit` | React hooks combining SDK services, wallet providers, and React Query | [`packages/dapp-kit/AGENTS.md`](packages/dapp-kit/AGENTS.md) |
@@ -43,8 +43,8 @@ Do not hardcode supported chain counts or chain lists in agent guidance. When ex
 ## Dependency Direction
 
 - `@sodax/types` has no package dependencies.
-- `@sodax/swaps-api` depends on `@sodax/types` (and `valibot`) — a standalone swaps-API wire client with no dependency on `@sodax/sdk`.
-- `@sodax/sdk` depends on `@sodax/types` and `@sodax/swaps-api` (its `SwapsApiService` wraps the latter) and re-exports public shared types.
+- `@sodax/swaps-api` and `@sodax/bridge-api` each depend on `@sodax/types` (and `valibot`) — standalone wire clients with no dependency on `@sodax/sdk`.
+- `@sodax/sdk` depends on `@sodax/types`, `@sodax/swaps-api`, and `@sodax/bridge-api` (its `SwapsApiService` / `BridgeApiService` wrap the two wire clients) and re-exports public shared types.
 - `@sodax/wallet-sdk-core` depends on `@sodax/types`.
 - `@sodax/wallet-sdk-react` depends on `@sodax/types` and `@sodax/wallet-sdk-core`.
 - `@sodax/dapp-kit` depends on `@sodax/sdk` and imports wallet-provider contracts through SDK/type exports.

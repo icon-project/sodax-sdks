@@ -8,8 +8,15 @@ response is validated at runtime against a valibot schema, so a backend contract
 
 Access: `sodax.api.bridge`. Service class: `BridgeApiService`. **Errors:** every failure (network, timeout,
 non-2xx HTTP, or response-shape mismatch) returns `Result<T, SodaxError<'EXTERNAL_API_ERROR'>>` with
-`feature: 'backend'`, `context.api: 'bridge'`, and `context.endpoint` (the path); the underlying failure
-is on `error.cause`. Like `sodax.api.swaps`, the bridge **HTTP client** is uniformly `feature: 'backend'`
+`feature: 'backend'`, `context.api: 'bridge'`, and `context.endpoint` (the path). The underlying failure
+is preserved on `error.cause` — a `BridgeApiError` from the `@sodax/bridge-api` client this service wraps
+(read its `code`: `NETWORK_ERROR` | `TIMEOUT_ERROR` | `HTTP_ERROR` | `PARSE_ERROR` | `VALIDATION_ERROR`;
+the same code is mirrored on `error.context.code`, and both `BridgeApiError` and the `BridgeApiErrorCode`
+union are re-exported from `@sodax/sdk`). Idempotent
+reads/polls (and pure-compute POSTs like `getFee`) retry transient failures; mutating calls do not —
+except the apiguard's transient key-verification `503`, which the wire client replays for every call
+(the guard rejects before the handler runs). A `401`/`403` is terminal until the consumer fixes the key.
+Like `sodax.api.swaps`, the bridge **HTTP client** is uniformly `feature: 'backend'`
 (with a per-service `context.api` tag — `'bridge'`).
 
 > Lower-level than `sodax.bridge` (the `BridgeService` orchestrator that deposits + relays end-to-end).

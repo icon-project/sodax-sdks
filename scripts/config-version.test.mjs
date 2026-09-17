@@ -98,7 +98,16 @@ const ADJACENT = [
 // CONFIG_VERSION, so adding exports to index.ts would have corrupted a release silently.
 const DECOY_ABOVE = 'export const MIN_CONFIG_VERSION = 200;';
 const DECOY_BELOW = 'export const MAX_CONFIG_VERSION = 300;';
-const PACKAGE_DIRS = ['types', 'libs', 'swaps-api', 'skills', 'wallet-sdk-core', 'sdk', 'wallet-sdk-react', 'dapp-kit'];
+// Read from bump-versions.sh rather than restated: a fixture missing a package the script bumps fails
+// as an unreadable path, blaming whichever PR added the package instead of the drift.
+const PACKAGE_DIRS = (() => {
+  const script = readFileSync(join(REPO_ROOT, 'scripts/bump-versions.sh'), 'utf8');
+  const declared = /^PACKAGES=\(([^)]*)\)/m.exec(script);
+  assert.ok(declared, 'bump-versions.sh must declare a PACKAGES=(...) array');
+  const dirs = declared[1].trim().split(/\s+/).filter(Boolean);
+  assert.ok(dirs.length > 0, 'bump-versions.sh declared an empty PACKAGES array');
+  return dirs;
+})();
 
 const workspace = (t, version, configVersion, { decoys = false } = {}) => {
   const root = mkdtempSync(join(tmpdir(), 'config-version-'));

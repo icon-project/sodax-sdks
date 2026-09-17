@@ -24,6 +24,11 @@
       "icon": "code"
     },
     {
+      "src": "packages/bridge-api/README.md",
+      "dest": "developers/packages/foundation/bridge-api.md",
+      "icon": "code"
+    },
+    {
       "src": "packages/sdk/docs/SWAPS.md",
       "dest": "developers/packages/foundation/sdk/functional-modules/swaps.md",
       "title": "Swaps",
