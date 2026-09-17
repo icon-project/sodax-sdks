@@ -68,6 +68,12 @@ built on `100` instead of the published `235`. Check the branch that actually sh
 origin/<branch>:<path>`), and check what CI actually runs on — `ci.yml` never runs on `release`, which
 is what forced the verification to live in the publish workflow rather than in a test.
 
+This extends to delegation. A subagent inherits the checked-out tree, not the intent behind the task,
+so on a stale branch it will confidently report that a symbol does not exist when it exists on `main`.
+Establish the real base *before* dispatching, and say in the prompt which ref to read (`git show
+origin/main:<path>`, `git grep <pat> origin/main -- <path>`). A report contradicting what the shipping
+branch contains is a stale read until proven otherwise.
+
 ## L8 — Ask about system facts outside the repo; do not infer them
 
 **Corrections:** assumed the backend *maintained* its own `version` number (it re-exposes

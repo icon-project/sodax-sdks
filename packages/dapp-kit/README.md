@@ -336,6 +336,22 @@ Typed wrappers over the backend Swaps API v2 — one `useSwapsApi*` hook per end
 
 See [`src/hooks/swapsApi/`](https://github.com/icon-project/sodax-sdks/tree/main/packages/dapp-kit/src/hooks/swapsApi) for the full set (tokens, deadline, allowance, approve, submit/cancel intent, status, hash, packet, extra-data, intent lookups, limit orders, gas, fees).
 
+### Backend API retry policy
+
+The backend-API hook families — `useSwapsApi*`, `useBridgeApi*`, `useLeverageYieldApi*` — all default
+`retry` to [`retryUnlessAuthFailure()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/shared/retryUnlessAuthFailure.ts):
+a transport blip is replayed up to 3 times, but a terminal API-key rejection (401/403) never is, since
+only a corrected key resolves one. The 1s status polls (`useSwapsApiStatus`, and the three
+`*SubmitTxStatus` hooks) stop polling on a rejected key too, rather than re-requesting forever.
+
+Both `retryUnlessAuthFailure` and `isAuthFailure` (the guard it uses, re-exported from `@sodax/sdk`)
+are importable from `@sodax/dapp-kit`. Override the default per call through `queryOptions` /
+`mutationOptions`:
+
+```tsx
+useBridgeApiTokens({ queryOptions: { retry: (count, error) => !isAuthFailure(error) && count < 5 } });
+```
+
 ### Utils
 
 DEX param builders:
