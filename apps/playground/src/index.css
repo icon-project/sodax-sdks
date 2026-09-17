@@ -452,15 +452,6 @@ code,
 .preview-toolbar {
   margin-bottom: 18px;
 }
-.widget-preview {
-  max-width: 520px;
-  width: 100%;
-  margin: 0 auto;
-  transition: max-width 180ms;
-}
-.preview-mobile {
-  max-width: 375px;
-}
 .segmented {
   display: flex;
   gap: 4px;
@@ -475,10 +466,6 @@ code,
 }
 .builder-tabs {
   padding: 0 4px;
-}
-.studio-code {
-  grid-column: 1 / -1;
-  min-width: 0;
 }
 .brand-card .brand-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -785,37 +772,12 @@ code,
   .app-embed-content {
     padding: 16px;
   }
-  .stage {
-    padding: 20px 12px;
-    border-width: 4px;
-  }
-  .app-main {
-    gap: 24px;
-  }
-  .studio-heading h2 {
-    font-size: 32px;
-  }
   .widget-modal {
     padding: 18px;
   }
   /* The same sentence needs a third line in a narrow frame, and it must already be reserved. */
   .review-message {
     min-height: 54px;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .widget-preview {
-    transition: none;
-  }
-}
-
-@media (max-width: 1180px) {
-  .app-main {
-    grid-template-columns: 1fr;
-  }
-
-  .stage {
-    padding: var(--space-24);
   }
 }
 
@@ -2478,13 +2440,6 @@ body:has(.app-embed) {
   grid-template-columns: minmax(340px, 560px) minmax(0, 1fr);
   gap: 20px;
 }
-.studio-heading {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
 .studio-heading h2 {
   font-size: clamp(26px, 3vw, 34px);
   line-height: 1.2;
@@ -2515,7 +2470,7 @@ body:has(.app-embed) {
   font-size: var(--text-body-small);
 }
 /* Empty on every ordinary run — the buttons confirm themselves — so it reserves no height. */
-.studio-heading .studio-status {
+.studio-action-group .studio-status {
   margin: 0;
   line-height: 18px;
   text-align: right;
@@ -2735,7 +2690,7 @@ body:has(.app-embed) {
   opacity: 1;
   cursor: default;
 }
-@media (min-width: 981px) and (min-height: 720px) {
+@media (width >= 1181px) and (height >= 720px) {
   .app-studio {
     height: 100dvh;
     min-height: 0;
@@ -2803,7 +2758,7 @@ body:has(.app-embed) {
     margin: 0;
   }
 }
-@media (max-width: 980px) {
+@media (width < 1181px) {
   .app-main {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -2854,5 +2809,75 @@ body:has(.app-embed) {
   .asset-logo-img {
     width: 24px;
     height: 24px;
+  }
+}
+
+/* ── The studio's two shapes ────────────────────────────────────────────── */
+/* Wide: all four children are placed, so the builder keeps the left column although the preview
+   comes first in the markup, and the actions sit on the heading's line rather than under it.
+   Paired with its `<` twin so a fractional width under zoom lands in one of them, never neither. */
+@media (width >= 1181px) {
+  .studio-heading {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .studio-action-group {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+    align-self: center;
+  }
+  .build-column {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .preview-column {
+    grid-column: 2;
+    grid-row: 2;
+  }
+}
+/* Narrow: the widget, then what you do with it, then the builder you scroll to. */
+@media (width < 1181px) {
+  .studio-heading {
+    order: 1;
+  }
+  .preview-column {
+    order: 2;
+  }
+  .studio-action-group {
+    order: 3;
+    width: 100%;
+  }
+  .build-column {
+    order: 4;
+  }
+  .studio-actions {
+    justify-content: flex-start;
+  }
+  .studio-action-group .studio-status {
+    text-align: left;
+  }
+  /* The builder is a section rather than a column here, and the tabs are its header. */
+  .builder-tabs {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+}
+/* A phone spends its fold on whatever sits above the widget, so the lead and the width presets go.
+   The frame gives up both caps, the mobile preset included: the stage is already narrower. */
+@media (max-width: 640px) {
+  .studio-heading p {
+    display: none;
+  }
+  .preview-width {
+    display: none;
+  }
+  .preview-toolbar {
+    min-height: 0;
+    margin-bottom: 8px;
+  }
+  .preview-frame {
+    max-width: none;
   }
 }

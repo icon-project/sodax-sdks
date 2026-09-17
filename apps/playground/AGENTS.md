@@ -138,6 +138,12 @@ pnpm check:ai-dev-files
   because which one applies is a layout question: `--widget-height` floors the stacked layouts,
   `--builder-height` sets the side-by-side one, capped at the column. Its header gap and caption
   margin are load-bearing — they are the height the frame reaches the card with.
+- Stacked, the preview precedes the builder in the markup and the actions follow it: a partner
+  opening the page narrow came to see the widget, not to scroll a Setup card to reach it. The
+  side-by-side layout places all four children of `.app-main` explicitly rather than reordering
+  them, so the builder keeps the left column without the markup owing it that order. Its two
+  queries are exclusive at 1180/1181 — the stacked one is every other viewport, a short desktop
+  window included.
 - The picker names what the wallet holds, as the exchange does: an asset's total across its networks
   under the hovered tile, and the hovered network's own amount in place of the flyout's caption.
   Balances are read per chain while the dialog is open, never on a timer behind a closed one.

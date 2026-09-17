@@ -104,36 +104,36 @@ export function SwapView({ flow, brandControls }: { flow: SwapFlow; brandControl
   return (
     <>
       <div className="studio-heading">
-        <div>
-          <h2>Build your swap widget.</h2>
-          <p className="muted">Set the trade, make it yours, and embed it in your app.</p>
+        <h2>Build your swap widget.</h2>
+        <p className="muted">Set the trade, make it yours, and embed it in your app.</p>
+      </div>
+      {/* Its own row rather than the heading's trailing half: stacked, the widget leads and these
+          follow it, which it cannot do from inside the heading above both columns. */}
+      <div className="studio-action-group">
+        <div className="studio-actions">
+          <button
+            type="button"
+            className="btn"
+            disabled={previewBusy}
+            onClick={() => {
+              flow.resetDefaults();
+              brandControls.reset();
+              setNotice('');
+              setShareFallback('');
+            }}
+          >
+            Reset all
+          </button>
+          <button type="button" className="btn" disabled={!configured} onClick={share}>
+            <CopyLabel label="Share" copied={copied === 'share'} />
+          </button>
+          <button type="button" className="btn btn-primary" disabled={!configured} onClick={copy}>
+            <CopyLabel label="Copy embed" copied={copied === 'embed'} />
+          </button>
         </div>
-        <div className="studio-action-group">
-          <div className="studio-actions">
-            <button
-              type="button"
-              className="btn"
-              disabled={previewBusy}
-              onClick={() => {
-                flow.resetDefaults();
-                brandControls.reset();
-                setNotice('');
-                setShareFallback('');
-              }}
-            >
-              Reset all
-            </button>
-            <button type="button" className="btn" disabled={!configured} onClick={share}>
-              <CopyLabel label="Share" copied={copied === 'share'} />
-            </button>
-            <button type="button" className="btn btn-primary" disabled={!configured} onClick={copy}>
-              <CopyLabel label="Copy embed" copied={copied === 'embed'} />
-            </button>
-          </div>
-          <p className="studio-status small" role="status">
-            {notice}
-          </p>
-        </div>
+        <p className="studio-status small" role="status">
+          {notice}
+        </p>
         {shareFallback && (
           <input
             className="input share-link"
@@ -143,6 +143,46 @@ export function SwapView({ flow, brandControls }: { flow: SwapFlow; brandControl
             onFocus={event => event.target.select()}
           />
         )}
+      </div>
+      {/* Before the builder, because a narrow viewport reads this order and a partner opening the
+          page on a phone came to see the widget. The wide layout places both columns explicitly. */}
+      <div className="preview-column">
+        <div className="preview-toolbar">
+          <span className="eyebrow">Live preview</span>
+          <fieldset className="segmented preview-width" aria-label="Preview width">
+            <button type="button" className="btn" aria-pressed={!mobile} onClick={() => setMobile(false)}>
+              Desktop
+            </button>
+            <button type="button" className="btn" aria-pressed={mobile} onClick={() => setMobile(true)}>
+              Mobile
+            </button>
+          </fieldset>
+        </div>
+        <div className="preview-canvas">
+          {configured ? (
+            <WidgetPreview
+              key={configured.preview}
+              setupUrl={configured.preview}
+              brand={brand}
+              mobile={mobile}
+              matchHeight={builderHeight}
+              onBusy={setPreviewBusy}
+            />
+          ) : (
+            <p className="muted">
+              {flow.assetsError ??
+                (flow.isLoadingAssets ? 'Loading available assets…' : 'Complete Setup to preview your widget.')}
+            </p>
+          )}
+          {flow.assetsError && (
+            <button className="btn" type="button" onClick={flow.retryAssets}>
+              Retry loading assets
+            </button>
+          )}
+        </div>
+        <p className="preview-caption muted small">
+          Swaps in this preview use real funds. Your exported starting trade is set in Setup.
+        </p>
       </div>
       <div className="build-column">
         <fieldset className="segmented builder-tabs" aria-label="Widget configuration">
@@ -227,44 +267,6 @@ export function SwapView({ flow, brandControls }: { flow: SwapFlow; brandControl
             Finish or close the current wallet or swap flow before changing the configuration.
           </p>
         )}
-      </div>
-      <div className="preview-column">
-        <div className="preview-toolbar">
-          <span className="eyebrow">Live preview</span>
-          <fieldset className="segmented" aria-label="Preview width">
-            <button type="button" className="btn" aria-pressed={!mobile} onClick={() => setMobile(false)}>
-              Desktop
-            </button>
-            <button type="button" className="btn" aria-pressed={mobile} onClick={() => setMobile(true)}>
-              Mobile
-            </button>
-          </fieldset>
-        </div>
-        <div className="preview-canvas">
-          {configured ? (
-            <WidgetPreview
-              key={configured.preview}
-              setupUrl={configured.preview}
-              brand={brand}
-              mobile={mobile}
-              matchHeight={builderHeight}
-              onBusy={setPreviewBusy}
-            />
-          ) : (
-            <p className="muted">
-              {flow.assetsError ??
-                (flow.isLoadingAssets ? 'Loading available assets…' : 'Complete Setup to preview your widget.')}
-            </p>
-          )}
-          {flow.assetsError && (
-            <button className="btn" type="button" onClick={flow.retryAssets}>
-              Retry loading assets
-            </button>
-          )}
-        </div>
-        <p className="preview-caption muted small">
-          Swaps in this preview use real funds. Your exported starting trade is set in Setup.
-        </p>
       </div>
     </>
   );
