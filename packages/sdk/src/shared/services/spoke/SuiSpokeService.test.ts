@@ -19,8 +19,8 @@
  * SUT calls are spied per-test: getCoins, simulate, estimateGas, fetchLatestPackageId,
  * waitForTransaction. The `client.core` translation itself is covered by SuiGrpcTransport.test.ts.
  *
- * The cached `assetManagerAddress` field persists for the file lifetime, so `beforeEach` resets it
- * to `undefined` to keep cache-hit/cache-miss tests independent.
+ * The asset manager package id is read from chain on every build, so a test that reaches a build
+ * path stubs `fetchLatestPackageId` itself.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { bcs } from '@mysten/sui/bcs';
@@ -100,9 +100,6 @@ const makeCoinsPage = (
 
 beforeEach(() => {
   vi.clearAllMocks();
-  // Cache lives on the shared instance for the file lifetime — reset so cache-hit / cache-miss
-  // tests don't bleed into each other.
-  suiSpoke.assetManagerAddress = undefined;
   (mockSuiProvider.signAndExecuteTxn as ReturnType<typeof vi.fn>).mockReset();
 });
 
@@ -158,10 +155,6 @@ describe('SuiSpokeService — constructor', () => {
     const custom = new Sodax({ chains: { [SUI]: { grpc_url: 'https://my-grpc.example' } } });
 
     expect(custom.spoke.sui.transport.endpoint).toBe('https://my-grpc.example');
-  });
-
-  it('starts with an empty asset-manager cache', () => {
-    expect(suiSpoke.assetManagerAddress).toBeUndefined();
   });
 });
 
@@ -355,14 +348,16 @@ describe('SuiSpokeService.encodeSimulationParams', () => {
 });
 
 // =========================================================================
-// 8. getAssetManagerAddress — fetch-then-cache semantics
+// 8. getAssetManagerAddress — read per call, overlapping reads shared
 // =========================================================================
 
 describe('SuiSpokeService.getAssetManagerAddress', () => {
-  it('first call fetches the package id and composes pkg::asset_manager::configId', async () => {
+  const UPGRADED_PKG = `0x${'9'.repeat(64)}`;
+
+  it('fetches the package id and composes pkg::asset_manager::configId', async () => {
     // Use the REAL package id from config so the composed result round-trips against
     // suiConfig.addresses.assetManager.
-    const spy = vi.spyOn(suiSpoke.transport, 'fetchLatestPackageId').mockResolvedValueOnce(SUI_ASSET_MGR_PKG);
+    const spy = vi.spyOn(suiSpoke.transport, 'fetchLatestPackageId').mockResolvedValue(SUI_ASSET_MGR_PKG);
 
     const result = await suiSpoke.getAssetManagerAddress(SUI);
 
@@ -371,14 +366,44 @@ describe('SuiSpokeService.getAssetManagerAddress', () => {
     expect(spy).toHaveBeenCalledWith(SUI_ASSET_MGR_CONFIG_ID);
   });
 
-  it('second call returns the cached value without re-fetching', async () => {
-    const spy = vi.spyOn(suiSpoke.transport, 'fetchLatestPackageId').mockResolvedValueOnce(SUI_ASSET_MGR_PKG);
+  it('re-reads on the next call, so a package upgrade is picked up', async () => {
+    const spy = vi
+      .spyOn(suiSpoke.transport, 'fetchLatestPackageId')
+      .mockResolvedValueOnce(SUI_ASSET_MGR_PKG)
+      .mockResolvedValueOnce(UPGRADED_PKG);
 
-    const first = await suiSpoke.getAssetManagerAddress(SUI);
-    const second = await suiSpoke.getAssetManagerAddress(SUI);
+    await expect(suiSpoke.getAssetManagerAddress(SUI)).resolves.toBe(SUI_ASSET_MGR);
+    await expect(suiSpoke.getAssetManagerAddress(SUI)).resolves.toBe(
+      `${UPGRADED_PKG}::${SUI_ASSET_MGR_MOD}::${SUI_ASSET_MGR_CONFIG_ID}`,
+    );
+    expect(spy).toHaveBeenCalledTimes(2);
+  });
 
-    expect(second).toBe(first);
+  it('shares one read between callers that overlap', async () => {
+    // Collect every resolver, not just the last one: a regression that starts 50 reads then fails
+    // the call-count assertion, instead of leaving 49 promises pending until the test times out.
+    const releases: Array<(packageId: string) => void> = [];
+    const spy = vi
+      .spyOn(suiSpoke.transport, 'fetchLatestPackageId')
+      .mockImplementation(() => new Promise<string>(resolve => releases.push(resolve)));
+
+    // Every caller asks while the read is still pending, so none of them can be a cache hit.
+    const calls = Array.from({ length: 50 }, () => suiSpoke.getAssetManagerAddress(SUI));
+    for (const release of releases) release(SUI_ASSET_MGR_PKG);
+
+    expect(new Set(await Promise.all(calls))).toEqual(new Set([SUI_ASSET_MGR]));
     expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not hold on to a failed read', async () => {
+    const spy = vi
+      .spyOn(suiSpoke.transport, 'fetchLatestPackageId')
+      .mockRejectedValueOnce(new Error('node down'))
+      .mockResolvedValueOnce(SUI_ASSET_MGR_PKG);
+
+    await expect(suiSpoke.getAssetManagerAddress(SUI)).rejects.toThrow('node down');
+    await expect(suiSpoke.getAssetManagerAddress(SUI)).resolves.toBe(SUI_ASSET_MGR);
+    expect(spy).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -476,7 +501,7 @@ describe('SuiSpokeService.deposit', () => {
   const expectedTransferTarget = `${SUI_ASSET_MGR_PKG}::${SUI_ASSET_MGR_MOD}::transfer`;
 
   it('native raw=true → returns rawTx targeting <assetManager>::transfer with value=amount', async () => {
-    suiSpoke.assetManagerAddress = SUI_ASSET_MGR;
+    vi.spyOn(suiSpoke.transport, 'fetchLatestPackageId').mockResolvedValue(SUI_ASSET_MGR_PKG);
 
     const result = await suiSpoke.deposit(depositParams<true>({ token: SUI_NATIVE, raw: true }));
 
@@ -493,7 +518,7 @@ describe('SuiSpokeService.deposit', () => {
   });
 
   it('native raw=true does NOT call publicClient.getCoins (native path uses tx.gas)', async () => {
-    suiSpoke.assetManagerAddress = SUI_ASSET_MGR;
+    vi.spyOn(suiSpoke.transport, 'fetchLatestPackageId').mockResolvedValue(SUI_ASSET_MGR_PKG);
     const getCoinsSpy = vi.spyOn(suiSpoke.transport, 'getCoins');
 
     await suiSpoke.deposit(depositParams<true>({ token: SUI_NATIVE, raw: true }));
@@ -502,7 +527,7 @@ describe('SuiSpokeService.deposit', () => {
   });
 
   it('ERC20 raw=true → fetches user coins and returns rawTx with value=amount', async () => {
-    suiSpoke.assetManagerAddress = SUI_ASSET_MGR;
+    vi.spyOn(suiSpoke.transport, 'fetchLatestPackageId').mockResolvedValue(SUI_ASSET_MGR_PKG);
     vi.spyOn(suiSpoke.transport, 'getCoins').mockResolvedValueOnce(
       makeCoinsPage([{ balance: '5000', coinObjectId: '0xa' }]),
     );
@@ -516,7 +541,7 @@ describe('SuiSpokeService.deposit', () => {
   });
 
   it('ERC20 raw=true reads coins via publicClient.getCoins with the deposited coinType', async () => {
-    suiSpoke.assetManagerAddress = SUI_ASSET_MGR;
+    vi.spyOn(suiSpoke.transport, 'fetchLatestPackageId').mockResolvedValue(SUI_ASSET_MGR_PKG);
     const getCoinsSpy = vi
       .spyOn(suiSpoke.transport, 'getCoins')
       .mockResolvedValueOnce(makeCoinsPage([{ balance: '5000', coinObjectId: '0xa' }]));
@@ -527,7 +552,7 @@ describe('SuiSpokeService.deposit', () => {
   });
 
   it('raw=false → delegates to walletProvider.signAndExecuteTxn and returns its digest', async () => {
-    suiSpoke.assetManagerAddress = SUI_ASSET_MGR;
+    vi.spyOn(suiSpoke.transport, 'fetchLatestPackageId').mockResolvedValue(SUI_ASSET_MGR_PKG);
     vi.spyOn(suiSpoke.transport, 'getCoins').mockResolvedValueOnce(
       makeCoinsPage([{ balance: '5000', coinObjectId: '0xa' }]),
     );
@@ -541,7 +566,7 @@ describe('SuiSpokeService.deposit', () => {
   });
 
   it("defaults data to '0x' when omitted from the deposit params", async () => {
-    suiSpoke.assetManagerAddress = SUI_ASSET_MGR;
+    vi.spyOn(suiSpoke.transport, 'fetchLatestPackageId').mockResolvedValue(SUI_ASSET_MGR_PKG);
     // Drop `data` entirely; the destructuring `data = '0x'` default must kick in.
     const params = {
       srcAddress: SRC_ADDR,
@@ -555,14 +580,38 @@ describe('SuiSpokeService.deposit', () => {
     await expect(suiSpoke.deposit(params)).resolves.toMatchObject({ to: expectedTransferTarget });
   });
 
-  it('on uncached asset-manager, fetches the package id before building the tx', async () => {
-    // Cache is reset in beforeEach. This must trigger the fetch path.
+  it('fetches the package id before building the tx', async () => {
     const spy = vi.spyOn(suiSpoke.transport, 'fetchLatestPackageId').mockResolvedValueOnce(SUI_ASSET_MGR_PKG);
 
     const result = await suiSpoke.deposit(depositParams<true>({ token: SUI_NATIVE, raw: true }));
 
     expect(spy).toHaveBeenCalledWith(SUI_ASSET_MGR_CONFIG_ID);
     expect(result.to).toBe(expectedTransferTarget);
+  });
+
+  it('targets the upgraded package on the next deposit', async () => {
+    const upgraded = `0x${'9'.repeat(64)}`;
+    vi.spyOn(suiSpoke.transport, 'fetchLatestPackageId')
+      .mockResolvedValueOnce(SUI_ASSET_MGR_PKG)
+      .mockResolvedValueOnce(upgraded);
+
+    const before = await suiSpoke.deposit(depositParams<true>({ token: SUI_NATIVE, raw: true }));
+    const after = await suiSpoke.deposit(depositParams<true>({ token: SUI_NATIVE, raw: true }));
+
+    expect(before.to).toBe(expectedTransferTarget);
+    expect(after.to).toBe(`${upgraded}::${SUI_ASSET_MGR_MOD}::transfer`);
+    expect(after.data).toContain(`${upgraded}::${SUI_ASSET_MGR_MOD}::transfer`);
+  });
+
+  it('builds the signed path through the freshly resolved package too', async () => {
+    const upgraded = `0x${'8'.repeat(64)}`;
+    vi.spyOn(suiSpoke.transport, 'fetchLatestPackageId').mockResolvedValueOnce(upgraded);
+    (mockSuiProvider.signAndExecuteTxn as ReturnType<typeof vi.fn>).mockResolvedValueOnce(TX_DIGEST);
+
+    await suiSpoke.deposit(depositParams<false>({ token: SUI_NATIVE, raw: false, walletProvider: mockSuiProvider }));
+
+    const [signed] = (mockSuiProvider.signAndExecuteTxn as ReturnType<typeof vi.fn>).mock.calls[0] as [Transaction];
+    expect(signed.serialize()).toContain(`${upgraded}::${SUI_ASSET_MGR_MOD}::transfer`);
   });
 });
 
@@ -667,7 +716,7 @@ describe('SuiSpokeService.getDeposit', () => {
   });
 
   it('decodes a BCS-U64 balance from the simulation result', async () => {
-    suiSpoke.assetManagerAddress = SUI_ASSET_MGR;
+    vi.spyOn(suiSpoke.transport, 'fetchLatestPackageId').mockResolvedValue(SUI_ASSET_MGR_PKG);
     vi.spyOn(suiSpoke.transport, 'simulate').mockResolvedValueOnce(makeBalanceResult(7_500n));
 
     const result = await suiSpoke.getDeposit({
@@ -680,7 +729,7 @@ describe('SuiSpokeService.getDeposit', () => {
   });
 
   it('handles a zero balance', async () => {
-    suiSpoke.assetManagerAddress = SUI_ASSET_MGR;
+    vi.spyOn(suiSpoke.transport, 'fetchLatestPackageId').mockResolvedValue(SUI_ASSET_MGR_PKG);
     vi.spyOn(suiSpoke.transport, 'simulate').mockResolvedValueOnce(makeBalanceResult(0n));
 
     const result = await suiSpoke.getDeposit({
@@ -693,7 +742,7 @@ describe('SuiSpokeService.getDeposit', () => {
   });
 
   it('throws when returnValues is missing', async () => {
-    suiSpoke.assetManagerAddress = SUI_ASSET_MGR;
+    vi.spyOn(suiSpoke.transport, 'fetchLatestPackageId').mockResolvedValue(SUI_ASSET_MGR_PKG);
     vi.spyOn(suiSpoke.transport, 'simulate').mockResolvedValueOnce({});
 
     await expect(suiSpoke.getDeposit({ srcChainKey: SUI, srcAddress: SRC_ADDR, token: SUI_BNUSD })).rejects.toThrow(
@@ -702,7 +751,7 @@ describe('SuiSpokeService.getDeposit', () => {
   });
 
   it('throws when returnValues[0] is not an array', async () => {
-    suiSpoke.assetManagerAddress = SUI_ASSET_MGR;
+    vi.spyOn(suiSpoke.transport, 'fetchLatestPackageId').mockResolvedValue(SUI_ASSET_MGR_PKG);
     vi.spyOn(suiSpoke.transport, 'simulate').mockResolvedValueOnce({
       returnValues: ['not-an-array'],
     } as unknown as SuiExecutionResult);
@@ -713,7 +762,7 @@ describe('SuiSpokeService.getDeposit', () => {
   });
 
   it('throws when returnValues[0][0] is undefined', async () => {
-    suiSpoke.assetManagerAddress = SUI_ASSET_MGR;
+    vi.spyOn(suiSpoke.transport, 'fetchLatestPackageId').mockResolvedValue(SUI_ASSET_MGR_PKG);
     vi.spyOn(suiSpoke.transport, 'simulate').mockResolvedValueOnce({
       returnValues: [[undefined, '']],
     } as unknown as SuiExecutionResult);
