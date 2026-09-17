@@ -1,12 +1,12 @@
 ---
 name: sodax-sdk-leverage-yield-api
-description: 'Granular skill for the @sodax/sdk v2 Leverage Yield API client — `sodax.api.leverageYield` (class LeverageYieldApiService), a typed HTTP client for the backend Leverage Yield API v2 (`/leverage-yield/*`, 33 endpoints: vault registry, vault reads (asset/position/APR/effective-APR/LSD-APR/total-assets/previews/share-balance/max-withdraw), deposit & withdraw quote, deadline, allowance/approve, create-deposit-intent & create-withdraw-intent, intent submit/status/cancel/hash/packet/extra-data/fill/get, gas estimate, partner/solver fees, submit-tx + status). Every method returns Promise<Result<T>>, never throws, and validates the response. Use when the task calls the leverage-yield backend directly (e.g. "sodax.api.leverageYield", "leverage vault APR from the backend", "vault position from the API", "leverage-yield deposit quote", "createDepositIntent via the backend API", "leverage-yield API v2"). For the higher-level end-to-end vault-swap orchestrator use the `leverage-yield` skill instead. Skill links into the parent sodax-sdk knowledge tree.'
+description: 'Granular skill for the @sodax/sdk v2 Leverage Yield API client — `sodax.api.leverageYield` (class LeverageYieldApiService), a typed HTTP client for the backend Leverage Yield API (`/leverage-yield/*`, 33 endpoints: vault registry, vault reads (asset/position/APR/effective-APR/LSD-APR/total-assets/previews/share-balance/max-withdraw), deposit & withdraw quote, deadline, allowance/approve, create-deposit-intent & create-withdraw-intent, intent submit/status/cancel/hash/packet/extra-data/fill/get, gas estimate, partner/solver fees, submit-tx + status). Every method returns Promise<Result<T>>, never throws, and validates the response. Use when the task calls the leverage-yield backend directly (e.g. "sodax.api.leverageYield", "leverage vault APR from the backend", "vault position from the API", "leverage-yield deposit quote", "createDepositIntent via the backend API", "leverage-yield API v2"). For the higher-level end-to-end vault-swap orchestrator use the `leverage-yield` skill instead. Skill links into the parent sodax-sdk knowledge tree.'
 ---
 
 # Leverage Yield API (Core SDK granular skill)
 
 Granular skill for `sodax.api.leverageYield` (class `LeverageYieldApiService`) — the typed HTTP client for
-the backend **Leverage Yield API v2** (`/leverage-yield/*`). `sodax.api` is an alias for `sodax.backendApi`;
+the backend **Leverage Yield API** (`/leverage-yield/*`). `sodax.api` is an alias for `sodax.backendApi`;
 `.leverageYield` is the leverage-yield client. 33 endpoints, one method each; every method returns
 `Promise<Result<T>>` (never throws) and validates the response. Errors carry `feature: 'backend'`,
 `context.api: 'leverageYield'`, `context.endpoint`.

@@ -27,7 +27,7 @@ const PATHS = {
 } as const;
 
 /**
- * Minimal HTTP client for the SODAX backend Bridge API v2.
+ * Minimal HTTP client for the SODAX backend Bridge API.
  *
  * One thin method per `IBridgeApiV2` endpoint. The bridge wire DTOs are fully string-typed, so
  * bodies go out as-is; every response is validated with a valibot schema (tx-bearing responses are

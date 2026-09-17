@@ -1,5 +1,5 @@
 /**
- * Tests for the BridgeApiService HTTP client (backend Bridge API v2).
+ * Tests for the BridgeApiService HTTP client (backend Bridge API).
  *
  * Mirrors SwapsApiService.test.ts:
  *   1. A single module-scope `new Sodax()` backs every test — `sodax.api.bridge` is the

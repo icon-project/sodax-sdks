@@ -49,7 +49,7 @@ const PATHS = {
 } as const;
 
 /**
- * Minimal HTTP client for the SODAX backend Swaps API v2.
+ * Minimal HTTP client for the SODAX backend Swaps API.
  *
  * One thin method per `ISwapsApiV2` endpoint. Each method builds its request, runs any
  * `IntentRequestV2` body through {@link serializeIntentRequest}, and validates the response with a
