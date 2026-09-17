@@ -589,6 +589,23 @@ describe('SuiSpokeService.deposit', () => {
     expect(result.to).toBe(expectedTransferTarget);
   });
 
+  it('reads the coins and the package id together, not one after the other', async () => {
+    let resolveCoins!: (page: SuiPaginatedCoins) => void;
+    vi.spyOn(suiSpoke.transport, 'getCoins').mockImplementationOnce(
+      () => new Promise<SuiPaginatedCoins>(resolve => (resolveCoins = resolve)),
+    );
+    const packageSpy = vi.spyOn(suiSpoke.transport, 'fetchLatestPackageId').mockResolvedValue(SUI_ASSET_MGR_PKG);
+
+    const pending = suiSpoke.deposit(depositParams<true>({ token: SUI_BNUSD, raw: true }));
+    await Promise.resolve();
+
+    // The coin read is still pending; a sequential build would not have asked for the package yet.
+    expect(packageSpy).toHaveBeenCalledTimes(1);
+
+    resolveCoins(makeCoinsPage([{ balance: '5000', coinObjectId: '0xa' }]));
+    await expect(pending).resolves.toMatchObject({ to: expectedTransferTarget });
+  });
+
   it('targets the upgraded package on the next deposit', async () => {
     const upgraded = `0x${'9'.repeat(64)}`;
     vi.spyOn(suiSpoke.transport, 'fetchLatestPackageId')

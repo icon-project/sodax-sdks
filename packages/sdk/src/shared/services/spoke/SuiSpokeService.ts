@@ -206,11 +206,14 @@ export class SuiSpokeService {
     const { srcAddress: from, srcChainKey, token, to, amount, data = '0x' } = params;
     const isNative = isNativeToken(srcChainKey, token);
     const tx = new Transaction();
-    const coin: TransactionResult | SuiNativeCoinResult | SuiTxObject = isNative
-      ? await this.getNativeCoin(tx, amount)
-      : await this.getCoin(tx, token, amount, from);
     const connection = this.splitAddress(this.config.getChainConfig(srcChainKey).addresses.connection);
-    const assetManager = await this.resolveAssetManager(srcChainKey);
+    // Neither read needs the other, and only the coin lookup writes commands to `tx`, so running
+    // them together hides one round trip without touching the command order.
+    const [coin, assetManager]: [TransactionResult | SuiNativeCoinResult | SuiTxObject, AssetManagerTarget] =
+      await Promise.all([
+        isNative ? this.getNativeCoin(tx, amount) : this.getCoin(tx, token, amount, from),
+        this.resolveAssetManager(srcChainKey),
+      ]);
 
     // Call transfer function
     tx.moveCall({
