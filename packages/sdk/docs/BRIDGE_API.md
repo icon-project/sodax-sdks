@@ -157,17 +157,41 @@ relay — see [`CONFIGURE_SDK.md`](CONFIGURE_SDK.md) and [`BRIDGE.md`](BRIDGE.md
 
 Every method returns `Result<T, SodaxError<'EXTERNAL_API_ERROR'>>`. On any failure (network, timeout,
 non-2xx HTTP, or response-shape mismatch), the result is `{ ok: false }` with a `SodaxError` carrying
-`feature: 'backend'`, `context.api: 'bridge'`, and `context.endpoint` (the path); the underlying transport
+`feature: 'backend'`, `context.api: 'bridge'`, and `context.endpoint` (the path); the underlying
 failure is preserved on `error.cause`.
 
 ```typescript
 const r = await sodax.api.bridge.createBridgeIntent(body);
 if (!r.ok) {
   // r.error.feature === 'backend'; r.error.context.api === 'bridge'; r.error.context.endpoint === '/bridge/intents'
-  // r.error.cause: the HTTP_REQUEST_FAILED / REQUEST_TIMEOUT / validation failure
+  // r.error.context.code / (r.error.cause as BridgeApiError).code:
+  //   NETWORK_ERROR | TIMEOUT_ERROR | HTTP_ERROR | PARSE_ERROR | VALIDATION_ERROR
   return;
 }
 ```
+
+### Implementation note
+
+`BridgeApiService` is a thin adapter over the standalone [`@sodax/bridge-api`](../../bridge-api/README.md)
+package — the single source of the bridge wire client (request building, per-chain `tx`
+validation/transform, response schemas, HTTP). This service adds the SDK conventions on top: the
+`Result<T>` contract, the `SodaxLogger`, config resolution, and per-call `RequestOverrideConfig`. Three
+consequences worth noting:
+
+- **`error.cause` is a `BridgeApiError`** (from `@sodax/bridge-api`), not the raw transport error — read
+  its `code` (`NETWORK_ERROR` | `TIMEOUT_ERROR` | `HTTP_ERROR` | `PARSE_ERROR` | `VALIDATION_ERROR`) to
+  distinguish failure kinds; the same code is mirrored onto `error.context.code`. Both `BridgeApiError`
+  and the `BridgeApiErrorCode` union are re-exported from `@sodax/sdk`, so you can narrow `error.cause`
+  and type `error.context.code` without a direct `@sodax/bridge-api` import.
+- **A `bigint` in a request body is now rejected, not stringified.** The wire DTOs are string-typed,
+  so the client fails fast with `VALIDATION_ERROR` before any fetch instead of silently coercing.
+  TypeScript callers are unaffected; an untyped JS caller passing e.g. `{ inputAmount: 1000n }` must
+  send `'1000'`.
+- **Idempotent calls retry transient failures.** Reads, polls, and pure-compute POSTs (e.g. `getFee`)
+  are retried a few times on transient statuses / network errors; mutating calls are never retried —
+  except the apiguard's transient key-verification `503`, which is rejected before the route handler
+  runs and is therefore replayed (with a short backoff) for every call. A `401`/`403` is terminal:
+  fix the API key rather than retrying.
 
 ## See also
 

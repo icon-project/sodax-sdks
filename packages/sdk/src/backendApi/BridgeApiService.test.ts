@@ -6,8 +6,9 @@
  *      service under test. `vi.stubGlobal('fetch', ...)` intercepts every outbound call.
  *   2. URL construction, HTTP method, default vs override headers, query-string params,
  *      request-body serialization, and valibot response validation are asserted explicitly.
+ *      The service delegates the wire work to `@sodax/bridge-api`.
  *   3. Every method returns `Result<T>` — happy paths assert `{ ok: true, value }`,
- *      failures assert `{ ok: false }` with the expected error.
+ *      failures assert `{ ok: false }` with the expected error (a `BridgeApiError` on `cause`).
  *
  * Bridge-specific deltas covered: create-intent response is `{ tx, relayData }` (no intent);
  * the submit-tx body carries the FULL `relayData { address, payload }` envelope; the
@@ -20,6 +21,7 @@ import { Sodax } from '../shared/entities/Sodax.js';
 import { BridgeApiService, toCreateBridgeIntentParamsV2 } from './BridgeApiService.js';
 import { SodaxError } from '../errors/SodaxError.js';
 import { isAuthFailure, isSodaxError } from '../errors/guards.js';
+import { BridgeApiError } from '@sodax/bridge-api';
 
 // --- fetch stub -----------------------------------------------------------
 const mockFetch = vi.fn();
@@ -353,6 +355,10 @@ describe('BridgeApiService response validation', () => {
         endpoint: '/bridge/tokens',
         reason: 'invalid_response_shape',
       });
+      // issues are flattened (v.flatten) to match BackendApiService — a plain object that survives
+      // SodaxError.toJSON, not a raw ValiError (which would sanitize down to just name + message).
+      expect(err.context?.issues).toBeTypeOf('object');
+      expect(err.context?.issues).not.toBeInstanceOf(Error);
     }
   });
 
@@ -377,49 +383,99 @@ describe('BridgeApiService response validation', () => {
       const err = result.error as SodaxError;
       expect(err.code).toBe('EXTERNAL_API_ERROR');
       expect(err.feature).toBe('backend');
+      // The error context reports the static path — the query string moved into the wire client.
+      expect(err.context?.endpoint).toBe('/bridge/submit-tx/status');
+    }
+  });
+
+  it('does NOT tag a request-side VALIDATION_ERROR (stray bigint in the body) as invalid_response_shape', async () => {
+    // Simulates an untyped JS caller passing a runtime bigint in a wire DTO. rejectBigint throws
+    // before fetch; the failure is the caller's, so it must not be labeled a backend
+    // response-shape problem (`reason`/`issues` are reserved for response validation).
+    const badParams = { ...sampleCreateBridgeIntentParams, inputAmount: 1n } as unknown as CreateBridgeIntentParamsV2;
+    const result = await sodax.api.bridge.checkAllowance(badParams);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      const err = result.error as SodaxError;
+      expect(err.code).toBe('EXTERNAL_API_ERROR');
+      expect(err.context?.code).toBe('VALIDATION_ERROR');
+      expect(err.context?.reason).toBeUndefined();
+      expect(err.context?.issues).toBeUndefined();
+      expect(mockFetch).not.toHaveBeenCalled();
     }
   });
 });
 
 // =========================================================================
-// Error propagation — HTTP + timeout + network failures resolve to ok:false.
+// Error propagation — HTTP, timeout, and network failures resolve to ok:false
+// with a canonical SodaxError whose `cause` is the underlying BridgeApiError.
+// Idempotent calls retry transient failures (delegated to @sodax/bridge-api).
 // =========================================================================
 
 describe('BridgeApiService error propagation', () => {
-  it('wraps a non-2xx response as EXTERNAL_API_ERROR (cause carries HTTP_REQUEST_FAILED)', async () => {
-    mockFetch.mockResolvedValueOnce(httpErrorResponse(502, 'Bad Gateway'));
+  it('wraps a non-retryable non-2xx response as EXTERNAL_API_ERROR (cause is a BridgeApiError HTTP_ERROR)', async () => {
+    mockFetch.mockResolvedValueOnce(httpErrorResponse(400, 'Bad Request'));
     const result = await sodax.api.bridge.getTokens();
     expect(result.ok).toBe(false);
     if (!result.ok) {
+      expect(result.error).toBeInstanceOf(SodaxError);
       const err = result.error as SodaxError;
       expect(err.code).toBe('EXTERNAL_API_ERROR');
       expect(err.feature).toBe('backend');
-      expect(err.message).toBe('HTTP_REQUEST_FAILED');
+      // Distinguish bridge-client errors from BackendApiService errors on the transport (catch) path.
+      expect(err.context?.api).toBe('bridge');
+      expect(err.context?.status).toBe(400);
+      expect(err.cause).toBeInstanceOf(BridgeApiError);
+      expect((err.cause as BridgeApiError).code).toBe('HTTP_ERROR');
     }
+    expect(mockFetch).toHaveBeenCalledOnce(); // 400 is not retryable
   });
 
-  it('wraps a timeout abort as EXTERNAL_API_ERROR (message REQUEST_TIMEOUT)', async () => {
-    mockFetch.mockImplementationOnce(abortFetchImpl);
+  it('retries an idempotent call on a transient 503, then succeeds', async () => {
+    mockFetch
+      .mockResolvedValueOnce(httpErrorResponse(503, 'Service Unavailable'))
+      .mockResolvedValueOnce(okResponse(tokensResponse));
+    const result = await sodax.api.bridge.getTokens();
+    expect(result).toEqual({ ok: true, value: tokensResponse });
+    expect(mockFetch).toHaveBeenCalledTimes(2); // one retry after the 503
+  });
+
+  it('never retries a non-idempotent call (submitTx) on a transient 503', async () => {
+    mockFetch.mockResolvedValue(httpErrorResponse(503, 'Service Unavailable'));
+    const result = await sodax.api.bridge.submitTx(sampleBridgeSubmitTxRequest);
+    expect(result.ok).toBe(false);
+    expect(mockFetch).toHaveBeenCalledOnce(); // mutation: no retry despite the retryable status
+  });
+
+  it('wraps a timed-out call as EXTERNAL_API_ERROR with a TIMEOUT_ERROR cause, without retrying', async () => {
+    mockFetch.mockImplementation(abortFetchImpl);
     const result = await sodax.api.bridge.getTokens({ timeout: 5 });
     expect(result.ok).toBe(false);
     if (!result.ok) {
       const err = result.error as SodaxError;
       expect(err.code).toBe('EXTERNAL_API_ERROR');
-      expect(err.message).toBe('REQUEST_TIMEOUT');
+      // The wire code is surfaced in context so a timeout is distinguishable from a network drop.
+      expect(err.context?.code).toBe('TIMEOUT_ERROR');
+      expect(err.cause).toBeInstanceOf(BridgeApiError);
+      expect((err.cause as BridgeApiError).code).toBe('TIMEOUT_ERROR');
     }
+    // timeout is an overall deadline: it stops the call rather than burning the idempotent retry budget
+    expect(mockFetch).toHaveBeenCalledOnce();
   });
 
-  it('wraps a raw network error as EXTERNAL_API_ERROR with the original error as cause', async () => {
+  it('wraps a raw network error as EXTERNAL_API_ERROR, preserving the original error on the cause chain', async () => {
     const networkError = new Error('Network down');
-    mockFetch.mockRejectedValueOnce(networkError);
+    mockFetch.mockRejectedValue(networkError);
     const result = await sodax.api.bridge.getTokens();
     expect(result.ok).toBe(false);
     if (!result.ok) {
       const err = result.error as SodaxError;
       expect(err.code).toBe('EXTERNAL_API_ERROR');
-      expect(err.cause).toBe(networkError);
-      expect(err.message).toBe('Network down');
+      expect(err.cause).toBeInstanceOf(BridgeApiError);
+      // The original fetch error is preserved one level deeper, on the BridgeApiError's cause.
+      expect((err.cause as BridgeApiError).cause).toBe(networkError);
     }
+    expect(mockFetch).toHaveBeenCalledTimes(3); // network errors are retryable for idempotent calls
   });
 
   it.each([401, 403])('lifts a %d onto error.context so isAuthFailure recognizes it', async status => {
@@ -517,5 +573,63 @@ describe('BridgeApiService utilities', () => {
     const headers = mockFetch.mock.calls[0]?.[1]?.headers as Record<string, string>;
     expect(Object.keys(headers).filter(h => h.toLowerCase() === 'x-trace')).toHaveLength(1);
     expect(new Headers(headers).get('x-trace')).toBe('v3');
+  });
+});
+
+// =========================================================================
+// API key → x-api-key. Precedence: per-call header > per-call apiKey > configured header > configured
+// key. The adapter builds a `@sodax/bridge-api` client per call, so the key has to survive that hop —
+// `BridgeService` sends the per-action key as `overrideConfig.apiKey` on the submit-tx leg.
+// =========================================================================
+
+const sentHeaders = (): Record<string, string> => mockFetch.mock.calls[0]?.[1]?.headers;
+
+describe('BridgeApiService API key', () => {
+  it('sends a configured x-api-key header on every request', async () => {
+    const service = new BridgeApiService({ baseURL: BASE, timeout: 30_000, headers: { 'x-api-key': 'config-key' } });
+    mockFetch.mockResolvedValueOnce(okResponse(tokensResponse));
+    await service.getTokens();
+    expect(sentHeaders()['x-api-key']).toBe('config-key');
+  });
+
+  it('bakes the instance key from new Sodax({ apiKey }) into every bridge request', async () => {
+    const keyed = new Sodax({ apiKey: 'global-key', logger: 'silent' });
+    mockFetch.mockResolvedValueOnce(okResponse(tokensResponse));
+    await keyed.api.bridge.getTokens();
+    expect(sentHeaders()['x-api-key']).toBe('global-key');
+  });
+
+  it('lets a per-call apiKey win over the configured key', async () => {
+    const keyed = new Sodax({ apiKey: 'global-key', logger: 'silent' });
+    mockFetch.mockResolvedValueOnce(okResponse(tokensResponse));
+    await keyed.api.bridge.getTokens({ apiKey: 'call-key' });
+    expect(sentHeaders()['x-api-key']).toBe('call-key');
+  });
+
+  it('lets a per-call x-api-key header win over the per-call apiKey, in any casing', async () => {
+    // fetch folds two casings of one header name into a comma-joined value, so the case variant must
+    // REPLACE the expanded key instead of being sent alongside it.
+    for (const name of ['x-api-key', 'X-Api-Key']) {
+      mockFetch.mockReset();
+      const service = new BridgeApiService({ baseURL: BASE, timeout: 30_000, headers: { 'x-api-key': 'config-key' } });
+      mockFetch.mockResolvedValueOnce(okResponse(tokensResponse));
+      await service.getTokens({ apiKey: 'call-key', headers: { [name]: 'call-header-key' } });
+      const headers = sentHeaders();
+      expect(Object.keys(headers).filter(h => h.toLowerCase() === 'x-api-key')).toHaveLength(1);
+      expect(new Headers(headers).get('x-api-key')).toBe('call-header-key');
+    }
+  });
+
+  it('treats an empty per-call apiKey as unset and falls back to the configured key', async () => {
+    const service = new BridgeApiService({ baseURL: BASE, timeout: 30_000, headers: { 'x-api-key': 'config-key' } });
+    mockFetch.mockResolvedValueOnce(okResponse(tokensResponse));
+    await service.getTokens({ apiKey: '' });
+    expect(sentHeaders()['x-api-key']).toBe('config-key');
+  });
+
+  it('sends no x-api-key when nothing configures one', async () => {
+    mockFetch.mockResolvedValueOnce(okResponse(tokensResponse));
+    await sodax.api.bridge.getTokens();
+    expect(sentHeaders()['x-api-key']).toBeUndefined();
   });
 });

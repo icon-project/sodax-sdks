@@ -12,7 +12,7 @@ import {
 } from '@sodax/dapp-kit';
 import { defaultUseBackendSubmitTx, productionSolverConfig, stagingSolverConfig } from './constants';
 import { SolverEnv, useAppStore } from './zustand/useAppStore';
-import { envSodaxApiKey, envSwapsApiBaseUrl, isHttpUrl, nonEmptyEnv } from './lib/sodaxSettings';
+import { effectiveSodaxApiKey, effectiveSwapsApiBaseUrl, isHttpUrl, nonEmptyEnv } from './lib/sodaxSettings';
 import { createDatadogLogger } from './lib/loggers/datadogLogger';
 import { createDemoAnalytics } from './lib/analytics';
 
@@ -131,14 +131,12 @@ export default function Providers({ children }: { children: ReactNode }) {
         // service appends its own path (`/be`, `/swaps`, `/bridge`, `/sponsorships/*`).
         // `undefined` slices are skipped by `deepMerge`, so an unset override is the same as no key.
         ...(s.apiBaseUrl ? { baseApiConfig: { baseURL: s.apiBaseUrl } } : {}),
-        swapsApiConfig: s.swapsApiBaseUrl
-          ? { baseURL: s.swapsApiBaseUrl }
-          : envSwapsApiBaseUrl
-            ? { baseURL: envSwapsApiBaseUrl }
-            : undefined,
+        // Resolved rather than layered, so the Swaps API page's direct client can be built from the
+        // same value — a page submitting to one deployment and polling another never shows a status.
+        swapsApiConfig: { baseURL: effectiveSwapsApiBaseUrl(s) },
         sponsoringApiConfig,
       },
-      apiKey: s.apiKey ?? envSodaxApiKey,
+      apiKey: effectiveSodaxApiKey(s),
       logger: createDatadogLogger(),
       // Opt-in user-action analytics (issue #175). Enabled by default in the demo; the sink logs each
       // event and re-emits it as a `sodax:analytics` window CustomEvent. `false` when disabled, which
@@ -151,6 +149,14 @@ export default function Providers({ children }: { children: ReactNode }) {
       },
       swaps: { useBackendSubmitTx: s.swapUseBackendSubmitTx ?? defaultUseBackendSubmitTx(solverApiEndpoint) },
       bridge: { useBackendSubmitTx: s.bridgeUseBackendSubmitTx ?? true },
+
+      // No `leverageYield.positionFactory` override: the deployed factory now ships in
+      // `leverageYieldConfig`, and pinning the same address here would be a second source of truth
+      // that silently outlives a rotation of the packaged one. Worth knowing when it does rotate:
+      // clones bake in their implementation, so positions opened against an earlier factory keep
+      // working but stop appearing under the new one, and each of its hooks has to be whitelisted
+      // with the solver before an intent posted against it can be filled.
+
       // Global partner fee. Per-call / per-feature fees still win, and the Swaps/Bridge API pages
       // carry their own per-request fee — `SodaxOptions.fee` never reaches those routes.
       ...(s.partnerFeeAddress && s.partnerFeeBps !== null

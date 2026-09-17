@@ -72,6 +72,7 @@
     "@pancakeswap/infinity-sdk": "catalog:",
     "@pancakeswap/swap-sdk-core": "catalog:",
     "@pancakeswap/v3-sdk": "catalog:",
+    "@sodax/bridge-api": "workspace:*",
     "@sodax/libs": "workspace:*",
     "@sodax/swaps-api": "workspace:*",
     "@sodax/types": "workspace:*",

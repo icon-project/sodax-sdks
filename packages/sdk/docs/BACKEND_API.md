@@ -1,6 +1,6 @@
 # Backend API Service Documentation
 
-The `BackendApiService` provides a comprehensive HTTP client for the SODAX backend API, covering intent lookup, swap submission, solver orderbook, money market data, USD OHLC price candles, and runtime configuration. It implements `IConfigApi` so that `ConfigService` and other services can fetch dynamic chain/token configuration without coupling to a concrete HTTP implementation.
+The `BackendApiService` provides a comprehensive HTTP client for the SODAX backend API, covering intent lookup, swap submission, solver orderbook, money market data, USD OHLC price candles, and runtime configuration. It implements `IConfigApiV1` so that `ConfigService` and other services can fetch dynamic chain/token configuration without coupling to a concrete HTTP implementation.
 
 The service is automatically instantiated when you create a `Sodax` instance and is available as `sodax.backendApi`.
 
@@ -197,6 +197,10 @@ console.log(result.value); // OrderbookResponse
 | `'REQUEST_TIMEOUT'` | Request exceeded the configured timeout. Check `error.cause` for the timeout duration. |
 | `'UNKNOWN_REQUEST_ERROR'` | Any other unexpected failure. |
 
+Those sentinels are this client's surface only. The typed sibling clients — `sodax.api.swaps` and
+`sodax.api.bridge` — take their `error.message` from the wire client they wrap, so discriminate on
+`error.context.code` there instead (see [Bridge Endpoints](#bridge-endpoints)).
+
 ## Intent Endpoints
 
 ### Get Intent by Transaction Hash
@@ -331,6 +335,30 @@ minus the solver/intent surface: allowance/approve/create-bridge-intent, submit-
 the fee/bridgeable-amount/bridgeable discovery quotes. Submit a signed spoke-deposit with
 `sodax.api.bridge.submitTx(...)` (passing the FULL `relayData { address, payload }` envelope, not just the
 payload). See [`BRIDGE_API.md`](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/BRIDGE_API.md) for the full reference.
+
+`BridgeApiService` is a thin adapter over the standalone
+[`@sodax/bridge-api`](https://github.com/icon-project/sodax-sdks/tree/main/packages/bridge-api) client —
+the same split as `sodax.api.swaps` over `@sodax/swaps-api` — so the wire behaviour below is shared by both:
+
+- **Errors.** Every method returns `Result<T>` and never throws. A failure carries
+  `SodaxError<'EXTERNAL_API_ERROR'>` with `feature: 'backend'`, `context.api: 'bridge'` and
+  `context.endpoint`; `error.cause` is the underlying `BridgeApiError`, whose `code`
+  (`NETWORK_ERROR` | `TIMEOUT_ERROR` | `HTTP_ERROR` | `PARSE_ERROR` | `VALIDATION_ERROR`) is mirrored on
+  `error.context.code`, with `context.status` set for HTTP failures. Discriminate on `context.code`, not
+  on the message. `BridgeApiError` and `BridgeApiErrorCode` are re-exported from `@sodax/sdk`.
+- **Retries.** Idempotent calls — reads, `getSubmitTxStatus` polls, and pure-compute POSTs like `getFee` —
+  replay transient failures (network errors and 408/429/5xx), up to **3 attempts** (the first try plus two
+  retries) issued back to back with no delay. Mutations (`approve`, `createBridgeIntent`, `submitTx`) never
+  retry, except on the API-key guard's transient verification `503`: that one is rejected before the route
+  handler runs, so replaying it cannot double-apply anything, and it is the one case that backs off.
+  A `timeout` bounds the whole call, retries included, and is never replayed.
+- **Budgets multiply.** This wire budget is *per call*, so a caller that also retries multiplies against it.
+  The `@sodax/dapp-kit` backend hooks default to three React Query retries, which is four executions of a
+  query — against three wire attempts each, a persistently failing idempotent endpoint can cost up to 12
+  requests before the error surfaces. A terminal API-key rejection (401/403) is never replayed at the wire
+  level, and the `swapsApi` hooks stop retrying it at the query level too (`retryUnlessAuthFailure`); the
+  `bridgeApi` hooks still spend their full `retry: 3`. Lower either with `queryOptions.retry` (or
+  `mutationOptions.retry`) when you want a tighter ceiling.
 
 ## Leverage Yield Endpoints
 
@@ -741,7 +769,7 @@ interface OracleCandlesResponse {
 
 ## Config Endpoints
 
-These methods implement `IConfigApi` and are consumed internally by `ConfigService`. You generally do not call them directly — use `sodax.config` instead. They are documented here for completeness and for custom `IConfigApi` implementations.
+These methods implement `IConfigApiV1` and are consumed internally by `ConfigService`. You generally do not call them directly — use `sodax.config` instead. They are documented here for completeness and for custom `IConfigApiV1` implementations.
 
 | Method | Endpoint | Returns |
 |---|---|---|
