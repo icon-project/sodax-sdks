@@ -94,6 +94,9 @@ pnpm check:ai-dev-files
   `input_amount_usd` while nothing here prices the input. Failure reasons stay a closed set.
 - Use native dialogs, keyboard-operable controls, readable errors and responsive layouts. Keep partner
   controls and technical setup in the builder, not inside the user's swap form.
+- The note below the action carries the SODAX attribution and nothing else of ours — no custody
+  reassurance, no follow-us line. The widget renders inside someone else's product, and that product
+  reassures its own users; on a quote-only pair the note states the route's limit and its handoff instead.
 - The form is the exchange's currency panel: the symbol and its chevron open the picker, the network
   and the connected balance share the line beneath it, and the flip disc centres on the seam between
   the two panels. Wallet chips name their side and sit above the form, never between the legs.

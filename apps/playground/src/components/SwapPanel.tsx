@@ -249,9 +249,10 @@ export function SwapPanel({ flow }: { flow: SwapFlow }) {
           <div className="action-message" role="status" aria-live="polite">
             {message && <p className="alert">{message}</p>}
           </div>
+          {/* Our attribution, not our reassurance: the host page tells its own users about custody. */}
           <p className="muted small action-note">
             {flow.execution.signable
-              ? 'Powered by SODAX · Your keys stay in your wallet.'
+              ? 'Powered by SODAX'
               : 'Quote-only for this route. Continue on SODAX and select your trade there.'}
           </p>
         </div>
