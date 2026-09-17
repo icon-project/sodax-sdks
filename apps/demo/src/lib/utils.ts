@@ -40,6 +40,10 @@ export function normaliseTokenAmount(amount: number | string | bigint, decimals:
  * Restate a raw amount from one decimals base to another. A bridge moves the same nominal value,
  * so the two sides differ only in scale — and a gate that compares across chains (Stellar's
  * trustline check works in stroops) needs the destination's base, not the source's.
+ *
+ * Downscaling truncates: a positive amount below the destination asset's smallest unit floors to
+ * `0n`. Callers must reject that amount rather than forward it to a gate that reads `0n` as "no
+ * amount" (`enabled: !!amount`) and skips the check.
  */
 export function rescaleTokenAmount(amount: bigint, fromDecimals: number, toDecimals: number): bigint {
   if (fromDecimals === toDecimals) return amount;

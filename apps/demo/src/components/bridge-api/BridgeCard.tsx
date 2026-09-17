@@ -244,10 +244,15 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
     [parsedAmount, fromToken, toToken],
   );
 
+  // Below the destination asset's smallest unit the rescale floors to `0n`, which the trustline
+  // query reads as "no amount" and skips — leaving `needsTrustline` false and the prerequisite
+  // unchecked. Reject the amount instead of gating on a query that never runs.
+  const isBelowDestinationUnit = dstAmount === 0n && parsedAmount !== undefined && parsedAmount > 0n;
+
   const { data: hasSufficientTrustline, isPending: isTrustlineLoading } = useStellarTrustlineCheck({
     params: {
       token: toToken?.address,
-      amount: dstAmount,
+      amount: isBelowDestinationUnit ? undefined : dstAmount,
       chainId: toChainKey,
       walletAddress: toChainType === 'STELLAR' ? toAccount.address : undefined,
     },
@@ -385,7 +390,7 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
   };
 
   const handleRequestTrustline = async () => {
-    if (toChainType !== 'STELLAR' || !stellarWalletProvider || !toToken || dstAmount === undefined) return;
+    if (toChainType !== 'STELLAR' || !stellarWalletProvider || !toToken || !dstAmount) return;
     await requestTrustline({
       token: toToken.address,
       amount: dstAmount,
@@ -407,6 +412,7 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
     isBridging ||
     !bridgeBody ||
     !!feeDraft.error ||
+    isBelowDestinationUnit ||
     (fromChainType === 'EVM' && !hasAllowance) ||
     (fromChainKey === ChainKeys.BITCOIN_MAINNET && !isFromBtcReady) ||
     (toChainKey === ChainKeys.BITCOIN_MAINNET && !isToBtcReady) ||
@@ -459,6 +465,13 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
               </SelectContent>
             </Select>
           </div>
+
+          {isBelowDestinationUnit && toToken && (
+            <p className="text-sm text-red-500">
+              Amount is below the smallest {toToken.symbol} unit on {toChainKey} — bridge at least{' '}
+              {formatUnits(1n, toToken.decimals)}.
+            </p>
+          )}
 
           <div className="grow">
             <PartnerFeeFields draft={feeDraft} unsetBehavior="use the backend's configured fee" />
@@ -583,7 +596,7 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
           <Button
             className="w-full"
             onClick={handleOpenDialog}
-            disabled={!bridgeBody || !isBridgeable || !isSourceSignable || !!feeDraft.error}
+            disabled={!bridgeBody || !isBridgeable || !isSourceSignable || !!feeDraft.error || isBelowDestinationUnit}
           >
             Bridge
           </Button>

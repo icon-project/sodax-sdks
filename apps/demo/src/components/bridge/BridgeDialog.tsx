@@ -89,10 +89,15 @@ export function BridgeDialog({
   const dstAmount =
     fromToken && toToken ? rescaleTokenAmount(order.amount, fromToken.decimals, toToken.decimals) : undefined;
 
+  // Below the destination asset's smallest unit the rescale floors to `0n`, which the trustline
+  // query reads as "no amount" and skips — the gate then blocks on an unresolved check with nothing
+  // on screen. Reject the amount so the dialog can say why.
+  const isBelowDestinationUnit = dstAmount === 0n && order.amount > 0n;
+
   const stellar = useStellarGate({
     dstChainKey: toChainKey,
     token: order.dstToken,
-    amount: dstAmount,
+    amount: isBelowDestinationUnit ? undefined : dstAmount,
     address: toAccount.address,
     walletProvider: toWalletProvider,
   });
@@ -149,6 +154,7 @@ export function BridgeDialog({
 
   const isBridgeDisabled =
     isBridging ||
+    isBelowDestinationUnit ||
     (fromChainType === 'EVM' && !hasAllowance) ||
     (order.srcChainKey === ChainKeys.BITCOIN_MAINNET && !isFromBtcReady) ||
     (toChainKey === ChainKeys.BITCOIN_MAINNET && !isToBtcReady) ||
@@ -172,6 +178,13 @@ export function BridgeDialog({
           </div>
           <div>Amount: {formatUnits(order.amount, fromToken?.decimals ?? 0)}</div>
           <div className="break-all">Recipient: {order.recipient}</div>
+
+          {isBelowDestinationUnit && toToken && (
+            <div className="text-red-500">
+              Amount is below the smallest {toToken.symbol} unit on {order.dstChainKey} — close this and bridge at least{' '}
+              {formatUnits(1n, toToken.decimals)}.
+            </div>
+          )}
 
           {/* Keep activation in-flow; funding has no client-side remedy. */}
           {stellar.needsActivation && (
