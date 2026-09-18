@@ -4,7 +4,7 @@ import { isAuthFailure } from '@sodax/sdk';
 const MAX_RETRIES = 3;
 
 /**
- * Default React Query `retry` policy for the backend swaps-API hooks: replay a transport blip, never a
+ * Default React Query `retry` policy for the backend API hooks (swaps, leverage-yield, bridge): replay a transport blip, never a
  * terminal API-key rejection (see `isAuthFailure`). Retrying a rejected key only multiplies doomed
  * requests before the consumer sees the error.
  *

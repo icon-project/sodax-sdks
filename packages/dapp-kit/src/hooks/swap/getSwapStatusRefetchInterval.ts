@@ -8,24 +8,27 @@ import {
   type SolverIntentStatusResponse,
 } from '@sodax/sdk';
 
-export const STATUS_POLL_MS = 3000;
-/** Cap consecutive NOT_FOUND polls (~2 min at 3s). First NOT_FOUND is a race, not a stop. */
-export const MAX_NOT_FOUND_POLLS = 40;
+import {
+  advanceNotFoundStreak,
+  INITIAL_NOT_FOUND_STREAK,
+  MAX_NOT_FOUND_POLLS,
+  nextNotFoundStreak,
+  STATUS_POLL_MS,
+  type NotFoundStreakState,
+} from '../shared/notFoundStreak.js';
 
+// Re-exported so the swap hooks and their tests keep one import site for the whole policy.
+export {
+  advanceNotFoundStreak,
+  INITIAL_NOT_FOUND_STREAK,
+  MAX_NOT_FOUND_POLLS,
+  nextNotFoundStreak,
+  STATUS_POLL_MS,
+  type NotFoundStreakState,
+};
+
+/** A solver status read, as `useStatus` holds it. */
 export type SwapStatusResult = Result<SolverIntentStatusResponse, SolverErrorResponse> | undefined;
-
-export type NotFoundStreakState = {
-  /** Identity of what is being polled — an intent tx hash, or a composite source-chain/tx key. */
-  pollKey: string | undefined;
-  seenUpdates: number;
-  consecutiveNotFound: number;
-};
-
-export const INITIAL_NOT_FOUND_STREAK: NotFoundStreakState = {
-  pollKey: undefined,
-  seenUpdates: 0,
-  consecutiveNotFound: 0,
-};
 
 /**
  * Polling interval for `useStatus`. Stops on SOLVED/FAILED immediately; stops on NOT_FOUND only
@@ -46,33 +49,9 @@ export function getSwapStatusRefetchInterval(data: SwapStatusResult, consecutive
   return STATUS_POLL_MS;
 }
 
-export function nextNotFoundStreak(data: SwapStatusResult, previousStreak: number): number {
-  const status = data?.ok ? data.value.status : undefined;
-  return status === SolverIntentStatusCode.NOT_FOUND ? previousStreak + 1 : 0;
-}
-
-/**
- * Advances the consecutive-NOT_FOUND counter once per successful query update. A `pollKey` change
- * starts a new streak so a prior intent's count cannot stop the next one. React Query may call
- * `refetchInterval` more than once per fetch — same `dataUpdateCount` is a no-op.
- */
-export function advanceNotFoundStreak(
-  state: NotFoundStreakState,
-  pollKey: string | undefined,
-  data: SwapStatusResult,
-  dataUpdateCount: number,
-): NotFoundStreakState {
-  if (state.pollKey !== pollKey) {
-    state = { pollKey, seenUpdates: 0, consecutiveNotFound: 0 };
-  }
-  if (state.seenUpdates === dataUpdateCount) {
-    return state;
-  }
-  return {
-    pollKey,
-    seenUpdates: dataUpdateCount,
-    consecutiveNotFound: nextNotFoundStreak(data, state.consecutiveNotFound),
-  };
+/** The read shape the budget counts: a solver that has not seen this intent. */
+export function isSolverNotFound(data: SwapStatusResult): boolean {
+  return (data?.ok ? data.value.status : undefined) === SolverIntentStatusCode.NOT_FOUND;
 }
 
 /**

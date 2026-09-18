@@ -4,6 +4,7 @@ import {
   advanceNotFoundStreak,
   getDetailedStatusRefetchInterval,
   INITIAL_NOT_FOUND_STREAK,
+  isSolverNotFound,
   MAX_NOT_FOUND_POLLS,
   STATUS_POLL_MS,
   toNotFoundBudgetRead,
@@ -57,7 +58,11 @@ const advance = (
   reads: (ReturnType<typeof ok> | typeof notDelivered | typeof outage)[],
   key = KEY_A,
   from = 1,
-) => reads.reduce((acc, read, i) => advanceNotFoundStreak(acc, key, toNotFoundBudgetRead(read), from + i), state);
+) =>
+  reads.reduce(
+    (acc, read, i) => advanceNotFoundStreak(acc, key, isSolverNotFound(toNotFoundBudgetRead(read)), from + i),
+    state,
+  );
 
 describe('getDetailedStatusRefetchInterval', () => {
   // Both terminal states of the `SubmitSwapTxStatusV2` wire contract. `'failed'` is unreachable via
