@@ -102,7 +102,8 @@ overrides:
   "nanoid@3": "^3.3.18"
   # Clears browserslist GHSA-c83g-rgw3-j3cx and GHSA-73wf-gq98-2v4g; via @babel/helper-compilation-targets.
   browserslist: "^4.28.7"
-  # Clears brace-expansion GHSA-3jxr-9vmj-r5cp, GHSA-mh99-v99m-4gvg and GHSA-rgw5-rvv9-x895 per major; guards both minimatch lines.
+  # Clears brace-expansion GHSA-3jxr-9vmj-r5cp, GHSA-mh99-v99m-4gvg and GHSA-rgw5-rvv9-x895 per major.
+  # Only the 5.x line resolves today (via minimatch@10); the 2.x floor is a guard if a 2.x consumer returns.
   "brace-expansion@2": "^2.1.4"
   "brace-expansion@5": "^5.0.9"
   # Clears js-yaml GHSA-52cp-r559-cp3m, GHSA-5p4m-2wfm-xmqj and GHSA-2883-xcg3-v3hh; reached via commitlint's cosmiconfig.
