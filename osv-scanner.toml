@@ -49,29 +49,9 @@ ignoreUntil = 2026-12-03
 reason = "pre-existing at baseline: @babel/core@7.29.0"
 
 [[IgnoredVulns]]
-id = "CVE-2026-54272"
-ignoreUntil = 2026-12-03
-reason = "pre-existing at baseline: ip-address@10.2.0"
-
-[[IgnoredVulns]]
 id = "CVE-2026-59952"
 ignoreUntil = 2026-12-03
 reason = "pre-existing at baseline: valibot@1.4.0"
-
-[[IgnoredVulns]]
-id = "CVE-2026-69185"
-ignoreUntil = 2026-12-03
-reason = "pre-existing at baseline: socket.io-parser@4.2.6"
-
-[[IgnoredVulns]]
-id = "CVE-2026-69192"
-ignoreUntil = 2026-12-03
-reason = "pre-existing at baseline: ip-address@10.2.0"
-
-[[IgnoredVulns]]
-id = "CVE-2026-69198"
-ignoreUntil = 2026-12-03
-reason = "pre-existing at baseline: ip-address@10.2.0"
 
 [[IgnoredVulns]]
 id = "CVE-2026-71429"
