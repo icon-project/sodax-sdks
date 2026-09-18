@@ -36,10 +36,8 @@ import {
   isStacksChainKeyType,
   isNativeBitcoinTransfer,
   RELAY_FALLBACK_FLOOR_MS,
-  RELAY_REQUEST_TIMEOUT_MS,
-  getTransactionPackets,
-  HttpRelayError,
 } from '../shared/index.js';
+import { resolveDeliveredPacket } from '../backendApi/detailedStatusRouting.js';
 import { SolverApiService } from './SolverApiService.js';
 import { EvmSolverService } from './EvmSolverService.js';
 import type { BackendApiService } from '../backendApi/index.js';
@@ -212,7 +210,7 @@ const RECONCILE_TIMEOUT_MS = 5_000;
  * Budget for the solver status call behind {@link SwapService.getDetailedStatus}. Same reasoning as
  * {@link RECONCILE_TIMEOUT_MS}: a polled read must not inherit the 30s backend default.
  *
- * The relay leg does **not** share this value — it takes {@link RELAY_REQUEST_TIMEOUT_MS}, the relay
+ * The relay leg does **not** share this value — it takes `RELAY_REQUEST_TIMEOUT_MS`, the relay
  * module's own per-request budget. One number for both reads was tempting, but 5s is a third of what
  * the relay path already tolerates for a single request, so it would abort reads that succeed today.
  * A budget that expires is untagged, which keeps the caller polling; a relay slower than the budget
@@ -504,69 +502,26 @@ export class SwapService {
     key: DetailedSwapStatusKey,
     backendAnswered: boolean,
   ): Promise<Result<Hex, DetailedStatusError>> {
-    // A relay miss only proves the swap is unresolvable if the backend also had nothing to say.
-    const missReason = backendAnswered ? DETAILED_STATUS_NOT_DELIVERED : undefined;
     let hubTxHash = key.srcTxHash;
 
     if (!isHubChainKeyType(key.srcChainKey)) {
-      const relayChainId = getIntentRelayChainId(key.srcChainKey);
-      const packets = await getTransactionPackets(
-        {
-          action: 'get_transaction_packets',
-          params: { chain_id: relayChainId.toString(), tx_hash: key.srcTxHash },
-        },
-        this.relayerApiEndpoint,
-        RELAY_REQUEST_TIMEOUT_MS,
-      );
-      if (!packets.ok) {
-        // The relayer answers 404 for a source tx it has not indexed — verified live, and the same
-        // reading `pollForExecutedPacket` applies. That is the *same* "no packet for this tx" state
-        // as an empty list, and equally indistinguishable from a tx that will never relay, so it is
-        // budgetable. Anything else (5xx, transport, parse, a read that outran its budget) is the
-        // relay failing right now.
-        const notIndexed = packets.error instanceof HttpRelayError && packets.error.status === 404;
-        return {
-          ok: false,
-          error: this.detailedStatusLookupFailed(packets.error, key.srcChainKey, notIndexed ? missReason : undefined),
-        };
-      }
-
-      // Same envelope, attribution and delivery guards `pollForExecutedPacket` applies. Relay
-      // responses are not schema-validated (`parseRelayResponse` casts `response.json()`), so
-      // `success`/`data` are checked before use — a 200 with no `data` would otherwise throw here
-      // and be reported as ordinary in-flight latency. A packet for another transaction would hand
-      // the solver the wrong intent hash, so match on (src_tx_hash, src_chain_id) rather than taking
-      // the first executed entry, and string-guard both hashes so a malformed entry is skipped.
-      if (!packets.value?.success || !Array.isArray(packets.value.data)) {
+      const delivered = await resolveDeliveredPacket({
+        srcChainKey: key.srcChainKey,
+        srcTxHash: key.srcTxHash,
+        relayerApiEndpoint: this.relayerApiEndpoint,
+        backendAnswered,
+      });
+      if (!delivered.ok) {
         return {
           ok: false,
           error: this.detailedStatusLookupFailed(
-            new Error('relay returned no usable transaction packets'),
+            delivered.cause,
             key.srcChainKey,
+            delivered.budgetable ? DETAILED_STATUS_NOT_DELIVERED : undefined,
           ),
         };
       }
-
-      const delivered = packets.value.data.find(
-        packet =>
-          typeof packet?.src_tx_hash === 'string' &&
-          packet.src_tx_hash.toLowerCase() === key.srcTxHash.toLowerCase() &&
-          packet.src_chain_id === Number(relayChainId) &&
-          packet.status === 'executed' &&
-          typeof packet.dst_tx_hash === 'string' &&
-          packet.dst_tx_hash.length > 0,
-      );
-      if (!delivered) {
-        return {
-          ok: false,
-          error: this.detailedStatusLookupFailed(
-            new Error('relay has not delivered the intent to the hub yet'),
-            key.srcChainKey,
-            missReason,
-          ),
-        };
-      }
-      hubTxHash = delivered.dst_tx_hash;
+      hubTxHash = delivered.packet.dst_tx_hash;
     }
 
     // Validate rather than cast — this hash reaches the solver next.

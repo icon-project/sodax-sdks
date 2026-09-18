@@ -22,22 +22,26 @@
 import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from 'vitest';
 import { decodeAbiParameters, decodeFunctionData, erc20Abi, parseAbiParameters } from 'viem';
 import type { Address, IEvmWalletProvider, SpokeChainKey } from '@sodax/types';
-import { ChainKeys, DEFAULT_BACKEND_API_TIMEOUT, DEFAULT_RELAY_TX_TIMEOUT } from '@sodax/types';
+import { ChainKeys, DEFAULT_BACKEND_API_TIMEOUT, DEFAULT_RELAY_TX_TIMEOUT, getIntentRelayChainId } from '@sodax/types';
 import { RELAY_FALLBACK_FLOOR_MS } from '../shared/services/intentRelay/IntentRelayApiService.js';
 import { EvmVaultTokenService } from '../shared/services/hub/EvmVaultTokenService.js';
 import { Sodax } from '../shared/entities/Sodax.js';
 import { SodaxError } from '../errors/SodaxError.js';
+import { isAuthFailure } from '../errors/guards.js';
+import { DETAILED_STATUS_NOT_DELIVERED } from '../backendApi/detailedStatusRouting.js';
 import { invariant } from '../shared/utils/tiny-invariant.js';
 import type { BridgeParams } from './BridgeService.js';
 
 const mocks = vi.hoisted(() => ({
   relayTxAndWaitPacket: vi.fn(),
+  getTransactionPackets: vi.fn(),
 }));
 vi.mock('../shared/services/intentRelay/IntentRelayApiService.js', async () => {
   const actual = await vi.importActual<object>('../shared/services/intentRelay/IntentRelayApiService.js');
   return {
     ...actual,
     relayTxAndWaitPacket: mocks.relayTxAndWaitPacket,
+    getTransactionPackets: mocks.getTransactionPackets,
   };
 });
 
@@ -1430,5 +1434,139 @@ describe('BridgeService.buildApproveTxs', () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(String(result.error.message)).toMatch(/Amount must be greater than 0/);
+  });
+});
+
+describe('BridgeService.getDetailedStatus', () => {
+  const sodaxBE = new Sodax({ logger: 'silent' });
+  const SRC_TX = '0xabc123';
+  const DST_TX = '0xdef456';
+  const key = { srcChainKey: ARBITRUM, srcTxHash: SRC_TX } as const;
+
+  const statusData = (data: Record<string, unknown>) => ({
+    txHash: SRC_TX,
+    srcChainKey: ARBITRUM,
+    status: 'pending',
+    processingAttempts: 1,
+    ...data,
+  });
+
+  const record = (data: Record<string, unknown>) =>
+    vi
+      .spyOn(sodaxBE.api.bridge, 'getSubmitTxStatus')
+      .mockResolvedValueOnce({ ok: true, value: { success: true, data: statusData(data) } });
+
+  const recordNotFound = () =>
+    vi
+      .spyOn(sodaxBE.api.bridge, 'getSubmitTxStatus')
+      .mockResolvedValueOnce({ ok: true, value: { success: false, data: statusData({}) } });
+
+  const backendFails = (message: string, status: number) =>
+    vi.spyOn(sodaxBE.api.bridge, 'getSubmitTxStatus').mockResolvedValueOnce({
+      ok: false,
+      error: new SodaxError('EXTERNAL_API_ERROR', message, {
+        feature: 'backend',
+        context: { api: 'bridge', endpoint: '/bridge/submit-tx/status', status },
+      }),
+    });
+
+  const packets = (data: unknown[]) =>
+    mocks.getTransactionPackets.mockResolvedValueOnce({ ok: true, value: { success: true, data } });
+  // Carries the identity fields the attribution guard matches on, so the happy paths exercise it.
+  // The relay has its own chain numbering, so derive it rather than hardcoding a chain id.
+  const RELAY_CHAIN_ID = Number(getIntentRelayChainId(ARBITRUM));
+  const delivered = [{ status: 'executed', dst_tx_hash: DST_TX, src_tx_hash: SRC_TX, src_chain_id: RELAY_CHAIN_ID }];
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    mocks.getTransactionPackets.mockReset();
+  });
+
+  it('returns the unmodified submit-tx record without touching the relay', async () => {
+    record({ status: 'relaying' });
+
+    const result = await sodaxBE.bridge.getDetailedStatus(key);
+
+    invariant(result.ok, 'expected a backend answer');
+    expect(result.value.source).toBe('backend');
+    invariant(result.value.source === 'backend', 'narrowing');
+    expect(result.value.data.status).toBe('relaying');
+    expect(mocks.getTransactionPackets).not.toHaveBeenCalled();
+  });
+
+  it('passes a per-request override to the backend read', async () => {
+    const statusSpy = record({ status: 'pending' });
+
+    await sodaxBE.bridge.getDetailedStatus(key, { apiKey: 'per-action-key' });
+
+    expect(statusSpy).toHaveBeenCalledWith({ txHash: SRC_TX, srcChainKey: ARBITRUM }, { apiKey: 'per-action-key' });
+  });
+
+  it.each([
+    ['no record exists', () => backendFails('not found', 404)],
+    ['the record reports a success:false envelope', () => recordNotFound()],
+    ['the backend gave up terminally', () => record({ status: 'failed' })],
+    ['the backend abandoned the record mid-flight', () => record({ status: 'relayed', abandonedAt: 'now' })],
+    ['the backend is unreachable', () => backendFails('backend unavailable', 503)],
+  ])('routes to the relay packet when %s', async (_case, arrange) => {
+    arrange();
+    packets(delivered);
+
+    const result = await sodaxBE.bridge.getDetailedStatus(key);
+
+    invariant(result.ok, 'expected the relay to answer');
+    expect(result.value.source).toBe('relay');
+    invariant(result.value.source === 'relay', 'narrowing');
+    expect(result.value.data.dst_tx_hash).toBe(DST_TX);
+  });
+
+  it('never returns a packet that is not a delivered match for this tx', async () => {
+    backendFails('not found', 404);
+    packets([
+      { status: 'executed', dst_tx_hash: DST_TX, src_tx_hash: '0xsomeoneelse', src_chain_id: RELAY_CHAIN_ID },
+      { status: 'validating', dst_tx_hash: '', src_tx_hash: SRC_TX, src_chain_id: RELAY_CHAIN_ID },
+    ]);
+
+    const result = await sodaxBE.bridge.getDetailedStatus(key);
+
+    invariant(!result.ok, 'expected LOOKUP_FAILED');
+    expect(result.error.code).toBe('LOOKUP_FAILED');
+  });
+
+  it('tags only the undelivered-packet miss as budgetable, not an outage', async () => {
+    backendFails('not found', 404);
+    packets([]);
+    const budgetable = await sodaxBE.bridge.getDetailedStatus(key);
+
+    backendFails('backend unavailable', 503);
+    packets([]);
+    const unprovable = await sodaxBE.bridge.getDetailedStatus(key);
+
+    invariant(!budgetable.ok && !unprovable.ok, 'expected both to fail');
+    // A relay miss behind a backend outage proves nothing, so it must not consume a caller's budget.
+    expect(budgetable.error.context?.reason).toBe(DETAILED_STATUS_NOT_DELIVERED);
+    expect(unprovable.error.context?.reason).toBeUndefined();
+  });
+
+  it.each([401, 403])('treats a rejected API key as terminal instead of degrading (%i)', async status => {
+    backendFails('rejected', status);
+
+    const result = await sodaxBE.bridge.getDetailedStatus(key);
+
+    invariant(!result.ok, 'expected LOOKUP_FAILED');
+    // Lifted so `isAuthFailure` recognises the wrapped error — it reads `context.status` only.
+    expect(result.error.context?.status).toBe(status);
+    expect(isAuthFailure(result.error)).toBe(true);
+    expect(result.error.context?.reason).toBeUndefined();
+    expect(mocks.getTransactionPackets).not.toHaveBeenCalled();
+  });
+
+  it('returns a Result rather than rejecting when a dependency throws', async () => {
+    vi.spyOn(sodaxBE.api.bridge, 'getSubmitTxStatus').mockRejectedValueOnce(new Error('boom'));
+
+    const result = await sodaxBE.bridge.getDetailedStatus(key);
+
+    invariant(!result.ok, 'expected LOOKUP_FAILED');
+    expect(result.error.code).toBe('LOOKUP_FAILED');
   });
 });

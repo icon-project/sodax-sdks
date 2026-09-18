@@ -415,6 +415,66 @@ if (result.ok) {
 }
 ```
 
+### Get Detailed Status
+
+`getDetailedStatus` answers "what is the status of this bridge?" from the **source-chain** tx — the one identifier you always hold. It does not define a new status: it routes to whichever of the two existing sources can answer, and returns that source's payload unmodified.
+
+```typescript
+const result = await sodax.bridge.getDetailedStatus({
+  srcChainKey: ChainKeys.ARBITRUM_MAINNET,
+  srcTxHash: bridgeResult.value.srcChainTxHash,
+});
+
+if (result.ok) {
+  if (result.value.source === 'backend') {
+    // `data` is the BridgeSubmitTxStatusDataV2 from sodax.api.bridge.getSubmitTxStatus
+    console.log(result.value.data.status, result.value.data.userMessage);
+  } else {
+    // `data` is the delivered relay PacketData
+    console.log(result.value.data.status, result.value.data.dst_tx_hash);
+  }
+}
+```
+
+`DetailedBridgeStatus` is discriminated on `source`, so it narrows on its own — no type guards needed:
+
+```typescript
+type DetailedBridgeStatus =
+  | { source: 'backend'; data: BridgeSubmitTxStatusDataV2 }
+  | { source: 'relay'; data: PacketData };
+```
+
+A point-in-time read — poll it yourself, or use `@sodax/dapp-kit`'s `useBridgeDetailedStatus`.
+
+The optional second argument is a `RequestOverrideConfig` for the backend read (a per-action `apiKey`, a different `baseURL`). The relay leg is unauthenticated and takes none.
+
+#### Why it exists
+
+`sodax.api.bridge.getSubmitTxStatus` cannot answer for every bridge, in two different ways.
+
+Sometimes there is **no record**, and it reads 404 — you opted out with `useBackendSubmitTx: false`, or the submit itself never landed. More often the record exists but is **stale**: the backend path POSTs the tx *first* and only falls back to the client-side relay once that path stalls, so a fallback-completed bridge leaves behind whatever state the backend last reached — `pending`, `relaying`, or a record it abandoned outright. Neither shape reflects what actually happened to the bridge.
+
+The relay can answer for it, but only if you know to ask it, and with what. So the caller had to know which path ran and pick a source. This method makes that choice instead:
+
+1. Read the backend record; return it while it is still in play.
+2. Otherwise return the delivered relay packet for the source tx.
+
+A record the backend **gave up on** (`failed`, or `abandonedAt` set) takes step 2, and on the default path this is the *common* branch rather than an edge case: the record almost always exists, so abandonment — not a 404 — is what usually signals the fallback ran. It never self-heals, so keeping it would report `failed` for a bridge the fallback went on to complete. A `success: false` envelope takes step 2 as well — that is the wire contract's "no record found", whatever `data` carries. A transport or server error routes on too, so a transient backend outage does not fail a bridge the relay can still report on.
+
+**One failure does not route on: a rejected API key.** `GET /bridge/submit-tx/status` is guarded by an API key, so a 401/403 is a terminal configuration problem rather than a source that had nothing to say. Degrading to the relay would bury it behind a relay error and leave a poller retrying a request only a corrected key can satisfy, so it surfaces directly, with `context.status` set for `isAuthFailure`.
+
+**What the relay arm proves, and what it does not.** The packet is returned whole rather than reduced to a hash, because `dst_tx_hash` means different things by route: for a spoke-source bridge it is the **hub settlement** tx, and for a hub-source bridge it is the destination spoke's tx. The spoke→spoke hop from the hub onwards is not covered by this read. So a `source: 'relay'` answer means *the deposit reached the packet's destination*, not always *the funds landed with the recipient*. The arm is terminal either way: the router only ever returns an `executed` packet with a non-empty `dst_tx_hash`.
+
+Both payloads are already documented — the submit-tx record in [BRIDGE_API.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/BRIDGE_API.md), the relay packet as `PacketData`. Nothing is translated between them, so no field is dropped and no status is reinterpreted.
+
+#### When it fails
+
+`LOOKUP_FAILED`, and only that. It means no source could answer — most often the relay has not delivered the packet yet.
+
+If you poll this yourself, branch on `error.context.reason`. It equals `DETAILED_STATUS_NOT_DELIVERED` when the backend answered (a record, or a definitive 404) **and** the relay has no packet for the source tx — whether it answers 404 for a tx it has not indexed, or returns no matching delivered packet. You cannot tell that apart from "still in flight", so bound it with a retry budget. Any other `LOOKUP_FAILED` is a dependency failing right now — relay 5xx or unreachable, malformed response, or a backend outage that left the relay miss unprovable. Keep retrying those, since retrying is how the read recovers. A rejected key is the exception: `isAuthFailure(error)` is true and no budget applies, because only a corrected key changes the answer. `useBridgeDetailedStatus` applies exactly this split.
+
+Because it is meant to be polled, the relay read carries the relay module's own per-request budget and gives up rather than hanging. An expiry lands in the retryable group: it is a dependency failing right now, so it does not consume a not-delivered budget.
+
 ## Types
 
 ### CreateBridgeIntentParams

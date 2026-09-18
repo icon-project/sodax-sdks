@@ -7,6 +7,7 @@ import {
   advanceNotFoundStreak,
   getDetailedStatusRefetchInterval,
   INITIAL_NOT_FOUND_STREAK,
+  isSolverNotFound,
   toNotFoundBudgetRead,
 } from './getSwapStatusRefetchInterval.js';
 
@@ -60,7 +61,7 @@ export const useDetailedStatus = ({
       notFoundStreakRef.current = advanceNotFoundStreak(
         notFoundStreakRef.current,
         pollKey,
-        toNotFoundBudgetRead(query.state.data),
+        isSolverNotFound(toNotFoundBudgetRead(query.state.data)),
         query.state.dataUpdateCount,
       );
       return getDetailedStatusRefetchInterval(query.state.data, notFoundStreakRef.current.consecutiveNotFound);
