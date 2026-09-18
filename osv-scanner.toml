@@ -16,7 +16,7 @@ reason = "pre-existing at baseline: elliptic@6.6.1"
 [[IgnoredVulns]]
 id = "CVE-2025-3194"
 ignoreUntil = 2026-12-03
-reason = "pre-existing at baseline: bigint-buffer@1.1.5"
+reason = "bigint-buffer@1.1.5 via @solana/buffer-layout-utils -> @solana/spl-token. No fix exists: 1.1.5 is the latest release (published 2019) and the advisory has no patched range. Not removable by a bump either -- @solana/buffer-layout-utils@0.3.0, the newest, still requires bigint-buffer ^1.1.5, so moving @solana/spl-token 0.4.9 -> 0.4.15 keeps it. Not reachable as described: the overflow is in the native binding, and bigint-buffer's install script never runs here (pnpm 10 skips dependency lifecycle scripts absent onlyBuiltDependencies, which this workspace does not set), so no build/ directory exists, require(bindings) throws and dist/node.js falls back to its pure-JS toBigIntLE. The SDK imports only TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, getAssociatedTokenAddress(Sync) and unpackAccount; unpackAccount decodes u64 fields through that fallback."
 
 [[IgnoredVulns]]
 id = "CVE-2026-2739"
