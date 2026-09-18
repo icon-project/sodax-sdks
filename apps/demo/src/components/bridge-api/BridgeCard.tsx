@@ -55,7 +55,7 @@ import { formatUnits, parseUnits } from 'viem';
 import { PartnerFeeFields, usePartnerFeeDraft } from '@/components/shared/PartnerFeeFields';
 import { useAppStore } from '@/zustand/useAppStore';
 import { BitcoinSetupPanel } from '@/components/bitcoin/BitcoinSetupPanel';
-import { formatMutationFailureMessage } from '@/lib/utils';
+import { formatMutationFailureMessage, rescaleTokenAmount } from '@/lib/utils';
 import type { BridgeApiOrder } from '@/components/bridge-api/OrderStatus';
 import { BRIDGE_API_MAX_PARTNER_FEE_BPS, DEFAULT_BRIDGE_API_BASE_URL, envBridgeApiBaseUrl } from '@/lib/sodaxSettings';
 import { isSignableBridgeApiChain, signAndBroadcastBridgeApiTx } from '@/components/bridge-api/lib/signAndBroadcast';
@@ -234,10 +234,25 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
   // Client-side destination prerequisites the API doesn't cover: Stellar trustline + NEAR storage.
   const stellarWalletProvider =
     toChainType === 'STELLAR' ? (toWalletProvider as IStellarWalletProvider | undefined) : undefined;
+  // Trustline capacity is denominated in the destination asset (Stellar works in stroops, 7dp), but
+  // `parsedAmount` is in the source token's decimals — an 18dp source would overstate it by 1e11.
+  const dstAmount = useMemo(
+    () =>
+      fromToken && toToken && parsedAmount !== undefined
+        ? rescaleTokenAmount(parsedAmount, fromToken.decimals, toToken.decimals)
+        : undefined,
+    [parsedAmount, fromToken, toToken],
+  );
+
+  // Below the destination asset's smallest unit the rescale floors to `0n`, which the trustline
+  // query reads as "no amount" and skips — leaving `needsTrustline` false and the prerequisite
+  // unchecked. Reject the amount instead of gating on a query that never runs.
+  const isBelowDestinationUnit = dstAmount === 0n && parsedAmount !== undefined && parsedAmount > 0n;
+
   const { data: hasSufficientTrustline, isPending: isTrustlineLoading } = useStellarTrustlineCheck({
     params: {
       token: toToken?.address,
-      amount: parsedAmount,
+      amount: isBelowDestinationUnit ? undefined : dstAmount,
       chainId: toChainKey,
       walletAddress: toChainType === 'STELLAR' ? toAccount.address : undefined,
     },
@@ -375,10 +390,10 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
   };
 
   const handleRequestTrustline = async () => {
-    if (toChainType !== 'STELLAR' || !stellarWalletProvider || !toToken || parsedAmount === undefined) return;
+    if (toChainType !== 'STELLAR' || !stellarWalletProvider || !toToken || !dstAmount) return;
     await requestTrustline({
       token: toToken.address,
-      amount: parsedAmount,
+      amount: dstAmount,
       srcChainKey: toChainKey as StellarChainKey,
       walletProvider: stellarWalletProvider,
     });
@@ -397,6 +412,7 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
     isBridging ||
     !bridgeBody ||
     !!feeDraft.error ||
+    isBelowDestinationUnit ||
     (fromChainType === 'EVM' && !hasAllowance) ||
     (fromChainKey === ChainKeys.BITCOIN_MAINNET && !isFromBtcReady) ||
     (toChainKey === ChainKeys.BITCOIN_MAINNET && !isToBtcReady) ||
@@ -449,6 +465,13 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
               </SelectContent>
             </Select>
           </div>
+
+          {isBelowDestinationUnit && toToken && (
+            <p className="text-sm text-red-500">
+              Amount is below the smallest {toToken.symbol} unit on {toChainKey} — bridge at least{' '}
+              {formatUnits(1n, toToken.decimals)}.
+            </p>
+          )}
 
           <div className="grow">
             <PartnerFeeFields draft={feeDraft} unsetBehavior="use the backend's configured fee" />
@@ -573,7 +596,7 @@ export default function BridgeCard({ setOrders }: { setOrders: (value: SetStateA
           <Button
             className="w-full"
             onClick={handleOpenDialog}
-            disabled={!bridgeBody || !isBridgeable || !isSourceSignable || !!feeDraft.error}
+            disabled={!bridgeBody || !isBridgeable || !isSourceSignable || !!feeDraft.error || isBelowDestinationUnit}
           >
             Bridge
           </Button>

@@ -17,6 +17,8 @@ import {
 import { toMystenTransaction } from '../../utils/sui-utils.js';
 
 const DEFAULT_GET_COINS_LIMIT = 10;
+/** Every deposit build waits on this read, so bound it instead of inheriting the runtime's default. */
+const LATEST_PACKAGE_ID_TIMEOUT_MS = 10_000;
 
 function toSuiObjectOwner(owner: SuiClientTypes.ObjectOwner | null): SuiObjectOwner {
   switch (owner?.$kind) {
@@ -109,7 +111,11 @@ export class SuiGrpcTransport implements SuiTransport {
   async fetchLatestPackageId(objectId: string): Promise<string> {
     let object: SuiClientTypes.Object<{ json: true }>;
     try {
-      ({ object } = await this.client.core.getObject({ objectId, include: { json: true } }));
+      ({ object } = await this.client.core.getObject({
+        objectId,
+        include: { json: true },
+        signal: AbortSignal.timeout(LATEST_PACKAGE_ID_TIMEOUT_MS),
+      }));
     } catch (error) {
       throw new Error('Failed to fetch asset manager id', { cause: error });
     }
