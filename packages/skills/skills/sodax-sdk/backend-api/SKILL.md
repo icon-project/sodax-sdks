@@ -52,7 +52,7 @@ Granular skill for `BackendApiService` — `sodax.backendApi`. HTTP client used 
 ## Related granular skills (same family)
 
 - [`../swap/SKILL.md`](../swap/SKILL.md) — `sodax.api.swaps.submitTx` is the backend half of the step-by-step swap flow.
-- [`../swaps-api/SKILL.md`](../swaps-api/SKILL.md) — the full typed Swaps API v2 client (`sodax.api.swaps`): quote, create-intent, submit-tx, fees, status.
+- [`../swaps-api/SKILL.md`](../swaps-api/SKILL.md) — the full typed Swaps API client (`sodax.api.swaps`): quote, create-intent, submit-tx, fees, status.
 - [`../money-market/SKILL.md`](../money-market/SKILL.md) — `BackendApiService` is the canonical source of MM position reads.
 - [`../partner/SKILL.md`](../partner/SKILL.md), [`../recovery/SKILL.md`](../recovery/SKILL.md) — diagnostics for failures via intent / tx lookups.
 

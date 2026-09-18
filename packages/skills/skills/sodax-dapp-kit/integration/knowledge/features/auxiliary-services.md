@@ -75,7 +75,7 @@ useBackendOracleCandles({ params: { symbol, interval, from, to }, queryOptions }
 
 ### Swaps API (`sodax.api.swaps`)
 
-Typed React Query wrappers over the backend **Swaps API v2** — one `useSwapsApi*` hook per endpoint of `sodax.api.swaps.*` (21 total: tokens, quote, deadline, allowance, approve, create / submit / cancel intent, status, intent hash / packet / extra-data, intent lookups, limit orders, gas estimate, fees, submit-tx + status). They call the backend HTTP API and are distinct from the on-chain `swap/` hooks (`useQuote`/`useStatus`/`useSwap`/…), which drive `sodax.swaps` (the on-chain `SwapService`). Reads take `{ params, queryOptions }`; the six actions (`approve`, `createIntent`, `submitIntent`, `cancelIntent`, `createLimitOrder`, `submitTx`) are mutations taking `{ mutationOptions }`, with domain inputs flowing through `mutate(vars)`.
+Typed React Query wrappers over the backend **Swaps API** — one `useSwapsApi*` hook per endpoint of `sodax.api.swaps.*` (21 total: tokens, quote, deadline, allowance, approve, create / submit / cancel intent, status, intent hash / packet / extra-data, intent lookups, limit orders, gas estimate, fees, submit-tx + status). They call the backend HTTP API and are distinct from the on-chain `swap/` hooks (`useQuote`/`useStatus`/`useSwap`/…), which drive `sodax.swaps` (the on-chain `SwapService`). Reads take `{ params, queryOptions }`; the six actions (`approve`, `createIntent`, `submitIntent`, `cancelIntent`, `createLimitOrder`, `submitTx`) are mutations taking `{ mutationOptions }`, with domain inputs flowing through `mutate(vars)`.
 
 ```ts
 // @ai-snippets-skip
@@ -143,7 +143,7 @@ const { mutateAsync: submitSwapTx } = useSwapsApiSubmitTx();
 await submitSwapTx({ request, apiConfig: { baseURL: 'https://...' } });
 ```
 
-`useSwapsApiSubmitTxStatus` polls the processing status and returns `SubmitTxStatusResponseV2 | undefined`. Its query runs only when **both** `txHash` and `srcChainKey` are supplied — the v2 status endpoint requires the source chain key:
+`useSwapsApiSubmitTxStatus` polls the processing status and returns `SubmitTxStatusResponseV2 | undefined`. Its query runs only when **both** `txHash` and `srcChainKey` are supplied — the status endpoint requires the source chain key:
 
 ```ts
 // @ai-snippets-skip
@@ -155,7 +155,7 @@ const { data: status } = useSwapsApiSubmitTxStatus({ params: { txHash, srcChainK
 
 ### Bridge API (`sodax.api.bridge`)
 
-Typed React Query wrappers over the backend **Bridge API v2** — `useBridgeApi*` hooks over `sodax.api.bridge.*` (tokens, allowance, approve, create-bridge-intent, submit-tx + status, plus the fee / bridgeable-amount / bridgeable discovery quotes). They are the HTTP-API parallel of the on-chain `bridge/` hooks (`useBridge`/`useBridgeAllowance`/…, which drive `sodax.bridge`). Mirrors the swaps family minus the solver/intent surface; reads take `{ params, queryOptions }`, the three actions (`approve`, `createBridgeIntent`, `submitTx`) are mutations taking `{ mutationOptions }`.
+Typed React Query wrappers over the backend **Bridge API** — `useBridgeApi*` hooks over `sodax.api.bridge.*` (tokens, allowance, approve, create-bridge-intent, submit-tx + status, plus the fee / bridgeable-amount / bridgeable discovery quotes). They are the HTTP-API parallel of the on-chain `bridge/` hooks (`useBridge`/`useBridgeAllowance`/…, which drive `sodax.bridge`). Mirrors the swaps family minus the solver/intent surface; reads take `{ params, queryOptions }`, the three actions (`approve`, `createBridgeIntent`, `submitTx`) are mutations taking `{ mutationOptions }`.
 
 ```ts
 // @ai-snippets-skip
@@ -179,7 +179,7 @@ await submitBridgeTx({ request, apiConfig: { baseURL: 'https://...' } });
 
 ### Leverage Yield API (`sodax.api.leverageYield`)
 
-Typed React Query wrappers over the backend **Leverage Yield API v2** — `useLeverageYieldApi*` hooks over `sodax.api.leverageYield.*` (vault registry, vault reads, split deposit/withdraw quote + create-intent, deadline, allowance/approve, the intent lifecycle, gas/fees, submit-tx + status). They are the HTTP-API parallel of the on-chain `leverageYield/` hooks (`useLeverageYieldDeposit`/`useLeverageYieldWithdraw`/…, which drive `sodax.leverageYield`). A vault deposit/withdraw IS an intent-based swap, so the intent / gas / fee / submit-tx hooks mirror the swaps family; reads take `{ params, queryOptions }` and the actions are mutations taking `{ mutationOptions }`.
+Typed React Query wrappers over the backend **Leverage Yield API** — `useLeverageYieldApi*` hooks over `sodax.api.leverageYield.*` (vault registry, vault reads, split deposit/withdraw quote + create-intent, deadline, allowance/approve, the intent lifecycle, gas/fees, submit-tx + status). They are the HTTP-API parallel of the on-chain `leverageYield/` hooks (`useLeverageYieldDeposit`/`useLeverageYieldWithdraw`/…, which drive `sodax.leverageYield`). A vault deposit/withdraw IS an intent-based swap, so the intent / gas / fee / submit-tx hooks mirror the swaps family; reads take `{ params, queryOptions }` and the actions are mutations taking `{ mutationOptions }`.
 
 ```ts
 // @ai-snippets-skip

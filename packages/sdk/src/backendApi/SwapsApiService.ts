@@ -68,7 +68,7 @@ type ResultifiedSwapsApiV2 = {
 };
 
 /**
- * HTTP client for the backend **Swaps API v2** (`/swaps/*`).
+ * HTTP client for the backend **Swaps API** (`/swaps/*`).
  *
  * A thin adapter over the standalone `@sodax/swaps-api` package (the single source of the wire
  * client — request building, per-chain `tx` validation/transform, response schemas, HTTP + retry).

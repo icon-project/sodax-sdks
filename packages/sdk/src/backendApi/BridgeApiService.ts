@@ -83,7 +83,7 @@ export function toCreateBridgeIntentParamsV2(
 }
 
 /**
- * HTTP client for the backend **Bridge API v2** (`/bridge/*`).
+ * HTTP client for the backend **Bridge API** (`/bridge/*`).
  *
  * A thin adapter over the standalone `@sodax/bridge-api` package (the single source of the wire
  * client — request building, per-chain `tx` validation/transform, response schemas, HTTP + retry).

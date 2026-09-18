@@ -1,6 +1,6 @@
 # Leverage Yield API — `LeverageYieldApiService`
 
-Typed HTTP client for the backend **Leverage Yield API v2** (`/leverage-yield/*`). Reached on the `Sodax`
+Typed HTTP client for the backend **Leverage Yield API** (`/leverage-yield/*`). Reached on the `Sodax`
 facade as `sodax.api.leverageYield` — `sodax.api` is an alias for `sodax.backendApi`, and
 `.leverageYield` is the `LeverageYieldApiService` instance.
 

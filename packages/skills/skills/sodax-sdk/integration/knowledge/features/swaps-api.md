@@ -1,6 +1,6 @@
 # Swaps API — `SwapsApiService`
 
-Typed HTTP client for the backend **Swaps API v2** (`/swaps/*`). Reachable as `sodax.api.swaps`
+Typed HTTP client for the backend **Swaps API** (`/swaps/*`). Reachable as `sodax.api.swaps`
 (`sodax.api` is an alias for `sodax.backendApi`; `.swaps` is the `SwapsApiService` instance). One method
 per endpoint (21 total). Every method returns `Promise<Result<T>>` — it **never throws** — and every
 response is validated at runtime against a valibot schema, so a backend contract drift surfaces as
@@ -95,7 +95,7 @@ Optional on the type, but no default: the backend does not fill it in, and
 `new Sodax({ fee })` / `new Sodax({ swaps: { partnerFee } })` only reach the
 `sodax.swaps` orchestrator — not this wire path. Send the same value on quote and
 create-intent. `checkAllowance` / `approve` inherit the field but ignore it.
-Bridge API v2 is different: omitted `partnerFee` falls back to `bridgePartnerFee`.
+The Bridge API is different: omitted `partnerFee` falls back to `bridgePartnerFee`.
 
 ## API key
 

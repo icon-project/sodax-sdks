@@ -331,7 +331,7 @@ These drive sponsored activation, where the SODAX sponsor pays the account's bas
 
 ### Swaps API Hooks (`sodax.api.swaps`)
 
-Typed wrappers over the backend Swaps API v2 — one `useSwapsApi*` hook per endpoint (21 total). Highlights:
+Typed wrappers over the backend Swaps API — one `useSwapsApi*` hook per endpoint (21 total). Highlights:
 
 - [`useSwapsApiQuote()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/swapsApi/useSwapsApiQuote.ts) — Solver quote for a cross-chain swap
 - [`useSwapsApiCreateIntent()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/swapsApi/useSwapsApiCreateIntent.ts) — Build an unsigned create-intent tx

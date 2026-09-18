@@ -191,7 +191,24 @@ describe('SuiGrpcTransport.fetchLatestPackageId', () => {
     const spy = vi.spyOn(core, 'getObject').mockResolvedValueOnce(objectWithJson({ latest_package_id: PKG }) as never);
 
     await expect(transport.fetchLatestPackageId(SUI_ASSET_MGR_CONFIG_ID)).resolves.toBe(PKG);
-    expect(spy).toHaveBeenCalledWith({ objectId: SUI_ASSET_MGR_CONFIG_ID, include: { json: true } });
+    expect(spy).toHaveBeenCalledWith({
+      objectId: SUI_ASSET_MGR_CONFIG_ID,
+      include: { json: true },
+      signal: expect.any(AbortSignal),
+    });
+  });
+
+  it('bounds the read with a live timeout signal', async () => {
+    let seen: AbortSignal | undefined;
+    vi.spyOn(core, 'getObject').mockImplementationOnce((async (options: { signal?: AbortSignal }) => {
+      seen = options.signal;
+      return objectWithJson({ latest_package_id: PKG });
+    }) as never);
+
+    await transport.fetchLatestPackageId(SUI_ASSET_MGR_CONFIG_ID);
+
+    // No signal, or one that already fired, would let a hung node stall every caller sharing the read.
+    expect(seen?.aborted).toBe(false);
   });
 
   it('throws when getObject rejects, keeping the transport error as cause', async () => {

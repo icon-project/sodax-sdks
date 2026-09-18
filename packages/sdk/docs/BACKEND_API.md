@@ -320,7 +320,7 @@ interface UserIntentsResponse {
 
 ## Swap Endpoints
 
-Swap-tx submission and the rest of the typed Swaps API v2 moved off `BackendApiService` onto the swaps
+Swap-tx submission and the rest of the typed Swaps API moved off `BackendApiService` onto the swaps
 client — `sodax.api.swaps` (`SwapsApiService`). Submit a signed spoke-chain swap transaction with
 `sodax.api.swaps.submitTx(...)` and poll it with
 `sodax.api.swaps.getSubmitTxStatus({ txHash, srcChainKey })` (both fields required). See
@@ -329,7 +329,7 @@ status, fees, …).
 
 ## Bridge Endpoints
 
-The Bridge API v2 is a sibling typed client — `sodax.api.bridge` (`BridgeApiService`), also reached via the
+The Bridge API is a sibling typed client — `sodax.api.bridge` (`BridgeApiService`), also reached via the
 `sodax.api` alias and sharing the same backend host (`/bridge/*` sub-paths). It mirrors the swaps client
 minus the solver/intent surface: allowance/approve/create-bridge-intent, submit-tx + status, tokens, and
 the fee/bridgeable-amount/bridgeable discovery quotes. Submit a signed spoke-deposit with
@@ -362,7 +362,7 @@ the same split as `sodax.api.swaps` over `@sodax/swaps-api` — so the wire beha
 
 ## Leverage Yield Endpoints
 
-The Leverage Yield API v2 is a third sibling typed client — `sodax.api.leverageYield`
+The Leverage Yield API is a third sibling typed client — `sodax.api.leverageYield`
 (`LeverageYieldApiService`), also reached via the `sodax.api` alias and sharing the same backend host
 (`/leverage-yield/*` sub-paths). A leverage-yield deposit/withdraw **is** an intent-based swap (the vault's
 `lsoda*` share token is a solver-tradeable token), so its intent-relay / gas / fee / submit-tx endpoints

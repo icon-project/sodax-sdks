@@ -1,6 +1,6 @@
 /**
- * Leverage Yield API v2 hooks — typed React Query wrappers over `sodax.api.leverageYield.*` (the
- * LeverageYieldApiService HTTP client). One hook per endpoint of the backend Leverage Yield API v2.
+ * Leverage Yield API hooks — typed React Query wrappers over `sodax.api.leverageYield.*` (the
+ * LeverageYieldApiService HTTP client). One hook per endpoint of the backend Leverage Yield API.
  *
  * Distinct from the on-chain `leverageYield/` hooks (`useLeverageYieldDeposit`/…), which drive the
  * `LeverageYieldService` path (wallet → hub chain). These hooks call the backend HTTP API instead.

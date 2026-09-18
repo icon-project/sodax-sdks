@@ -5,7 +5,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { SolverEnv, useAppStore } from '@/zustand/useAppStore';
 
 /**
- * Leverage Yield API v2 showcase — deposits/withdrawals driven entirely by the backend
+ * Leverage Yield API showcase — deposits/withdrawals driven entirely by the backend
  * `sodax.api.leverageYield.*` HTTP client (via `@sodax/dapp-kit` `useLeverageYieldApi*` hooks).
  * The only client-side steps are allowance signing, sign-and-broadcast, and minor utils — every
  * quote/intent/relay decision is made by the API. Mirrors the swaps-api page.

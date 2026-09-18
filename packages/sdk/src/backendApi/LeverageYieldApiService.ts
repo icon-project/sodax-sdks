@@ -89,7 +89,7 @@ type ResultifiedLeverageYieldApiV2 = {
 };
 
 /**
- * HTTP client for the backend **Leverage Yield API v2** (`/leverage-yield/*`).
+ * HTTP client for the backend **Leverage Yield API** (`/leverage-yield/*`).
  *
  * The leverage-yield counterpart to {@link import('./SwapsApiService.js').SwapsApiService}:
  * one method per route of {@link ILeverageYieldApiV2}, each response validated at runtime
