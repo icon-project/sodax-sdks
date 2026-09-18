@@ -54,11 +54,6 @@ ignoreUntil = 2026-12-03
 reason = "pre-existing at baseline: yaml@2.8.2"
 
 [[IgnoredVulns]]
-id = "CVE-2026-39365"
-ignoreUntil = 2026-12-03
-reason = "pre-existing at baseline: vite@5.4.21"
-
-[[IgnoredVulns]]
 id = "CVE-2026-41907"
 ignoreUntil = 2026-12-03
 reason = "pre-existing at baseline: uuid@8.3.2, uuid@9.0.1"
@@ -84,16 +79,6 @@ ignoreUntil = 2026-12-03
 reason = "pre-existing at baseline: js-yaml@3.14.2, js-yaml@4.1.1"
 
 [[IgnoredVulns]]
-id = "CVE-2026-53571"
-ignoreUntil = 2026-12-03
-reason = "pre-existing at baseline: vite@5.4.21"
-
-[[IgnoredVulns]]
-id = "CVE-2026-53632"
-ignoreUntil = 2026-12-03
-reason = "pre-existing at baseline: vite@5.4.21"
-
-[[IgnoredVulns]]
 id = "CVE-2026-54272"
 ignoreUntil = 2026-12-03
 reason = "pre-existing at baseline: ip-address@10.2.0"
@@ -109,24 +94,9 @@ ignoreUntil = 2026-12-03
 reason = "pre-existing at baseline: valibot@1.4.0"
 
 [[IgnoredVulns]]
-id = "CVE-2026-67213"
-ignoreUntil = 2026-12-03
-reason = "pre-existing at baseline: nanoid@3.3.12"
-
-[[IgnoredVulns]]
-id = "CVE-2026-67214"
-ignoreUntil = 2026-12-03
-reason = "pre-existing at baseline: nanoid@3.3.12"
-
-[[IgnoredVulns]]
 id = "CVE-2026-69152"
 ignoreUntil = 2026-12-03
 reason = "pre-existing at baseline: brace-expansion@2.1.0, brace-expansion@5.0.6"
-
-[[IgnoredVulns]]
-id = "CVE-2026-69153"
-ignoreUntil = 2026-12-03
-reason = "pre-existing at baseline: postcss@8.5.15"
 
 [[IgnoredVulns]]
 id = "CVE-2026-69185"
@@ -147,21 +117,6 @@ reason = "pre-existing at baseline: ip-address@10.2.0"
 id = "CVE-2026-71429"
 ignoreUntil = 2026-12-03
 reason = "stream-json@1.9.1 via jayson -> @solana/web3.js. Not affected: the advisory is specific to the pick/ignore/filter/replace path filters in filter-base.js, and jayson only requires streamers/StreamValues and utils/Verifier, which use the O(1) asm.depth getter. Not overridable either — the 3.5.0 fix is ESM-only, needs Node >=22, and moved every subpath under ./src/*, so jayson's CJS requires would break."
-
-[[IgnoredVulns]]
-id = "CVE-2026-73088"
-ignoreUntil = 2026-12-03
-reason = "browserslist@4.28.2 via @babel/helper-compilation-targets; overriding to the 4.28.7 fix re-resolves the @babel/core subtree and trustPolicy rejects the already-locked semver@6.3.1"
-
-[[IgnoredVulns]]
-id = "CVE-2026-73089"
-ignoreUntil = 2026-12-03
-reason = "browserslist@4.28.2 via @babel/helper-compilation-targets; overriding to the 4.28.7 fix re-resolves the @babel/core subtree and trustPolicy rejects the already-locked semver@6.3.1"
-
-[[IgnoredVulns]]
-id = "CVE-2026-73646"
-ignoreUntil = 2026-12-03
-reason = "pre-existing at baseline: postcss@8.5.15"
 
 [[IgnoredVulns]]
 id = "CVE-2026-75899"
@@ -197,11 +152,6 @@ reason = "pre-existing at baseline: qs@6.15.1"
 id = "GHSA-5p4m-2wfm-xmqj"
 ignoreUntil = 2026-12-03
 reason = "pre-existing at baseline: js-yaml@3.14.2, js-yaml@4.1.1"
-
-[[IgnoredVulns]]
-id = "GHSA-67mh-4wv8-2f99"
-ignoreUntil = 2026-12-03
-reason = "pre-existing at baseline: esbuild@0.21.5"
 
 [[IgnoredVulns]]
 id = "GHSA-g7r4-m6w7-qqqr"

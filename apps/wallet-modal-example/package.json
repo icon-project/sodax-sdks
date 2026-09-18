@@ -21,7 +21,7 @@
     "@sodax/wallet-sdk-react": "workspace:*",
     "@tanstack/react-query": "catalog:",
     "@types/node": "catalog:",
-    "@vitejs/plugin-react": "4.2.1",
+    "@vitejs/plugin-react": "catalog:",
     "buffer": "^6.0.3",
     "react": "19.1.4",
     "react-dom": "19.1.4"
@@ -34,8 +34,8 @@
     "babel-plugin-macros": "3.1.0",
     "tailwindcss": "^4.1.16",
     "typescript": "catalog:",
-    "vite": "^5.4.11",
-    "vite-plugin-svgr": "4.2.0",
+    "vite": "catalog:",
+    "vite-plugin-svgr": "catalog:",
     "vite-tsconfig-paths": "4.3.1"
   }
 }

@@ -14,7 +14,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
-      // Absolute path so Vite 5 cannot treat `buffer` as a Node builtin and externalize it.
+      // Absolute path pins `buffer` to the npm polyfill so it is never resolved as the Node builtin.
       buffer: require.resolve('buffer/'),
     },
     // Force a single React instance: transitive deps that still declare a React 18 peer otherwise
