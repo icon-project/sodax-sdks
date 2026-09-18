@@ -95,6 +95,7 @@
   --radius-regular: 16px;
   --radius-inset: 12px;
   --radius-small: 8px;
+  --asset-logo-size: 52px;
   /* Buttons, badges and the search field. A round image keeps its own 9999px — see RADIUS_SCALES. */
   --radius-pill: 9999px;
 }
@@ -162,7 +163,8 @@
      it — which is the stage, not the page. */
   --form-surface: var(--stage-2);
   --surface-embed: var(--stage-2);
-  --flip-bg: var(--cream-white);
+  /* Two rungs off the form surface, not the exchange's one: there the disc sits on a white card. */
+  --flip-bg: var(--cream-cherry);
   --flip-bg-hover: var(--cherry-grey);
   --flip-fg: var(--espresso);
   --logo-shadow: var(--clay-light-veil);
@@ -239,8 +241,8 @@
   --panel-halo-hover: var(--night-600);
 
   --form-surface: var(--surface-page);
-  --flip-bg: var(--night-700);
-  --flip-bg-hover: var(--night-600);
+  --flip-bg: var(--night-600);
+  --flip-bg-hover: var(--night-700);
   --flip-fg: var(--cream-cherry);
   --logo-shadow: rgb(0 0 0 / 35%);
   --chip-shadow: rgb(0 0 0 / 55%);
@@ -312,13 +314,20 @@ code,
   padding: 12px var(--space-24) 0;
 }
 
-/* Framed by a host page: the widget alone, on its own surface, with none of our chrome. The full
-   height keeps the cherry ground off an iframe taller than the form. */
+/* Framed by a host page: the widget alone, on its own surface, with none of our chrome. The ground
+   fills the frame the host gives us — the room the asset picker opens into — and the widget stays at
+   the top of it, where it was before there was any room to spare. */
 .app-embed {
   min-height: 100vh;
   background: var(--surface-embed);
+  padding: 0;
+  justify-content: flex-start;
+}
+
+/* The widget's own box, and the one the resize message measures. */
+.app-embed-content {
+  width: 100%;
   padding: var(--space-24);
-  justify-content: center;
 }
 
 /* ── Header bar ─────────────────────────────────────────────────────────── */
@@ -423,13 +432,17 @@ code,
   font-weight: 600;
   color: var(--text-muted);
 }
+/* Stretched to the row, so the preview ends where the builder's card does rather than hanging past
+   it. The frame keeps its own height inside that and the canvas scrolls once it needs more. */
 .preview-column {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
   min-width: 0;
 }
 .preview-toolbar,
 .wallet-row,
-.integration-actions,
-.activity-links {
+.integration-actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -438,15 +451,6 @@ code,
 }
 .preview-toolbar {
   margin-bottom: 18px;
-}
-.widget-preview {
-  max-width: 520px;
-  width: 100%;
-  margin: 0 auto;
-  transition: max-width 180ms;
-}
-.preview-mobile {
-  max-width: 375px;
 }
 .segmented {
   display: flex;
@@ -463,10 +467,6 @@ code,
 .builder-tabs {
   padding: 0 4px;
 }
-.studio-code {
-  grid-column: 1 / -1;
-  min-width: 0;
-}
 .brand-card .brand-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
@@ -474,8 +474,7 @@ code,
   gap: 16px;
 }
 .integration-card h3,
-.behavior-card h3,
-.activity-card h3 {
+.behavior-card h3 {
   color: var(--text-heading);
   margin: 10px 0;
 }
@@ -523,16 +522,19 @@ code,
 .swap-fields:disabled {
   opacity: 0.65;
 }
-.asset-caption {
-  font-size: 12px;
-  margin: 8px 8px 10px;
-  color: var(--text-muted);
+/* The exchange keeps wallet state out of the form and above it; the panels label their own sides. */
+.wallet-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-8);
+  margin: 0 var(--space-8) var(--space-8);
 }
-.max-button {
-  padding: 2px 6px;
-  margin-left: 6px;
-  font-size: 11px;
+
+.wallet-chips:empty {
+  display: none;
 }
+
 .wallet-row .btn {
   font-size: 12px;
 }
@@ -569,59 +571,207 @@ code,
 .modal-body p {
   margin: 0;
 }
-.wallet-option {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 12px;
-  padding: 12px;
-}
 .address-text {
   overflow-wrap: anywhere;
   font-family: var(--font-mono);
   font-size: 12px;
 }
-.review-amount {
-  font-size: 24px;
-  color: var(--text-heading);
+/* ── Confirm dialog ─────────────────────────────────────────────────────── */
+/* The exchange's: both legs either side of the wait, and one action carrying the whole lifecycle. */
+.modal-header-bare {
+  display: flex;
+  justify-content: flex-end;
+  min-height: 16px;
 }
-.review-details {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  font-size: 13px;
+.modal-close {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-faint);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+.modal-close:hover:not(:disabled) {
+  color: var(--text-body);
+}
+.modal-close:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+.review {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  padding-top: var(--space-8);
+}
+.review p {
   margin: 0;
 }
-.review-details dd {
-  text-align: right;
-  margin: 0;
+/* Two lines of room, kept whether or not there is anything to say. */
+.review-message {
+  min-height: 36px;
+  color: var(--alert-fg);
+  font-size: var(--text-caption);
+  line-height: 1.5;
+  text-align: center;
   overflow-wrap: anywhere;
 }
-.recipient-box {
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-inset);
-  padding: 12px;
+.review-legs {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: var(--space-8);
+  padding-bottom: var(--space-8);
 }
-.activity-card {
+.review-leg {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-8);
+  text-align: center;
+}
+/* Sent and gone: the source asset greys out once the destination has been paid. */
+.review-leg-spent .asset-logo {
+  filter: grayscale(1);
+  opacity: 0.5;
+}
+.review-leg-amount {
+  font-size: var(--text-lead);
+  line-height: 1.3;
+  color: var(--text-heading);
+  overflow-wrap: anywhere;
+}
+.review-least {
+  display: block;
+  min-height: 12px;
+  font-size: 10px;
+  line-height: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.review-leg-where {
+  display: flex;
+  max-width: 100%;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.review-chip {
+  max-width: 100%;
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-inset);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.review-eta {
+  display: flex;
+  flex: none;
+  width: 56px;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding-top: 16px;
+  color: var(--text-faint);
+}
+.review-glyph {
+  width: 16px;
+  height: 16px;
+}
+.review-recipient {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  text-align: center;
+}
+.review-caution {
+  text-align: center;
+  text-wrap: balance;
+}
+/* The record's own line, standing in for the legs when the asset list cannot draw them. */
+.review-restored {
+  font-size: var(--text-lead);
+  line-height: 1.3;
+  color: var(--text-heading);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.review-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-16);
+}
+.review-support {
+  align-self: center;
+  font-size: var(--text-body-small);
+}
+.review-fees > summary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: var(--text-body-small);
+  cursor: pointer;
+}
+.review-fees > summary::-webkit-details-marker {
+  display: none;
+}
+.review-fees > summary:hover {
+  color: var(--text-body);
+}
+.review-fees[open] .review-chevron {
+  transform: rotate(180deg);
+}
+.review-fees-rows {
   margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-inset);
 }
-.activity-links {
-  justify-content: flex-start;
-  margin: 16px 0 0;
-  font-size: 13px;
+.spinner {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  animation: spin 900ms linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+  }
 }
 .hero-note a {
   color: var(--text-on-hero);
 }
-.app-embed {
-  justify-content: flex-start;
-  min-height: 0;
+/* The widget in its own tab: the same width a host frame gives it, centred in the window. */
+.app-standalone {
+  justify-content: safe center;
+  min-height: 100vh;
+}
+
+.app-standalone .flow-column {
+  width: 100%;
+  max-width: 480px;
+  margin-inline: auto;
 }
 
 .standalone-link {
   display: block;
   text-align: center;
-  margin-top: 8px;
+  margin-top: var(--space-16);
   font-size: 12px;
 }
 .studio-heading p {
@@ -637,36 +787,15 @@ code,
   .app {
     padding: 8px 8px 0;
   }
-  .app-embed {
+  .app-embed-content {
     padding: 16px;
-  }
-  .stage {
-    padding: 20px 12px;
-    border-width: 4px;
-  }
-  .app-main {
-    gap: 24px;
-  }
-  .studio-heading h2 {
-    font-size: 32px;
   }
   .widget-modal {
     padding: 18px;
   }
-}
-@media (prefers-reduced-motion: reduce) {
-  .widget-preview {
-    transition: none;
-  }
-}
-
-@media (max-width: 1180px) {
-  .app-main {
-    grid-template-columns: 1fr;
-  }
-
-  .stage {
-    padding: var(--space-24);
+  /* The same sentence needs a third line in a narrow frame, and it must already be reserved. */
+  .review-message {
+    min-height: 54px;
   }
 }
 
@@ -708,7 +837,7 @@ code,
 }
 
 .action-message:empty {
-  margin: 6px 0;
+  margin: var(--space-8) 0;
 }
 
 .action-message .alert {
@@ -789,11 +918,10 @@ code,
   gap: 12px;
 }
 
-/* The whole identity cluster is the picker trigger, as on the exchange. */
+/* The symbol and its chevron are the picker trigger, as on the exchange. */
 .asset-id {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-16);
   min-width: 0;
   padding: 0;
   border: 0;
@@ -810,10 +938,27 @@ code,
   border-radius: var(--radius-small);
 }
 
+.asset-identity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-16);
+  min-width: 0;
+}
+
 .asset-id-text {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 2px;
+  min-width: 0;
+}
+
+/* The exchange's second line: the network, and what this side knows about the wallet. */
+.asset-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  margin: 0;
   min-width: 0;
 }
 
@@ -837,12 +982,16 @@ code,
   color: var(--text-heading);
 }
 
+.asset-meta,
 .asset-chain {
   color: var(--text-faint);
   font-size: var(--text-body-small);
   font-weight: 500;
   line-height: 1.3;
   white-space: nowrap;
+}
+
+.asset-chain {
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -887,8 +1036,8 @@ code,
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 52px;
-  height: 52px;
+  width: var(--asset-logo-size);
+  height: var(--asset-logo-size);
   flex: none;
   border-radius: 9999px;
   background: linear-gradient(135deg, var(--surface-card), var(--surface-inset));
@@ -953,7 +1102,6 @@ code,
   color: var(--text-body);
 }
 
-.select,
 .input {
   background: var(--surface-inset);
   border: 1px solid var(--border-inset);
@@ -966,7 +1114,6 @@ code,
   width: 100%;
 }
 
-.select:focus-visible,
 .input:focus-visible {
   outline: 2px solid var(--border-strong);
   outline-offset: -2px;
@@ -978,8 +1125,125 @@ code,
   opacity: 1;
 }
 
-.select {
+/* ── Dropdown ───────────────────────────────────────────────────────────── */
+/* The B2B design system's navigation menu, rebuilt as a form control: a 42px trigger on an 8px
+   radius, a 12px chevron behind a 4px gap, and a panel of 12px/8px rows. Only the geometry is
+   borrowed — every colour stays on a semantic role, so an appearance the visitor picks reaches it. */
+.dropdown {
+  display: flex;
+  min-width: 0;
+}
+
+.dropdown-trigger {
+  display: flex;
   flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  min-width: 0;
+  height: 42px;
+  padding: 0 var(--space-16);
+  border: 1px solid var(--border-inset);
+  border-radius: var(--radius-small);
+  background: var(--surface-inset);
+  color: var(--text-heading);
+  font-family: var(--font-body);
+  font-size: var(--text-body-small);
+  font-weight: 500;
+  line-height: 18px;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color 150ms,
+    border-color 150ms;
+}
+
+.dropdown-trigger:hover:not(:disabled) {
+  border-color: var(--border-strong);
+}
+
+.dropdown-trigger:focus-visible {
+  outline: 2px solid var(--border-strong);
+  outline-offset: -2px;
+}
+
+.dropdown-trigger:disabled {
+  color: var(--text-faint);
+  cursor: default;
+}
+
+/* An open trigger is filled in the brand colour there; the brand here is the visitor's, so it is a
+   wash of the accent rather than the accent itself — a solid fill would redraw its own label. */
+.dropdown-trigger[aria-expanded="true"] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface-inset));
+}
+
+.dropdown-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dropdown-chevron {
+  flex: none;
+  color: var(--text-muted);
+}
+
+.dropdown-trigger[aria-expanded="true"] .dropdown-chevron {
+  color: var(--accent);
+}
+
+/* A popover in the top layer, not a child of the control: these open inside cards and a scrolling
+   column, either of which would clip an absolutely-positioned panel at its own edge. The component
+   sets `top`/`bottom`/`left` from the trigger, which is why the UA's centring inset is cleared. */
+.dropdown-panel {
+  position: fixed;
+  inset: auto;
+  z-index: 5;
+  width: max-content;
+  max-width: min(260px, 72vw);
+  margin: 0;
+  padding: 4px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-small);
+  background: color-mix(in srgb, var(--surface-card) 88%, transparent);
+  color: var(--text-heading);
+  backdrop-filter: blur(40px);
+  box-shadow: 0 12px 36px var(--logo-shadow);
+  overflow: visible;
+}
+
+/* Positioned so a row's `offsetTop` is measured against the list the component scrolls. */
+.dropdown-list {
+  position: relative;
+  max-height: 264px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.dropdown-option {
+  padding: 12px var(--space-8);
+  border-radius: var(--radius-small);
+  color: var(--text-muted);
+  font-size: var(--text-body-regular);
+  line-height: 18px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+/* The design system holds one row at full strength and dims the rest, so pointing at a row and
+   having chosen it are the same signal read at different moments. */
+.dropdown-option-active {
+  background: var(--ghost-bg-hover);
+  color: var(--text-heading);
+}
+
+.dropdown-option-selected {
+  color: var(--text-heading);
+  font-weight: 600;
 }
 
 .slip {
@@ -1010,28 +1274,6 @@ code,
   margin: -16px 0;
 }
 
-/* The exchange's neutral disc, ringed in the page tone so it punches a hole through the seam. */
-.flip-btn {
-  width: 44px;
-  height: 44px;
-  background: var(--flip-bg);
-  border: 4px solid var(--form-surface);
-  color: var(--flip-fg);
-  transition: transform 200ms;
-}
-
-.flip-btn svg {
-  width: 16px;
-  height: 16px;
-}
-
-.flip-btn:hover:not(:disabled) {
-  background: var(--flip-bg-hover);
-  border-color: var(--form-surface);
-  color: var(--flip-fg);
-  transform: scale(1.1);
-}
-
 .summary {
   margin-top: 12px;
   padding-top: 12px;
@@ -1040,9 +1282,11 @@ code,
 
 /* ── Asset picker ───────────────────────────────────────────────────────── */
 /* The exchange's picker: a grid of assets rather than a list of every token-chain pair. */
+/* A height, not a max-height: the grid below sizes against it, and a max- one leaves it indefinite,
+   so the list grew past the dialog instead of scrolling inside it. */
 .picker {
   width: min(480px, 92vw);
-  max-height: min(600px, 86vh);
+  height: min(600px, 86vh);
   padding: 0;
   border: 0;
   border-radius: var(--radius-large);
@@ -1051,14 +1295,15 @@ code,
 }
 
 .picker::backdrop {
-  background: rgb(29 20 20 / 40%);
+  background: var(--border-strong);
+  backdrop-filter: blur(6px);
 }
 
 .picker-body {
   display: flex;
   flex-direction: column;
   gap: var(--space-16);
-  max-height: inherit;
+  height: 100%;
   min-height: 0;
   padding: var(--space-24);
 }
@@ -1155,9 +1400,10 @@ code,
   box-shadow: -4px 0 4px var(--chip-shadow);
 }
 
+/* The design system's chevron is a 12px box; scaling it up would thicken its 1.5 stroke with it. */
 .picker-chevron {
-  width: 16px;
-  height: 16px;
+  width: 12px;
+  height: 12px;
   border-radius: 0;
 }
 
@@ -1182,7 +1428,7 @@ code,
 .picker-stage {
   position: relative;
   flex: 1;
-  min-height: 240px;
+  min-height: 0;
   overflow: visible;
 }
 
@@ -1190,7 +1436,8 @@ code,
   overflow: hidden;
 }
 
-/* 72px columns and 16px of side padding give the exchange's five-per-row grid at this width. */
+/* 72px columns, and only 8px of side padding: the dialog is at most as wide as the frame around it,
+   and 16px each side cost the fifth column the exchange fits. */
 .tile-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, 72px);
@@ -1199,9 +1446,11 @@ code,
   overflow-y: auto;
   min-height: 0;
   height: 100%;
-  padding: var(--space-8) var(--space-16);
+  padding: var(--space-8) var(--space-8) var(--space-24);
   align-content: start;
-  mask-image: linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 56px), transparent);
+  /* Bottom only, and the padding above scrolls the last row clear of it: a fade at the top veiled
+     the first row of a list that starts there. */
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent);
 }
 
 .tile-grid-behind {
@@ -1236,7 +1485,9 @@ code,
   pointer-events: none;
 }
 
-.tile-cell-open .tile-label {
+/* An open flyout speaks for the tile: its caption replaces the symbol and the amount held. */
+.tile-cell-open .tile-label,
+.tile-cell-open .tile-balance {
   visibility: hidden;
 }
 
@@ -1341,6 +1592,14 @@ code,
   object-fit: contain;
 }
 
+.tile-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+}
+
 .tile-label {
   color: var(--text-heading);
   font-size: var(--text-body-small);
@@ -1348,19 +1607,51 @@ code,
   overflow-wrap: anywhere;
 }
 
-/* Two centred columns floating over the blurred grid, as the exchange's chain selector does. */
+/* The exchange shows what you hold of an asset under the tile you are pointing at. The line is
+   reserved across the grid, so the rows do not reflow as each chain's balance arrives. */
+.tile-balance {
+  min-height: 14px;
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+  line-height: 14px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0;
+  transition: opacity 150ms ease-out;
+}
+
+.tile:hover .tile-balance,
+.tile:focus-visible .tile-balance {
+  opacity: 1;
+}
+
+/* Dismisses an open flyout or network sheet; sits under both and over the grid they cover. */
+.picker-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: default;
+}
+
+/* Two centred columns floating over the blurred grid, as the exchange's chain selector does. A plain
+   `center` pushed the first rows of a long list above the scroll box, where nothing could reach them. */
 .network-overlay {
   position: absolute;
   inset: 0;
+  z-index: 2;
   display: grid;
   grid-template-columns: repeat(2, max-content);
   gap: 4px var(--space-16);
-  align-content: center;
+  align-content: safe center;
   justify-content: center;
   overflow-y: auto;
   padding: 4px var(--space-8);
 }
 
+/* Exactly as wide as its row of networks: a caption sized to its own text pushed the flyout past the
+   grid, which scrolls, and a scroller clips — so the name was cut off rather than wrapped. */
 .chain-flyout {
   position: absolute;
   top: 64px;
@@ -1370,18 +1661,25 @@ code,
   flex-direction: column;
   align-items: center;
   gap: 4px;
-  width: max-content;
-  min-width: 150px;
+  width: 150px;
   transform: translateX(-50%);
   pointer-events: auto;
 }
 
+/* Two lines' worth, reserved: the caption answers the pointer, and a line of it appearing must not
+   move the networks out from under the cursor that asked. */
 .chain-flyout-caption {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
   margin: 0;
   color: var(--text-heading);
   font-size: var(--text-caption);
   font-weight: 500;
-  white-space: nowrap;
+  line-height: 1.25;
+  text-align: center;
+  text-wrap: balance;
 }
 
 .chain-flyout-row {
@@ -1429,6 +1727,11 @@ code,
   box-shadow: -2px 0 8px var(--chip-shadow);
 }
 
+/* A network you hold the asset on wears a thicker collar, as the exchange's picker marks it. */
+.chain-flyout-icon-funded .chain-flyout-logo {
+  outline-width: 5px;
+}
+
 .network-row {
   display: flex;
   align-items: center;
@@ -1456,6 +1759,13 @@ code,
 
 .network-row-active {
   font-weight: 600;
+}
+
+.network-row-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.2;
 }
 
 .network-logo {
@@ -1559,6 +1869,14 @@ code,
   color: var(--cta-disabled-fg);
 }
 
+/* Working, not dead: a swap in flight keeps the CTA's colour and lets the spinner carry the state. */
+.btn-primary.btn-working:disabled {
+  background: var(--cta-bg);
+  border-color: var(--cta-bg);
+  color: var(--cta-fg);
+  opacity: 0.8;
+}
+
 .btn-on-cherry {
   background: var(--hero-ctl-bg);
   border-color: var(--hero-ctl-bg);
@@ -1585,6 +1903,90 @@ code,
 .btn-icon {
   width: 36px;
   padding: 0;
+}
+
+/* The exchange's neutral disc, ringed in the page tone so it punches a hole through the seam. Below
+   `.btn`, not up with the form it sits in: at equal specificity the generic ghost style wins. */
+.flip-btn {
+  width: 40px;
+  height: 40px;
+  background: var(--flip-bg);
+  border: 4px solid var(--form-surface);
+  color: var(--flip-fg);
+  transition: transform 200ms;
+}
+
+.flip-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.flip-btn:hover:not(:disabled) {
+  background: var(--flip-bg-hover);
+  border-color: var(--form-surface);
+  color: var(--flip-fg);
+  transform: scale(1.1);
+}
+
+/* `.btn:disabled` outranks the fill above, so the ring is restated here or the seam shows through. */
+.flip-btn:disabled {
+  border-color: var(--form-surface);
+}
+
+/* The exchange's tiny filled pill on the balance line — also below `.btn`, for the same reason. */
+.max-button {
+  height: 18px;
+  padding: 0 8px;
+  border-color: transparent;
+  background: var(--panel-halo);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.max-button:hover:not(:disabled) {
+  background: var(--panel-halo-hover);
+  border-color: transparent;
+  color: var(--text-heading);
+}
+
+/* A row in the connect sheet: icon then name, left-aligned, and tall enough to hold the icon. */
+.wallet-option {
+  justify-content: flex-start;
+  gap: 12px;
+  height: auto;
+  padding: 12px;
+}
+
+/* Label and confirmation share one cell: the button sizes to the wider of the two and holds it. */
+.copy-label {
+  display: inline-grid;
+  align-items: center;
+  justify-items: center;
+}
+
+.copy-label > span {
+  grid-area: 1 / 1;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+  white-space: nowrap;
+}
+
+.copy-label-done,
+.copy-label-copied .copy-label-idle {
+  visibility: hidden;
+}
+
+.copy-label-copied .copy-label-done {
+  visibility: visible;
+}
+
+.copied-glyph {
+  width: 14px;
+  height: 14px;
+  flex: none;
 }
 
 .btn-on-cherry.btn-icon {
@@ -1759,6 +2161,7 @@ code,
 /* Segmented control: the group is an inset, the active tab steps back up to the card. */
 .tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
   padding: 4px;
   background: var(--surface-inset);
@@ -1787,12 +2190,6 @@ code,
   font-weight: 500;
 }
 
-/* Bare glyph plus a CSS-only bubble — the note it replaces was a standing paragraph nobody needed twice. */
-.hint {
-  position: relative;
-  display: inline-flex;
-}
-
 .hint-trigger {
   display: inline-flex;
   padding: 0;
@@ -1808,62 +2205,37 @@ code,
   color: var(--text-heading);
 }
 
-/* The stake page's tooltip, in plain CSS: a white pill centred above the trigger, px-4 py-2 at
-   12px. The shadow is ours — that surface is cream on sodax.com and white here. */
+/* Match the frontend's bubble and curved pointer; the portal escapes the builder's scrolling panel. */
 .hint-bubble {
-  position: absolute;
-  bottom: calc(100% + 10px);
-  left: 50%;
-  z-index: 5;
+  position: fixed;
+  z-index: 50;
   width: max-content;
-  padding: var(--space-8) var(--space-16);
-  border-radius: var(--radius-pill);
-  background: var(--tooltip-bg);
+  max-width: min(480px, calc(100vw - 24px));
+  padding: 8px 16px;
+  border-radius: 9999px;
+  background: var(--white);
   box-shadow:
     0 10px 15px -3px rgb(0 0 0 / 10%),
     0 4px 6px -4px rgb(0 0 0 / 10%);
-  color: var(--tooltip-fg);
+  color: var(--espresso);
   font-size: 12px;
   line-height: 16px;
-  white-space: nowrap;
-  opacity: 0;
-  visibility: hidden;
-  transform: translateX(-50%) scale(0.95);
-  transform-origin: bottom center;
-  transition:
-    opacity 120ms,
-    transform 120ms;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
 }
 
-/* The frontend's pointer, masked rather than filled so it follows the pill into dark mode. */
-.hint-bubble::after {
-  content: "";
+.hint-arrow {
   position: absolute;
-  top: calc(100% - 16px);
-  left: calc(50% - 4px);
-  width: 8px;
-  height: 40px;
-  background: var(--tooltip-bg);
-  transform: rotate(-90deg);
-  mask:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 80'%3E%3Cpath d='M0 40C0 38.125 0.9411 37.1741 1.8824 36.6667C11.1437 31.6736 16 18.033 16 0L16 80C16 61.967 11.1437 48.3264 1.8824 43.3333C0.9411 42.8259 0 41.875 0 40Z'/%3E%3C/svg%3E")
-    no-repeat center / contain;
+  bottom: -24px;
+  color: var(--white);
+  transform: translateX(-50%) rotate(-90deg);
 }
 
-/* No popper here to detect collisions, so the one line wraps rather than overflow a phone. */
-@media (width < 640px) {
-  .hint-bubble {
-    max-width: 240px;
-    white-space: normal;
-    text-wrap: pretty;
-  }
-}
-
-.hint:hover .hint-bubble,
-.hint:focus-within .hint-bubble {
-  opacity: 1;
-  visibility: visible;
-  transform: translateX(-50%) scale(1);
+.hint-bubble[data-side="bottom"] .hint-arrow {
+  top: -24px;
+  bottom: auto;
+  transform: translateX(-50%) rotate(90deg);
 }
 
 /* The one outbound CTA on the page, so it reads as accent rather than another ghost control. */
@@ -1924,8 +2296,8 @@ code,
 .brand-card {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding-block: 12px;
+  gap: 14px;
+  padding-block: 16px;
 }
 
 .brand-head {
@@ -2000,21 +2372,15 @@ code,
 .brand-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 10px var(--space-16);
+  gap: 14px var(--space-16);
 }
 
 .brand-cell {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 6px;
   min-width: 0;
   cursor: pointer;
-}
-
-/* `.select` grows to fill a row by default, which in this column would stretch its height. */
-.brand-cell .select {
-  flex: none;
-  padding: 5px 8px;
 }
 
 .brand-label {
@@ -2086,16 +2452,11 @@ body:has(.app-embed) {
   margin-bottom: 12px;
   gap: 12px;
 }
+/* One width for all three tabs: the snippets want it, the widget never fills the column it gives up,
+   and a column that resized per tab read as the layout moving under you. */
 .app-main {
-  grid-template-columns: minmax(340px, 430px) minmax(0, 1fr);
+  grid-template-columns: minmax(340px, 560px) minmax(0, 1fr);
   gap: 20px;
-}
-.studio-heading {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
 }
 .studio-heading h2 {
   font-size: clamp(26px, 3vw, 34px);
@@ -2105,20 +2466,32 @@ body:has(.app-embed) {
 .studio-heading p {
   margin: 4px 0;
 }
+.studio-action-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 320px;
+  max-width: 100%;
+}
 .studio-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 8px;
 }
+/* One size across the row: `.btn-primary` is sized for the widget's full-width CTA, and carrying
+   that scale into a group of three peers read as a mistake rather than as emphasis. Colour leads. */
 .studio-actions .btn-primary {
   width: auto;
-  height: 40px;
-  padding: 0 20px;
+  height: 36px;
+  padding: 0 16px;
+  font-size: var(--text-body-small);
 }
-.studio-status {
-  flex-basis: 100%;
-  min-height: 18px;
+/* Empty on every ordinary run — the buttons confirm themselves — so it reserves no height. */
+.studio-action-group .studio-status {
   margin: 0;
+  line-height: 18px;
+  text-align: right;
 }
 .share-link {
   width: 100%;
@@ -2138,8 +2511,10 @@ body:has(.app-embed) {
   border-radius: 12px;
   background: var(--surface-inset);
 }
+/* The inset is the group's own edge; outlining every tab inside it reads as a border in a border. */
 .builder-tabs .btn {
   flex: 1;
+  border-color: transparent;
 }
 .segmented .btn[aria-pressed="true"] {
   background: var(--surface-card);
@@ -2153,8 +2528,7 @@ body:has(.app-embed) {
   padding: 16px;
 }
 .setup-card h3,
-.integration-card h3,
-.asset-picker-list h3 {
+.integration-card h3 {
   margin: 0;
 }
 .setup-side {
@@ -2170,7 +2544,6 @@ body:has(.app-embed) {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
-.setup-pair .select,
 .setup-pair .input {
   width: 100%;
   min-width: 0;
@@ -2225,27 +2598,40 @@ body:has(.app-embed) {
 .preview-toolbar .btn {
   padding: 8px 12px;
 }
+/* No edge of its own: the stage frames this column already, and the widget below carries the border
+   a host page would see. Three nested outlines around one widget was two too many. */
 .preview-canvas {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
   padding: 12px;
-  border: 1px solid var(--border-subtle);
   border-radius: 20px;
-  background: radial-gradient(var(--border-strong) 1px, transparent 1px) 0 0 / 12px 12px;
   min-height: 540px;
 }
+/* Overflow alone leaves the frame's corners square once the widget opens a modal; the clip path
+   rounds everything the iframe paints, backdrop blur included. */
 .preview-frame {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
   width: 100%;
   max-width: 480px;
-  margin: auto;
+  margin-inline: auto;
   overflow: hidden;
   border-radius: 24px;
+  clip-path: inset(0 round 24px);
   border: 1px solid var(--border-strong);
   box-shadow: 0 12px 36px var(--logo-shadow);
 }
 .preview-frame-mobile {
   max-width: 375px;
 }
+/* Floored at the height the widget reported, which is the whole box where the preview stacks under
+   the builder and has no column to answer to. The desktop builder lifts that floor. */
 .preview-frame iframe {
   display: block;
+  flex: 1;
+  min-height: var(--widget-height, 360px);
   width: 100%;
   border: 0;
 }
@@ -2258,6 +2644,9 @@ body:has(.app-embed) {
   border: 0;
   background: none;
 }
+.snippet-note {
+  margin: 0 0 8px;
+}
 .integration-card .code-header {
   flex-wrap: wrap;
   gap: 12px;
@@ -2266,8 +2655,14 @@ body:has(.app-embed) {
   max-height: 400px;
   font-size: 11px;
 }
+/* Four tabs in a 340px column: equal cells on one row, the shape the builder's own tab row uses. */
 .integration-card .tabs {
-  flex-wrap: wrap;
+  flex: 1;
+  flex-wrap: nowrap;
+}
+.integration-card .tab {
+  flex: 1;
+  text-align: center;
 }
 .widget-heading {
   display: flex;
@@ -2280,31 +2675,22 @@ body:has(.app-embed) {
   font-size: 24px;
   color: var(--text-heading);
 }
-.network-label {
-  font-size: 11px;
-  color: var(--text-muted);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-small);
-  padding: 4px 8px;
-}
 .wallet-inline {
   font-size: 11px;
   padding: 4px 8px;
   height: auto;
 }
-.asset-caption {
-  min-height: 20px;
-  margin: 4px 8px 6px;
-  flex-wrap: wrap;
-}
+/* The summary is about the trade, not part of it: it reads as its own block, off the second leg. */
 .quote-summary {
-  padding: 10px 0 4px;
+  padding: var(--space-24) 0 var(--space-8);
 }
 .app-embed .flow-column {
-  gap: 8px;
+  gap: var(--space-16);
 }
 .app-embed .swap-details {
-  margin-bottom: 12px;
+  margin-top: var(--space-24);
+  padding-top: var(--space-16);
+  margin-bottom: var(--space-16);
 }
 .app-embed .btn-primary {
   height: 52px;
@@ -2312,6 +2698,7 @@ body:has(.app-embed) {
 .quote-summary .row-between {
   font-size: 12px;
   align-items: baseline;
+  padding: 5px 0;
 }
 .quote-summary .row-between > :last-child {
   text-align: right;
@@ -2321,56 +2708,7 @@ body:has(.app-embed) {
   opacity: 1;
   cursor: default;
 }
-.asset-picker-list .picker-body {
-  padding: 16px;
-  gap: 12px;
-}
-.asset-picker-list .picker-close {
-  width: 36px;
-  height: 36px;
-  align-self: center;
-}
-.asset-results {
-  overflow-y: auto;
-  min-height: 0;
-}
-.asset-result {
-  display: flex;
-  width: 100%;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 4px;
-  border: 0;
-  border-bottom: 1px solid var(--border-subtle);
-  color: var(--text-heading);
-  background: transparent;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.asset-result:hover,
-.asset-result[aria-pressed="true"] {
-  background: var(--surface-inset);
-}
-.asset-result-name {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  flex: 1;
-  overflow-wrap: anywhere;
-}
-.asset-result-network {
-  display: flex;
-  flex-direction: column;
-  font-size: 12px;
-  text-align: right;
-  max-width: 90px;
-}
-.asset-result .asset-logo {
-  width: 36px;
-  height: 36px;
-}
-@media (min-width: 981px) and (min-height: 720px) {
+@media (width >= 1181px) and (height >= 720px) {
   .app-studio {
     height: 100dvh;
     min-height: 0;
@@ -2410,18 +2748,35 @@ body:has(.app-embed) {
   .preview-caption {
     flex: none;
   }
+  /* No block padding: it comes off the height the frame is allowed, and the frame is trying to end
+     level with a card that answers to no such inset. */
   .preview-canvas {
     flex: 1;
     min-height: 0;
-    padding-block: 8px;
+    padding-block: 0;
     overflow-y: auto;
     scrollbar-width: thin;
   }
+  /* Ends level with the builder's card rather than with the column, which is the viewport here and
+     would leave the frame's border far below it. Capped at the column, which scrolls past that. */
+  .preview-frame {
+    flex: none;
+    height: min(var(--builder-height, 100%), 100%);
+  }
+  .preview-frame iframe {
+    min-height: 0;
+  }
+  /* Both headers are 44px, so matching this to the build column's gap starts the frame on the same
+     line as the card. The caption gives up its margin for the same reason: it is height the frame
+     is trying to reach the card with, and the column has none to spare. */
+  .preview-toolbar {
+    margin-bottom: 16px;
+  }
   .preview-caption {
-    margin: 8px 0 0;
+    margin: 0;
   }
 }
-@media (max-width: 980px) {
+@media (width < 1181px) {
   .app-main {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -2445,7 +2800,7 @@ body:has(.app-embed) {
   .preview-toolbar {
     flex-wrap: wrap;
   }
-  .app-embed {
+  .app-embed-content {
     padding: 16px;
   }
   .asset-panel {
@@ -2454,7 +2809,7 @@ body:has(.app-embed) {
   .asset-row {
     gap: 10px;
   }
-  .asset-id {
+  .asset-identity {
     gap: 8px;
     max-width: 52%;
   }
@@ -2466,12 +2821,81 @@ body:has(.app-embed) {
     font-size: 26px;
     width: 100%;
   }
-  .asset-logo {
-    width: 36px;
-    height: 36px;
+  :root {
+    --asset-logo-size: 36px;
   }
   .asset-logo-img {
     width: 24px;
     height: 24px;
+  }
+}
+
+/* ── The studio's two shapes ────────────────────────────────────────────── */
+/* Wide: all four children are placed, so the builder keeps the left column although the preview
+   comes first in the markup, and the actions sit on the heading's line rather than under it.
+   Paired with its `<` twin so a fractional width under zoom lands in one of them, never neither. */
+@media (width >= 1181px) {
+  .studio-heading {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .studio-action-group {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+    align-self: center;
+  }
+  .build-column {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .preview-column {
+    grid-column: 2;
+    grid-row: 2;
+  }
+}
+/* Narrow: the widget, then what you do with it, then the builder you scroll to. */
+@media (width < 1181px) {
+  .studio-heading {
+    order: 1;
+  }
+  .preview-column {
+    order: 2;
+  }
+  .studio-action-group {
+    order: 3;
+    width: 100%;
+  }
+  .build-column {
+    order: 4;
+  }
+  .studio-actions {
+    justify-content: flex-start;
+  }
+  .studio-action-group .studio-status {
+    text-align: left;
+  }
+  /* The builder is a section rather than a column here, and the tabs are its header. */
+  .builder-tabs {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+}
+/* A phone spends its fold on whatever sits above the widget, so the lead and the width presets go.
+   The frame gives up both caps, the mobile preset included: the stage is already narrower. */
+@media (max-width: 640px) {
+  .studio-heading p {
+    display: none;
+  }
+  .preview-width {
+    display: none;
+  }
+  .preview-toolbar {
+    min-height: 0;
+    margin-bottom: 8px;
+  }
+  .preview-frame {
+    max-width: none;
   }
 }

@@ -64,13 +64,20 @@ The builder has three panels: **Setup**, **Appearance**, and **Integrate**.
   token blocks the route rather than silently substituting another asset.
 - The live preview is a real iframe at 480px or 375px (limited by available screen width). Dialogs,
   media queries, and wallet connections belong to that frame. Trying a different trade in the
-  preview does not change the exported defaults in Setup.
+  preview does not change the exported defaults in Setup. The builder caption explains that preview
+  swaps use real funds; the swap review repeats the warning before confirmation.
 - Appearance updates the preview without reloading it or restyling the builder. The color controls
   show resolved theme colors and accept hex entry; font, radius, density and secondary colors sit
   under Advanced appearance. Derived text and CTA labels are checked for contrast.
-- Integrate provides HTML, a React iframe wrapper, and a separate SDK quote example. The React
-  wrapper owns no wallet provider and supports an optional `onSwapStatus` callback.
+- Integrate provides HTML, a React iframe wrapper, an Agent prompt, and a separate SDK quote example.
+  The React wrapper owns no wallet provider and supports an optional `onSwapStatus` callback. The
+  Agent tab is the configured embed written as a prompt for a coding agent, stating what the markup
+  cannot: the query string is the configuration, `allow` is load-bearing, there is no `@sodax/*`
+  package to install, and the widget moves real funds. Its info tooltip uses the frontend bubble
+  style above the icon, with viewport positioning outside the scrolling panel.
 - Share copies a configuration URL. Reset all restores the default trade, restrictions, and theme.
+  A copy confirms itself on the button that was pressed, so nothing resizes and the configuration
+  tabs stay put; the line below the buttons carries only the paths that need an instruction.
   Setup and Appearance pause while a wallet dialog, review, preparation or activity is active in
   the preview, so an edit cannot replace an in-progress swap.
 - The compact swap form shows minimum received, estimated time, and applicable partner fees before
@@ -160,6 +167,12 @@ Unknown chain names are discarded. Restrictions control this UI, not access to t
 A configured restriction with no currently listed assets cannot execute a swap. Fee settings are
 never taken from URL parameters.
 
+A `surface` with no `theme` decides the theme itself, and both themes derive from it. Every link
+this builder writes spells out that implied `theme` as well, because the pre-paint script in
+`index.html` reads the URL without doing colour maths. Keep both parameters when hand-writing an
+embed URL: with only `surface`, the first paint uses the visitor's stored or system theme and flips
+to the surface's own once the widget mounts.
+
 ### Host messages
 
 Messages target the direct host origin (from `ancestorOrigins`, then the referrer), never `*`.
@@ -196,10 +209,13 @@ The deployment allows framing with `frame-ancestors *`.
 3. Review the recipient, minimum received and partner fee. Network fees are confirmed in the wallet.
 4. Recheck the quote and allowance; confirm any allowance reset/approval through dapp-kit.
 5. Recheck the price after approval, get a fresh deadline, build the intent and request a signature.
-6. Persist the broadcast hash, intent and relay payload before submitting to the backend.
+6. Persist the broadcast hash, intent, reviewed token addresses and amount, and relay payload before
+   submitting to the backend.
 7. Track settlement until solved, failed or abandoned, with explorer links and support access.
 
 **Retry tracking** resubmits the saved transaction hash and payload; it never signs a new deposit.
+It is offered from the record rather than from the error that raised it, so a reload between the
+broadcast and a relay that has not accepted the deposit still reaches it.
 The latest activity is restored after refresh when local storage is available. If storage is blocked,
 the widget warns the user to retain the transaction hash. Failed/abandoned swaps show a support path;
 an integrated on-chain refund workflow is not implemented in this widget.

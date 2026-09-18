@@ -19,16 +19,22 @@
     />
     <title>SODAX Swap Widget</title>
     <script>
-      // Resolve the theme before first paint so an embed never flashes the wrong one. Owns the
-      // initial value; src/hooks/useBrand.ts reads it back and takes over from there. `?theme=`
-      // wins because a partner's page has already decided — mirrors resolveTheme() there.
+      // Resolves the theme before first paint so an embed never flashes the wrong one; mirrors
+      // resolveTheme() in src/hooks/useBrand.ts, minus its colour maths. `theme` is the embed's.
       try {
         var params = new URLSearchParams(location.search);
-        var pinned = params.get('embed') === '1' ? params.get('theme') : 'auto';
-        var system = matchMedia('(prefers-color-scheme: dark)').matches;
-        var stored = pinned === 'auto' ? null : localStorage.getItem('sodax-playground-theme');
-        var dark = pinned === 'dark' || pinned === 'light' ? pinned === 'dark' : stored ? stored === 'dark' : system;
-        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+        var pinned = params.get('embed') === '1' ? params.get('theme') : null;
+        var stored = localStorage.getItem('sodax-playground-theme');
+        var system = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        var resolved =
+          pinned === 'dark' || pinned === 'light'
+            ? pinned
+            : pinned === 'auto'
+              ? system
+              : stored === 'dark' || stored === 'light'
+                ? stored
+                : system;
+        document.documentElement.dataset.theme = resolved;
       } catch (error) {
         document.documentElement.dataset.theme = 'light';
       }

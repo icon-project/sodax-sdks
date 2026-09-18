@@ -1,12 +1,13 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { BrandBar } from '../components/BrandBar';
 import { CodePanel } from '../components/CodePanel';
+import { CopyLabel } from '../components/CopyLabel';
 import { SetupPanel } from '../components/SetupPanel';
 import { WidgetPreview } from '../components/WidgetPreview';
 import { SwapPanel } from '../components/SwapPanel';
-import { SwapActivity } from '../components/SwapActivity';
 import { embedOrigin } from '../config';
 import type { BrandControls } from '../hooks/useBrand';
+import { useContentHeight } from '../hooks/useContentHeight';
 import type { SwapFlow } from '../hooks/useSwapFlow';
 import { buildSnippets } from '../lib/snippet';
 import { embedUrl, toSearch } from '../lib/urlState';
@@ -17,10 +18,8 @@ export function SwapWidget({ flow }: { flow: SwapFlow }) {
     <div className="flow-column">
       <header className="widget-heading">
         <h2>Swap</h2>
-        <span className="network-label">Live on mainnet</span>
       </header>
       <SwapPanel flow={flow} />
-      <SwapActivity execution={flow.execution} />
     </div>
   );
 }
@@ -30,10 +29,20 @@ const PANELS = { setup: 'Setup', appearance: 'Appearance', integrate: 'Integrate
 export function SwapView({ flow, brandControls }: { flow: SwapFlow; brandControls: BrandControls }) {
   const [panel, setPanel] = useState<keyof typeof PANELS>('setup');
   const [mobile, setMobile] = useState(false);
-  const [message, setMessage] = useState('');
+  // Success is confirmed on the button that was pressed; the line below is for the paths that need
+  // an instruction, so nothing reserves space for a message that is usually absent.
+  const [copied, setCopied] = useState<'share' | 'embed'>();
+  const [notice, setNotice] = useState('');
   const [shareFallback, setShareFallback] = useState('');
   const [previewBusy, setPreviewBusy] = useState(false);
+  // Setup's height, held across every tab: the preview ends level with it so the pair reads as one
+  // row. Only the side-by-side layout uses it; stacked, the widget's own height decides.
+  const [builderCard, builderHeight] = useContentHeight<HTMLDivElement>();
+  const confirmTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const { srcChain, dstChain, srcToken, dstToken, amount, slippagePercent, partnerFee, brand, widget } = flow;
+
+  useEffect(() => () => clearTimeout(confirmTimer.current), []);
+
   const configured = useMemo(() => {
     if (!srcChain || !dstChain || !srcToken || !dstToken || !flow.isAmountValid || !flow.isSlippageValid)
       return undefined;
@@ -59,15 +68,23 @@ export function SwapView({ flow, brandControls }: { flow: SwapFlow; brandControl
     flow.isSlippageValid,
   ]);
 
+  // Clearing the pending timer first: without it the earlier button's timer ends this confirmation.
+  const confirm = (button: 'share' | 'embed') => {
+    clearTimeout(confirmTimer.current);
+    setCopied(button);
+    confirmTimer.current = setTimeout(() => setCopied(undefined), 1500);
+  };
+
   const share = async () => {
     if (!configured) return;
     try {
       await navigator.clipboard.writeText(configured.share);
       setShareFallback('');
-      setMessage('Configuration link copied');
+      setNotice('');
+      confirm('share');
     } catch {
       setShareFallback(configured.share);
-      setMessage('Select and copy your configuration link below.');
+      setNotice('Select and copy your configuration link below.');
     }
   };
   const copy = async () => {
@@ -76,20 +93,23 @@ export function SwapView({ flow, brandControls }: { flow: SwapFlow; brandControl
     try {
       await navigator.clipboard.writeText(snippet.code);
       trackSnippetCopied('embed');
-      setMessage('HTML embed copied');
+      setNotice('');
+      confirm('embed');
     } catch {
       setPanel('integrate');
-      setMessage('Select and copy the code in Integrate.');
+      setNotice('Select and copy the code in Integrate.');
     }
   };
 
   return (
     <>
       <div className="studio-heading">
-        <div>
-          <h2>Build your swap widget.</h2>
-          <p className="muted">Set the trade, make it yours, and embed it in your app.</p>
-        </div>
+        <h2>Build your swap widget.</h2>
+        <p className="muted">Set the trade, make it yours, and embed it in your app.</p>
+      </div>
+      {/* Its own row rather than the heading's trailing half: stacked, the widget leads and these
+          follow it, which it cannot do from inside the heading above both columns. */}
+      <div className="studio-action-group">
         <div className="studio-actions">
           <button
             type="button"
@@ -98,21 +118,21 @@ export function SwapView({ flow, brandControls }: { flow: SwapFlow; brandControl
             onClick={() => {
               flow.resetDefaults();
               brandControls.reset();
-              setMessage('Configuration reset');
+              setNotice('');
               setShareFallback('');
             }}
           >
             Reset all
           </button>
           <button type="button" className="btn" disabled={!configured} onClick={share}>
-            Share
+            <CopyLabel label="Share" copied={copied === 'share'} />
           </button>
           <button type="button" className="btn btn-primary" disabled={!configured} onClick={copy}>
-            Copy embed
+            <CopyLabel label="Copy embed" copied={copied === 'embed'} />
           </button>
         </div>
-        <p className="studio-status small" role="status" hidden={!message}>
-          {message}
+        <p className="studio-status small" role="status">
+          {notice}
         </p>
         {shareFallback && (
           <input
@@ -123,6 +143,46 @@ export function SwapView({ flow, brandControls }: { flow: SwapFlow; brandControl
             onFocus={event => event.target.select()}
           />
         )}
+      </div>
+      {/* Before the builder, because a narrow viewport reads this order and a partner opening the
+          page on a phone came to see the widget. The wide layout places both columns explicitly. */}
+      <div className="preview-column">
+        <div className="preview-toolbar">
+          <span className="eyebrow">Live preview</span>
+          <fieldset className="segmented preview-width" aria-label="Preview width">
+            <button type="button" className="btn" aria-pressed={!mobile} onClick={() => setMobile(false)}>
+              Desktop
+            </button>
+            <button type="button" className="btn" aria-pressed={mobile} onClick={() => setMobile(true)}>
+              Mobile
+            </button>
+          </fieldset>
+        </div>
+        <div className="preview-canvas">
+          {configured ? (
+            <WidgetPreview
+              key={configured.preview}
+              setupUrl={configured.preview}
+              brand={brand}
+              mobile={mobile}
+              matchHeight={builderHeight}
+              onBusy={setPreviewBusy}
+            />
+          ) : (
+            <p className="muted">
+              {flow.assetsError ??
+                (flow.isLoadingAssets ? 'Loading available assets…' : 'Complete Setup to preview your widget.')}
+            </p>
+          )}
+          {flow.assetsError && (
+            <button className="btn" type="button" onClick={flow.retryAssets}>
+              Retry loading assets
+            </button>
+          )}
+        </div>
+        <p className="preview-caption muted small">
+          Swaps in this preview use real funds. Your exported starting trade is set in Setup.
+        </p>
       </div>
       <div className="build-column">
         <fieldset className="segmented builder-tabs" aria-label="Widget configuration">
@@ -141,14 +201,20 @@ export function SwapView({ flow, brandControls }: { flow: SwapFlow; brandControl
           ))}
         </fieldset>
         <fieldset className="builder-controls" disabled={previewBusy && panel !== 'integrate'}>
-          {panel === 'setup' && <SetupPanel flow={flow} />}
+          {/* Only Setup is measured, and the wrapper exists to measure it: the preview keeps that one
+              height on every tab rather than resizing as a partner moves between them. */}
+          {panel === 'setup' && (
+            <div className="builder-measure" ref={builderCard}>
+              <SetupPanel flow={flow} />
+            </div>
+          )}
           {panel === 'appearance' && <BrandBar controls={brandControls} />}
           {panel === 'integrate' && (
             <section className="card integration-card">
               <h3>Add it to your app</h3>
               <p className="muted small">
-                Choose HTML or React below. Both embed the hosted widget, with its own wallet connection. No SODAX
-                package installation needed.
+                Take the HTML or React embed, or hand the prompt to your coding agent — each installs the hosted widget
+                with its own wallet connection, and no SODAX package.
               </p>
               {configured ? (
                 <CodePanel snippets={configured.snippets} initialId="embed" />
@@ -201,43 +267,6 @@ export function SwapView({ flow, brandControls }: { flow: SwapFlow; brandControl
             Finish or close the current wallet or swap flow before changing the configuration.
           </p>
         )}
-      </div>
-      <div className="preview-column">
-        <div className="preview-toolbar">
-          <span className="eyebrow">Live preview</span>
-          <fieldset className="segmented" aria-label="Preview width">
-            <button type="button" className="btn" aria-pressed={!mobile} onClick={() => setMobile(false)}>
-              Desktop · 480
-            </button>
-            <button type="button" className="btn" aria-pressed={mobile} onClick={() => setMobile(true)}>
-              Mobile · 375
-            </button>
-          </fieldset>
-        </div>
-        <div className="preview-canvas">
-          {configured ? (
-            <WidgetPreview
-              key={configured.preview}
-              setupUrl={configured.preview}
-              brand={brand}
-              mobile={mobile}
-              onBusy={setPreviewBusy}
-            />
-          ) : (
-            <p className="muted">
-              {flow.assetsError ??
-                (flow.isLoadingAssets ? 'Loading available assets…' : 'Complete Setup to preview your widget.')}
-            </p>
-          )}
-          {flow.assetsError && (
-            <button className="btn" type="button" onClick={flow.retryAssets}>
-              Retry loading assets
-            </button>
-          )}
-        </div>
-        <p className="preview-caption muted small">
-          Try the widget here. Your exported starting trade is set in Setup.
-        </p>
       </div>
     </>
   );
