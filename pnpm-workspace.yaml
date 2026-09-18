@@ -66,7 +66,10 @@ catalog:
   "@stacks/connect": "8.2.6"
   "near-api-js": "7.2.0"
   "madge": "8.0.0"
-  "knip": "5.30.5"
+  # Held on 5.x: knip 6 resolves the pnpm catalog only from its own cwd, and every package runs
+  # `knip` in its own directory, so 6.x reports all 109 `catalog:` specifiers as unresolved.
+  # Moving to 6 needs a single root-level knip run first.
+  "knip": "5.88.1"
   "tslib": "2.8.1"
   "cross-env": "7.0.3"
   "valibot": "1.4.2"
@@ -102,6 +105,12 @@ overrides:
   # Clears brace-expansion GHSA-3jxr-9vmj-r5cp, GHSA-mh99-v99m-4gvg and GHSA-rgw5-rvv9-x895 per major; guards both minimatch lines.
   "brace-expansion@2": "^2.1.4"
   "brace-expansion@5": "^5.0.9"
+  # Clears js-yaml GHSA-52cp-r559-cp3m, GHSA-5p4m-2wfm-xmqj and GHSA-2883-xcg3-v3hh; reached via commitlint's cosmiconfig.
+  "js-yaml@4": "^4.3.2"
+  # Clears six fast-uri host-confusion/IDN advisories (GHSA-jqff-g426-hqxp et al); only the 3.x line is in the tree, via ajv.
+  fast-uri: "^3.1.6"
+  # Clears smol-toml GHSA-7w5x-hrqm-74c2; reached only via knip, held on 5.x (see the catalog note).
+  smol-toml: "^1.7.1"
   # Clears CVE-2026-63376 (__proto__ path desync) in toml <4.1.2. Reached via
   # @stellar/stellar-sdk's stellartoml, which parses a TOML file fetched from a
   # remote domain. Held on 4.x: 5.0.0 throws on integers outside the safe range.
