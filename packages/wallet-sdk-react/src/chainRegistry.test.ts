@@ -9,6 +9,8 @@ import { NearXService } from './xchains/near/NearXService.js';
 import { StacksXService } from './xchains/stacks/index.js';
 import { StellarXService } from './xchains/stellar/index.js';
 
+type CtorOpts = { defaults?: unknown };
+
 // Mock wallet-sdk-core provider constructors so tests verify defaults forwarding
 // without actually constructing the providers (avoids real SDK init side-effects).
 const ctorSpies = {
@@ -21,28 +23,27 @@ const ctorSpies = {
 
 vi.mock('@sodax/wallet-sdk-core', async importOriginal => {
   const actual = await importOriginal<typeof import('@sodax/wallet-sdk-core')>();
+  // vitest 4 builds the instance with Reflect.construct, so a `new`-ed mock needs a class impl.
+  // The spy is reached through a callback because `ctorSpies` is still in TDZ when this factory runs.
+  const ctorMock = (spy: (opts: CtorOpts) => void) =>
+    vi.fn(
+      class {
+        defaults: unknown;
+        _opts: CtorOpts;
+        constructor(opts: CtorOpts) {
+          spy(opts);
+          this.defaults = opts.defaults;
+          this._opts = opts;
+        }
+      },
+    );
   return {
     ...actual,
-    IconWalletProvider: vi.fn().mockImplementation(opts => {
-      ctorSpies.Icon(opts);
-      return { defaults: opts.defaults, _opts: opts };
-    }),
-    InjectiveWalletProvider: vi.fn().mockImplementation(opts => {
-      ctorSpies.Injective(opts);
-      return { defaults: opts.defaults, _opts: opts };
-    }),
-    StellarWalletProvider: vi.fn().mockImplementation(opts => {
-      ctorSpies.Stellar(opts);
-      return { defaults: opts.defaults, _opts: opts };
-    }),
-    NearWalletProvider: vi.fn().mockImplementation(opts => {
-      ctorSpies.Near(opts);
-      return { defaults: opts.defaults, _opts: opts };
-    }),
-    StacksWalletProvider: vi.fn().mockImplementation(opts => {
-      ctorSpies.Stacks(opts);
-      return { defaults: opts.defaults, _opts: opts };
-    }),
+    IconWalletProvider: ctorMock(opts => ctorSpies.Icon(opts)),
+    InjectiveWalletProvider: ctorMock(opts => ctorSpies.Injective(opts)),
+    StellarWalletProvider: ctorMock(opts => ctorSpies.Stellar(opts)),
+    NearWalletProvider: ctorMock(opts => ctorSpies.Near(opts)),
+    StacksWalletProvider: ctorMock(opts => ctorSpies.Stacks(opts)),
   };
 });
 

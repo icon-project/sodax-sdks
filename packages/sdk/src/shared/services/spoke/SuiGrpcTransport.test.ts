@@ -19,8 +19,11 @@ const OWNER = `0x${'11'.repeat(32)}`;
 const TX_DIGEST = '7g6sQdY5RrZ4kRzBz7VLgY3qX2vN6Y4mT8L1J5K9A2Bx';
 
 const transport = new SuiGrpcTransport(suiConfig.grpc_url);
-// `client` is private; the tests spy on its core methods.
-const core = (transport as unknown as { ['client']: { core: Record<string, never> } })['client'].core;
+// `client` is private; the tests spy on its core methods. The value type has to be callable —
+// vitest 4's `spyOn` resolves to `never` for a key whose type is not a function.
+const core = (transport as unknown as { ['client']: { core: Record<string, (...args: never[]) => Promise<unknown>> } })[
+  'client'
+].core;
 
 // A locally-buildable transaction — nothing here touches the network.
 const makeTx = (sender?: string): Transaction => {

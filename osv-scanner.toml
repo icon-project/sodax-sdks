@@ -19,19 +19,9 @@ ignoreUntil = 2026-12-03
 reason = "pre-existing at baseline: bigint-buffer@1.1.5"
 
 [[IgnoredVulns]]
-id = "CVE-2026-13149"
-ignoreUntil = 2026-12-03
-reason = "pre-existing at baseline: brace-expansion@2.1.0, brace-expansion@5.0.6"
-
-[[IgnoredVulns]]
 id = "CVE-2026-13676"
 ignoreUntil = 2026-12-03
 reason = "pre-existing at baseline: fast-uri@3.1.2"
-
-[[IgnoredVulns]]
-id = "CVE-2026-14257"
-ignoreUntil = 2026-12-03
-reason = "pre-existing at baseline: brace-expansion@2.1.0, brace-expansion@5.0.6"
 
 [[IgnoredVulns]]
 id = "CVE-2026-16221"
@@ -92,11 +82,6 @@ reason = "pre-existing at baseline: js-yaml@3.14.2, js-yaml@4.1.1"
 id = "CVE-2026-59952"
 ignoreUntil = 2026-12-03
 reason = "pre-existing at baseline: valibot@1.4.0"
-
-[[IgnoredVulns]]
-id = "CVE-2026-69152"
-ignoreUntil = 2026-12-03
-reason = "pre-existing at baseline: brace-expansion@2.1.0, brace-expansion@5.0.6"
 
 [[IgnoredVulns]]
 id = "CVE-2026-69185"

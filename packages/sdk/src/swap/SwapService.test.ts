@@ -700,7 +700,7 @@ describe('SwapService.cancelIntent — narrows walletProvider from explicit srcC
 // Real config doesn't know about our synthetic test token/address pairs, so every
 // runtime test needs the three validity predicates stubbed to `true`. Mocks are
 // restored between tests so a `vi.spyOn(svc.spoke, ...)` in one test doesn't leak
-// into the next. Note that `vi.restoreAllMocks()` also strips the default return
+// into the next. Note that `vi.resetAllMocks()` also strips the default return
 // value off our hoisted `vi.fn()` mocks — we re-apply those defaults here each run.
 beforeEach(() => {
   vi.spyOn(sodax.config, 'isValidOriginalAssetAddress').mockReturnValue(true);
@@ -720,6 +720,9 @@ beforeEach(() => {
   mocks.encodeCreateIntent.mockReturnValue(emptyContractCall);
 });
 afterEach(() => {
+  // vitest 4: restoreAllMocks only restores `vi.spyOn` spies, so the hoisted `vi.fn()`
+  // mocks need resetAllMocks to clear their call history and default impls.
+  vi.resetAllMocks();
   vi.restoreAllMocks();
 });
 

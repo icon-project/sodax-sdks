@@ -267,7 +267,9 @@ beforeEach(() => {
   vi.spyOn(sodax.hubProvider.publicClient, 'getBlock').mockResolvedValue({ timestamp: HUB_BLOCK_TIMESTAMP } as never);
 });
 afterEach(() => {
-  // restoreAllMocks() also strips the default impls off the hoisted vi.fn()s — re-applied above.
+  // vitest 4: restoreAllMocks only restores `vi.spyOn` spies, so resetAllMocks is what strips
+  // the call history and default impls off the hoisted vi.fn()s — both re-applied above.
+  vi.resetAllMocks();
   vi.restoreAllMocks();
   // getLsdApr / getEffectiveApr tests stub global `fetch`; clear it so it can't leak.
   vi.unstubAllGlobals();
