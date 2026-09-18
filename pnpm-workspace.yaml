@@ -11,13 +11,14 @@ trustPolicy: no-downgrade
 # Exact versions only, so an exception lapses as soon as the tree moves off them. Each was
 # checked against the registry: same maintainer account as the provenance-bearing releases,
 # same upstream repo, npm-signed — a release that skipped CI, not a publisher change.
+# One entry per package name — pnpm keeps only the first. Several versions of one
+# package go in a single entry joined with `||`.
 trustPolicyExclude:
   # Legacy-line backports published after the current major had moved to provenance.
   - "semver@6.3.1"
   - "@noble/secp256k1@1.7.2"
   - "tailwind-merge@2.6.1"
-  - "undici-types@6.19.8"
-  - "undici-types@6.21.0"
+  - "undici-types@6.19.8 || 6.21.0"
   # Hand-published releases by the package's own long-standing maintainer.
   - "@noble/curves@1.8.0"
   - "@noble/hashes@1.7.0"

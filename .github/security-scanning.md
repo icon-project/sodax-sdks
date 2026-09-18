@@ -43,6 +43,12 @@ Prefer a fix over an entry. In order:
    (an ESM-only or engine-bumping major that would break its consumer) or the advisory
    does not cover the code path in use. Say which, concretely.
 
+`pnpm update -r <pkg>` refreshes a transitive dependency to a new floor inside the range
+its parents already declare, without re-resolving the whole tree.
+
+In `trustPolicyExclude` pnpm keeps only the first entry per package name, so several
+versions of one package go in a single entry joined with `||` — `"undici-types@6.19.8 || 6.21.0"`.
+
 Every entry needs an `ignoreUntil` date, which osv-scanner enforces — past it, the
 advisory is reported again. Use the date a cooldown lapses for a fix that is merely
 waiting, and the quarterly re-triage date otherwise. An expired entry does not turn
