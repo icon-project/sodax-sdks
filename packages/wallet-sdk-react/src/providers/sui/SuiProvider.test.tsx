@@ -16,10 +16,15 @@ vi.mock('@mysten/dapp-kit-react', () => ({
 }));
 
 vi.mock('@mysten/sui/grpc', () => ({
-  SuiGrpcClient: vi.fn().mockImplementation(opts => {
-    grpcCtor(opts);
-    return { core: {} };
-  }),
+  // vitest 4 builds the instance with Reflect.construct, so a `new`-ed mock needs a class impl.
+  SuiGrpcClient: vi.fn(
+    class {
+      core = {};
+      constructor(opts: { baseUrl: string }) {
+        grpcCtor(opts);
+      }
+    },
+  ),
 }));
 
 // The trio's other two members do their own hydration; this file only covers endpoint resolution.

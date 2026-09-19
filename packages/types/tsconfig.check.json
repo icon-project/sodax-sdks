@@ -3,5 +3,5 @@
   "compilerOptions": {
     "noEmit": true
   },
-  "exclude": ["dist", "node_modules", ".turbo"]
+  "exclude": ["vitest.config.ts", "coverage", "dist", "node_modules", ".turbo"]
 }

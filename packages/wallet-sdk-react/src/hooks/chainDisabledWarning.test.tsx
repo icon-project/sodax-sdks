@@ -1,6 +1,6 @@
 import { ChainKeys } from '@sodax/types';
 import { cleanup, renderHook } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from 'vitest';
 import { useXWalletStore } from '@/useXWalletStore.js';
 import { useWalletProvider } from './useWalletProvider.js';
 import { useXConnectors } from './useXConnectors.js';
@@ -17,7 +17,7 @@ import { useXConnectors } from './useXConnectors.js';
  * `vi.resetModules()` re-runs the chain registry, whose Stellar kit registers a custom element
  * that a second registration rejects. So each case below claims its own chain type instead.
  */
-let warn: ReturnType<typeof vi.spyOn>;
+let warn: MockInstance<typeof console.warn>;
 
 beforeEach(() => {
   warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
