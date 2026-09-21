@@ -81,7 +81,11 @@
       },
       {
         "tab": "Solutions",
-        "pages": ["swap/index", "swap/widget", "money-market/index", "bridge/index", "yield/index"]
+        "pages": ["swap/index", "money-market/index", "bridge/index", "yield/index"]
+      },
+      {
+        "tab": "Widget",
+        "pages": ["widget/index"]
       },
       {
         "tab": "API",

@@ -4,7 +4,7 @@ A hosted cross-network swap widget with a visual integration playground. Visitor
 quotes before connecting a wallet. For executable routes they connect, review the receiving address
 and minimum output, approve when needed, and sign inside the widget.
 
-The partner-facing page is [Swap widget](https://docs.sodax.com/swap/widget); this README is the
+The partner-facing page is [Swap widget](https://docs.sodax.com/widget); this README is the
 repo-side reference behind it.
 
 ## Run
