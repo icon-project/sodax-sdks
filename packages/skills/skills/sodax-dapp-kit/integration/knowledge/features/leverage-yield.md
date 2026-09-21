@@ -17,6 +17,7 @@ useLeverageYieldVaultSwap({ mutationOptions });  // EXECUTE the built payload en
 useLeverageYieldNotifySolver({ mutationOptions }); // manual-flow: notify the solver after a self-driven relay
 
 // Reads
+useLeverageYieldDetailedStatus({ params, queryOptions }); // track a vault swap from its SOURCE tx (3s)
 useLeverageYieldQuote({ params, queryOptions });          // vault deposit/withdraw quote (3s) — NOT useQuote
 useLeverageYieldEffectiveApr({ params, queryOptions });  // AAVE + LSD effective net APR (60s)
 useLeverageYieldPosition({ params, queryOptions });      // collateral/debt/ltv/healthFactor/idle (30s)
@@ -25,7 +26,7 @@ useLeverageYieldPreviewRedeem({ params, queryOptions }); // assets for N shares;
 useLeverageYieldShareBalances({ params, queryOptions }); // per-chain share balances via useQueries (15s)
 ```
 
-`deposit` / `withdraw` are **builders** — they assemble a `LeverageYieldSwapPayload`, they do NOT broadcast. Spread the built payload into `useLeverageYieldVaultSwap`'s `mutate`, adding the `walletProvider`. There is no dedicated leverage-yield approve hook: the swap-style deposit approves the spoke-side asset manager, so reuse `useSwapApprove` / `useSwapAllowance` (see Approval pattern).
+`deposit` / `withdraw` are **builders** — they assemble a `LeverageYieldSwapPayload`, they do NOT broadcast. Spread the built payload into `useLeverageYieldVaultSwap`'s `mutate`, adding the `walletProvider`. `vaultSwap` takes the **backend submit-tx** path by default and falls back to the client-side relay on any non-success, so track the result with `useLeverageYieldDetailedStatus` — it keys on the source tx and answers for whichever path completed. Pass `extras.apiKey` in `mutate` to key the backend leg per action. There is no dedicated leverage-yield approve hook: the swap-style deposit approves the spoke-side asset manager, so reuse `useSwapApprove` / `useSwapAllowance` (see Approval pattern).
 
 `use*Approve` is unchanged and still resolves to one transaction hash, but the SDK may send **two**
 transactions on a token that rejects a non-zero to non-zero allowance change (Ethereum USDT today) —
@@ -100,6 +101,7 @@ Read hooks here are **already unwrapped** — they throw on SDK `!ok` so `isErro
 | `useLeverageYieldQuote` | `UseQueryResult<Result<SolverIntentQuoteResponse, SolverErrorResponse \| LeverageYieldLookupError> \| undefined, Error>` (Result **not** unwrapped; `undefined` while `payload` is undefined). Guard the error with `isSodaxError` — the `SolverErrorResponse` arm has `detail.code`, the `SodaxError` arm has `.code` (`VALIDATION_FAILED` / `LOOKUP_FAILED` / `UNKNOWN`) |
 | `useLeverageYieldDeposit` / `useLeverageYieldWithdraw` | `SafeUseMutationResult<LeverageYieldSwapPayload, Error, …>` (builder — `data` is the payload to spread into `useLeverageYieldVaultSwap`) |
 | `useLeverageYieldVaultSwap` | `SafeUseMutationResult<VaultSwapResponse, Error, …>` (`{ solverExecutionResponse, intent, intentDeliveryInfo }`) |
+| `useLeverageYieldDetailedStatus` | `UseQueryResult<Result<DetailedLeverageYieldStatus, SodaxError> \| undefined>` — Result-wrapped, narrow the value on `source` (`'backend'` \| `'solver'`) |
 | `useLeverageYieldNotifySolver` | `SafeUseMutationResult<SolverExecutionResponse, Error, …>` (`{ answer: 'OK', intent_hash }`) |
 | `useLeverageYieldEffectiveApr` | `UseQueryResult<LeverageYieldEffectiveApr, Error>` |
 | `useLeverageYieldPosition` | `UseQueryResult<LeverageYieldPosition, Error>` |

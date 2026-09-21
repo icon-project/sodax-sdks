@@ -201,10 +201,7 @@ To size a full exit, read the withdrawable balance with `getMaxWithdrawForUser(v
 
 `vaultSwap()` completes through one of two paths, each bounded by its **own** `timeout` budget:
 
-- **Client-side (the default):** verify the broadcast intent tx landed on-chain, relay it to the hub
-  (Sonic) — skipped when `srcChainKey` is the hub, where the spoke tx already *is* the hub tx — then call
-  `notifySolver` so the solver fills the intent.
-- **Backend 2-step (opt in with `leverageYield.useBackendSubmitTx: true`):** hand the broadcast tx to the
+- **Backend 2-step (the default):** hand the broadcast tx to the
   Leverage Yield API (`sodax.api.leverageYield.submitTx`, carrying `operation: 'deposit' | 'withdraw'`),
   which relays and post-executes server-side, then poll `getSubmitTxStatus` until `solved`. On **any**
   non-success — submission rejected, a 200 the backend did not accept, terminal `failed`/abandoned, a
@@ -213,9 +210,19 @@ To size a full exit, read the withdrawable balance with `getMaxWithdrawForUser(v
   re-posting an already-processed vault swap is idempotent (the relay dedups and the solver re-affirms
   the intent — no double-fill), and it matters in practice: the backend keeps processing at its own pace
   after the SDK gives up, so the two relays can race.
+- **Client-side (opt out with `leverageYield.useBackendSubmitTx: false`):** verify the broadcast intent tx
+  landed on-chain, relay it to the hub (Sonic) — skipped when `srcChainKey` is the hub, where the spoke tx
+  already *is* the hub tx — then call `notifySolver` so the solver fills the intent. This is also the
+  fallback the backend path takes on any non-success.
 
-This is the leverage-yield counterpart of `swaps.useBackendSubmitTx`, but it defaults **off** while the
-backend path beds in. Read the effective value on `sodax.config.leverageYieldUseBackendSubmitTx`.
+This is the leverage-yield counterpart of `swaps.useBackendSubmitTx`, and it defaults on the same way.
+Read the effective value on `sodax.config.leverageYieldUseBackendSubmitTx`.
+
+`POST /leverage-yield/submit-tx` declares an API-key scope (`swaps:write`) where the status read declares
+none, and key enforcement is a per-deployment setting. Where it is enforced, a keyless caller spends one
+rejected attempt per vault swap before the fallback completes it. Configure `apiKey`, pass `extras.apiKey`
+per call, or set `useBackendSubmitTx: false` to skip the attempt. `swaps.useBackendSubmitTx` declares the
+same scope, so this is not specific to leverage yield.
 
 `timeout` is a **per-attempt** budget, not an end-to-end one: the backend attempt (the POST plus its
 status poll) gets it, and if that attempt does not complete the client-side relay wait gets a fresh one
@@ -229,11 +236,18 @@ are not bounded by `timeout` at all — the same model
 documents for swaps.
 
 ```typescript
-// Default — fully client-side relay + notify-solver.
+// Backend 2-step is the default (client-side fallback still applies).
 const sodax = new Sodax();
 
-// Opt into the backend 2-step path (client-side fallback still applies).
-const sodaxBackend = new Sodax({ leverageYield: { useBackendSubmitTx: true } });
+// Opt out — fully client-side relay + notify-solver.
+const sodaxClientSide = new Sodax({ leverageYield: { useBackendSubmitTx: false } });
+
+// Key the backend leg for one vault swap, overriding the instance `apiKey`.
+const result = await sodax.leverageYield.vaultSwap({
+  params,
+  walletProvider,
+  extras: { apiKey: 'partner-key' },
+});
 ```
 
 When the backend attempt does not complete, its own error is logged and discarded — the fallback runs and
@@ -281,7 +295,70 @@ Creates the vault swap intent on the user's source spoke chain without submittin
 
 ### vaultSwap
 
-Executes the full end-to-end vault swap. `createVaultIntent` broadcasts the intent on the source spoke chain; completion then runs via one of the two paths in [Completion paths and `timeout`](#completion-paths-and-timeout) — by default the client-side one: verify the spoke tx → relay to the hub (skipped when the source is Sonic) → notify the solver. Spread a `LeverageYieldSwapPayload` into it alongside the wallet provider: `vaultSwap({ ...payload, walletProvider })`. **Returns:** `Promise<Result<VaultSwapResponse, LeverageYieldSwapError>>` — `solverExecutionResponse`, `intent`, and `intentDeliveryInfo`. `context.action` is `'vaultSwap'`.
+Executes the full end-to-end vault swap. `createVaultIntent` broadcasts the intent on the source spoke chain; completion then runs via one of the two paths in [Completion paths and `timeout`](#completion-paths-and-timeout) — by default the backend 2-step one, falling back to the client-side path (verify the spoke tx → relay to the hub, skipped when the source is Sonic → notify the solver) on any non-success. Pass `extras.apiKey` to key the backend leg for this call only. Spread a `LeverageYieldSwapPayload` into it alongside the wallet provider: `vaultSwap({ ...payload, walletProvider })`. **Returns:** `Promise<Result<VaultSwapResponse, LeverageYieldSwapError>>` — `solverExecutionResponse`, `intent`, and `intentDeliveryInfo`. `context.action` is `'vaultSwap'`.
+
+### getDetailedStatus
+
+Answers "what happened to this vault swap?" from the **source-chain** tx — the one identifier you always
+hold after `vaultSwap()`. It does not define a new status: it routes to whichever of the two existing
+sources can answer, and returns that source's payload unmodified.
+
+```typescript
+const result = await sodax.leverageYield.getDetailedStatus({
+  srcChainKey: 'arb',
+  srcTxHash: vaultSwapResponse.intentDeliveryInfo.srcTxHash,
+});
+
+if (result.ok) {
+  if (result.value.source === 'backend') {
+    // `data` is the SubmitTxStatusDataV2 from sodax.api.leverageYield.getSubmitTxStatus
+    console.log(result.value.data.status, result.value.data.userMessage);
+  } else {
+    // `data` is the SolverIntentStatusResponse — the vault intent IS a solver intent
+    console.log(result.value.data.status, result.value.dstTxHash);
+  }
+}
+```
+
+`DetailedLeverageYieldStatus` is discriminated on `source`, so it narrows on its own — no type guards
+needed:
+
+```typescript
+type DetailedLeverageYieldStatus =
+  | { source: 'backend'; data: SubmitTxStatusDataV2 }
+  | { source: 'solver'; dstTxHash: Hex; data: SolverIntentStatusResponse };
+```
+
+**Why it exists.** `sodax.api.leverageYield.getSubmitTxStatus` cannot answer for every vault swap.
+Sometimes there is no record — you opted out with `useBackendSubmitTx: false`, or the submit was rejected
+(which a keyless caller hits every time). More often the record exists but is **stale**: the backend path
+POSTs first and only falls back to the client-side relay once that stalls, so a fallback-completed vault
+swap leaves behind whatever state the backend last reached, including a record it abandoned outright.
+So the method routes:
+
+1. Read the backend record; return it while it is still in play.
+2. Otherwise resolve the hub tx hash — the source tx itself for hub-source vault swaps, else the
+   delivered relay packet's `dst_tx_hash` — and return the solver's answer for it.
+
+**Failure is `LOOKUP_FAILED`, and one of them is budgetable.** Branch on `error.context.reason`:
+`DETAILED_STATUS_NOT_DELIVERED` means the relay has no packet for this source tx, which is ambiguous by
+nature — a vault swap still in flight and one whose tx never relayed look identical — so it is the only
+failure a caller should bound with a retry budget. Every other one is a dependency failing right now
+(relay 5xx, solver down), so keep retrying until it recovers.
+
+Takes an optional second argument, a `RequestOverrideConfig`, for a per-request API key on the backend
+read. The relay leg is unauthenticated; the solver leg uses the configured key.
+
+A point-in-time read — poll it yourself, or use `@sodax/dapp-kit`'s `useLeverageYieldDetailedStatus`.
+
+### getIntentStatus
+
+Polls the solver for the execution status of an intent this service created, keyed on the **hub-chain**
+tx hash. Pair it with `notifySolver`. When the solver answers `NOT_FOUND` — which a restarted solver does
+for intents it already filled, since it keeps intent state in memory — the read is reconciled against the
+backend's durable intent record, and a fill that consumed the whole input is reported as `SOLVED`.
+Prefer `getDetailedStatus` when all you hold is the source tx hash. **Returns:**
+`Promise<Result<SolverIntentStatusResponse, LeverageYieldPostExecutionError>>`.
 
 ### notifySolver
 

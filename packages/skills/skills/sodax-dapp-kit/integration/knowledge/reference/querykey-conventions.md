@@ -71,6 +71,7 @@ queryKey: ['mm', 'allowance', srcChainKey, token, action]
 queryKey: ['swap', 'allowance', srcChainKey, srcAddress, inputToken, inputAmount.toString()]
 queryKey: ['bridge', 'allowance', srcChainKey, srcAddress, srcToken, amount.toString()]
 queryKey: ['bridge', 'detailedStatus', srcChainKey, srcTxHash]        // useBridgeDetailedStatus — apiConfig excluded
+queryKey: ['leverageYield', 'detailedStatus', srcChainKey, srcTxHash] // useLeverageYieldDetailedStatus — apiConfig excluded
 queryKey: ['dex', 'allowance', srcChainKey, asset, amount.toString()]
 queryKey: ['staking', 'allowance', srcChainKey, action, srcAddress, amount.toString()]
 //   ^^ action is a fixed literal per hook: 'stake' / 'unstake' / 'instantUnstake'

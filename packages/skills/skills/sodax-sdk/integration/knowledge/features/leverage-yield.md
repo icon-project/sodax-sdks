@@ -6,7 +6,7 @@ Access: `sodax.leverageYield`. Service class: `LeverageYieldService`. Feature ta
 
 > **Two products on one service.** Everything above the "Leverage positions" section is the **vault** — one shared ERC-4626 position at a single target LTV, entered and exited as an intent swap. A **leverage position** is the unpooled counterpart: one owner-controlled AAVE account per position, cloned by `LeveragePositionFactory`, with its own eMode category and leverage tier. They share the service and nothing else — vault methods take a `vault` address, position methods take a `position` address or open a new clone.
 
-> **Backend HTTP client:** for the typed `sodax.api.leverageYield` client that calls the backend Leverage Yield API directly (vault reads, deposit/withdraw quotes + intents, submit-tx), see [`leverage-yield-api.md`](leverage-yield-api.md). Opting into `new Sodax({ leverageYield: { useBackendSubmitTx: true } })` routes this service's `vaultSwap` through that client's submit-tx flow (with client-side fallback).
+> **Backend HTTP client:** for the typed `sodax.api.leverageYield` client that calls the backend Leverage Yield API directly (vault reads, deposit/withdraw quotes + intents, submit-tx), see [`leverage-yield-api.md`](leverage-yield-api.md). `vaultSwap` routes through that client's submit-tx flow **by default** (with client-side fallback); opt out with `new Sodax({ leverageYield: { useBackendSubmitTx: false } })`.
 
 ## How it works
 
@@ -33,6 +33,12 @@ sodax.leverageYield.createVaultIntent<K, Raw>(params: VaultSwapActionParams<K, R
 sodax.leverageYield.vaultSwap<K>(params: VaultSwapActionParams<K, false>): Promise<Result<VaultSwapResponse, SodaxError>>;
 sodax.leverageYield.notifySolver(request: { intent_tx_hash: string }): Promise<Result<SolverExecutionResponse, SodaxError>>;
 //   notifySolver is PUBLIC — call it to finish a manual createVaultIntent → relay → notify flow
+
+// Status. getDetailedStatus takes the SOURCE tx (what you hold after vaultSwap) and routes to whichever
+// source can answer; getIntentStatus takes the HUB tx and asks the solver directly.
+sodax.leverageYield.getDetailedStatus(key: { srcChainKey, srcTxHash }, config?: RequestOverrideConfig):
+  Promise<Result<DetailedLeverageYieldStatus, SodaxError>>;
+sodax.leverageYield.getIntentStatus(request: { intent_tx_hash: string }): Promise<Result<SolverIntentStatusResponse, SodaxError>>;
 
 // Sonic-direct allowance for the vault's underlying asset (the swap-style deposit handles its own approvals)
 sodax.leverageYield.approve<R>(params: LeverageYieldApproveParams<R>): Promise<Result<TxReturnType<HubChainKey, R>, SodaxError>>;
@@ -90,10 +96,19 @@ type LeverageYieldSwapWithdrawParams = {
 
 // The execute-mode wrapper (createVaultIntent / vaultSwap). The two vault execution modifiers
 // live HERE, never on the generic swap surface:
-type VaultSwapActionParams<K, Raw> = SpokeExecActionParams<K, Raw, CreateIntentParams<K>> & {
+type VaultSwapActionParams<K, Raw> = SpokeExecActionParams<K, Raw, CreateIntentParams<K>, LeverageYieldExtras> & {
   hubWalletSwap?: boolean;  // withdraw: inputToken is hub-wallet lsoda*, authorise via Connection.sendMessage
   partnerFee?: PartnerFee;  // beats config.leverageYield.partnerFee for this intent only
 };
+type LeverageYieldExtras = { apiKey?: string };  // per-action key for the backend submit-tx leg only
+
+// getDetailedStatus — discriminated on `source`, no guards needed. Arms are swap's, not bridge's:
+// a vault swap IS a solver intent, so the second source is the solver, not a terminal relay packet.
+type DetailedLeverageYieldStatus =
+  | { source: 'backend'; data: SubmitTxStatusDataV2 }
+  | { source: 'solver'; dstTxHash: Hex; data: SolverIntentStatusResponse };
+// On failure: LOOKUP_FAILED. Branch on error.context.reason — DETAILED_STATUS_NOT_DELIVERED is the one
+// ambiguous miss a caller should bound with a retry budget; anything else is a live dependency failure.
 ```
 
 ## Common call shapes
