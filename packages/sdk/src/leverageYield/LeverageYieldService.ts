@@ -713,9 +713,9 @@ export class LeverageYieldService {
   private readonly backendApi: BackendApiService;
 
   /**
-   * Effective backend submit-tx flow (`leverageYield.useBackendSubmitTx`, default off). Read live off
-   * `ConfigService`, like `config.leverageYieldPartnerFee`, so the config object and the behavior can
-   * never disagree.
+   * Effective backend submit-tx flow (`leverageYield.useBackendSubmitTx`, default ON; opt out with
+   * `false`). Read live off `ConfigService`, like `config.leverageYieldPartnerFee`, so the config
+   * object and the behavior can never disagree.
    */
   get useBackendSubmitTx(): boolean {
     return this.config.leverageYieldUseBackendSubmitTx;
@@ -1264,9 +1264,14 @@ export class LeverageYieldService {
           // caller value cannot reach either budget — see `resolveTimeoutMs`. Mirrors SwapService.swap.
           const timeoutMs = resolveTimeoutMs(_params.timeout, DEFAULT_RELAY_TX_TIMEOUT);
 
-          // Opt-in backend 2-step flow: hand the broadcast intent tx to the leverage-yield API, which
-          // relays + post-executes server-side. On ANY non-success we fall back to the client-side
-          // relay so the vault swap still completes — safe because re-relay / re-post are idempotent.
+          // Backend 2-step flow, the default: hand the broadcast intent tx to the leverage-yield API,
+          // which relays + post-executes server-side. On ANY non-success we fall back to the
+          // client-side relay so the vault swap still completes — safe because re-relay / re-post are
+          // idempotent. That fallback is also what makes the ON default cheap for a keyless caller:
+          // `POST /leverage-yield/submit-tx` declares an API-key scope, so against a deployment that
+          // enforces keys every vault swap spends one rejected attempt here before completing
+          // client-side. Set `leverageYield.useBackendSubmitTx: false` to skip it. Swap's submit-tx
+          // declares the same scope and has defaulted on since it shipped.
           if (this.useBackendSubmitTx) {
             const submitted = await this.submitTx(_params, created, createSubmitTxAttempt(timeoutMs));
             if (submitted.ok) return submitted;
@@ -1308,10 +1313,11 @@ export class LeverageYieldService {
   }
 
   /**
-   * Client-side vault-swap completion (the default path): verify the broadcast intent tx landed,
+   * Client-side vault-swap completion (the opt-out path, and the fallback): verify the broadcast
+   * intent tx landed,
    * relay it to the hub (Sonic) — or use it directly when the source IS the hub — then notify the
    * solver via {@link LeverageYieldService.notifySolver} and build the {@link VaultSwapResponse}.
-   * Extracted from `vaultSwap()` so the opt-in backend 2-step path ({@link LeverageYieldService.submitTx})
+   * Extracted from `vaultSwap()` so the default backend 2-step path ({@link LeverageYieldService.submitTx})
    * can fall back to it on any non-success. Leverage-yield copy of `SwapService.fallbackSwapSteps`.
    */
   private async fallbackVaultSwapSteps<K extends SpokeChainKey>(
@@ -1379,7 +1385,8 @@ export class LeverageYieldService {
   }
 
   /**
-   * Backend 2-step vault-swap path (opt-in via `leverageYield.useBackendSubmitTx`): hand the
+   * Backend 2-step vault-swap path (the default; opt out with `leverageYield.useBackendSubmitTx:
+   * false`): hand the
    * broadcast intent tx to the leverage-yield API (`POST /leverage-yield/submit-tx`); the backend
    * relays + post-executes server-side. Polls `getSubmitTxStatus` until `solved`, then reconstructs
    * the same {@link VaultSwapResponse} the client-side path returns.

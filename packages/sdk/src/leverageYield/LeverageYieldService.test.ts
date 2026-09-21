@@ -125,7 +125,12 @@ vi.mock('../shared/services/Erc4626Service.js', async () => {
 });
 import { Sodax } from '../shared/entities/Sodax.js';
 
-const sodax = new Sodax();
+// Pins the CLIENT-SIDE path for every test below that does not opt in explicitly — the shipped
+// default is the backend one. Same pattern as `SwapService.test.ts`; without it the client-side
+// assertions would be testing a path the SDK no longer takes by default.
+const sodax = new Sodax({ leverageYield: { useBackendSubmitTx: false } });
+/** Nothing configured at all — what a consumer calling `new Sodax()` actually gets. */
+const sodaxDefaults = new Sodax();
 const HUB = sodax.hubProvider.chainConfig.chain.key;
 
 const ARBITRUM = ChainKeys.ARBITRUM_MAINNET satisfies SpokeChainKey;
@@ -1269,9 +1274,11 @@ describe('LeverageYieldService.vaultSwap', () => {
 // ─── vaultSwap — backend submit-tx path (leverageYield.useBackendSubmitTx) ─
 
 describe('LeverageYieldService.vaultSwap — backend submit-tx (useBackendSubmitTx)', () => {
-  // A separate Sodax instance with the opt-in flag ON; the module-level `sodax` leaves it off, which
-  // is the default. Per test we stub createVaultIntent + verifyTxHash on this instance and the backend
-  // leverage-yield API it calls; the module-level `mocks.relayTxAndWaitPacket` covers the fallback.
+  // A separate Sodax instance with the flag set ON explicitly. It matches the shipped default, but
+  // is spelled out so these tests keep testing the backend path even if the default moves again; the
+  // module-level `sodax` is the one pinned to the opt-out. Per test we stub createVaultIntent +
+  // verifyTxHash on this instance and the backend leverage-yield API it calls; the module-level
+  // `mocks.relayTxAndWaitPacket` covers the fallback.
   const sodaxBE = new Sodax({ leverageYield: { useBackendSubmitTx: true }, logger: 'silent' });
 
   /** Deposit params on an EVM spoke, with the wallet-provider wrapper `vaultSwap` takes. */
@@ -1530,8 +1537,26 @@ describe('LeverageYieldService.vaultSwap — backend submit-tx (useBackendSubmit
     }
   });
 
-  it('does not touch the backend submit API when the flag is off (the default)', async () => {
-    // The module-level `sodax` leaves `leverageYield.useBackendSubmitTx` unset → pure client-side flow.
+  it('defaults the backend submit-tx path ON, like swaps and bridge', () => {
+    // `new Sodax()` with nothing configured. The three features resolve independently, so a caller
+    // opting one out must not move the others.
+    expect(sodaxDefaults.config.leverageYieldUseBackendSubmitTx).toBe(true);
+    expect(sodaxDefaults.leverageYield.useBackendSubmitTx).toBe(true);
+
+    const lyOff = new Sodax({ leverageYield: { useBackendSubmitTx: false } });
+    expect(lyOff.config.leverageYieldUseBackendSubmitTx).toBe(false);
+    expect(lyOff.config.swapUseBackendSubmitTx).toBe(true);
+    expect(lyOff.config.bridgeUseBackendSubmitTx).toBe(true);
+
+    const swapOff = new Sodax({ swaps: { useBackendSubmitTx: false } });
+    expect(swapOff.config.leverageYieldUseBackendSubmitTx).toBe(true);
+
+    const bridgeOff = new Sodax({ bridge: { useBackendSubmitTx: false } });
+    expect(bridgeOff.config.leverageYieldUseBackendSubmitTx).toBe(true);
+  });
+
+  it('does not touch the backend submit API when the flag is explicitly off', async () => {
+    // The module-level `sodax` sets `leverageYield.useBackendSubmitTx: false` → pure client-side flow.
     const intent = makeIntent(ARBITRUM);
     vi.spyOn(sodax.leverageYield, 'createVaultIntent').mockResolvedValueOnce({
       ok: true,
