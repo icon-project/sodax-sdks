@@ -107,7 +107,8 @@ type LeverageYieldExtras = { apiKey?: string };  // per-action key for the backe
 type DetailedLeverageYieldStatus =
   | { source: 'backend'; data: SubmitTxStatusDataV2 }
   | { source: 'solver'; dstTxHash: Hex; data: SolverIntentStatusResponse };
-// On failure: LOOKUP_FAILED. Branch on error.context.reason — DETAILED_STATUS_NOT_DELIVERED is the one
+// On failure: LOOKUP_FAILED. A rejected key stops there with context.status set (isAuthFailure) —
+// never routed on. Otherwise branch on error.context.reason: DETAILED_STATUS_NOT_DELIVERED is the one
 // ambiguous miss a caller should bound with a retry budget; anything else is a live dependency failure.
 ```
 

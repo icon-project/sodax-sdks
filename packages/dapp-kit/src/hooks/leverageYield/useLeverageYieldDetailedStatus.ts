@@ -37,9 +37,9 @@ export type UseLeverageYieldDetailedStatusParams = ReadHookParams<
  * source can answer, so it also covers a vault swap the client-side fallback completed. `data.value`
  * is discriminated on `source`, and each variant carries that source's payload unmodified.
  *
- * Polls every 3s. Stops once the answering source is terminal, and — like `useDetailedStatus` —
- * after 40 consecutive *ambiguous* reads: a solver `NOT_FOUND`, or a `LOOKUP_FAILED` whose relay has
- * no packet for the tx. Neither can distinguish "still in flight" from "never will be", so the
+ * Polls every 3s. Stops once the answering source is terminal, once the backend rejects the API
+ * key, and — like `useDetailedStatus` — after 40 consecutive *ambiguous* reads: a solver
+ * `NOT_FOUND`, or a `LOOKUP_FAILED` whose relay has no packet for the tx. Neither can distinguish "still in flight" from "never will be", so the
  * budget is what stops a vault swap nothing can resolve. A dependency outage — relay unreachable,
  * solver down — keeps polling instead, so the read recovers by itself; any real status resets the
  * budget. Override with `queryOptions.refetchInterval`.

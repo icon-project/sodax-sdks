@@ -30,6 +30,7 @@ import {
   getIntentRelayChainId,
   type IBitcoinWalletProvider,
   type IEvmWalletProvider,
+  isAuthFailure,
   isSodaxError,
   MAX_POSITION_FEE_BPS,
   SolverIntentStatusCode,
@@ -1920,6 +1921,22 @@ describe('LeverageYieldService.getDetailedStatus', () => {
     expect(result.ok).toBe(true);
     if (!result.ok || result.value.source !== 'solver') throw new Error('expected the solver arm');
     expect(result.value.data.status).toBe(SolverIntentStatusCode.NOT_FOUND);
+  });
+
+  it.each([401, 403])('treats a rejected API key as terminal instead of degrading (%i)', async status => {
+    backendFails('rejected', status);
+
+    const result = await sodaxDS.leverageYield.getDetailedStatus(key);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    // Lifted so `isAuthFailure` recognises the wrapped error — it reads `context.status` only.
+    expect(result.error.context?.status).toBe(status);
+    expect(isAuthFailure(result.error)).toBe(true);
+    expect(result.error.context?.reason).toBeUndefined();
+    // Routing on would bury the 401 behind a relay or solver error.
+    expect(mocks.getTransactionPackets).not.toHaveBeenCalled();
+    expect(mocks.solverGetStatus).not.toHaveBeenCalled();
   });
 
   it('returns a Result rather than rejecting when a dependency throws', async () => {

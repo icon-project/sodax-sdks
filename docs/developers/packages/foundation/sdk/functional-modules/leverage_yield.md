@@ -344,7 +344,11 @@ So the method routes:
 2. Otherwise resolve the hub tx hash — the source tx itself for hub-source vault swaps, else the
    delivered relay packet's `dst_tx_hash` — and return the solver's answer for it.
 
-**Failure is `LOOKUP_FAILED`, and one of them is budgetable.** Branch on `error.context.reason`:
+**A rejected API key stops there.** It is not a source with nothing to say — only a corrected key
+resolves it — so it surfaces directly with `context.status` set for `isAuthFailure`, instead of being
+routed on and buried behind a relay or solver error. The swap and bridge routers apply the same rule.
+
+**Every other failure is `LOOKUP_FAILED`, and one of them is budgetable.** Branch on `error.context.reason`:
 `DETAILED_STATUS_NOT_DELIVERED` means the relay has no packet for this source tx, which is ambiguous by
 nature — a vault swap still in flight and one whose tx never relayed look identical — so it is the only
 failure a caller should bound with a retry budget. Every other one is a dependency failing right now

@@ -76,7 +76,7 @@ import {
   resolveDeliveredPacket,
 } from '../backendApi/detailedStatusRouting.js';
 import { isFillEvent } from '../backendApi/guards.js';
-import { isSodaxError } from '../errors/guards.js';
+import { isAuthFailure, isSodaxError } from '../errors/guards.js';
 import type { DetailedLeverageYieldStatus, DetailedLeverageYieldStatusKey } from './detailedStatus.js';
 import { runBackendSubmitTx } from '../backendApi/runBackendSubmitTx.js';
 import { createSubmitTxAttempt, type SubmitTxAttempt } from '../backendApi/submitTxAttempt.js';
@@ -1646,9 +1646,12 @@ export class LeverageYieldService {
    * reached, including a record it abandoned outright.
    *
    * **Any** unusable backend response routes to the solver — a 404, a transport or server error, or
-   * a record the backend gave up on. Unlike bridge's equivalent there is no auth arm:
-   * `GET /leverage-yield/submit-tx/status` is not key-guarded, so a rejected key cannot silently
-   * turn into a relay error here.
+   * a record the backend gave up on. A rejected API key is the exception: it is not a source with
+   * nothing to say, it is a configuration problem only a corrected key resolves, so routing it on
+   * would bury it behind a relay or solver error and leave a poller retrying a request that cannot
+   * succeed. The same rule the swap and bridge siblings apply. It holds here even though
+   * `GET /leverage-yield/submit-tx/status` declares no scope of its own: whether a key is checked
+   * is a per-deployment setting, so this must not assume the read is unauthenticated.
    *
    * A point-in-time read; poll it yourself, or use dapp-kit's `useLeverageYieldDetailedStatus`.
    *
@@ -1674,6 +1677,16 @@ export class LeverageYieldService {
       // only proves the request and schema succeeded.
       if (record.ok && record.value.success && !isBackendSubmitTxAbandoned(record.value.data)) {
         return { ok: true, value: { source: 'backend', data: record.value.data } };
+      }
+
+      // Surfaced directly, with its status lifted so `isAuthFailure` recognises the wrapped error.
+      if (!record.ok && isSodaxError(record.error) && isAuthFailure(record.error)) {
+        return {
+          ok: false,
+          error: this.detailedStatusLookupFailed(record.error, params.srcChainKey, {
+            status: record.error.context?.status,
+          }),
+        };
       }
 
       // Did the backend *answer*? A record — even `success: false`, even abandoned — and a 404 are
@@ -1723,11 +1736,9 @@ export class LeverageYieldService {
       if (!delivered.ok) {
         return {
           ok: false,
-          error: this.detailedStatusLookupFailed(
-            delivered.cause,
-            key.srcChainKey,
-            delivered.budgetable ? DETAILED_STATUS_NOT_DELIVERED : undefined,
-          ),
+          error: this.detailedStatusLookupFailed(delivered.cause, key.srcChainKey, {
+            reason: delivered.budgetable ? DETAILED_STATUS_NOT_DELIVERED : undefined,
+          }),
         };
       }
       hubTxHash = delivered.packet.dst_tx_hash;
@@ -1747,17 +1758,19 @@ export class LeverageYieldService {
   /**
    * `reason` is set only for {@link DETAILED_STATUS_NOT_DELIVERED} — the miss a caller can bound
    * with a retry budget. Leaving it off marks a dependency that is failing right now, which a
-   * caller should keep retrying rather than give up on.
+   * caller should keep retrying rather than give up on. `status` is lifted for a rejected key so
+   * `isAuthFailure` recognises the wrapped error; it reads `context.status` and does not walk the
+   * cause chain.
    */
   private detailedStatusLookupFailed(
     cause: unknown,
     srcChainKey: SpokeChainKey,
-    reason?: string,
+    extra?: { reason?: string; status?: number },
   ): LeverageYieldDetailedStatusError {
     return lookupFailed('leverageYield', 'getDetailedStatus', cause, {
       srcChainKey,
       action: 'vaultSwap' satisfies LeverageYieldAction,
-      reason,
+      ...extra,
     });
   }
 

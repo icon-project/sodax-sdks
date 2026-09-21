@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { SolverIntentStatusCode } from '@sodax/sdk';
+import { SodaxError, SolverIntentStatusCode } from '@sodax/sdk';
 import { MAX_NOT_FOUND_POLLS, STATUS_POLL_MS } from '../shared/notFoundStreak.js';
 
 /**
@@ -88,6 +88,19 @@ describe('useLeverageYieldDetailedStatus wiring', () => {
     expect(captured.refetchInterval({ state: { data: solvedRecord, dataUpdateCount: 2 } })).toBe(false);
     const inFlightRecord = { ok: true, value: { source: 'backend', data: { status: 'relaying' } } };
     expect(captured.refetchInterval({ state: { data: inFlightRecord, dataUpdateCount: 3 } })).toBe(STATUS_POLL_MS);
+  });
+
+  it('stops outright on a rejected API key, without spending the budget', () => {
+    refSlots.length = 0;
+    render();
+    // A real SodaxError, not a shaped literal: `isAuthFailure` goes through `isSodaxError`, which
+    // checks the instance. The SDK returns 401/403 as a Result, so React Query never sees an error
+    // to withhold a retry from — the policy is the only thing that can stop this poll.
+    const rejected = {
+      ok: false,
+      error: new SodaxError('LOOKUP_FAILED', 'rejected', { feature: 'leverageYield', context: { status: 401 } }),
+    };
+    expect(captured.refetchInterval({ state: { data: rejected, dataUpdateCount: 1 } })).toBe(false);
   });
 
   it('advances the not-delivered budget once per update, and stops when it is spent', () => {
