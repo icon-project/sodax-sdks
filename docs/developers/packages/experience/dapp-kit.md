@@ -354,6 +354,8 @@ See [`src/hooks/bridgeApi/`](https://github.com/icon-project/sodax-sdks/tree/mai
 
 Every retrying `useSwapsApi*`, `useLeverageYieldApi*` and `useBridgeApi*` hook defaults `retry` to [`retryUnlessAuthFailure()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/shared/retryUnlessAuthFailure.ts): transport blips retry up to 3 times, a `401`/`403` never replays. `useSwapsApiStatus`, `useSwapsApiSubmitTxStatus`, `useLeverageYieldApiSubmitTxStatus` and `useBridgeApiSubmitTxStatus` stop their 1s poll on a rejected key too, since `retry` bounds attempts within a tick rather than the interval — so a bad key surfaces once, on `error`, instead of re-requesting forever. Override either through `queryOptions` / `mutationOptions`.
 
+`useDetailedStatus` and `useBridgeDetailedStatus` stop on a rejected key as well, but by a different route: the SDK hands them the `401`/`403` inside a `Result` rather than throwing, so React Query never sees an error and `retry` has nothing to withhold. Their poll interval checks `isAuthFailure(data.error)` instead. It has to — a rejected key leaves the backend unanswered, so a relay miss behind it is never tagged `DETAILED_STATUS_NOT_DELIVERED`, and the not-delivered budget that stops every other unresolved read would never advance.
+
 ### Utils
 
 DEX param builders:

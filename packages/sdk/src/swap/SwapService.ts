@@ -49,6 +49,7 @@ import type { ApprovalTxs } from '../shared/types/spoke-types.js';
 import { selectSolvedIntentPacket } from './selectSolvedIntentPacket.js';
 import { estimateSwapSpeedTier, type SwapSpeedTierParams, type SwapSpeedTierResult } from './speed-tier.js';
 import { isSodaxError, SodaxError } from '../errors/SodaxError.js';
+import { isAuthFailure } from '../errors/guards.js';
 import { mapRelayFailure } from '../errors/relay-error-mapping.js';
 import {
   verifyFailed,
@@ -467,6 +468,19 @@ export class SwapService {
         return { ok: true, value: { source: 'backend', data: record.value.data } };
       }
 
+      // A rejected key is not a source with nothing to say — it is a configuration problem only a
+      // corrected key resolves. Routing it on would bury it behind a relay or solver error and leave
+      // a poller retrying a request that cannot succeed, so it surfaces directly with its status
+      // lifted for `isAuthFailure`. Same rule the bridge sibling applies.
+      if (!record.ok && isSodaxError(record.error) && isAuthFailure(record.error)) {
+        return {
+          ok: false,
+          error: this.detailedStatusLookupFailed(record.error, params.srcChainKey, {
+            status: record.error.context?.status,
+          }),
+        };
+      }
+
       // Did the backend *answer*? A record — even `success: false`, even abandoned — and a 404 are
       // both definitive "nothing usable here". A 5xx or a transport failure is not: behind one we
       // cannot tell a swap that will never resolve from a live one whose record we simply could not
@@ -514,11 +528,9 @@ export class SwapService {
       if (!delivered.ok) {
         return {
           ok: false,
-          error: this.detailedStatusLookupFailed(
-            delivered.cause,
-            key.srcChainKey,
-            delivered.budgetable ? DETAILED_STATUS_NOT_DELIVERED : undefined,
-          ),
+          error: this.detailedStatusLookupFailed(delivered.cause, key.srcChainKey, {
+            reason: delivered.budgetable ? DETAILED_STATUS_NOT_DELIVERED : undefined,
+          }),
         };
       }
       hubTxHash = delivered.packet.dst_tx_hash;
@@ -538,10 +550,16 @@ export class SwapService {
   /**
    * `reason` is set only for {@link DETAILED_STATUS_NOT_DELIVERED} — the miss a caller can bound
    * with a retry budget. Leaving it off marks a dependency that is failing right now, which a
-   * caller should keep retrying rather than give up on.
+   * caller should keep retrying rather than give up on. `status` is lifted for a rejected key so
+   * `isAuthFailure` recognises the wrapped error; it reads `context.status` and does not walk the
+   * cause chain.
    */
-  private detailedStatusLookupFailed(cause: unknown, srcChainKey: SpokeChainKey, reason?: string): DetailedStatusError {
-    return lookupFailed('swap', 'getDetailedStatus', cause, { srcChainKey, action: 'swap', reason });
+  private detailedStatusLookupFailed(
+    cause: unknown,
+    srcChainKey: SpokeChainKey,
+    extra?: { reason?: string; status?: number },
+  ): DetailedStatusError {
+    return lookupFailed('swap', 'getDetailedStatus', cause, { srcChainKey, action: 'swap', ...extra });
   }
 
   /**

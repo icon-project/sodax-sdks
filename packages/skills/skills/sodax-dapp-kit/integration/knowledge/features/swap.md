@@ -13,6 +13,7 @@ Pair: [`features/swap.md`](../../../migration-v1-to-v2/knowledge/features/swap.m
 useQuote({ params: { payload }, queryOptions });                                  // Real-time quote (3s)
 useSwapAllowance({ params: { payload, srcChainKey, walletProvider }, queryOptions }); // allowance (2s)
 useStatus({ params: { intentTxHash }, queryOptions });                            // Intent execution status (3s)
+// Polls 3s; stops on a terminal source, a rejected API key, or 40 consecutive ambiguous reads.
 useDetailedStatus({ params: { srcChainKey, srcTxHash }, queryOptions });          // Swap status by source tx (3s)
 
 // Mutations — domain inputs flow through mutate(vars), see Mutation params below
@@ -106,7 +107,7 @@ type UseDetailedStatusParams = ReadHookParams<
 | `useQuote` | `UseQueryResult<Result<SolverIntentQuoteResponse, SolverErrorResponse> \| undefined, Error>` — `data?.ok` branching required; polls 3 s |
 | `useSwapAllowance` | `UseQueryResult<boolean, Error>` — `data` is already-unwrapped `boolean \| undefined`; truthy when approved; polls 2 s |
 | `useStatus` | `UseQueryResult<Result<SolverIntentStatusResponse, SolverErrorResponse> \| undefined, Error>` — Result-wrapped like `useQuote`; `data?.ok` branching required; polls 3 s; stops on status `3`/`4`, and after 40 consecutive NOT_FOUND fetches |
-| `useDetailedStatus` | `UseQueryResult<Result<DetailedSwapStatus, DetailedStatusError> \| undefined, Error>` — Result-wrapped tagged union; polls 3 s; stops when the answering source is terminal (backend `'solved'`, or solver `SOLVED`/`FAILED`), and — like `useStatus` — after 40 consecutive ambiguous reads (solver `NOT_FOUND`, or a relay with no packet for the tx); a dependency outage keeps polling |
+| `useDetailedStatus` | `UseQueryResult<Result<DetailedSwapStatus, DetailedStatusError> \| undefined, Error>` — Result-wrapped tagged union; polls 3 s; stops when the answering source is terminal (backend `'solved'`, or solver `SOLVED`/`FAILED`), when the backend rejects the API key, and — like `useStatus` — after 40 consecutive ambiguous reads (solver `NOT_FOUND`, or a relay with no packet for the tx); a dependency outage keeps polling |
 
 ### `useStatus` vs `useDetailedStatus`
 

@@ -1,5 +1,6 @@
 import {
   DETAILED_STATUS_NOT_DELIVERED,
+  isAuthFailure,
   SolverIntentStatusCode,
   type DetailedStatusError,
   type DetailedSwapStatus,
@@ -89,11 +90,19 @@ export function toNotFoundBudgetRead(data: DetailedStatusRead): SwapStatusResult
  * Polling interval for `useDetailedStatus`. Backend records report terminality in their own
  * vocabulary; everything else reuses `useStatus`'s policy verbatim, so `MAX_NOT_FOUND_POLLS` stays
  * the single cutoff — for a forgotten intent and for a swap no source can resolve.
+ *
+ * A rejected API key is the one stop that sits outside both: `retryUnlessAuthFailure` cannot catch
+ * it, because the SDK returns the 401/403 as a `Result` rather than throwing, so React Query never
+ * sees an error to withhold a retry from. Without this branch a bad key polls forever whenever the
+ * relay has also not delivered — the miss is unprovable behind an unanswered backend, so it never
+ * consumes the not-delivered budget either.
  */
 export function getDetailedStatusRefetchInterval(
   data: DetailedStatusRead,
   consecutiveNotFound: number,
 ): number | false {
+  // A rejected key is terminal — only a corrected key changes the answer, so stop asking.
+  if (data && !data.ok && isAuthFailure(data.error)) return false;
   if (data?.ok && data.value.source === 'backend') {
     // Both terminal states of `SubmitSwapTxStatusV2`. Today the SDK routes `'failed'` records to the
     // solver so only `'solved'` reaches us, but that is its routing rule, not this hook's contract —
