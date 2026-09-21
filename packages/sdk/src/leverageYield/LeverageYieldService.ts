@@ -1533,6 +1533,13 @@ export class LeverageYieldService {
    * A `NOT_FOUND` status usually means the notification never landed rather than that the intent
    * does not exist — an intent created on the hub is invisible to the solver until it is told.
    *
+   * Reports the solver verbatim. It does NOT reconcile a `NOT_FOUND` against the backend's durable
+   * record the way {@link LeverageYieldService.getDetailedStatus} does — a restarted solver answers
+   * `NOT_FOUND` for intents it already filled, and that read resolves it. Keeping this one
+   * unreconciled is deliberate: it has shipped with this contract, and folding the reconcile in
+   * would turn a `NOT_FOUND` behind an unreadable backend into an error for every existing caller.
+   * Prefer `getDetailedStatus` when you hold the source tx hash.
+   *
    * @param request - `{ intent_tx_hash }` — the hub-chain (Sonic) tx hash the intent was
    *   registered in. For a position that is the tx that called the factory or the position.
    */
@@ -1540,9 +1547,9 @@ export class LeverageYieldService {
     request: SolverIntentStatusRequest,
   ): Promise<Result<SolverIntentStatusResponse, LeverageYieldPostExecutionError>> {
     try {
-      // Unbounded: this is a one-shot read a caller budgets however it likes. `getDetailedStatus`
-      // is polled and passes a budget instead.
-      const result = await this.resolveSolverStatus(request);
+      // Unbounded and unreconciled: a one-shot read a caller budgets however it likes, returning
+      // exactly what the solver said. `getDetailedStatus` is the polled, reconciling sibling.
+      const result = await this.solverStatus(request);
       if (result.ok) return result;
 
       const detail = result.error?.detail ?? {
@@ -1568,10 +1575,22 @@ export class LeverageYieldService {
   }
 
   /**
-   * The solver read both public status surfaces go through, so the durable-record reconcile below
-   * is written once. Returns the solver's own vocabulary; the two callers wrap it differently —
-   * {@link LeverageYieldService.getIntentStatus} into `EXTERNAL_API_ERROR`,
-   * {@link LeverageYieldService.getDetailedStatus} into `LOOKUP_FAILED`.
+   * The raw solver read, in the solver's own vocabulary. Both public status surfaces start here; the
+   * api key is the 5th argument, and leaving it out let a keyed partner notify and then fail to poll.
+   */
+  private async solverStatus(
+    request: SolverIntentStatusRequest,
+    timeoutMs?: number,
+  ): Promise<Result<SolverIntentStatusResponse, SolverErrorResponse>> {
+    return SolverApiService.getStatus(request, this.config.solver, this.config.logger, timeoutMs, this.config.apiKey);
+  }
+
+  /**
+   * {@link LeverageYieldService.solverStatus} plus the durable-record reconcile, for
+   * {@link LeverageYieldService.getDetailedStatus}. Deliberately not shared with
+   * {@link LeverageYieldService.getIntentStatus}: the reconcile turns a `NOT_FOUND` behind an
+   * unreadable backend into an error, which is right for a polled read that would otherwise spend a
+   * budget on an unverified miss, and wrong to impose on a surface that already ships without it.
    *
    * `timeoutMs` bounds the solver request alone. The reconcile carries its own
    * {@link RECONCILE_TIMEOUT_MS}, so a bounded call can cost both.
@@ -1580,15 +1599,7 @@ export class LeverageYieldService {
     request: SolverIntentStatusRequest,
     timeoutMs?: number,
   ): Promise<Result<SolverIntentStatusResponse, SolverErrorResponse>> {
-    // The api key is the 5th argument; leaving it out let a keyed partner notify and then fail to
-    // poll.
-    const solverResult = await SolverApiService.getStatus(
-      request,
-      this.config.solver,
-      this.config.logger,
-      timeoutMs,
-      this.config.apiKey,
-    );
+    const solverResult = await this.solverStatus(request, timeoutMs);
     const forgotten = !solverResult.ok || solverResult.value.status === SolverIntentStatusCode.NOT_FOUND;
     if (!forgotten) return solverResult;
 

@@ -1939,6 +1939,22 @@ describe('LeverageYieldService.getDetailedStatus', () => {
     expect(mocks.solverGetStatus).not.toHaveBeenCalled();
   });
 
+  it('leaves getIntentStatus unreconciled — one solver call, no durable-record lookup', async () => {
+    // The reconcile belongs to the polled read. Folding it in here would add a round trip to every
+    // NOT_FOUND and turn a NOT_FOUND behind an unreadable backend into an error for callers that
+    // already ship against this contract.
+    mocks.solverGetStatus.mockResolvedValueOnce({ ok: true, value: { status: SolverIntentStatusCode.NOT_FOUND } });
+    const intentSpy = vi.spyOn(sodaxDS.api, 'getIntentByTxHash');
+
+    const result = await sodaxDS.leverageYield.getIntentStatus({ intent_tx_hash: HUB_TX });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.status).toBe(SolverIntentStatusCode.NOT_FOUND);
+    expect(intentSpy).not.toHaveBeenCalled();
+    expect(mocks.solverGetStatus).toHaveBeenCalledTimes(1);
+  });
+
   it('returns a Result rather than rejecting when a dependency throws', async () => {
     vi.spyOn(sodaxDS.api.leverageYield, 'getSubmitTxStatus').mockRejectedValueOnce(new Error('boom'));
 

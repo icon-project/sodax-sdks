@@ -362,11 +362,15 @@ A point-in-time read — poll it yourself, or use `@sodax/dapp-kit`'s `useLevera
 ### getIntentStatus
 
 Polls the solver for the execution status of an intent this service created, keyed on the **hub-chain**
-tx hash. Pair it with `notifySolver`. When the solver answers `NOT_FOUND` — which a restarted solver does
-for intents it already filled, since it keeps intent state in memory — the read is reconciled against the
-backend's durable intent record, and a fill that consumed the whole input is reported as `SOLVED`.
-Prefer `getDetailedStatus` when all you hold is the source tx hash. **Returns:**
-`Promise<Result<SolverIntentStatusResponse, LeverageYieldPostExecutionError>>`.
+tx hash. Pair it with `notifySolver`. Reports the solver verbatim — unchanged contract.
+
+It does **not** reconcile a `NOT_FOUND` against the backend's durable record. A restarted solver answers
+`NOT_FOUND` for intents it already filled, because it keeps intent state in memory; `getDetailedStatus`
+resolves that, and is what to reach for when you hold the source tx hash. Keeping it out of here is
+deliberate: the reconcile also turns a `NOT_FOUND` behind an unreadable backend into an error, which
+would change this method's answers for every caller already using it.
+
+**Returns:** `Promise<Result<SolverIntentStatusResponse, LeverageYieldPostExecutionError>>`.
 
 ### notifySolver
 
