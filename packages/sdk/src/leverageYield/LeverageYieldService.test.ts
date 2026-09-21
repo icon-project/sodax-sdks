@@ -32,7 +32,9 @@ import {
   type IEvmWalletProvider,
   isSodaxError,
   MAX_POSITION_FEE_BPS,
+  SolverIntentStatusCode,
   type PartnerFee,
+  DETAILED_STATUS_NOT_DELIVERED,
   RELAY_FALLBACK_FLOOR_MS,
   type Result,
   type SodaxOptions,
@@ -56,6 +58,8 @@ const mocks = vi.hoisted(() => ({
   relayTxAndWaitPacket: vi.fn(),
   solverPostExecution: vi.fn(),
   solverGetQuote: vi.fn(),
+  solverGetStatus: vi.fn(),
+  getTransactionPackets: vi.fn(),
   erc20Approve: vi.fn(),
   erc20PlanApproval: vi.fn(),
   erc4626GetMaxWithdraw: vi.fn(),
@@ -75,11 +79,20 @@ vi.mock('../swap/EvmSolverService.js', () => ({
   EvmSolverService: { constructCreateIntentData: mocks.constructCreateIntentData },
 }));
 vi.mock('../swap/SolverApiService.js', () => ({
-  SolverApiService: { postExecution: mocks.solverPostExecution, getQuote: mocks.solverGetQuote },
+  SolverApiService: {
+    postExecution: mocks.solverPostExecution,
+    getQuote: mocks.solverGetQuote,
+    getStatus: mocks.solverGetStatus,
+  },
 }));
 vi.mock('../shared/services/intentRelay/IntentRelayApiService.js', async () => {
   const actual = await vi.importActual<object>('../shared/services/intentRelay/IntentRelayApiService.js');
-  return { ...actual, relayTxAndWaitPacket: mocks.relayTxAndWaitPacket };
+  // `HttpRelayError` stays real — `resolveDeliveredPacket` classifies a relay 404 with `instanceof`.
+  return {
+    ...actual,
+    relayTxAndWaitPacket: mocks.relayTxAndWaitPacket,
+    getTransactionPackets: mocks.getTransactionPackets,
+  };
 });
 vi.mock('../shared/services/erc-20/Erc20Service.js', async () => {
   const actual = await vi.importActual<typeof import('../shared/services/erc-20/Erc20Service.js')>(
@@ -1566,6 +1579,332 @@ describe('LeverageYieldService.vaultSwap — backend submit-tx (useBackendSubmit
     // The floor deliberately outranks a sub-floor caller `timeout` (matching SwapService): the intent
     // has already landed, and `relayTxAndWaitPacket` submits before `timeout` bounds the wait.
     expect(mocks.relayTxAndWaitPacket.mock.calls.at(-1)?.[0]?.timeout).toBe(RELAY_FALLBACK_FLOOR_MS);
+  });
+
+  it('threads extras.apiKey into the backend submit-tx leg as a per-request override', async () => {
+    stubCreatedAndVerified();
+    const submitSpy = stubAcceptedSubmit();
+    const statusSpy = vi
+      .spyOn(sodaxBE.api.leverageYield, 'getSubmitTxStatus')
+      .mockResolvedValueOnce(
+        statusEnvelope({ status: 'solved', result: { dstIntentTxHash: '0xDST', intent_hash: '0xhash' } }),
+      );
+
+    const result = await sodaxBE.leverageYield.vaultSwap({
+      ...vaultSwapInput(),
+      extras: { apiKey: 'per-action-key' },
+    });
+
+    expect(result.ok).toBe(true);
+    // Both the POST and the status poll carry the per-action key (as RequestOverrideConfig.apiKey).
+    expect(submitSpy.mock.calls[0]?.[1]).toMatchObject({ apiKey: 'per-action-key' });
+    expect(statusSpy.mock.calls[0]?.[1]).toMatchObject({ apiKey: 'per-action-key' });
+  });
+});
+
+// =========================================================================
+// Backend submit-tx call-through: extras.apiKey on the wire. Same 2-step flow as above, but the
+// real LeverageYieldApiService transport runs against a test-local global fetch stub, so the
+// `x-api-key` asserted is the header actually sent — not an argument recorded on a stubbed method.
+// =========================================================================
+
+describe('LeverageYieldService.vaultSwap — backend submit-tx extras.apiKey on the wire (call-through)', () => {
+  // Backend path spelled out rather than inherited, like `sodaxBE` above: these tests are about the
+  // key on the wire, and they should keep exercising the backend legs whatever the default is.
+  const sodaxKeyed = new Sodax({
+    apiKey: 'instance-key',
+    leverageYield: { useBackendSubmitTx: true },
+    logger: 'silent',
+  });
+
+  // The same payloads the spied specs above return — they satisfy the real leverage-yield schemas.
+  const SUBMIT_TX_BODY = { success: true, data: { status: 'inserted', message: 'accepted' } };
+  const SOLVED_STATUS_BODY = {
+    success: true,
+    data: {
+      txHash: '0xspokeTx',
+      srcChainKey: ARBITRUM,
+      status: 'solved',
+      processingAttempts: 1,
+      result: { dstIntentTxHash: '0xDST', intent_hash: '0xhash' },
+    },
+  };
+
+  const wireFetch = vi.fn();
+
+  beforeEach(() => {
+    wireFetch.mockReset();
+    // Only the two submit-tx legs may reach fetch; anything else fails the test loudly. The
+    // file-level afterEach calls `vi.unstubAllGlobals()`, so this does not leak.
+    wireFetch.mockImplementation(async (url: unknown, init?: { method?: string }) => {
+      const { pathname } = new URL(String(url));
+      if (pathname === '/v1/leverage-yield/submit-tx' && init?.method === 'POST') {
+        return { ok: true, status: 200, json: async () => SUBMIT_TX_BODY };
+      }
+      if (pathname === '/v1/leverage-yield/submit-tx/status' && (init?.method ?? 'GET') === 'GET') {
+        return { ok: true, status: 200, json: async () => SOLVED_STATUS_BODY };
+      }
+      throw new Error(`unexpected fetch: ${init?.method ?? 'GET'} ${String(url)}`);
+    });
+    vi.stubGlobal('fetch', wireFetch);
+  });
+
+  const stubKeyedCreated = () => {
+    const intent = makeIntent(ARBITRUM);
+    vi.spyOn(sodaxKeyed.leverageYield, 'createVaultIntent').mockResolvedValueOnce({
+      ok: true,
+      value: {
+        tx: '0xspokeTx',
+        intent: { ...intent, feeAmount: 0n },
+        relayData: { address: intent.creator, payload: '0xdata' },
+      },
+    });
+    vi.spyOn(sodaxKeyed.spoke, 'verifyTxHash').mockResolvedValue({ ok: true, value: true });
+  };
+
+  /** The `x-api-key` actually sent to (pathname, method), read through `Headers` so any casing counts. */
+  const keySentTo = (pathname: string, method: string): string | null => {
+    const matches = wireFetch.mock.calls.filter(
+      call => new URL(String(call[0])).pathname === pathname && (call[1]?.method ?? 'GET') === method,
+    );
+    expect(matches).toHaveLength(1);
+    return new Headers(matches[0]?.[1]?.headers).get('x-api-key');
+  };
+
+  const runKeyedVaultSwap = async (extras?: { apiKey?: string }) => {
+    stubKeyedCreated();
+    const args = {
+      params: vaultIntentParams(ARBITRUM, { dstChainKey: ARBITRUM as SpokeChainKey, dstAddress: SAMPLE_USER }),
+      walletProvider: mockEvmProvider,
+    };
+    const result = await sodaxKeyed.leverageYield.vaultSwap(extras ? { ...args, extras } : args);
+    expect(result.ok).toBe(true);
+    // The value round-tripped through the real transport + schemas, not a stubbed method.
+    if (result.ok) expect(result.value.intentDeliveryInfo.dstTxHash).toBe('0xDST');
+    expect(wireFetch).toHaveBeenCalledTimes(2);
+  };
+
+  it('sends extras.apiKey over the instance key on both the submit POST and the status poll', async () => {
+    await runKeyedVaultSwap({ apiKey: 'action-key' });
+    expect(keySentTo('/v1/leverage-yield/submit-tx', 'POST')).toBe('action-key');
+    expect(keySentTo('/v1/leverage-yield/submit-tx/status', 'GET')).toBe('action-key');
+  });
+
+  it('sends the instance key on both requests when extras is omitted', async () => {
+    await runKeyedVaultSwap();
+    expect(keySentTo('/v1/leverage-yield/submit-tx', 'POST')).toBe('instance-key');
+    expect(keySentTo('/v1/leverage-yield/submit-tx/status', 'GET')).toBe('instance-key');
+  });
+
+  it('treats an empty extras.apiKey as unset: the instance key still rides both requests', async () => {
+    await runKeyedVaultSwap({ apiKey: '' });
+    expect(keySentTo('/v1/leverage-yield/submit-tx', 'POST')).toBe('instance-key');
+    expect(keySentTo('/v1/leverage-yield/submit-tx/status', 'GET')).toBe('instance-key');
+  });
+});
+
+// =========================================================================
+// getDetailedStatus — the source-tx status router (backend record | solver)
+// =========================================================================
+
+describe('LeverageYieldService.getDetailedStatus', () => {
+  const sodaxDS = new Sodax({ logger: 'silent' });
+  const SRC_TX = '0xabc123';
+  const HUB_TX = '0x00000000000000000000000000000000000000000000000000000000000000ff';
+  const key = { srcChainKey: ARBITRUM, srcTxHash: SRC_TX } as const;
+
+  const statusData = (data: Record<string, unknown>) => ({
+    txHash: SRC_TX,
+    srcChainKey: ARBITRUM,
+    status: 'relaying',
+    processingAttempts: 1,
+    ...data,
+  });
+
+  const record = (data: Record<string, unknown>) =>
+    vi
+      .spyOn(sodaxDS.api.leverageYield, 'getSubmitTxStatus')
+      .mockResolvedValueOnce({ ok: true, value: { success: true, data: statusData(data) } } as never);
+
+  const recordNotFound = () =>
+    vi
+      .spyOn(sodaxDS.api.leverageYield, 'getSubmitTxStatus')
+      .mockResolvedValueOnce({ ok: true, value: { success: false, data: statusData({}) } } as never);
+
+  const backendFails = (message: string, status: number) =>
+    vi.spyOn(sodaxDS.api.leverageYield, 'getSubmitTxStatus').mockResolvedValueOnce({
+      ok: false,
+      error: new SodaxError('EXTERNAL_API_ERROR', message, {
+        feature: 'backend',
+        context: { api: 'leverageYield', endpoint: '/leverage-yield/submit-tx/status', status },
+      }),
+    } as never);
+
+  const packets = (data: unknown[]) =>
+    mocks.getTransactionPackets.mockResolvedValueOnce({ ok: true, value: { success: true, data } });
+
+  // The relay has its own chain numbering, so derive it rather than hardcoding a chain id. These
+  // identity fields are what the attribution guard inside `resolveDeliveredPacket` matches on.
+  const RELAY_CHAIN_ID = Number(getIntentRelayChainId(ARBITRUM));
+  const delivered = [{ status: 'executed', dst_tx_hash: HUB_TX, src_tx_hash: SRC_TX, src_chain_id: RELAY_CHAIN_ID }];
+
+  const solverSays = (status: SolverIntentStatusCode, fill_tx_hash?: string) =>
+    mocks.solverGetStatus.mockResolvedValueOnce({
+      ok: true,
+      value: { status, ...(fill_tx_hash ? { fill_tx_hash } : {}) },
+    });
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    mocks.getTransactionPackets.mockReset();
+    mocks.solverGetStatus.mockReset();
+  });
+
+  it('returns the unmodified submit-tx record without touching the relay or the solver', async () => {
+    record({ status: 'relaying' });
+
+    const result = await sodaxDS.leverageYield.getDetailedStatus(key);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok || result.value.source !== 'backend') throw new Error('expected a backend answer');
+    expect(result.value.data.status).toBe('relaying');
+    expect(mocks.getTransactionPackets).not.toHaveBeenCalled();
+    expect(mocks.solverGetStatus).not.toHaveBeenCalled();
+  });
+
+  it('passes a per-request override to the backend read', async () => {
+    const statusSpy = record({ status: 'relaying' });
+
+    await sodaxDS.leverageYield.getDetailedStatus(key, { apiKey: 'per-action-key' });
+
+    expect(statusSpy).toHaveBeenCalledWith({ txHash: SRC_TX, srcChainKey: ARBITRUM }, { apiKey: 'per-action-key' });
+  });
+
+  it.each([
+    ['no record exists', () => backendFails('not found', 404)],
+    ['the record reports a success:false envelope', () => recordNotFound()],
+    ['the backend gave up terminally', () => record({ status: 'failed' })],
+    ['the backend abandoned the record mid-flight', () => record({ status: 'relayed', abandonedAt: 'now' })],
+    ['the backend is unreachable', () => backendFails('backend unavailable', 503)],
+  ])('routes relay → hub hash → solver when %s', async (_case, arrange) => {
+    arrange();
+    packets(delivered);
+    solverSays(SolverIntentStatusCode.SOLVED, '0xfill');
+
+    const result = await sodaxDS.leverageYield.getDetailedStatus(key);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok || result.value.source !== 'solver') throw new Error('expected the solver to answer');
+    expect(result.value.dstTxHash).toBe(HUB_TX);
+    expect(result.value.data.status).toBe(SolverIntentStatusCode.SOLVED);
+    // The hash handed to the solver is the one the relay packet carried.
+    expect(mocks.solverGetStatus.mock.calls[0]?.[0]).toEqual({ intent_tx_hash: HUB_TX });
+  });
+
+  it('skips the relay for a hub-source vault swap — the source tx IS the hub tx', async () => {
+    backendFails('not found', 404);
+    solverSays(SolverIntentStatusCode.SOLVED, '0xfill');
+
+    const result = await sodaxDS.leverageYield.getDetailedStatus({ srcChainKey: SONIC, srcTxHash: HUB_TX });
+
+    expect(result.ok).toBe(true);
+    expect(mocks.getTransactionPackets).not.toHaveBeenCalled();
+    expect(mocks.solverGetStatus.mock.calls[0]?.[0]).toEqual({ intent_tx_hash: HUB_TX });
+  });
+
+  it('never hands the solver a packet that is not a delivered match for this tx', async () => {
+    backendFails('not found', 404);
+    packets([
+      { status: 'executed', dst_tx_hash: HUB_TX, src_tx_hash: '0xsomeoneelse', src_chain_id: RELAY_CHAIN_ID },
+      { status: 'validating', dst_tx_hash: '', src_tx_hash: SRC_TX, src_chain_id: RELAY_CHAIN_ID },
+    ]);
+
+    const result = await sodaxDS.leverageYield.getDetailedStatus(key);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('LOOKUP_FAILED');
+    expect(mocks.solverGetStatus).not.toHaveBeenCalled();
+  });
+
+  it('tags only the undelivered-packet miss as budgetable, not an outage', async () => {
+    backendFails('not found', 404);
+    packets([]);
+    const budgetable = await sodaxDS.leverageYield.getDetailedStatus(key);
+
+    backendFails('backend unavailable', 503);
+    packets([]);
+    const unprovable = await sodaxDS.leverageYield.getDetailedStatus(key);
+
+    expect(budgetable.ok).toBe(false);
+    expect(unprovable.ok).toBe(false);
+    if (budgetable.ok || unprovable.ok) return;
+    // A relay miss behind a backend outage proves nothing, so it must not consume a caller's budget.
+    expect(budgetable.error.context?.reason).toBe(DETAILED_STATUS_NOT_DELIVERED);
+    expect(unprovable.error.context?.reason).toBeUndefined();
+  });
+
+  it('fails rather than casting when the relay packet carries a malformed hub hash', async () => {
+    backendFails('not found', 404);
+    packets([{ status: 'executed', dst_tx_hash: 'not-hex', src_tx_hash: SRC_TX, src_chain_id: RELAY_CHAIN_ID }]);
+
+    const result = await sodaxDS.leverageYield.getDetailedStatus(key);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('LOOKUP_FAILED');
+    expect(result.error.context?.reason).toBeUndefined();
+    expect(mocks.solverGetStatus).not.toHaveBeenCalled();
+  });
+
+  it('reconciles a solver NOT_FOUND against the durable intent record', async () => {
+    backendFails('not found', 404);
+    packets(delivered);
+    solverSays(SolverIntentStatusCode.NOT_FOUND);
+    // A vault intent reaches the same journal as a swap's — it is created on the same hub Intents
+    // contract — so a restarted solver's amnesia is recoverable from the record.
+    vi.spyOn(sodaxDS.api, 'getIntentByTxHash').mockResolvedValueOnce({
+      ok: true,
+      value: {
+        events: [{ eventType: 'intent-filled', txHash: '0xfillTx', intentState: { remainingInput: '0' } }],
+      },
+    } as never);
+
+    const result = await sodaxDS.leverageYield.getDetailedStatus(key);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok || result.value.source !== 'solver') throw new Error('expected the solver arm');
+    expect(result.value.data.status).toBe(SolverIntentStatusCode.SOLVED);
+    expect(result.value.data.fill_tx_hash).toBe('0xfillTx');
+  });
+
+  it('leaves a solver NOT_FOUND standing when the durable record answers with no terminal fill', async () => {
+    backendFails('not found', 404);
+    packets(delivered);
+    solverSays(SolverIntentStatusCode.NOT_FOUND);
+    // A partial fill does not settle the intent; only `remainingInput === '0'` does.
+    vi.spyOn(sodaxDS.api, 'getIntentByTxHash').mockResolvedValueOnce({
+      ok: true,
+      value: {
+        events: [{ eventType: 'intent-filled', txHash: '0xpartial', intentState: { remainingInput: '5' } }],
+      },
+    } as never);
+
+    const result = await sodaxDS.leverageYield.getDetailedStatus(key);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok || result.value.source !== 'solver') throw new Error('expected the solver arm');
+    expect(result.value.data.status).toBe(SolverIntentStatusCode.NOT_FOUND);
+  });
+
+  it('returns a Result rather than rejecting when a dependency throws', async () => {
+    vi.spyOn(sodaxDS.api.leverageYield, 'getSubmitTxStatus').mockRejectedValueOnce(new Error('boom'));
+
+    const result = await sodaxDS.leverageYield.getDetailedStatus(key);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('LOOKUP_FAILED');
   });
 });
 

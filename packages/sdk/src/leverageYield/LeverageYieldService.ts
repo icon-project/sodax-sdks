@@ -32,6 +32,8 @@ import {
   getIntentRelayChainId,
   HUB_CHAIN_KEY,
   isBitcoinChainKey,
+  SolverIntentErrorCode,
+  SolverIntentStatusCode,
 } from '@sodax/types';
 import type {
   Address,
@@ -67,11 +69,19 @@ import type {
   TxReturnType,
   XToken,
 } from '@sodax/types';
-import type { BackendApiService } from '../backendApi/index.js';
+import type { BackendApiService, RequestOverrideConfig } from '../backendApi/index.js';
+import {
+  DETAILED_STATUS_NOT_DELIVERED,
+  isBackendSubmitTxAbandoned,
+  resolveDeliveredPacket,
+} from '../backendApi/detailedStatusRouting.js';
+import { isFillEvent } from '../backendApi/guards.js';
+import { isSodaxError } from '../errors/guards.js';
+import type { DetailedLeverageYieldStatus, DetailedLeverageYieldStatusKey } from './detailedStatus.js';
 import { runBackendSubmitTx } from '../backendApi/runBackendSubmitTx.js';
 import { createSubmitTxAttempt, type SubmitTxAttempt } from '../backendApi/submitTxAttempt.js';
 import { resolveTimeoutMs } from '../shared/utils/resolveTimeoutMs.js';
-import { encodeFunctionData, erc20Abi, isAddress, isAddressEqual, parseAbi, zeroAddress } from 'viem';
+import { encodeFunctionData, erc20Abi, isAddress, isAddressEqual, isHex, parseAbi, zeroAddress } from 'viem';
 import type { ConfigService } from '../shared/config/ConfigService.js';
 import type { CreateIntentParams, Intent } from '../shared/types/intent-types.js';
 import { EvmSolverService } from '../swap/EvmSolverService.js';
@@ -87,6 +97,7 @@ import {
   unknownFailed,
   verifyFailed,
 } from '../errors/wrappers.js';
+import type { LeverageYieldDetailedStatusError } from './errors.js';
 import {
   isLeverageYieldAllowanceCheckError,
   isLeverageYieldApproveError,
@@ -162,6 +173,29 @@ const leveragePositionAbi = parseAbi([
  * deadline is enforced on-chain against the hub block timestamp.
  */
 const INTENT_DEADLINE_BUFFER_SECONDS = 5 * 60;
+
+/**
+ * Ceiling for the durable-record lookup behind {@link LeverageYieldService.getIntentStatus} and
+ * {@link LeverageYieldService.getDetailedStatus}. A status read is polled on a short interval, so
+ * its secondary lookup must not inherit the much longer default request budget. Same value and
+ * reasoning as `SwapService`'s.
+ */
+const RECONCILE_TIMEOUT_MS = 5_000;
+
+/**
+ * Budget for the solver status call behind {@link LeverageYieldService.getDetailedStatus}. Same
+ * reasoning as {@link RECONCILE_TIMEOUT_MS}: a polled read must not inherit the 30s backend default.
+ *
+ * The relay leg does **not** share this value — `resolveDeliveredPacket` takes the relay module's
+ * own per-request budget, which is three times this one, so imposing 5s there would abort reads
+ * that succeed today. A budget that expires is untagged, which keeps the caller polling; a relay
+ * slower than the budget would therefore never resolve and never surface an error.
+ *
+ * Worst case for one `getDetailedStatus` call is the sum of its legs, not this number: the backend
+ * record's own request budget, then the relay's, then this, plus a further
+ * {@link RECONCILE_TIMEOUT_MS} when a solver `NOT_FOUND` falls through to the reconcile.
+ */
+const DETAILED_STATUS_SOLVER_TIMEOUT_MS = 5_000;
 
 /**
  * Where a position's funds came from, and so where a failed intent refunds to.
@@ -565,6 +599,20 @@ export type LeverageYieldSwapPayload = {
 };
 
 /**
+ * Per-action extras for a vault swap, supplied via the `extras` slot of the action params.
+ * Deliberately smaller than `SwapExtras` / `BridgeExtras`: a vault swap has no Stacks or Bitcoin
+ * source variants to key off `K`, so this stays chain-agnostic.
+ */
+export type LeverageYieldExtras = {
+  /**
+   * Overrides the configured backend API key for this action's backend submit-tx leg; sent as the
+   * `x-api-key` header on both the submit POST and its status polls. Falls back to config when
+   * omitted. Has no effect on the client-side relay path, which never calls the backend.
+   */
+  apiKey?: string;
+};
+
+/**
  * Exec-mode params for {@link LeverageYieldService.createVaultIntent} /
  * {@link LeverageYieldService.vaultSwap}: `walletProvider` is required and K-narrowed
  * (`raw: true` returns unsigned tx data instead). The two vault-specific execution
@@ -576,11 +624,16 @@ export type LeverageYieldSwapPayload = {
  *   instead of a spoke-side AssetManager deposit.
  * - `partnerFee` overrides the effective leverage-yield fee
  *   (`config.leverageYieldPartnerFee`) for this intent only.
+ *
+ * Both stay intersected here rather than moving into {@link LeverageYieldExtras}, where swap and
+ * bridge keep their own `partnerFee`: they are vault *execution* modifiers read by
+ * `createVaultIntent`, and relocating them would break every existing caller for no gain.
  */
 export type VaultSwapActionParams<K extends SpokeChainKey, Raw extends boolean = false> = SpokeExecActionParams<
   K,
   Raw,
-  CreateIntentParams<K>
+  CreateIntentParams<K>,
+  LeverageYieldExtras
 > & { hubWalletSwap?: boolean; partnerFee?: PartnerFee };
 
 /**
@@ -1370,6 +1423,10 @@ export class LeverageYieldService {
           operation: _params.hubWalletSwap ? 'withdraw' : 'deposit',
         },
         statusQuery: { txHash: spokeTxHash, srcChainKey },
+        // Per-action key wins over the instance one for both legs of the attempt — the submit POST
+        // and its status polls. Undefined leaves the configured key in place; the same per-action
+        // override `extras.partnerFee` already has, travelling per call.
+        overrideConfig: { apiKey: _params.extras?.apiKey },
         // A vault deposit/withdraw IS a solver swap, so terminal success is `solved` — not bridge's
         // `executed`.
         terminalStatus: 'solved',
@@ -1476,19 +1533,13 @@ export class LeverageYieldService {
     request: SolverIntentStatusRequest,
   ): Promise<Result<SolverIntentStatusResponse, LeverageYieldPostExecutionError>> {
     try {
-      // The api key is the 5th argument; leaving it out let a keyed partner notify and then fail to
-      // poll. `timeoutMs` stays default.
-      const result = await SolverApiService.getStatus(
-        request,
-        this.config.solver,
-        this.config.logger,
-        undefined,
-        this.config.apiKey,
-      );
+      // Unbounded: this is a one-shot read a caller budgets however it likes. `getDetailedStatus`
+      // is polled and passes a budget instead.
+      const result = await this.resolveSolverStatus(request);
       if (result.ok) return result;
 
       const detail = result.error?.detail ?? {
-        code: -999, // SolverIntentErrorCode.UNKNOWN
+        code: SolverIntentErrorCode.UNKNOWN,
         message: 'Solver returned malformed error response',
       };
       return {
@@ -1507,6 +1558,200 @@ export class LeverageYieldService {
       if (isLeverageYieldPostExecutionError(error)) return { ok: false, error };
       return { ok: false, error: executionFailed('leverageYield', error, { phase: 'lookup' }) };
     }
+  }
+
+  /**
+   * The solver read both public status surfaces go through, so the durable-record reconcile below
+   * is written once. Returns the solver's own vocabulary; the two callers wrap it differently —
+   * {@link LeverageYieldService.getIntentStatus} into `EXTERNAL_API_ERROR`,
+   * {@link LeverageYieldService.getDetailedStatus} into `LOOKUP_FAILED`.
+   *
+   * `timeoutMs` bounds the solver request alone. The reconcile carries its own
+   * {@link RECONCILE_TIMEOUT_MS}, so a bounded call can cost both.
+   */
+  private async resolveSolverStatus(
+    request: SolverIntentStatusRequest,
+    timeoutMs?: number,
+  ): Promise<Result<SolverIntentStatusResponse, SolverErrorResponse>> {
+    // The api key is the 5th argument; leaving it out let a keyed partner notify and then fail to
+    // poll.
+    const solverResult = await SolverApiService.getStatus(
+      request,
+      this.config.solver,
+      this.config.logger,
+      timeoutMs,
+      this.config.apiKey,
+    );
+    const forgotten = !solverResult.ok || solverResult.value.status === SolverIntentStatusCode.NOT_FOUND;
+    if (!forgotten) return solverResult;
+
+    // The solver keeps intent state in memory, so a restart makes it answer NOT_FOUND for intents it
+    // already filled. The backend's record is durable, and a vault intent is in it: `createVaultIntent`
+    // goes through the same `EvmSolverService.constructCreateIntentData` as a swap, so it lands on the
+    // same hub Intents contract and the same `IntentCreated` / `IntentFilled` events feed the journal
+    // this endpoint reads. A read that *completes* without terminal fill evidence leaves the solver's
+    // answer standing; a read that could not complete proves nothing — see below.
+    //
+    // A fill event is not by itself proof of completion: an intent created with `allowPartialFill`
+    // emits one per fill while input remains. Only a fill that consumed the remainder settles the
+    // whole intent. Clamp rather than override, since a per-call timeout *replaces* the configured
+    // one and would otherwise lengthen the request for a consumer who configured something stricter.
+    const timeout = Math.min(RECONCILE_TIMEOUT_MS, this.backendApi.requestTimeoutMs);
+    const intent = await this.backendApi.getIntentByTxHash(request.intent_tx_hash, { timeout });
+    const settled = intent.ok
+      ? intent.value.events.filter(isFillEvent).find(fill => fill.intentState.remainingInput === '0')
+      : undefined;
+    if (settled) return { ok: true, value: { status: SolverIntentStatusCode.SOLVED, fill_tx_hash: settled.txHash } };
+
+    // Same reading as `getDetailedStatus`: a record — or a 404, which is the backend saying it has
+    // none — answers the question, so the solver's NOT_FOUND stands and a caller may budget it. A
+    // 5xx, a transport failure or an unusable body does not: the fill may exist and simply be
+    // unreadable right now. Reporting NOT_FOUND there lets a poller spend a miss it never verified.
+    const backendAnswered = intent.ok || (isSodaxError(intent.error) && intent.error.context?.status === 404);
+    if (solverResult.ok && !backendAnswered) {
+      return {
+        ok: false,
+        error: {
+          detail: {
+            code: SolverIntentErrorCode.UNKNOWN,
+            message: 'solver reported NOT_FOUND and the durable intent record could not be read to verify it',
+          },
+        },
+      };
+    }
+
+    // Either the backend answered, or the solver's own error is the better diagnostic to return.
+    return solverResult;
+  }
+
+  /**
+   * Reads a vault swap's status from its source-chain transaction — the identifier a caller always
+   * holds after `vaultSwap()`.
+   *
+   * **Routes; does not translate.** Returns the backend submit-tx record while it is in play,
+   * otherwise the solver's answer via the hub tx hash resolved from the relay packet. The result is
+   * tagged with `source` (discriminate on it) and carries that source's payload unmodified.
+   *
+   * `sodax.api.leverageYield.getSubmitTxStatus` cannot answer for every vault swap. Sometimes there
+   * is no record — `useBackendSubmitTx: false`, or the submit was rejected. More often the record
+   * exists but is stale: the backend path POSTs first and falls back to the client-side relay once
+   * that stalls, so a fallback-completed vault swap leaves behind whatever state the backend last
+   * reached, including a record it abandoned outright.
+   *
+   * **Any** unusable backend response routes to the solver — a 404, a transport or server error, or
+   * a record the backend gave up on. Unlike bridge's equivalent there is no auth arm:
+   * `GET /leverage-yield/submit-tx/status` is not key-guarded, so a rejected key cannot silently
+   * turn into a relay error here.
+   *
+   * A point-in-time read; poll it yourself, or use dapp-kit's `useLeverageYieldDetailedStatus`.
+   *
+   * @param params - `srcChainKey` and `srcTxHash` of the source-chain vault-swap transaction.
+   * @param config - Optional per-request override for the backend read (e.g. a per-action API key).
+   *   The relay leg is unauthenticated and takes none; the solver leg uses the configured key.
+   * @returns A `Result` containing a {@link DetailedLeverageYieldStatus}. Fails with `LOOKUP_FAILED`
+   *   when no source can answer yet. Branch on `error.context.reason`:
+   *   `DETAILED_STATUS_NOT_DELIVERED` is the ambiguous miss a caller should bound with a retry
+   *   budget; anything else is a dependency failing right now, so keep retrying.
+   */
+  public async getDetailedStatus(
+    params: DetailedLeverageYieldStatusKey,
+    config?: RequestOverrideConfig,
+  ): Promise<Result<DetailedLeverageYieldStatus, LeverageYieldDetailedStatusError>> {
+    try {
+      const record = await this.backendApi.leverageYield.getSubmitTxStatus(
+        { txHash: params.srcTxHash, srcChainKey: params.srcChainKey },
+        config,
+      );
+
+      // `success: false` is the wire contract's "no record found", whatever `data` carries — `ok`
+      // only proves the request and schema succeeded.
+      if (record.ok && record.value.success && !isBackendSubmitTxAbandoned(record.value.data)) {
+        return { ok: true, value: { source: 'backend', data: record.value.data } };
+      }
+
+      // Did the backend *answer*? A record — even `success: false`, even abandoned — and a 404 are
+      // both definitive "nothing usable here". A 5xx or a transport failure is not: behind one we
+      // cannot tell a vault swap that will never resolve from a live one whose record we simply
+      // could not read. So a relay miss that follows an outage must stay an unbudgeted dependency
+      // failure, or a backend outage would stop the caller polling something still progressing.
+      const backendAnswered = record.ok || (isSodaxError(record.error) && record.error.context?.status === 404);
+
+      const dstTxHash = await this.resolveHubTxHash(params, backendAnswered);
+      if (!dstTxHash.ok) return dstTxHash;
+
+      // `this.resolveSolverStatus`, not `SolverApiService.getStatus` — the durable-intent reconcile
+      // on solver NOT_FOUND stays in one place. Bounded, because this read is polled.
+      const solver = await this.resolveSolverStatus(
+        { intent_tx_hash: dstTxHash.value },
+        DETAILED_STATUS_SOLVER_TIMEOUT_MS,
+      );
+      if (!solver.ok) {
+        return { ok: false, error: this.detailedStatusLookupFailed(solver.error, params.srcChainKey) };
+      }
+      return { ok: true, value: { source: 'solver', dstTxHash: dstTxHash.value, data: solver.value } };
+    } catch (error) {
+      // The relay client asserts on empty identifiers rather than returning a Result.
+      return { ok: false, error: this.detailedStatusLookupFailed(error, params.srcChainKey) };
+    }
+  }
+
+  /**
+   * The hub-chain tx hash the solver is keyed on. A hub-source vault swap has no relay leg — the
+   * source tx *is* the hub tx. Otherwise the delivered relay packet carries it, so an undelivered
+   * packet is simply "no hash yet".
+   */
+  private async resolveHubTxHash(
+    key: DetailedLeverageYieldStatusKey,
+    backendAnswered: boolean,
+  ): Promise<Result<Hex, LeverageYieldDetailedStatusError>> {
+    let hubTxHash: string = key.srcTxHash;
+
+    if (!isHubChainKeyType(key.srcChainKey)) {
+      const delivered = await resolveDeliveredPacket({
+        srcChainKey: key.srcChainKey,
+        srcTxHash: key.srcTxHash,
+        relayerApiEndpoint: this.config.relay.relayerApiEndpoint,
+        backendAnswered,
+      });
+      if (!delivered.ok) {
+        return {
+          ok: false,
+          error: this.detailedStatusLookupFailed(
+            delivered.cause,
+            key.srcChainKey,
+            delivered.budgetable ? DETAILED_STATUS_NOT_DELIVERED : undefined,
+          ),
+        };
+      }
+      hubTxHash = delivered.packet.dst_tx_hash;
+    }
+
+    // Validate rather than cast — this hash reaches the solver next.
+    if (isHex(hubTxHash)) return { ok: true, value: hubTxHash };
+    return {
+      ok: false,
+      error: this.detailedStatusLookupFailed(
+        new Error(`hub tx hash is not a hex string: ${hubTxHash}`),
+        key.srcChainKey,
+      ),
+    };
+  }
+
+  /**
+   * `reason` is set only for {@link DETAILED_STATUS_NOT_DELIVERED} — the miss a caller can bound
+   * with a retry budget. Leaving it off marks a dependency that is failing right now, which a
+   * caller should keep retrying rather than give up on.
+   */
+  private detailedStatusLookupFailed(
+    cause: unknown,
+    srcChainKey: SpokeChainKey,
+    reason?: string,
+  ): LeverageYieldDetailedStatusError {
+    return lookupFailed('leverageYield', 'getDetailedStatus', cause, {
+      srcChainKey,
+      action: 'vaultSwap' satisfies LeverageYieldAction,
+      reason,
+    });
   }
 
   /**
@@ -2884,7 +3129,9 @@ export class LeverageYieldService {
        * would also match any future non-EVM provider that happens to grow one.
        */
       if (params.walletProvider && isEvmWalletProviderType(params.walletProvider as IWalletProvider)) {
-        const receipt = await (params.walletProvider as IEvmWalletProvider).waitForTransactionReceipt(inner.value as Hex);
+        const receipt = await (params.walletProvider as IEvmWalletProvider).waitForTransactionReceipt(
+          inner.value as Hex,
+        );
         if (receipt.status !== 'success') {
           return { ok: false, error: approveFailed('leverageYield', 'transaction reverted', baseCtx) };
         }
