@@ -1,0 +1,21 @@
+---
+hidden: true
+title: "SodaxPay"
+icon:
+  name: "credit-card"
+  style: "regular"
+  library: "fontawesome"
+---
+
+🌐 [sodaxpay.vercel.app](http://sodaxpay.vercel.app)
+
+**What it is:** cross-network payment links. Someone sets a recipient wallet, a token they want, an amount. Anyone pays in any token on any network.
+
+| Piece | Why it mattered |
+| --- | --- |
+| `sodax.swaps.getQuote()` | Pricing the payer’s chosen token against the requested output |
+| `sodax.swaps.swap()` | The whole execution, one call |
+| `sodax.config.getSupportedSwapTokens()` | Building the 115+ token picker without hardcoding anything |
+| `@sodax/wallet-sdk-react` | Multi-ecosystem wallet connect |
+
+**The crucial bit:** the `dstAddress` field on `CreateIntentParams`. Because you can set a destination that is not the signer, the payer can swap and have the output land in someone else’s wallet. That single parameter is the entire product. Without it there is no payment link, just a swap.

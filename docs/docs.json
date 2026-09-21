@@ -236,7 +236,15 @@
       {
         "tab": "Community",
         "align": "end",
-        "pages": ["resources/index", "resources/product-updates", "resources/videos", "resources/blog"]
+        "pages": [
+          "resources/index",
+          "resources/product-updates",
+          "example-builds",
+          "example-buils/sodax-pay",
+          "example-builds/yield-pachinko",
+          "resources/videos",
+          "resources/blog"
+        ]
       },
       {
         "tab": "Help",

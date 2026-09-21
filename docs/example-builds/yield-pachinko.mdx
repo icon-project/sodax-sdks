@@ -1,0 +1,24 @@
+---
+hidden: true
+icon:
+  name: "sparkles"
+  style: "regular"
+  library: "fontawesome"
+title: "Yield Pachinko"
+---
+
+🌐 [yield-pachinko.vercel.app](http://yield-pachinko.vercel.app)
+
+**What it is:** no-loss game. Deposit USDC cross-network, keep the principal, the yield becomes pachinko balls.
+
+| Piece | Why it mattered |
+| --- | --- |
+| `sodax.moneyMarket.supply()` | The deposit. Cross-network USDC into the money market. |
+| `sodax.moneyMarket.withdraw()` | Principal back, any time. The “no-loss” promise. |
+| `useMMAllowance` | Money-market approval, which nests params one level deeper than the swap hooks |
+| `mutateAsyncSafe` on MM mutations | Returns `Result<T>` instead of throwing |
+| `SodaxProvider` → `QueryClient` → `SodaxWalletProvider` | Strict ordering, load-bearing |
+
+**The crucial bit:** the only one of these builds touching the **money market instead of swaps**. Same SDK, entirely different surface. It proves swaps are maybe half of what the thing does.
+
+**The gotcha you documented:** EVM connect does not go through the XConnector store. SODAX treats EVM as provider-managed with empty `defaultConnectors`, so `useXConnectors('EVM')` always returns `[]`. You drive connect with wagmi and let the EvmHydrator mirror the account into `useXAccount('EVM')`. Not obvious from the docs, found the hard way.
