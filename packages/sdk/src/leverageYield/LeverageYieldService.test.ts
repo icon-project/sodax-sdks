@@ -1923,6 +1923,19 @@ describe('LeverageYieldService.getDetailedStatus', () => {
     expect(result.value.data.status).toBe(SolverIntentStatusCode.NOT_FOUND);
   });
 
+  it('sends the per-request key to the solver leg too, not just the backend read', async () => {
+    // One override should key the whole call; a caller passing a key for the record read and
+    // silently getting the instance key on the solver read is the surprise this guards.
+    backendFails('not found', 404);
+    packets(delivered);
+    solverSays(SolverIntentStatusCode.SOLVED, '0xfill');
+
+    await sodaxDS.leverageYield.getDetailedStatus(key, { apiKey: 'per-action-key' });
+
+    // SolverApiService.getStatus takes the api key as its 5th argument.
+    expect(mocks.solverGetStatus.mock.calls[0]?.[4]).toBe('per-action-key');
+  });
+
   it.each([401, 403])('treats a rejected API key as terminal instead of degrading (%i)', async status => {
     backendFails('rejected', status);
 

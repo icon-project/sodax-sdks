@@ -354,8 +354,9 @@ nature — a vault swap still in flight and one whose tx never relayed look iden
 failure a caller should bound with a retry budget. Every other one is a dependency failing right now
 (relay 5xx, solver down), so keep retrying until it recovers.
 
-Takes an optional second argument, a `RequestOverrideConfig`, for a per-request API key on the backend
-read. The relay leg is unauthenticated; the solver leg uses the configured key.
+Takes an optional second argument, a `RequestOverrideConfig`. Its `apiKey` reaches every
+authenticated leg — the backend record read and the solver read — so one override keys the whole
+call. The relay leg is unauthenticated and takes none.
 
 A point-in-time read — poll it yourself, or use `@sodax/dapp-kit`'s `useLeverageYieldDetailedStatus`.
 

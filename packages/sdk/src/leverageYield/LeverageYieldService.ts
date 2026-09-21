@@ -175,26 +175,14 @@ const leveragePositionAbi = parseAbi([
 const INTENT_DEADLINE_BUFFER_SECONDS = 5 * 60;
 
 /**
- * Ceiling for the durable-record lookup behind {@link LeverageYieldService.getIntentStatus} and
- * {@link LeverageYieldService.getDetailedStatus}. A status read is polled on a short interval, so
- * its secondary lookup must not inherit the much longer default request budget. Same value and
- * reasoning as `SwapService`'s.
+ * Budgets for the two secondary reads behind {@link LeverageYieldService.getDetailedStatus}: a
+ * polled status read must not inherit the much longer default request budget. Same values and same
+ * reasoning as `SwapService`'s pair, which documents it at length — including why the relay leg
+ * keeps its own, longer budget instead of sharing this one.
+ *
+ * Worst case for one call is the sum of its legs, not either number.
  */
 const RECONCILE_TIMEOUT_MS = 5_000;
-
-/**
- * Budget for the solver status call behind {@link LeverageYieldService.getDetailedStatus}. Same
- * reasoning as {@link RECONCILE_TIMEOUT_MS}: a polled read must not inherit the 30s backend default.
- *
- * The relay leg does **not** share this value — `resolveDeliveredPacket` takes the relay module's
- * own per-request budget, which is three times this one, so imposing 5s there would abort reads
- * that succeed today. A budget that expires is untagged, which keeps the caller polling; a relay
- * slower than the budget would therefore never resolve and never surface an error.
- *
- * Worst case for one `getDetailedStatus` call is the sum of its legs, not this number: the backend
- * record's own request budget, then the relay's, then this, plus a further
- * {@link RECONCILE_TIMEOUT_MS} when a solver `NOT_FOUND` falls through to the reconcile.
- */
 const DETAILED_STATUS_SOLVER_TIMEOUT_MS = 5_000;
 
 /**
@@ -1581,8 +1569,16 @@ export class LeverageYieldService {
   private async solverStatus(
     request: SolverIntentStatusRequest,
     timeoutMs?: number,
+    apiKey?: string,
   ): Promise<Result<SolverIntentStatusResponse, SolverErrorResponse>> {
-    return SolverApiService.getStatus(request, this.config.solver, this.config.logger, timeoutMs, this.config.apiKey);
+    // Empty string counts as unset, matching how `overrideConfig.apiKey` resolves on the backend legs.
+    return SolverApiService.getStatus(
+      request,
+      this.config.solver,
+      this.config.logger,
+      timeoutMs,
+      apiKey || this.config.apiKey,
+    );
   }
 
   /**
@@ -1598,8 +1594,9 @@ export class LeverageYieldService {
   private async resolveSolverStatus(
     request: SolverIntentStatusRequest,
     timeoutMs?: number,
+    apiKey?: string,
   ): Promise<Result<SolverIntentStatusResponse, SolverErrorResponse>> {
-    const solverResult = await this.solverStatus(request, timeoutMs);
+    const solverResult = await this.solverStatus(request, timeoutMs, apiKey);
     const forgotten = !solverResult.ok || solverResult.value.status === SolverIntentStatusCode.NOT_FOUND;
     if (!forgotten) return solverResult;
 
@@ -1667,8 +1664,9 @@ export class LeverageYieldService {
    * A point-in-time read; poll it yourself, or use dapp-kit's `useLeverageYieldDetailedStatus`.
    *
    * @param params - `srcChainKey` and `srcTxHash` of the source-chain vault-swap transaction.
-   * @param config - Optional per-request override for the backend read (e.g. a per-action API key).
-   *   The relay leg is unauthenticated and takes none; the solver leg uses the configured key.
+   * @param config - Optional per-request override. Its `apiKey` reaches every authenticated leg —
+   *   the backend read and the solver read — so one override keys the whole call. The relay leg is
+   *   unauthenticated and takes none.
    * @returns A `Result` containing a {@link DetailedLeverageYieldStatus}. Fails with `LOOKUP_FAILED`
    *   when no source can answer yet. Branch on `error.context.reason`:
    *   `DETAILED_STATUS_NOT_DELIVERED` is the ambiguous miss a caller should bound with a retry
@@ -1715,6 +1713,7 @@ export class LeverageYieldService {
       const solver = await this.resolveSolverStatus(
         { intent_tx_hash: dstTxHash.value },
         DETAILED_STATUS_SOLVER_TIMEOUT_MS,
+        config?.apiKey,
       );
       if (!solver.ok) {
         return { ok: false, error: this.detailedStatusLookupFailed(solver.error, params.srcChainKey) };
