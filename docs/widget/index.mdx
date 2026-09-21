@@ -104,8 +104,9 @@ Three panels, with a live preview beside them that is a real iframe, not a mock.
 
 ## Embed it
 
-Both snippets are what the **Integrate** panel generates, already carrying whatever you configured.
-The listener is optional; the `<iframe>` alone works.
+Both snippets are what the **Integrate** panel generates, already carrying whatever you configured —
+minus the panel's inline comments, which this page covers in prose. The listener is optional; the
+`<iframe>` alone works.
 
 <CodeGroup>
 
@@ -131,7 +132,7 @@ The listener is optional; the `<iframe>` alone works.
       if (data.type === 'sodax:swap' && ['started', 'submitted', 'completed', 'failed'].includes(data.status)) {
         frame.dispatchEvent(new CustomEvent('sodax:swap', { detail: { status: data.status } }));
       }
-      if (data.type === 'sodax:resize' && typeof data.height === 'number' && Number.isFinite(data.height)) {
+      if (data.type === 'sodax:resize' && 'height' in data && typeof data.height === 'number' && Number.isFinite(data.height)) {
         frame.height = String(Math.max(760, Math.min(1600, data.height)));
       }
     });
@@ -145,28 +146,25 @@ import { useEffect, useRef } from 'react';
 type SwapStatus = 'started' | 'submitted' | 'completed' | 'failed';
 type SodaxSwapWidgetProps = { src?: string; height?: number; onSwapStatus?: (status: SwapStatus) => void };
 
-export function SodaxSwapWidget({
-  src = 'https://widget.sodax.com/?embed=1',
-  height = 760,
-  onSwapStatus,
-}: SodaxSwapWidgetProps) {
+export function SodaxSwapWidget({ src = 'https://widget.sodax.com/?embed=1', height = 760, onSwapStatus }: SodaxSwapWidgetProps) {
   const frame = useRef<HTMLIFrameElement>(null);
-
   useEffect(() => {
     const onMessage = (event: MessageEvent<unknown>) => {
       const element = frame.current;
-      if (!element || event.source !== element.contentWindow) return;
-      if (event.origin !== new URL(src).origin) return;
-      const data = event.data as { type?: string; status?: SwapStatus; height?: number };
-      if (data?.type === 'sodax:swap' && data.status) onSwapStatus?.(data.status);
-      if (data?.type === 'sodax:resize' && typeof data.height === 'number') {
-        element.style.height = `${Math.max(760, Math.min(1600, data.height))}px`;
+      if (!element || event.source !== element.contentWindow || event.origin !== new URL(src).origin) return;
+      const data = event.data;
+      if (!data || typeof data !== 'object' || !('type' in data)) return;
+      const status = 'status' in data ? data.status : undefined;
+      if (data.type === 'sodax:swap' && (status === 'started' || status === 'submitted' || status === 'completed' || status === 'failed')) {
+        onSwapStatus?.(status);
+      }
+      if (data.type === 'sodax:resize' && 'height' in data && typeof data.height === 'number' && Number.isFinite(data.height)) {
+        element.style.height = String(Math.max(760, Math.min(1600, data.height))) + 'px';
       }
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
   }, [src, onSwapStatus]);
-
   return (
     <iframe
       ref={frame}
