@@ -41,6 +41,8 @@ import {
 import { keccak256, stringToBytes } from 'viem';
 import { Sodax } from '../shared/entities/Sodax.js';
 import { isSodaxError, SodaxError } from '../errors/SodaxError.js';
+import { isAuthFailure } from '../errors/guards.js';
+import { invariant } from '../shared/utils/tiny-invariant.js';
 import { adjustAmountByFee, encodeAddress } from '../shared/utils/shared-utils.js';
 import { HttpRelayError, RELAY_FALLBACK_FLOOR_MS } from '../shared/services/intentRelay/IntentRelayApiService.js';
 
@@ -2215,6 +2217,38 @@ describe('SwapService.getDetailedStatus', () => {
 
     expect(!result.ok && isSodaxError(result.error) && result.error.code).toBe('LOOKUP_FAILED');
     expect(mocks.solverGetStatus).not.toHaveBeenCalled();
+  });
+
+  // A rejected key is a configuration problem, not a source with nothing to say. Degrading to the
+  // relay would bury it behind a relay error and leave `useDetailedStatus` polling a request only a
+  // corrected key can satisfy — the miss behind an unanswered backend is never budgetable, so no
+  // budget would ever stop it. The bridge sibling applies the same rule.
+  it.each([401, 403])('treats a rejected API key as terminal instead of degrading (%i)', async status => {
+    backendFails('rejected', status);
+
+    const result = await sodax.swaps.getDetailedStatus(key);
+
+    expect(result.ok).toBe(false);
+    invariant(!result.ok, 'expected LOOKUP_FAILED');
+    expect(result.error.code).toBe('LOOKUP_FAILED');
+    // Lifted so `isAuthFailure` recognises the wrapped error — it reads `context.status` only.
+    expect(result.error.context?.status).toBe(status);
+    expect(isAuthFailure(result.error)).toBe(true);
+    expect(result.error.context?.reason).toBeUndefined();
+    expect(mocks.getTransactionPackets).not.toHaveBeenCalled();
+    expect(mocks.solverGetStatus).not.toHaveBeenCalled();
+  });
+
+  // 503 is the transient key-verification failure, which must keep routing on rather than surfacing.
+  it('routes a 503 on to the solver rather than treating it as a rejected key', async () => {
+    backendErrors(503);
+    packets(delivered);
+    solverSays(SolverIntentStatusCode.SOLVED, '0xfill');
+
+    const result = await sodax.swaps.getDetailedStatus(key);
+
+    invariant(result.ok, 'expected the solver to answer');
+    expect(result.value.source).toBe('solver');
   });
 
   // dapp-kit reads this tag across the package boundary to tell an ambiguous miss (budget it) from a

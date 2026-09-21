@@ -20,6 +20,10 @@ sodax.bridge.approve<K, Raw>(args): Promise<Result<TxReturnType<K, Raw>, SodaxEr
 sodax.bridge.buildApproveTxs<K>(action: BridgeParams<K, true>): Promise<Result<ApprovalTxs<K>, SodaxError>>;
 sodax.bridge.isAllowanceValid<K, Raw>(args): Promise<Result<boolean, SodaxError>>;
 
+// Routes from the source tx to whichever source can answer — the backend record while it is in
+// play, else the delivered relay packet. Covers a bridge the client-side fallback completed.
+sodax.bridge.getDetailedStatus({ srcChainKey, srcTxHash }, config?): Promise<Result<DetailedBridgeStatus, SodaxError>>;
+
 sodax.bridge.getBridgeableAmount(from: XToken, to: XToken): Promise<Result<BridgeLimit, SodaxError>>;
 sodax.bridge.getBridgeableTokens(from: SpokeChainKey, to: SpokeChainKey, token: string): Result<XToken[], SodaxError>;
 // Plus the sync helpers:

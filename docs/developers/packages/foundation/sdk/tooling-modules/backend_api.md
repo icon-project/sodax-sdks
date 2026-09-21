@@ -360,9 +360,9 @@ the same split as `sodax.api.swaps` over `@sodax/swaps-api` — so the wire beha
   The `@sodax/dapp-kit` backend hooks default to three React Query retries, which is four executions of a
   query — against three wire attempts each, a persistently failing idempotent endpoint can cost up to 12
   requests before the error surfaces. A terminal API-key rejection (401/403) is never replayed at the wire
-  level, and the `swapsApi` hooks stop retrying it at the query level too (`retryUnlessAuthFailure`); the
-  `bridgeApi` hooks still spend their full `retry: 3`. Lower either with `queryOptions.retry` (or
-  `mutationOptions.retry`) when you want a tighter ceiling.
+  level, and the `swapsApi`, `leverageYieldApi` and `bridgeApi` hooks stop retrying it at the query level
+  too (`retryUnlessAuthFailure`). Lower either with `queryOptions.retry` (or `mutationOptions.retry`) when
+  you want a tighter ceiling.
 
 ## Leverage Yield Endpoints
 

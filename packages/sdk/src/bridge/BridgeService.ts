@@ -28,8 +28,15 @@ import {
 } from '../shared/index.js';
 import type { IntentTxResult, TxHashPair } from '../shared/types/types.js';
 import type { ApprovalTxs } from '../shared/types/spoke-types.js';
-import type { BackendApiService } from '../backendApi/index.js';
+import type { BackendApiService, RequestOverrideConfig } from '../backendApi/index.js';
 import { runBackendSubmitTx } from '../backendApi/runBackendSubmitTx.js';
+import {
+  DETAILED_STATUS_NOT_DELIVERED,
+  isBackendSubmitTxAbandoned,
+  resolveDeliveredPacket,
+} from '../backendApi/detailedStatusRouting.js';
+import { isAuthFailure, isSodaxError } from '../errors/guards.js';
+import type { DetailedBridgeStatus, DetailedBridgeStatusKey } from './detailedStatus.js';
 import { createSubmitTxAttempt, type SubmitTxAttempt } from '../backendApi/submitTxAttempt.js';
 import { resolveTimeoutMs } from '../shared/utils/resolveTimeoutMs.js';
 import {
@@ -71,6 +78,7 @@ import {
   type BridgeAllowanceCheckError,
   type BridgeApproveError,
   type BridgeCreateIntentError,
+  type BridgeDetailedStatusError,
   type BridgeLookupError,
   type BridgeOrchestrationError,
   bridgeInvariant,
@@ -972,6 +980,99 @@ export class BridgeService {
       );
     }
     return encodeContractCalls(calls);
+  }
+
+  /**
+   * Answers "what is the status of this bridge?" from the **source-chain** tx — the one identifier a
+   * caller always holds. It does not define a new status: it routes to whichever of the two existing
+   * sources can answer, and returns that source's payload unmodified.
+   *
+   * `sodax.api.bridge.getSubmitTxStatus` cannot answer for every bridge. Sometimes there is no
+   * record — `useBackendSubmitTx: false`, or the submit itself never landed. More often the record
+   * exists but is stale: the backend path POSTs the tx first and only falls back to the client-side
+   * relay once that stalls, so a fallback-completed bridge leaves behind whatever state the backend
+   * last reached, including a record it abandoned outright. Neither shape reflects what happened.
+   *
+   * 1. Read the backend record; return it while it is still in play.
+   * 2. Otherwise return the delivered relay packet, which is terminal by construction.
+   *
+   * A rejected API key is the one failure that does **not** fall through to step 2: the status route
+   * is key-guarded, so degrading would bury a 401/403 behind a relay error and leave a poller
+   * retrying a request only a corrected key can satisfy. It surfaces with `context.status` instead,
+   * which is what `isAuthFailure` reads.
+   *
+   * A point-in-time read; poll it yourself, or use dapp-kit's `useBridgeDetailedStatus`.
+   *
+   * @param params - `srcChainKey` and `srcTxHash` of the source-chain bridge transaction.
+   * @param config - Optional per-request override for the backend read (e.g. a per-action API key).
+   *   The relay leg is unauthenticated and takes none.
+   * @returns A `Result` containing a {@link DetailedBridgeStatus}. Fails with `LOOKUP_FAILED` when no
+   *   source can answer yet — usually the relay has not delivered the packet. Branch on
+   *   `error.context.reason`: `DETAILED_STATUS_NOT_DELIVERED` is the ambiguous miss a caller should
+   *   bound with a retry budget; anything else is a dependency failing right now, so keep retrying.
+   */
+  public async getDetailedStatus(
+    params: DetailedBridgeStatusKey,
+    config?: RequestOverrideConfig,
+  ): Promise<Result<DetailedBridgeStatus, BridgeDetailedStatusError>> {
+    try {
+      const record = await this.backendApi.bridge.getSubmitTxStatus(
+        { txHash: params.srcTxHash, srcChainKey: params.srcChainKey },
+        config,
+      );
+
+      // `success: false` is the wire contract's "no record found", whatever `data` carries — `ok`
+      // only proves the request and schema succeeded.
+      if (record.ok && record.value.success && !isBackendSubmitTxAbandoned(record.value.data)) {
+        return { ok: true, value: { source: 'backend', data: record.value.data } };
+      }
+
+      if (!record.ok && isSodaxError(record.error) && isAuthFailure(record.error)) {
+        return {
+          ok: false,
+          error: this.detailedStatusLookupFailed(record.error, params.srcChainKey, {
+            status: record.error.context?.status,
+          }),
+        };
+      }
+
+      // Did the backend *answer*? A record — even `success: false`, even abandoned — and a 404 are
+      // both definitive "nothing usable here". A 5xx or a transport failure is not: behind one we
+      // cannot tell a bridge that will never resolve from a live one whose record we could not read.
+      const backendAnswered = record.ok || (isSodaxError(record.error) && record.error.context?.status === 404);
+
+      const delivered = await resolveDeliveredPacket({
+        srcChainKey: params.srcChainKey,
+        srcTxHash: params.srcTxHash,
+        relayerApiEndpoint: this.config.relay.relayerApiEndpoint,
+        backendAnswered,
+      });
+      if (!delivered.ok) {
+        return {
+          ok: false,
+          error: this.detailedStatusLookupFailed(delivered.cause, params.srcChainKey, {
+            reason: delivered.budgetable ? DETAILED_STATUS_NOT_DELIVERED : undefined,
+          }),
+        };
+      }
+      return { ok: true, value: { source: 'relay', data: delivered.packet } };
+    } catch (error) {
+      // The relay client asserts on empty identifiers rather than returning a Result.
+      return { ok: false, error: this.detailedStatusLookupFailed(error, params.srcChainKey) };
+    }
+  }
+
+  /**
+   * `reason` is set only for {@link DETAILED_STATUS_NOT_DELIVERED} — the miss a caller can bound with
+   * a retry budget. `status` is lifted for a rejected key so `isAuthFailure` recognises the wrapped
+   * error; it reads `context.status` and does not walk the cause chain.
+   */
+  private detailedStatusLookupFailed(
+    cause: unknown,
+    srcChainKey: SpokeChainKey,
+    extra?: { reason?: string; status?: number },
+  ): BridgeDetailedStatusError {
+    return lookupFailed('bridge', 'getDetailedStatus', cause, { srcChainKey, action: 'bridge', ...extra });
   }
 
   /**

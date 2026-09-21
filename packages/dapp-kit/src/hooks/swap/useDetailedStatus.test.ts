@@ -4,6 +4,7 @@ import {
   advanceNotFoundStreak,
   getDetailedStatusRefetchInterval,
   INITIAL_NOT_FOUND_STREAK,
+  isSolverNotFound,
   MAX_NOT_FOUND_POLLS,
   STATUS_POLL_MS,
   toNotFoundBudgetRead,
@@ -48,16 +49,26 @@ const outage = {
   error: new SodaxError('LOOKUP_FAILED', 'relay down', { feature: 'swap' }),
 };
 
+/** A key the backend rejected. Terminal, and reached before any budget — see the stop below. */
+const rejectedKey = {
+  ok: false as const,
+  error: new SodaxError('LOOKUP_FAILED', 'rejected', { feature: 'swap', context: { status: 401 } }),
+};
+
 const KEY_A = 'arb:0xaaa';
 const KEY_B = 'arb:0xbbb';
 
 /** Drives the streak the way the hook does, one query update per call. */
 const advance = (
   state: typeof INITIAL_NOT_FOUND_STREAK,
-  reads: (ReturnType<typeof ok> | typeof notDelivered | typeof outage)[],
+  reads: (ReturnType<typeof ok> | typeof notDelivered | typeof outage | typeof rejectedKey)[],
   key = KEY_A,
   from = 1,
-) => reads.reduce((acc, read, i) => advanceNotFoundStreak(acc, key, toNotFoundBudgetRead(read), from + i), state);
+) =>
+  reads.reduce(
+    (acc, read, i) => advanceNotFoundStreak(acc, key, isSolverNotFound(toNotFoundBudgetRead(read)), from + i),
+    state,
+  );
 
 describe('getDetailedStatusRefetchInterval', () => {
   // Both terminal states of the `SubmitSwapTxStatusV2` wire contract. `'failed'` is unreachable via
@@ -112,6 +123,35 @@ describe('getDetailedStatusRefetchInterval', () => {
 
   it('keeps polling before the first read lands', () => {
     expect(getDetailedStatusRefetchInterval(undefined, 0)).toBe(STATUS_POLL_MS);
+  });
+
+  // Only a corrected key changes the answer, so there is nothing to wait for and no budget to spend.
+  it.each([401, 403])('stops on a rejected API key at the first read (%i)', status => {
+    const rejected = {
+      ok: false as const,
+      error: new SodaxError('LOOKUP_FAILED', 'rejected', { feature: 'swap', context: { status } }),
+    };
+    expect(getDetailedStatusRefetchInterval(rejected, 0)).toBe(false);
+  });
+
+  // The regression this guards: a rejected key leaves the backend unanswered, so a relay miss behind
+  // it is unprovable and never tagged `DETAILED_STATUS_NOT_DELIVERED`. Without its own stop the read
+  // would poll both endpoints forever, because the budget it would need to exhaust never advances.
+  it('stops a rejected key even though the not-delivered budget never advances', () => {
+    expect(advance(INITIAL_NOT_FOUND_STREAK, Array(MAX_NOT_FOUND_POLLS).fill(rejectedKey)).consecutiveNotFound).toBe(0);
+    expect(getDetailedStatusRefetchInterval(rejectedKey, 0)).toBe(false);
+  });
+
+  // 503 is the transient key-verification failure, which is retried rather than surfaced.
+  it('keeps polling a 503 from the key-verification path', () => {
+    const unavailable = {
+      ok: false as const,
+      error: new SodaxError('LOOKUP_FAILED', 'verification unavailable', {
+        feature: 'swap',
+        context: { status: 503 },
+      }),
+    };
+    expect(getDetailedStatusRefetchInterval(unavailable, MAX_NOT_FOUND_POLLS)).toBe(STATUS_POLL_MS);
   });
 });
 
