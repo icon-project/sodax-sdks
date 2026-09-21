@@ -246,11 +246,11 @@ console.log({ swap, isError, error, swapsInFlight });
 
 ### Token list has duplicate addresses
 
-`getSupportedSolverTokens()` can return multiple tokens sharing the same contract address (same token on different chains). When rendering token lists, use a composite key like `${token.address}-${token.blockchain_id}` — not `token.address` alone.
+`sodax.swaps.getSupportedSwapTokens()` returns `Record<SpokeChainKey, readonly XToken[]>`. Flattening it (e.g. `Object.values(...).flat()`) yields multiple tokens sharing the same contract address (same token on different chains). When rendering token lists, use a composite key like `${token.address}-${token.chainKey}` — not `token.address` alone. (`XToken` carries `chainKey`; there is no `blockchain_id` field.)
 
 ### Balance display
 
-Balances come from `@sodax/wallet-sdk-react`, not from dapp-kit. See `wallet-connectivity.md` for `useXBalances`.
+Two options, both in dapp-kit: `useBalances` (SDK-backed, needs only a `SodaxProvider`) or `useXBalances` (wallet-layer, needs an `xService` from `@sodax/wallet-sdk-react`). See `wallet-connectivity.md`.
 
 ## Types
 

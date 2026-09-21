@@ -7,9 +7,9 @@ Pair: [`features/bridge.md`](../../../integration/knowledge/features/bridge.md).
 ## TL;DR
 
 1. **Drop `spokeProvider`. Pass `walletProvider` directly.**
-2. **Add `srcChainKey` + `srcAddress` to `CreateBridgeParams<K>`.** Generic added.
+2. **Add `srcChainKey` + `srcAddress` to `CreateBridgeIntentParams<K>`.** Generic added.
 3. **`bridge()` returns `Result<TxHashPair>`.** v1 returned a single `string` tx hash; v2 returns `{ srcChainTxHash, dstChainTxHash }` (the spoke + hub tx hashes) wrapped in `Result`.
-4. **`createBridgeIntent()` is spoke-only — no relay.** Same shape as the swap `createIntent`: returns `{ tx, intent, relayData }` for the spoke transaction. Useful when you need manual relay control.
+4. **`createBridgeIntent()` is spoke-only — no relay.** Same shape as the swap `createIntent`: returns `IntentTxResult<K, Raw> = { tx, relayData }` for the spoke transaction. Useful when you need manual relay control.
 5. **Read methods reshaped.** `getBridgeableAmount` returns `Promise<Result<BridgeLimit>>` (was `Promise<bigint>`) and now takes two `XToken` objects. `getBridgeableTokens` is synchronous (was async) and takes `(from, to, token)`.
 6. **Errors → `SodaxError` + `Result<T>`.** v1's `BridgeError<BridgeErrorCode>` is gone.
 
@@ -72,7 +72,7 @@ Pair: [`features/bridge.md`](../../../integration/knowledge/features/bridge.md).
 - await sodax.bridge.createBridgeIntent({ params, spokeProvider });
 + const result = await sodax.bridge.createBridgeIntent({ params, raw: false, walletProvider });
 + if (!result.ok) return;
-+ const { tx, intent, relayData } = result.value;
++ const { tx, relayData } = result.value;
 + // Submit relayData.payload via your custom relay if needed.
 ```
 
@@ -92,13 +92,13 @@ Standard pattern:
 
 ```ts
 await sodax.bridge.approve({
-  params: { srcChainKey, srcAddress, srcAsset, amount },
+  params: { srcChainKey, srcAddress, srcToken, amount },
   raw: false,
   walletProvider,
 });
 
 const allowed = await sodax.bridge.isAllowanceValid({
-  params: { srcChainKey, srcAddress, srcAsset, amount },
+  params: { srcChainKey, srcAddress, srcToken, amount },
   raw: true,    // read-only
 });
 ```

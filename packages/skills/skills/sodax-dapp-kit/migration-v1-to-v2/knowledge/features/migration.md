@@ -117,4 +117,4 @@ The biggest single API change in dapp-kit v2: v1 had a single `useMigrate(spokeP
 
 - [`features/migration.md`](../../../integration/knowledge/features/migration.md) — v2 reference.
 - [`recipes/migration.md`](../../../integration/knowledge/recipes/migration.md) — full v2 worked examples (ICX, BALN, bnUSD, revert).
-- `sodax-sdk`: `migration-v1-to-v2/knowledge/features/icx-bnusd-baln.md` — underlying SDK migration migration.
+- `sodax-sdk`: `migration-v1-to-v2/knowledge/features/migration.md` — underlying SDK migration migration.

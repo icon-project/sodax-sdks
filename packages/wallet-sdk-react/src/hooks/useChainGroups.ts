@@ -45,9 +45,7 @@ export function buildChainGroups(
   registry: Record<string, ChainServiceFactory> = chainRegistry,
   order?: readonly ChainType[],
 ): ChainGroup[] {
-  const chains = order
-    ? [...enabledChains].sort((a, b) => compareChainByOrder(a, b, order))
-    : enabledChains;
+  const chains = order ? [...enabledChains].sort((a, b) => compareChainByOrder(a, b, order)) : enabledChains;
 
   return chains.map(chainType => {
     const factory = registry[chainType];

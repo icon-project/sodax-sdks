@@ -1,7 +1,7 @@
 // apps/demo/src/components/dex/PoolInformation.tsx
 import React, { type JSX } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import type { PoolData } from '@sodax/sdk';
+import type { PoolData } from '@sodax/dapp-kit';
 
 interface PoolInformationProps {
   poolData: PoolData | null;

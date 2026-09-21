@@ -44,6 +44,11 @@ export interface FTTransferCallArgs {
   msg?: string;
 }
 
+export interface StorageDepositArgs {
+  account_id: string;
+  registration_only?: boolean;
+}
+
 export interface NearTransferArgs {
   to: Array<number>;
   amount: string;
@@ -66,6 +71,7 @@ export type ContractArgs =
   | InitArgs
   | SetHubConfig
   | FTTransferCallArgs
+  | StorageDepositArgs
   | NearTransferArgs
   | SendMsgArgs
   | FillIntentArgs;

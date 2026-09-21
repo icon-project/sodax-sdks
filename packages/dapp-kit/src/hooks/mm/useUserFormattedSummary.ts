@@ -2,6 +2,7 @@ import type { FormatReserveUSDResponse, FormatUserSummaryResponse } from '@sodax
 import type { SpokeChainKey } from '@sodax/sdk';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
+import { resolveBtcReadAddress } from '../bitcoin/resolveBtcReadAddress.js';
 import type { ReadHookParams } from '../shared/types.js';
 
 export type UseUserFormattedSummaryParams = ReadHookParams<
@@ -36,7 +37,10 @@ export function useUserFormattedSummary({
 
       const [reserves, userReserves] = await Promise.all([
         sodax.moneyMarket.data.getReservesHumanized(),
-        sodax.moneyMarket.data.getUserReservesHumanized(spokeChainKey, userAddress),
+        sodax.moneyMarket.data.getUserReservesHumanized(
+          spokeChainKey,
+          resolveBtcReadAddress(spokeChainKey, userAddress),
+        ),
       ]);
       const formattedReserves = sodax.moneyMarket.data.formatReservesUSD(
         sodax.moneyMarket.data.buildReserveDataWithPrice(reserves),

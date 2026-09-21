@@ -1,9 +1,10 @@
 # Error codes
 
-All 13 codes the SDK can emit. Each error is `SodaxError<C>` where `C` is one of these. The producing feature is on `error.feature`.
+All 14 codes the SDK can emit. Each error is `SodaxError<C>` where `C` is one of these. The producing feature is on `error.feature`.
 
 | Code | Meaning | Common `error.context` fields | Retry advice |
 |---|---|---|---|
+| `USER_REJECTED` | User cancelled the wallet prompt (signing / approval / connection). Classified at the source by `intentCreationFailed` / `approveFailed` wrappers via a built-in detector that recognises viem `4001` / `UserRejectedRequestError`, ICON Hana `CANCEL_SIGNING` / `-31002`, and name + message patterns from Solana / Sui / Stellar / Stacks / NEAR / Injective wallets. | `phase` (set to whichever phase the wrapper was wrapping: `'intentCreation'` or `'approve'`), `action` | No — user-initiated. Render a "Cancelled" UI, not a failure. |
 | `VALIDATION_FAILED` | Pre-flight invariant tripped (input shape, unsupported chain, etc.). | `field`, `reason`, `phase: 'validate'` | No — fix the input. |
 | `INTENT_CREATION_FAILED` | Building the intent / payload failed. | `phase: 'intentCreation'`, `action` | Sometimes — depends on root cause (`error.cause`). |
 | `EXECUTION_FAILED` | Orchestrator-level catch-all (multi-step op didn't complete). | `action`, `phase: 'execution'` or `'postExecution'` | Sometimes — inspect cause. |
@@ -29,7 +30,9 @@ type SodaxFeature =
   | 'migration'
   | 'dex'
   | 'partner'
-  | 'recovery';
+  | 'recovery'
+  | 'backend' // HTTP-client layer (BackendApiService / SwapsApiService) — not a domain feature
+  | 'leverageYield';
 ```
 
 The `(feature, code)` pair is the canonical discriminator. Loggers tag both fields; switch statements branch on both.
@@ -75,10 +78,10 @@ Narrow code unions per public method. Use these for exhaustive `switch` discrimi
 
 ```ts
 // 'create*Intent' methods
-type CreateIntentErrorCode = 'VALIDATION_FAILED' | 'INTENT_CREATION_FAILED' | 'UNKNOWN';
+type CreateIntentErrorCode = 'USER_REJECTED' | 'VALIDATION_FAILED' | 'INTENT_CREATION_FAILED' | 'UNKNOWN';
 
 // 'approve' methods
-type ApproveErrorCode = 'VALIDATION_FAILED' | 'APPROVE_FAILED' | 'UNKNOWN';
+type ApproveErrorCode = 'USER_REJECTED' | 'VALIDATION_FAILED' | 'APPROVE_FAILED' | 'UNKNOWN';
 
 // 'isAllowanceValid' methods
 type AllowanceCheckErrorCode = 'VALIDATION_FAILED' | 'ALLOWANCE_CHECK_FAILED' | 'UNKNOWN';
@@ -95,7 +98,7 @@ type LookupErrorCode = 'VALIDATION_FAILED' | 'LOOKUP_FAILED' | 'UNKNOWN';
 | Method | Narrow code union |
 |---|---|
 | `createIntent` | `CreateIntentErrorCode` |
-| `swap` | All of {`VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `EXECUTION_FAILED`, `TX_VERIFICATION_FAILED`, `TX_SUBMIT_FAILED`, `RELAY_TIMEOUT`, `RELAY_FAILED`, `EXTERNAL_API_ERROR`, `UNKNOWN`} |
+| `swap` | All of {`USER_REJECTED`, `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `EXECUTION_FAILED`, `TX_VERIFICATION_FAILED`, `TX_SUBMIT_FAILED`, `RELAY_TIMEOUT`, `RELAY_FAILED`, `EXTERNAL_API_ERROR`, `UNKNOWN`} |
 | `postExecution` | `EXECUTION_FAILED \| EXTERNAL_API_ERROR \| UNKNOWN` (with `phase: 'postExecution'`) |
 | `createLimitOrder`, `createLimitOrderIntent` | `CreateIntentErrorCode` |
 | `cancelIntent`, `cancelLimitOrder` | `EXECUTION_FAILED \| VALIDATION_FAILED \| UNKNOWN` |
@@ -104,12 +107,12 @@ type LookupErrorCode = 'VALIDATION_FAILED' | 'LOOKUP_FAILED' | 'UNKNOWN';
 
 | Method | Narrow code union |
 |---|---|
-| `supply`, `borrow`, `withdraw`, `repay` | `VALIDATION_FAILED \| INTENT_CREATION_FAILED \| EXECUTION_FAILED \| TX_VERIFICATION_FAILED \| TX_SUBMIT_FAILED \| RELAY_TIMEOUT \| RELAY_FAILED \| UNKNOWN` (with `action` discriminator) |
+| `supply`, `borrow`, `withdraw`, `repay` | `USER_REJECTED \| VALIDATION_FAILED \| INTENT_CREATION_FAILED \| EXECUTION_FAILED \| TX_VERIFICATION_FAILED \| TX_SUBMIT_FAILED \| RELAY_TIMEOUT \| RELAY_FAILED \| UNKNOWN` (with `action` discriminator) |
 | `createSupplyIntent`, `createBorrowIntent`, `createWithdrawIntent`, `createRepayIntent` | `CreateIntentErrorCode` |
 | `approve` | `ApproveErrorCode` |
 | `isAllowanceValid` | `AllowanceCheckErrorCode` |
 | `estimateGas` | `GasEstimationErrorCode` |
-| Read-only methods (reserves, user data, etc.) | `LookupErrorCode` |
+| Read methods (`sodax.moneyMarket.data.*` — reserves, user data, aToken balances) | throw on failure (bare `Promise<T>`, **not** a `Result`) — wrap in try/catch |
 
 ### Staking (`feature: 'staking'`)
 
@@ -150,11 +153,31 @@ type LookupErrorCode = 'VALIDATION_FAILED' | 'LOOKUP_FAILED' | 'UNKNOWN';
 | `createXxxIntent` (4 of these) | `CreateIntentErrorCode` |
 | `approve` | `ApproveErrorCode` |
 | `isAllowanceValid` | `AllowanceCheckErrorCode` |
-| `getAvailableAmount` | `LookupErrorCode` |
+
+> `getAvailableAmount` is **not** a public `MigrationService` method — it's an internal `icxMigration` sub-service helper, so it carries no public narrow code union.
 
 ### Partner (`feature: 'partner'`) and Recovery (`feature: 'recovery'`)
 
-Both follow the same shape: action methods get the full exec union (`'EXECUTION_FAILED' \| 'INTENT_CREATION_FAILED' \| ...`), read methods get `LookupErrorCode`, approve methods get `ApproveErrorCode`.
+Both follow the same shape: action methods get the full exec union (`'EXECUTION_FAILED' \| 'INTENT_CREATION_FAILED' \| ...`), read methods get `LookupErrorCode`, approve methods get `ApproveErrorCode` (so partner's `approve` can emit `'USER_REJECTED'`).
+
+### Backend / Swaps API (`feature: 'backend'`)
+
+`BackendApiService` (`sodax.backendApi`) and the Swaps API client (`sodax.api.swaps`) are the HTTP-client layer — not domain features. Every method returns `Result<T, SodaxError<'EXTERNAL_API_ERROR'>>` with `context.endpoint`, and the transport failure (timeout / non-2xx / response-shape mismatch) preserved on `error.cause`. `context.api` distinguishes the two clients: `'backend'` for `BackendApiService`, `'swaps'` for the `sodax.api.swaps` client.
+
+### Leverage Yield (`feature: 'leverageYield'`)
+
+Action discriminator on `context.action`: `'deposit' \| 'withdraw' \| 'approve' \| 'allowanceCheck' \| 'vaultSwap'`.
+
+| Method | Narrow code union |
+|---|---|
+| `deposit`, `withdraw`, `createVaultIntent` | `CreateIntentErrorCode` (create-intent subset) |
+| `vaultSwap` | All exec codes: `VALIDATION_FAILED \| INTENT_CREATION_FAILED \| TX_VERIFICATION_FAILED \| TX_SUBMIT_FAILED \| RELAY_TIMEOUT \| RELAY_FAILED \| EXECUTION_FAILED \| EXTERNAL_API_ERROR \| UNKNOWN` |
+| `notifySolver` | `EXECUTION_FAILED \| EXTERNAL_API_ERROR \| UNKNOWN` (with `phase: 'postExecution'`) |
+| `approve` | `ApproveErrorCode` |
+| `isAllowanceValid` | `AllowanceCheckErrorCode` (action `'allowanceCheck'`) |
+| `getApr`, `getEffectiveApr`, `getLsdApr`, `getPosition`, `getTotalAssets`, `previewDeposit`, `previewWithdraw`, `previewRedeem`, `getMaxWithdraw`, `getMaxWithdrawForUser`, `getShareBalance`, `getShareBalanceForUser`, `getAsset` | `LookupErrorCode` (with `method` discriminator) |
+
+Relay/tx-verification codes appear only on `vaultSwap`; `createVaultIntent` stays within the create-intent subset. `notifySolver` is public (manual create→relay→notify) and emits the post-execution subset.
 
 ---
 

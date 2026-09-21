@@ -30,10 +30,7 @@ export type WithdrawParamsCore = Omit<CreateAssetWithdrawParams<SpokeChainKey>, 
  * Subset of {@link ClDecreaseLiquidityParams} produced by {@link createDecreaseLiquidityParamsProps}.
  * Callers add `srcChainKey` + `srcAddress` at the mutation call site.
  */
-export type DecreaseLiquidityParamsCore = Omit<
-  ClDecreaseLiquidityParams<SpokeChainKey>,
-  'srcChainKey' | 'srcAddress'
->;
+export type DecreaseLiquidityParamsCore = Omit<ClDecreaseLiquidityParams<SpokeChainKey>, 'srcChainKey' | 'srcAddress'>;
 
 export function createDecreaseLiquidityParamsProps({
   poolKey,

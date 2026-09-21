@@ -3,6 +3,7 @@ import { normalizePsbtToBase64, ChainKeys, type IBitcoinWalletProvider } from '@
 import { useQueryClient } from '@tanstack/react-query';
 import { loadRadfiSession } from './useRadfiAuth.js';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
+import { invalidateBalances } from '../shared/invalidateBalances.js';
 import type { MutationHookParams } from '../shared/types.js';
 import { useSafeMutation, type SafeUseMutationResult } from '../shared/useSafeMutation.js';
 
@@ -19,7 +20,7 @@ type WithdrawResult = {
 };
 
 /**
- * React hook for withdrawing BTC from the user's Radfi trading wallet back to their personal
+ * React hook for withdrawing BTC from the user's Bound Exchange trading wallet back to their personal
  * Bitcoin wallet. Pure mutation: pass all inputs (including the wallet provider) to
  * `mutate({...})`.
  */
@@ -44,7 +45,7 @@ export function useRadfiWithdraw({
       const accessToken = session?.accessToken || radfi.accessToken;
 
       if (!accessToken) {
-        throw new Error('Radfi authentication required. Please login first.');
+        throw new Error('Bound Exchange authentication required. Please login first.');
       }
 
       const buildResult = await radfi.withdrawToUser({ userAddress, amount, tokenId, withdrawTo }, accessToken);
@@ -60,7 +61,7 @@ export function useRadfiWithdraw({
     onSuccess: async (data, vars, ctx) => {
       queryClient.invalidateQueries({ queryKey: ['bitcoin', 'tradingWalletBalance'] });
       queryClient.invalidateQueries({ queryKey: ['bitcoin', 'balance'] });
-      queryClient.invalidateQueries({ queryKey: ['shared', 'xBalances', ChainKeys.BITCOIN_MAINNET] });
+      invalidateBalances(queryClient, ChainKeys.BITCOIN_MAINNET);
       await mutationOptions?.onSuccess?.(data, vars, ctx);
     },
   });

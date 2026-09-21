@@ -35,6 +35,7 @@ Copy-paste patterns for adding SODAX features to a React app. Each recipe is sel
 | [`staking.md`](staking.md) | `useStake`, `useUnstake`, `useClaim`, staking info, ratios |
 | [`migration.md`](migration.md) | `useMigrateIcxToSoda`, `useRevertMigrateSodaToIcx`, `useMigratebnUSD`, `useMigrateBaln` |
 | [`dex.md`](dex.md) | `useDexDeposit`, `useSupplyLiquidity`, positions, pools |
+| [`leverage-yield.md`](leverage-yield.md) | `useLeverageYieldDeposit`, `useLeverageYieldWithdraw`, `useLeverageYieldVaultSwap`, APR/position/TVL/share-balance reads |
 | [`bitcoin.md`](bitcoin.md) | `useRadfiSession`, `useFundTradingWallet`, `useRadfiWithdraw`, UTXO management |
 | [`backend-queries.md`](backend-queries.md) | Intent tracking, orderbook, money market position queries (read-only, no wallet) |
 

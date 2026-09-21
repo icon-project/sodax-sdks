@@ -41,7 +41,7 @@ Same word, different concept across versions. Skim before reading the breaking-c
 | **config** | A `SodaxConfig` object passed at construction with hard-coded chain/token tables. Solver endpoints lived under `SodaxConfig.swaps`. | A `Sodax` instance owns a `ConfigService` that loads from the backend API, with packaged defaults as fallback. `sodax.config.*` is the lookup surface. **Solver endpoints moved to `SodaxConfig.solver`** (not `swaps`); `swaps` is `SwapsConfig` (supported tokens). |
 | **`xChainId` field on tokens** | Field name on the `Token` type. | Renamed: `XToken.chainKey`. Type also renamed: `Token` → `XToken`. |
 | **`hubAssets` / `moneyMarketSupportedTokens`** | Static `Record` global maps imported and walked. | `hubAssets` **deleted** — won't compile. `moneyMarketSupportedTokens` **still exported** as a packaged default, but prefer `sodax.config.*` and `sodax.moneyMarket.getSupportedTokens*()` so backend updates take effect. Each `XToken` now carries `vault` and `hubAsset` directly. |
-| **`SubmitSwapTxRequest.srcChainId`** | Numeric chain id field on the backend submit-swap request. | Renamed: `srcChainKey: SpokeChainKey`. |
+| **`SubmitSwapTxRequest.srcChainId`** | Numeric chain id field on the v1 backend submit-swap request. | `srcChainKey` on `SubmitTxRequestV2`; submit-tx also moved to `sodax.api.swaps.submitTx`. |
 | **`Intent.srcChain` / `Intent.dstChain`** | Read shape: `IntentRelayChainId` (bigint). | **Unchanged.** This is the relay chain id, not a spoke chain key. A blanket grep-replace `srcChain`→`srcChainKey` will break this. |
 | **`AddressType`** | Bitcoin-specific address-type union. | Renamed: `BtcAddressType`. (Generic name freed up.) |
 

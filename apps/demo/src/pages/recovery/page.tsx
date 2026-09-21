@@ -10,9 +10,9 @@ import {
   useGetUserHubWalletAddress,
   useHubAssetBalances,
   useWithdrawHubAsset,
+  type HubAssetBalance,
+  baseChainInfo,
 } from '@sodax/dapp-kit';
-import type { HubAssetBalance } from '@sodax/sdk';
-import { baseChainInfo } from '@sodax/sdk';
 import { formatTokenAmount, getChainExplorerTxUrl, getReadableTxError } from '@/lib/utils';
 import type { Address } from 'viem';
 
@@ -37,7 +37,10 @@ export default function RecoveryPage() {
   const [withdrawingAssets, setWithdrawingAssets] = useState<Set<string>>(new Set());
 
   const allowedChains = useMemo(
-    () => Object.values(baseChainInfo).filter(chain => chain.type === 'EVM').map(chain => chain.key),
+    () =>
+      Object.values(baseChainInfo)
+        .filter(chain => chain.type === 'EVM')
+        .map(chain => chain.key),
     [],
   );
 

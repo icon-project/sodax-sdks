@@ -1,8 +1,7 @@
 // Type guard functions for money market components - following best practices to avoid "as" type assertions
 
 import { isAddress, type Address } from 'viem';
-import type { UserReserveData } from '@sodax/sdk';
-import type { XToken } from '@sodax/sdk';
+import type { UserReserveData, XToken } from '@sodax/dapp-kit';
 
 /**
  * Type guard to check if a value is a valid UserReserveData object.

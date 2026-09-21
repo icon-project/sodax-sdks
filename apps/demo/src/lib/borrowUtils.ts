@@ -1,5 +1,4 @@
-import type { MoneyMarketAsset, Sodax } from '@sodax/sdk';
-import type { SpokeChainKey, XToken } from '@sodax/sdk';
+import type { MoneyMarketAsset, Sodax, SpokeChainKey, XToken } from '@sodax/dapp-kit';
 
 /**
  * Find the MoneyMarketAsset for a borrowable asset by matching the vault address.
@@ -8,9 +7,7 @@ export function findMoneyMarketAssetForBorrowable(
   vaultAddress: string,
   allMoneyMarketAssets: readonly MoneyMarketAsset[],
 ): MoneyMarketAsset | undefined {
-  return allMoneyMarketAssets.find(
-    asset => asset.reserveAddress.toLowerCase() === vaultAddress.toLowerCase(),
-  );
+  return allMoneyMarketAssets.find(asset => asset.reserveAddress.toLowerCase() === vaultAddress.toLowerCase());
 }
 
 export interface BorrowableAssetWithData {

@@ -9,9 +9,7 @@ export type UseStakingConfigParams = ReadHookParams<StakingConfig>;
  * React hook to fetch the global staking config (unstaking period, min unstaking period, max
  * penalty). Hub-only read; no chain context required. Throws on `!ok`.
  */
-export function useStakingConfig({
-  queryOptions,
-}: UseStakingConfigParams = {}): UseQueryResult<StakingConfig, Error> {
+export function useStakingConfig({ queryOptions }: UseStakingConfigParams = {}): UseQueryResult<StakingConfig, Error> {
   const { sodax } = useSodaxContext();
 
   return useQuery<StakingConfig, Error>({

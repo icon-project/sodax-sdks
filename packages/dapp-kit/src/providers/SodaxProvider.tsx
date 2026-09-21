@@ -1,7 +1,6 @@
 import { useMemo, type ReactNode, type ReactElement } from 'react';
-import { Sodax, type SodaxConfig } from '@sodax/sdk';
+import { Sodax, type SodaxOptions } from '@sodax/sdk';
 import { SodaxContext } from '@/contexts/index.js';
-import type { DeepPartial } from '@sodax/sdk';
 
 interface SodaxProviderProps {
   children: ReactNode;
@@ -17,7 +16,7 @@ interface SodaxProviderProps {
    * <SodaxProvider config={config}>...</SodaxProvider>
    * ```
    */
-  config?: DeepPartial<SodaxConfig>;
+  config?: SodaxOptions;
 }
 
 /** Root provider for `@sodax/dapp-kit`. Must be paired with `QueryClientProvider`. */

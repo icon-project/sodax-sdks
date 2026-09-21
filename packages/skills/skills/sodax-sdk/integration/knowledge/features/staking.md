@@ -7,7 +7,7 @@ Access: `sodax.staking`. Service class: `StakingService`. Feature tag for errors
 ## How it works
 
 - **SODA** (the staked asset) → **xSoda** (ERC4626 vault shares, proportional to current exchange rate).
-- **Unstake** has a configurable waiting period with linear penalty (max 1–100%).
+- **Unstake** has a configurable waiting period with a piecewise penalty (max 1–100%): the flat `maxPenalty` applies during the minimum period, then decays linearly to zero by the full unstaking period, and is none after.
 - **Instant unstake** bypasses the waiting period but pays slippage (via `StakingRouter`).
 - **Claim** redeems SODA after the unstaking period expires.
 - **Cancel unstake** restores xSoda from a pending unstake request before claim.
@@ -34,8 +34,12 @@ sodax.staking.getStakeRatio(amount): Promise<Result<[bigint, bigint], SodaxError
 sodax.staking.getInstantUnstakeRatio(amount): Promise<Result<bigint, SodaxError>>;
 sodax.staking.getConvertedAssets(amount): Promise<Result<bigint, SodaxError>>;
 
+// Reads (hub-address — caller already has the hub wallet):
+sodax.staking.getStakingInfo(hubAddress: Address): Promise<Result<StakingInfo, SodaxError>>;
+
 // Reads (cross-chain — derive hub wallet from src chain):
 sodax.staking.getStakingInfoFromSpoke(srcAddress, srcChainKey): Promise<Result<StakingInfo, SodaxError>>;
+//   internally calls hubProvider.getUserHubWalletAddress(srcAddress, srcChainKey), then delegates to getStakingInfo
 sodax.staking.getUnstakingInfo(srcAddress, srcChainKey): Promise<Result<UnstakingInfo, SodaxError>>;
 //   value: { userUnstakeSodaRequests: UserUnstakeInfo[]; totalUnstaking: bigint }
 sodax.staking.getUnstakingInfoWithPenalty(srcAddress, srcChainKey): Promise<Result<UnstakingInfo & { requestsWithPenalty: UnstakeRequestWithPenalty[] }, SodaxError>>;
@@ -136,15 +140,22 @@ const allowed = await sodax.staking.isAllowanceValid({
 | `create*Intent` | `CreateIntentResult<K, Raw>` |
 | `approve` | `TxReturnType<K, Raw>` |
 | `isAllowanceValid` | `boolean` |
-| `getStakingConfig` | `{ unstakingPeriod, maxPenalty, minPenalty, /* … */ }` |
+| `getStakingConfig` | `{ unstakingPeriod, minUnstakingPeriod, maxPenalty }` |
 | `getStakeRatio` | `[xSodaAmount: bigint, previewDepositAmount: bigint]` (estimated xSoda shares + vault's `previewDeposit` preview) |
 | `getInstantUnstakeRatio` | `bigint` |
 | `getConvertedAssets` | `bigint` (SODA per xSoda) |
-| `getStakingInfoFromSpoke` | `StakingInfo` (xSoda balance, accrued, etc.) |
+| `getStakingInfo` | `StakingInfo` (totals + user's xSoda balance + SODA value). Takes a hub address directly. |
+| `getStakingInfoFromSpoke` | `StakingInfo` (same shape). Takes `(srcAddress, srcChainKey)`; resolves hub wallet internally. |
 | `getUnstakingInfo` | `UnstakingInfo` (object; carries `userUnstakeSodaRequests` array + aggregate amount) |
 | `getUnstakingInfoWithPenalty` | `UnstakingInfo & { requestsWithPenalty: UnstakeRequestWithPenalty[] }` (each entry adds `penalty`, `penaltyPercentage`, `claimableAmount`) |
 
 > All 5 mutation methods return `TxHashPair = { srcChainTxHash, dstChainTxHash }` because the SDK relays spoke→hub internally. When the user is already on the hub, both fields hold the same hash.
+
+`approve` can send **two** transactions on a token that rejects a non-zero to non-zero allowance
+change (Ethereum USDT is the only listed one today): `approve(0)` is mined first, then the real
+approval, so the user signs twice. The returned value is unchanged — one hash, the **last**
+transaction's. Detection simulates the approval, so never gate on a token list. Full note: "ERC-20
+approval can take two transactions" in [`architecture.md`](../architecture.md).
 
 ## Error codes
 

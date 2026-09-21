@@ -1,6 +1,7 @@
 import type { Address } from '../shared/shared.js';
 import { StatATokenAddresses } from '../chains/tokens.js';
 import type { PoolKey } from './pancakeswap-infinity.js';
+import type { Prettify } from '../common/common.js';
 
 // Re-export imported types for external usage with explicit type definitions for clarity.
 export type {
@@ -150,7 +151,11 @@ export const dexPools = {
   },
 } as const satisfies Record<string, PoolKey>;
 
-export type DexConfig = {
+export type DexOptions = {};
+
+export type DexConfig = Prettify<DexDefaultConfig & DexOptions>; // future proofing for new dex optional configs
+
+export type DexDefaultConfig = {
   concentratedLiquidityConfig: ConcentratedLiquidityConfig;
   dexPools: Record<string, PoolKey>;
   statATokenAddresses: Record<Address, Address> & typeof StatATokenAddresses;
@@ -160,4 +165,4 @@ export const dexConfig = {
   concentratedLiquidityConfig: concentratedLiquidityConfig,
   dexPools: dexPools,
   statATokenAddresses: StatATokenAddresses,
-} as const satisfies DexConfig;
+} as const satisfies DexDefaultConfig;

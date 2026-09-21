@@ -45,7 +45,7 @@ export function clearRadfiSession(address: string): void {
 }
 
 /**
- * React hook for authenticating with Radfi via BIP322-signed message. Pure mutation: pass
+ * React hook for authenticating with Bound Exchange via BIP322-signed message. Pure mutation: pass
  * `{ walletProvider }` to `mutate({...})`. The hook itself takes no arguments other than the
  * structural `mutationOptions` slot.
  */
@@ -95,7 +95,7 @@ export function useRadfiAuth({
           }
 
           throw new Error(
-            'This wallet is already registered with Radfi from another session. ' +
+            'This wallet is already registered with Bound Exchange from another session. ' +
               'Please clear your browser storage for this site and try again, ' +
               'or wait for the previous session to expire.',
           );

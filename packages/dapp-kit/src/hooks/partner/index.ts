@@ -4,3 +4,7 @@ export * from './useIsTokenApproved.js';
 export * from './useApproveToken.js';
 export * from './useSetSwapPreference.js';
 export * from './useFeeClaimSwap.js';
+export * from './usePartnerCancelIntent.js';
+export * from './useGetUserIntent.js';
+export * from './useGetIntentDetails.js';
+export * from './useFeeClaimWithdraw.js';

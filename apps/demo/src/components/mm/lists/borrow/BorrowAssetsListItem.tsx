@@ -1,11 +1,16 @@
 import React from 'react';
 import { TableCell, TableRow } from '@/components/ui/table';
+import { TokenIcon } from '@/components/shared/TokenIcon';
 import { formatUnits } from 'viem';
-import type { XToken } from '@sodax/sdk';
+import {
+  type XToken,
+  type FormatReserveUSDResponse,
+  type FormatUserSummaryResponse,
+  type UserReserveData,
+  useAToken,
+} from '@sodax/dapp-kit';
 import { formatDecimalForDisplay, truncateToDecimals } from '@/lib/utils';
 import { useReserveMetrics } from '@/hooks/useReserveMetrics';
-import type { FormatReserveUSDResponse, FormatUserSummaryResponse, UserReserveData } from '@sodax/sdk';
-import { useAToken } from '@sodax/dapp-kit';
 import { Button } from '@/components/ui/button';
 import { MAX_BORROW_SAFETY_MARGIN, ZERO_ADDRESS, AMOUNT_DISPLAY_DECIMALS, AAVE_INDEX_PRECISION } from '../../constants';
 import { isUserReserveDataArray, isValidEvmAddress } from '../../typeGuards';
@@ -56,12 +61,18 @@ export function BorrowAssetsListItem({
   if (metrics.formattedReserve && aToken) {
     availableLiquidity =
       metrics.formattedReserve.borrowCap === '0'
-        ? truncateToDecimals(Number(formatUnits(BigInt(metrics.formattedReserve.availableLiquidity), aToken.decimals)), AMOUNT_DISPLAY_DECIMALS)
-        : truncateToDecimals(Math.min(
-            Number.parseFloat(formatUnits(BigInt(metrics.formattedReserve.availableLiquidity), aToken.decimals)),
-            Number.parseFloat(metrics.formattedReserve.borrowCap) -
-              Number.parseFloat(metrics.formattedReserve.totalVariableDebt),
-          ), AMOUNT_DISPLAY_DECIMALS);
+        ? truncateToDecimals(
+            Number(formatUnits(BigInt(metrics.formattedReserve.availableLiquidity), aToken.decimals)),
+            AMOUNT_DISPLAY_DECIMALS,
+          )
+        : truncateToDecimals(
+            Math.min(
+              Number.parseFloat(formatUnits(BigInt(metrics.formattedReserve.availableLiquidity), aToken.decimals)),
+              Number.parseFloat(metrics.formattedReserve.borrowCap) -
+                Number.parseFloat(metrics.formattedReserve.totalVariableDebt),
+            ),
+            AMOUNT_DISPLAY_DECIMALS,
+          );
   }
 
   let maxBorrow = '0';
@@ -125,6 +136,7 @@ export function BorrowAssetsListItem({
       {/* Asset */}
       <TableCell className="px-6 py-5">
         <div className="flex items-center gap-3">
+          <TokenIcon symbol={token.symbol} />
           <div className="flex flex-col">
             <span className="font-bold text-cherry-dark">{token.symbol}</span>
           </div>

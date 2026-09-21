@@ -1,4 +1,10 @@
-import { type ChainType, ChainKeys, ChainTypeArr, detectBitcoinAddressType } from '@sodax/types';
+import {
+  type ChainType,
+  ChainKeys,
+  ChainTypeArr,
+  detectBitcoinAddressType,
+  usesBip322MessageSigning,
+} from '@sodax/types';
 import {
   IconWalletProvider,
   InjectiveWalletProvider,
@@ -28,6 +34,7 @@ import { BitcoinXService } from './xchains/bitcoin/index.js';
 import { UnisatXConnector } from './xchains/bitcoin/UnisatXConnector.js';
 import { XverseXConnector } from './xchains/bitcoin/XverseXConnector.js';
 import { OKXXConnector } from './xchains/bitcoin/OKXXConnector.js';
+import { BitcoinHanaXConnector } from './xchains/bitcoin/BitcoinHanaXConnector.js';
 import { BitcoinXConnector } from './xchains/bitcoin/BitcoinXConnector.js';
 import { hasSignBip322, hasSignEcdsa } from './xchains/bitcoin/bitcoinSignGuards.js';
 import { NearXService } from './xchains/near/NearXService.js';
@@ -121,7 +128,10 @@ function narrowConnectors(items: readonly IXConnector[], chainType: ChainType): 
 }
 
 /** Read `connectors` override from the matching chain-type slot, if any. */
-function readConnectorsOverride(chainType: ChainType, walletConfig: SodaxWalletConfig | undefined): readonly IXConnector[] | undefined {
+function readConnectorsOverride(
+  chainType: ChainType,
+  walletConfig: SodaxWalletConfig | undefined,
+): readonly IXConnector[] | undefined {
   return walletConfig?.[chainType]?.connectors;
 }
 
@@ -181,7 +191,12 @@ export const chainRegistry: Record<string, ChainServiceFactory> = {
       const defaults = getEntryDefaults<typeof ChainKeys.BITCOIN_MAINNET>(
         walletConfig?.BITCOIN?.chains?.[ChainKeys.BITCOIN_MAINNET],
       );
-      return [new UnisatXConnector(defaults), new XverseXConnector(defaults), new OKXXConnector(defaults)];
+      return [
+        new UnisatXConnector(defaults),
+        new XverseXConnector(defaults),
+        new OKXXConnector(defaults),
+        new BitcoinHanaXConnector(defaults),
+      ];
     },
     providerManaged: false,
     createActions: (service, getStore) => ({
@@ -190,33 +205,29 @@ export const chainRegistry: Record<string, ChainServiceFactory> = {
         const store = getStore();
         const connection = store.xConnections.BITCOIN;
         const connector = connection?.xConnectorId ? service.getXConnectorById(connection.xConnectorId) : undefined;
-        if (!(connector instanceof BitcoinXConnector)) {
+        if (!connection || !(connector instanceof BitcoinXConnector)) {
           throw new Error('Bitcoin wallet not connected');
         }
-        const address = connection?.xAccount.address;
+        const address = connection.xAccount.address;
         if (!address) throw new Error('Bitcoin address not found');
-        const addressType = detectBitcoinAddressType(address);
-
-        switch (addressType) {
-          case 'P2WPKH':
-          case 'P2TR': {
-            if (!hasSignBip322(connector)) {
-              throw new Error(`${connector.id} does not support BIP-322 signing`);
-            }
-            return connector.signBip322Message(message);
-          }
-          case 'P2SH':
-          case 'P2PKH': {
-            if (!hasSignEcdsa(connector)) {
-              throw new Error(`${connector.id} does not support ECDSA signing`);
-            }
-            return connector.signEcdsaMessage(message);
-          }
-          default: {
-            const _exhaustiveCheck: never = addressType;
-            throw new Error(`Unhandled Bitcoin address type: ${_exhaustiveCheck}`);
-          }
+        // Signing lives on the wallet provider, not on the connector. Prefer the live one from
+        // `connect()`; after a page reload that is gone, so rebuild it from the stored account —
+        // same lookup as `createWalletProvider` below.
+        const walletProvider = connector.getWalletProvider() ?? connector.recreateWalletProvider(connection.xAccount);
+        if (!walletProvider) {
+          throw new Error(`${connector.id} has no wallet provider`);
         }
+        // Pick the message-signing scheme by address type: P2WPKH/P2TR sign via BIP322, P2SH/P2PKH via ECDSA.
+        if (usesBip322MessageSigning(detectBitcoinAddressType(address))) {
+          if (!hasSignBip322(walletProvider)) {
+            throw new Error(`${connector.id} does not support BIP-322 signing`);
+          }
+          return walletProvider.signBip322Message(message);
+        }
+        if (!hasSignEcdsa(walletProvider)) {
+          throw new Error(`${connector.id} does not support ECDSA signing`);
+        }
+        return walletProvider.signEcdsaMessage(message);
       },
     }),
     createWalletProvider: (service, getStore) => {
@@ -390,10 +401,7 @@ export const chainRegistry: Record<string, ChainServiceFactory> = {
 
 // ─── createChainServices ─────────────────────────────────────────────────────
 
-export const createChainServices = (
-  walletConfig: SodaxWalletConfig,
-  getStore: StoreAccessor,
-): ChainServicesResult => {
+export const createChainServices = (walletConfig: SodaxWalletConfig, getStore: StoreAccessor): ChainServicesResult => {
   const xServices: Partial<Record<ChainType, XService>> = {};
   const xConnectorsByChain: Partial<Record<ChainType, IXConnector[]>> = {};
   const enabledChains: ChainType[] = [];
@@ -410,9 +418,7 @@ export const createChainServices = (
 
     if (!factory.providerManaged) {
       const override = readConnectorsOverride(chainType, walletConfig);
-      const connectors = override
-        ? narrowConnectors(override, chainType)
-        : factory.defaultConnectors(walletConfig);
+      const connectors = override ? narrowConnectors(override, chainType) : factory.defaultConnectors(walletConfig);
       service.setXConnectors(connectors);
       xConnectorsByChain[chainType] = connectors;
 

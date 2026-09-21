@@ -52,7 +52,8 @@ export function rayPow(a: BigNumberValue, p: BigNumberValue): BigNumber {
 export function binomialApproximatedRayPow(a: BigNumberValue, p: BigNumberValue): BigNumber {
   const base = valueToZDBigNumber(a);
   const exp = valueToZDBigNumber(p);
-  if (exp.eq(0)) return RAY;
+  // Negative exp (clock-skew timeDelta) has no valid binomial expansion → no accrual.
+  if (exp.lte(0)) return RAY;
   const expMinusOne = exp.minus(1);
   const expMinusTwo = exp.gt(2) ? exp.minus(2) : 0;
 

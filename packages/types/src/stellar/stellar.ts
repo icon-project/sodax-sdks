@@ -102,6 +102,14 @@ export type StellarReturnType<Raw extends boolean> = Raw extends true
 
 export interface IStellarWalletProvider extends ICoreWallet {
   readonly chainType: 'STELLAR';
-  signTransaction: (tx: XDR) => Promise<XDR>;
+  /**
+   * Sign without broadcasting. Pass `options.address` when a specific
+   * account must sign; browser wallets otherwise use their active account.
+   */
+  signTransaction: (tx: XDR, options?: { address?: string }) => Promise<XDR>;
   waitForTransactionReceipt: (txHash: string) => Promise<StellarRawTransactionReceipt>;
+  /** Broadcast an already-signed XDR transaction via the Soroban RPC server. Returns the tx hash. */
+  sendTransaction?: (signedTx: XDR) => Promise<string>;
+  /** Sign and broadcast an unsigned `StellarRawTransaction` (e.g. from the Swaps API). Returns the tx hash. */
+  signAndSendTransaction?: (params: StellarRawTransaction) => Promise<string>;
 }

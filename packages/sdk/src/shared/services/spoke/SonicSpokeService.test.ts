@@ -26,7 +26,7 @@ import {
   type SonicChainKey,
   type SpokeChainKey,
 } from '@sodax/types';
-import { encodeAbiParameters, encodeFunctionData } from 'viem';
+import { encodeAbiParameters, encodeFunctionData, erc20Abi } from 'viem';
 import { wrappedSonicAbi, sonicWalletFactoryAbi } from '../../abis/index.js';
 
 // --- hoisted mocks --------------------------------------------------------
@@ -40,8 +40,13 @@ const mocks = vi.hoisted(() => ({
   // which calls `encodeTransferFrom` to prepend a transfer call to the wallet-router payload.
   erc20IsAllowanceValid: vi.fn(),
   erc20EncodeTransferFrom: vi.fn(),
-  // EvmSolverService — `createSwapIntent` calls `createIntentFeeData(fee, inputAmount)` and
-  // `encodeCreateIntent(intent, intentsContract)` to assemble the on-hub intent calldata.
+  // HookService — `createSwapIntent` calls `resolveDelivery(params)` to apply any delivery hook.
+  resolveDelivery: vi.fn(),
+  // IntentDataService — `createSwapIntent` calls `composeIntentData(feeEnvelope, deliveryData)` to fold
+  // the fee + delivery into the intent `data`.
+  composeIntentData: vi.fn(),
+  // EvmSolverService — `createSwapIntent` calls `createIntentFeeData(fee, inputAmount)` (fee envelope +
+  // amount) and `encodeCreateIntent(intent, intentsContract)` for the on-hub calldata.
   createIntentFeeData: vi.fn(),
   encodeCreateIntent: vi.fn(),
   // `randomUint256` mints the intentId. Mocking it makes the resulting intent deterministic so
@@ -67,6 +72,26 @@ vi.mock('../../../swap/EvmSolverService.js', async () => {
     EvmSolverService: {
       createIntentFeeData: mocks.createIntentFeeData,
       encodeCreateIntent: mocks.encodeCreateIntent,
+    },
+  };
+});
+
+vi.mock('../../../swap/HookService.js', async () => {
+  const actual = await vi.importActual<object>('../../../swap/HookService.js');
+  return {
+    ...actual,
+    HookService: {
+      resolveDelivery: mocks.resolveDelivery,
+    },
+  };
+});
+
+vi.mock('../../../swap/IntentDataService.js', async () => {
+  const actual = await vi.importActual<object>('../../../swap/IntentDataService.js');
+  return {
+    ...actual,
+    IntentDataService: {
+      composeIntentData: mocks.composeIntentData,
     },
   };
 });
@@ -137,7 +162,13 @@ beforeEach(() => {
   vi.clearAllMocks();
   // Sensible defaults — individual tests override per-call.
   mocks.erc20EncodeTransferFrom.mockReturnValue(fakeTransferFromCall);
-  mocks.createIntentFeeData.mockReturnValue(['0xfeedata', 0n]);
+  // Default: no hook — pass dstAddress through and forward the low-level deliveryData (if any).
+  mocks.resolveDelivery.mockImplementation((p: CreateIntentParams) => ({
+    dstAddress: p.dstAddress,
+    deliveryData: p.deliveryData,
+  }));
+  mocks.createIntentFeeData.mockReturnValue(['0xfeeenvelope', 0n]);
+  mocks.composeIntentData.mockReturnValue('0xfeedata');
   mocks.encodeCreateIntent.mockReturnValue({
     address: '0x6382D6ccD780758C5e8A6123c33ee8F4472F96ef' as Address,
     value: 0n,
@@ -455,6 +486,197 @@ describe('SonicSpokeService.getDeposit', () => {
 });
 
 // =========================================================================
+// getWalletBalance / getWalletBalances — the USER's own hub-chain holdings
+// =========================================================================
+//
+// Sibling of getDeposit above, and the contrast is the whole point: these read `srcAddress`
+// (the wallet owner), never a protocol-held address. Sonic's viem chain declares a multicall3
+// deployment, so every non-native read goes through the batched branch.
+//
+// `getWalletBalances` returns a flat `Record<string, bigint>`: an unreadable token collapses to
+// `0n`, so each of those tests also asserts the SDK logger fired — that warning is the only thing
+// separating a failure from an empty wallet, and a silent zero is the regression to catch.
+
+describe('SonicSpokeService.getWalletBalance / getWalletBalances', () => {
+  const NATIVE_S = sonicConfig.supportedTokens.S;
+  const USDC = sonicConfig.supportedTokens.USDC;
+  const USDT = sonicConfig.supportedTokens.USDT;
+
+  const spyOnBalanceWarning = () => vi.spyOn(sodax.config.logger, 'warn').mockImplementation(() => {});
+
+  const expectLoggedFailure = (
+    warnSpy: ReturnType<typeof spyOnBalanceWarning>,
+    tokenAddress: string,
+    message: string,
+  ) =>
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('balance read failed'),
+      expect.objectContaining({ chainKey: SONIC, token: tokenAddress, error: message }),
+    );
+
+  it('reads native S via publicClient.getBalance on the user address', async () => {
+    const spy = vi.spyOn(sonicSpoke.publicClient, 'getBalance').mockResolvedValueOnce(1_234n);
+
+    const result = await sonicSpoke.getWalletBalance({ srcChainKey: SONIC, srcAddress: SRC_ADDR, token: NATIVE_S });
+
+    expect(result).toBe(1_234n);
+    expect(spy).toHaveBeenCalledWith({ address: SRC_ADDR });
+  });
+
+  it('reads erc20 balanceOf with the USER as the holder', async () => {
+    const spy = vi.spyOn(sonicSpoke.publicClient, 'readContract').mockResolvedValueOnce(5_000n);
+
+    const result = await sonicSpoke.getWalletBalance({ srcChainKey: SONIC, srcAddress: SRC_ADDR, token: USDC });
+
+    expect(result).toBe(5_000n);
+    // The holder is srcAddress, not the token contract getDeposit passes — the only difference
+    // between the two reads, and the one that decides whose money the UI shows.
+    expect(spy).toHaveBeenCalledWith({
+      address: USDC.address,
+      abi: erc20Abi,
+      functionName: 'balanceOf',
+      args: [SRC_ADDR],
+    });
+  });
+
+  it('batches non-native tokens through multicall3 and merges the native entry', async () => {
+    const nativeSpy = vi.spyOn(sonicSpoke.publicClient, 'getBalance').mockResolvedValueOnce(100n);
+    const multicallSpy = vi.spyOn(sonicSpoke.publicClient, 'multicall').mockResolvedValueOnce([
+      { status: 'success', result: 700n },
+      { status: 'success', result: 900n },
+    ] as never);
+
+    const result = await sonicSpoke.getWalletBalances({
+      srcChainKey: SONIC,
+      srcAddress: SRC_ADDR,
+      tokens: [NATIVE_S, USDC, USDT],
+    });
+
+    expect(result).toEqual({
+      [NATIVE_S.address]: 100n,
+      [USDC.address]: 700n,
+      [USDT.address]: 900n,
+    });
+    expect(nativeSpy).toHaveBeenCalledWith({ address: SRC_ADDR });
+    // Native S must never reach multicall3 — there is no balanceOf to call on address zero.
+    expect(multicallSpy).toHaveBeenCalledWith({
+      contracts: [
+        { abi: erc20Abi, address: USDC.address, functionName: 'balanceOf', args: [SRC_ADDR] },
+        { abi: erc20Abi, address: USDT.address, functionName: 'balanceOf', args: [SRC_ADDR] },
+      ],
+    });
+  });
+
+  it('reports a failed multicall entry as a logged 0n, never as a silent zero balance', async () => {
+    const warnSpy = spyOnBalanceWarning();
+    vi.spyOn(sonicSpoke.publicClient, 'getBalance').mockResolvedValueOnce(100n);
+    // viem fans a rejected aggregate3 chunk out as one failure entry per call in that chunk.
+    const rpcError = new Error('HTTP 429');
+    vi.spyOn(sonicSpoke.publicClient, 'multicall').mockResolvedValueOnce([
+      { status: 'success', result: 700n },
+      { status: 'failure', error: rpcError, result: undefined },
+    ] as never);
+
+    const result = await sonicSpoke.getWalletBalances({
+      srcChainKey: SONIC,
+      srcAddress: SRC_ADDR,
+      tokens: [NATIVE_S, USDC, USDT],
+    });
+
+    // One bad entry must not discard the reads that did resolve.
+    expect(result[NATIVE_S.address]).toBe(100n);
+    expect(result[USDC.address]).toBe(700n);
+    // The 0n is indistinguishable from an empty wallet in the map, so the log line is the contract.
+    expect(result[USDT.address]).toBe(0n);
+    expectLoggedFailure(warnSpy, USDT.address, 'HTTP 429');
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a confirmed on-chain zero as a successful read, with nothing logged', async () => {
+    const warnSpy = spyOnBalanceWarning();
+    vi.spyOn(sonicSpoke.publicClient, 'getBalance').mockResolvedValueOnce(0n);
+    vi.spyOn(sonicSpoke.publicClient, 'multicall').mockResolvedValueOnce([{ status: 'success', result: 0n }] as never);
+
+    const result = await sonicSpoke.getWalletBalances({
+      srcChainKey: SONIC,
+      srcAddress: SRC_ADDR,
+      tokens: [NATIVE_S, USDC],
+    });
+
+    expect(result).toEqual({
+      [NATIVE_S.address]: 0n,
+      [USDC.address]: 0n,
+    });
+    // A real empty wallet must stay quiet, otherwise the warning stops meaning "failure".
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it('synthesises a logged failure when multicall returns fewer entries than tokens', async () => {
+    const warnSpy = spyOnBalanceWarning();
+    vi.spyOn(sonicSpoke.publicClient, 'multicall').mockResolvedValueOnce([
+      { status: 'success', result: 700n },
+    ] as never);
+
+    const result = await sonicSpoke.getWalletBalances({
+      srcChainKey: SONIC,
+      srcAddress: SRC_ADDR,
+      tokens: [USDC, USDT],
+    });
+
+    expect(result[USDC.address]).toBe(700n);
+    expect(result[USDT.address]).toBe(0n);
+    expectLoggedFailure(warnSpy, USDT.address, `missing multicall result for ${USDT.address}`);
+  });
+
+  it('surfaces a rejected native read as a logged 0n while erc20 entries survive', async () => {
+    const warnSpy = spyOnBalanceWarning();
+    const rpcError = new Error('eth_getBalance failed');
+    vi.spyOn(sonicSpoke.publicClient, 'getBalance').mockRejectedValueOnce(rpcError);
+    vi.spyOn(sonicSpoke.publicClient, 'multicall').mockResolvedValueOnce([
+      { status: 'success', result: 700n },
+    ] as never);
+
+    const result = await sonicSpoke.getWalletBalances({
+      srcChainKey: SONIC,
+      srcAddress: SRC_ADDR,
+      tokens: [NATIVE_S, USDC],
+    });
+
+    expect(result[NATIVE_S.address]).toBe(0n);
+    expect(result[USDC.address]).toBe(700n);
+    expectLoggedFailure(warnSpy, NATIVE_S.address, 'eth_getBalance failed');
+  });
+
+  it('rejects when no requested token could be read at all', async () => {
+    spyOnBalanceWarning();
+    vi.spyOn(sonicSpoke.publicClient, 'getBalance').mockRejectedValueOnce(new Error('eth_getBalance failed'));
+    vi.spyOn(sonicSpoke.publicClient, 'multicall').mockResolvedValueOnce([
+      { status: 'failure', error: new Error('HTTP 429'), result: undefined },
+    ] as never);
+
+    // An all-zero map from a dead RPC would render as "this wallet holds nothing" — the one failure
+    // the flat map cannot express, so the whole call must fail instead.
+    await expect(
+      sonicSpoke.getWalletBalances({ srcChainKey: SONIC, srcAddress: SRC_ADDR, tokens: [NATIVE_S, USDC] }),
+    ).rejects.toThrow(`every balance read failed on ${SONIC}`);
+  });
+
+  it('skips multicall entirely when every requested token is native', async () => {
+    vi.spyOn(sonicSpoke.publicClient, 'getBalance').mockResolvedValueOnce(42n);
+    const multicallSpy = vi.spyOn(sonicSpoke.publicClient, 'multicall');
+
+    const result = await sonicSpoke.getWalletBalances({
+      srcChainKey: SONIC,
+      srcAddress: SRC_ADDR,
+      tokens: [NATIVE_S],
+    });
+
+    expect(result).toEqual({ [NATIVE_S.address]: 42n });
+    expect(multicallSpy).not.toHaveBeenCalled();
+  });
+});
+
+// =========================================================================
 // deposit (static) — the wrap-vs-transferFrom branch + raw discriminant
 // =========================================================================
 
@@ -490,9 +712,7 @@ describe('SonicSpokeService.deposit (static)', () => {
 
   describe('native token branch', () => {
     it('prepends a wrap-native call and forwards `value: amount` when raw=true', async () => {
-      const result = await sonicSpoke.deposit(
-        depositParams<true>({ token: SONIC_NATIVE, raw: true }),
-      );
+      const result = await sonicSpoke.deposit(depositParams<true>({ token: SONIC_NATIVE, raw: true }));
 
       // Erc20Service.encodeTransferFrom must NOT be touched on the native path.
       expect(mocks.erc20EncodeTransferFrom).not.toHaveBeenCalled();
@@ -570,9 +790,7 @@ describe('SonicSpokeService.deposit (static)', () => {
         [[{ address: extraCall.address, value: extraCall.value, data: extraCall.data }]],
       );
 
-      const result = await sonicSpoke.deposit(
-        depositParams<true>({ raw: true, data: dataWithExtra }),
-      );
+      const result = await sonicSpoke.deposit(depositParams<true>({ raw: true, data: dataWithExtra }));
 
       // Reconstruct the expected route() calldata: [transferFromCall, extraCall].
       expect(result).toMatchObject({
@@ -581,7 +799,11 @@ describe('SonicSpokeService.deposit (static)', () => {
           functionName: 'route',
           args: [
             [
-              { addr: fakeTransferFromCall.address, value: fakeTransferFromCall.value, data: fakeTransferFromCall.data },
+              {
+                addr: fakeTransferFromCall.address,
+                value: fakeTransferFromCall.value,
+                data: fakeTransferFromCall.data,
+              },
               { addr: extraCall.address, value: extraCall.value, data: extraCall.data },
             ],
           ],
@@ -629,7 +851,10 @@ describe('SonicSpokeService.createSwapIntent (static)', () => {
     chainConfig: sodax.config.getHubChainConfig(),
   };
 
-  const baseCreateIntentParams = <K extends SpokeChainKey>(srcChainKey: K, overrides?: Partial<CreateIntentParams<K>>) =>
+  const baseCreateIntentParams = <K extends SpokeChainKey>(
+    srcChainKey: K,
+    overrides?: Partial<CreateIntentParams<K>>,
+  ) =>
     ({
       inputToken: ERC20_TOKEN,
       outputToken: '0x4444444444444444444444444444444444444444' as Address,
@@ -693,7 +918,8 @@ describe('SonicSpokeService.createSwapIntent (static)', () => {
     });
 
     it('returns `inputAmount - feeAmount` as the intent inputAmount when a partner fee is configured', async () => {
-      mocks.createIntentFeeData.mockReturnValueOnce(['0xpartnerfee' as Hex, 12_345n]);
+      mocks.createIntentFeeData.mockReturnValueOnce(['0xfeeenvelope' as Hex, 12_345n]);
+      mocks.composeIntentData.mockReturnValueOnce('0xpartnerfee' as Hex);
       const fee: PartnerFee = {
         address: '0x9999999999999999999999999999999999999999' as Address,
         amount: 12_345n,
@@ -709,6 +935,7 @@ describe('SonicSpokeService.createSwapIntent (static)', () => {
       });
 
       expect(mocks.createIntentFeeData).toHaveBeenCalledWith(fee, 1_000_000n);
+      expect(mocks.composeIntentData).toHaveBeenCalledWith('0xfeeenvelope', undefined);
       expect(feeAmount).toBe(12_345n);
       expect(intent.inputAmount).toBe(1_000_000n - 12_345n);
       expect(intent.data).toBe('0xpartnerfee');
@@ -838,7 +1065,7 @@ describe('SonicSpokeService.createSwapIntent (static)', () => {
     it('throws when inputToken cast yields a falsy value', async () => {
       await expect(
         SonicSpokeService.createSwapIntent({
-          createIntentParams: baseCreateIntentParams(SONIC, { inputToken: '' as unknown as Address }),
+          createIntentParams: baseCreateIntentParams(SONIC, { inputToken: '' }),
           creatorHubWalletAddress: HUB_WALLET,
           solverConfig,
           fee: undefined,

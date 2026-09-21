@@ -9,8 +9,10 @@ One file per feature, paired with the v2 design counterpart in [`features/`](../
 | Staking | [`staking.md`](staking.md) |
 | Bridge | [`bridge.md`](bridge.md) |
 | DEX | [`dex.md`](dex.md) |
-| ICX/bnUSD/BALN | [`icx-bnusd-baln.md`](icx-bnusd-baln.md) |
-| Auxiliary services | [`auxiliary-services.md`](auxiliary-services.md) — `PartnerService` + `RecoveryService` + `BackendApiService`. The backend-API one is the load-bearing change: every method now returns `Promise<Result<T>>`. |
+| ICX/bnUSD/BALN | [`migration.md`](migration.md) |
+| Partner | [`partner.md`](partner.md) — standard pattern; 5 v1 typed errors collapse into `SodaxError<C>` with `feature: 'partner'`. |
+| Recovery | [`recovery.md`](recovery.md) — new in v2; no v1 equivalent. |
+| Backend API | [`backend-api.md`](backend-api.md) — load-bearing change: every method now returns `Promise<Result<T>>`. |
 
 ## Reading order within a feature
 

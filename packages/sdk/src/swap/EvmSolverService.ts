@@ -3,8 +3,8 @@ import { invariant } from '../shared/utils/tiny-invariant.js';
 import {
   type Address,
   type GetLogsReturnType,
-  type HttpTransport,
   type PublicClient,
+  decodeAbiParameters,
   encodeAbiParameters,
   encodeFunctionData,
   encodePacked,
@@ -24,6 +24,8 @@ import {
   type IntentData,
   type IntentState,
 } from '../shared/types/intent-types.js';
+import { HookService } from './HookService.js';
+import { IntentDataService } from './IntentDataService.js';
 import {
   getIntentRelayChainId,
   isHubChainKey,
@@ -104,7 +106,11 @@ export class EvmSolverService {
       `hub asset not found for spoke chain token (intent.outputToken): ${createIntentParams.outputToken}`,
     );
 
-    const [feeData, feeAmount] = EvmSolverService.createIntentFeeData(fee, createIntentParams.inputAmount);
+    // Apply the delivery hook (if any): may override dstAddress and derive deliveryData.
+    const { dstAddress, deliveryData } = HookService.resolveDelivery(createIntentParams);
+    // Encode the partner fee, then fold it together with any delivery payload into the intent `data`.
+    const [feeEnvelope, feeAmount] = EvmSolverService.createIntentFeeData(fee, createIntentParams.inputAmount);
+    const intentData = IntentDataService.composeIntentData(feeEnvelope, deliveryData);
 
     const calls: EvmContractCall[] = [];
     const intentsContract = config.solver.intentsContract;
@@ -120,9 +126,9 @@ export class EvmSolverService {
       srcChain: getIntentRelayChainId(createIntentParams.srcChainKey),
       dstChain: getIntentRelayChainId(createIntentParams.dstChainKey),
       srcAddress: encodeAddress(createIntentParams.srcChainKey, createIntentParams.srcAddress),
-      dstAddress: encodeAddress(createIntentParams.dstChainKey, createIntentParams.dstAddress),
+      dstAddress: encodeAddress(createIntentParams.dstChainKey, dstAddress),
       solver: createIntentParams.solver ?? '0x0000000000000000000000000000000000000000',
-      data: feeData, // fee amount will be deducted from the input amount
+      data: intentData, // fee amount will be deducted from the input amount; may also carry delivery data
     } satisfies Intent;
 
     calls.push(Erc20Service.encodeApprove(intent.inputToken, intentsContract, createIntentParams.inputAmount));
@@ -194,6 +200,68 @@ export class EvmSolverService {
   }
 
   /**
+   * Recovers the partner fee amount embedded in an intent's `data` field.
+   *
+   * Inverse of {@link createIntentFeeData}: returns the encoded fee, regardless of whether the `data`
+   * is a bare fee envelope or a multi-entry envelope that also carries delivery data. The envelope
+   * parsing lives in {@link IntentDataService.extractFeePayload}; this method just decodes the fee struct.
+   *
+   * @param data - The intent's `data` field (`'0x'` when no fee was configured).
+   * @returns The fee amount in the input token's smallest unit (`0n` when no fee is present).
+   */
+  public static decodeIntentFeeAmount(data: Hex): bigint {
+    const feePayload = IntentDataService.extractFeePayload(data);
+    return feePayload ? EvmSolverService.decodeFeePayload(feePayload) : 0n;
+  }
+
+  /** Decodes a raw `FeeData` payload (`abi.encode(uint256 fee, address receiver)`) to its fee amount. */
+  private static decodeFeePayload(payload: Hex): bigint {
+    const [feeAmount] = decodeAbiParameters(
+      [
+        { name: 'fee', type: 'uint256' },
+        { name: 'receiver', type: 'address' },
+      ],
+      payload,
+    );
+    return feeAmount;
+  }
+
+  /**
+   * Re-derives the byte-identical relay payload that `createIntent` originally produced, from a
+   * fully-populated `Intent` alone.
+   *
+   * Mirrors the two payload shapes built at intent-creation time:
+   * - Hub (Sonic) source — raw `createIntent(intent)` calldata (no approval, no multicall), matching
+   *   {@link SonicSpokeService.createSwapIntent}.
+   * - Spoke source — the `[approve(intentsContract, gross), createIntent(intent)]` multicall, matching
+   *   {@link constructCreateIntentData}. The gross approval amount is recovered as
+   *   `intent.inputAmount + feeAmount`, where `feeAmount` comes from {@link decodeIntentFeeAmount}.
+   *
+   * Byte-identity holds because this reuses the exact encode primitives (`encodeCreateIntent`,
+   * `Erc20Service.encodeApprove`, `encodeContractCalls`) that produced the original — the only
+   * originally-random input, `intentId`, is already carried on the `Intent`.
+   *
+   * @param intent - The fully-populated intent (e.g. from `createIntent` or `getIntent`).
+   * @param intentsContract - The hub-chain intents contract address (`config.solver.intentsContract`).
+   * @param isHubSource - `true` when the intent's source chain is the hub (Sonic).
+   * @returns The byte-identical relay payload `Hex`.
+   */
+  public static reconstructCreateIntentData(intent: Intent, intentsContract: Address, isHubSource: boolean): Hex {
+    const createIntentCall = EvmSolverService.encodeCreateIntent(intent, intentsContract);
+
+    if (isHubSource) {
+      return createIntentCall.data;
+    }
+
+    const grossInputAmount = intent.inputAmount + EvmSolverService.decodeIntentFeeAmount(intent.data);
+
+    return encodeContractCalls([
+      Erc20Service.encodeApprove(intent.inputToken, intentsContract, grossInputAmount),
+      createIntentCall,
+    ]);
+  }
+
+  /**
    * Reads an `Intent` struct from a hub-chain transaction receipt.
    *
    * Waits for the transaction to be mined, then parses the `IntentCreated` event logs,
@@ -207,11 +275,7 @@ export class EvmSolverService {
    * @throws If the transaction contains no matching `IntentCreated` event, or if the
    *   intent's chain IDs are not recognized.
    */
-  public static async getIntent(
-    txHash: Hash,
-    config: ConfigService,
-    publicClient: PublicClient<HttpTransport>,
-  ): Promise<Intent> {
+  public static async getIntent(txHash: Hash, config: ConfigService, publicClient: PublicClient): Promise<Intent> {
     const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
     const logs: IntentCreatedEventLog[] = parseEventLogs({
       abi: IntentsAbi,
@@ -270,7 +334,7 @@ export class EvmSolverService {
   public static async getFilledIntent(
     txHash: Hash,
     solverConfig: SolverConfig,
-    publicClient: PublicClient<HttpTransport>,
+    publicClient: PublicClient,
   ): Promise<IntentState> {
     const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
     const logs: IntentFilledEventLog[] = parseEventLogs({

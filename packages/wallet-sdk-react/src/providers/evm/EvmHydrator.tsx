@@ -70,6 +70,16 @@ export const EvmHydrator = () => {
     }
   }, [address, status, connector, userDisconnectedEvm, setXConnection, unsetXConnection]);
 
+  // After hydration, a persisted EVM connection means we WERE connected, so mark it — a failed reconnect
+  // (status reaches 'disconnected' without ever hitting 'connected') then clears the stale entry instead
+  // of keeping it all session. Must stay after the status effect so the initial 'disconnected' tick still
+  // sees `false` and doesn't clear prematurely.
+  useEffect(() => {
+    if (hydrated && useXWalletStore.getState().xConnections.EVM) {
+      wasConnectedRef.current = true;
+    }
+  }, [hydrated]);
+
   const walletProvider = useMemo(() => {
     if (!evmPublicClient || !evmWalletClient) return undefined;
     if (userDisconnectedEvm) return undefined;

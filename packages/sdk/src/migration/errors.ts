@@ -28,6 +28,7 @@ export type MigrationDirection = 'forward' | 'reverse';
 
 export type MigrateOrchestrationErrorCode = Extract<
   SodaxErrorCode,
+  | 'USER_REJECTED'
   | 'VALIDATION_FAILED'
   | 'INTENT_CREATION_FAILED'
   | 'TX_VERIFICATION_FAILED'
@@ -47,6 +48,7 @@ export type MigrationLookupErrorCode = LookupErrorCode;
 
 export type MigrationErrorCode = Extract<
   SodaxErrorCode,
+  | 'USER_REJECTED'
   | 'VALIDATION_FAILED'
   | 'INTENT_CREATION_FAILED'
   | 'TX_VERIFICATION_FAILED'
@@ -69,6 +71,7 @@ export type MigrationLookupError = SodaxError<MigrationLookupErrorCode>;
 export type MigrationError = SodaxError<MigrationErrorCode>;
 
 const MIGRATE_ORCH_CODES: ReadonlySet<MigrateOrchestrationErrorCode> = new Set([
+  'USER_REJECTED',
   'VALIDATION_FAILED',
   'INTENT_CREATION_FAILED',
   'TX_VERIFICATION_FAILED',
@@ -80,6 +83,7 @@ const MIGRATE_ORCH_CODES: ReadonlySet<MigrateOrchestrationErrorCode> = new Set([
 ]);
 
 const REVERT_ORCH_CODES: ReadonlySet<RevertMigrationOrchestrationErrorCode> = new Set([
+  'USER_REJECTED',
   'VALIDATION_FAILED',
   'INTENT_CREATION_FAILED',
   'TX_SUBMIT_FAILED',
@@ -90,6 +94,7 @@ const REVERT_ORCH_CODES: ReadonlySet<RevertMigrationOrchestrationErrorCode> = ne
 ]);
 
 const MIGRATION_CODES: ReadonlySet<MigrationErrorCode> = new Set<MigrationErrorCode>([
+  'USER_REJECTED',
   'VALIDATION_FAILED',
   'INTENT_CREATION_FAILED',
   'TX_VERIFICATION_FAILED',

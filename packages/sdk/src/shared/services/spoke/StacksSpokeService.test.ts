@@ -13,7 +13,6 @@
  *        - `fetchFeeEstimateTransaction` — used by `estimateGas`.
  *        - `makeUnsignedContractCall`   — used by `deposit` and `sendMessage` in raw mode.
  *        - `serializePayloadBytes`      — used to turn an unsigned tx into the rawTx payload.
- *        - `validateStacksAddress`      — used by `deposit` raw-mode invariant.
  *      All other exports (`Cl`, `noneCV`, `someCV`, `uintCV`, `PostConditionMode`,
  *      `parseContractId`, the Clarity type constructors, etc.) are pass-through via
  *      `vi.importActual` so payload-shape assertions can read real Clarity values.
@@ -27,11 +26,12 @@
  * catches a class of regressions where a hardcoded value happens to match a test fixture but
  * diverges from production config.
  *
- * Stacks-specific gotcha: `deposit` with `raw=true` expects `srcAddress` to be a **public key**,
- * NOT a Stacks address. The SUT asserts this via `validateStacksAddress(srcAddress) === true`
- * throwing. Our raw-mode fixtures therefore pass a fake hex public key (66 chars, compressed-
- * secp256k1 shape) and the validation mock returns `false` for it. The address-error test mocks
- * `validateStacksAddress` to return `true` for the same input to trigger the throw branch.
+ * Stacks-specific gotcha: `deposit` with `raw=true` builds the tx unsigned, so it needs the signer's
+ * **public key** via `srcPublicKey` (the `SP…` address is a one-way hash of it); `srcAddress` stays
+ * the real address. The raw guard derives the address from `srcPublicKey` and asserts it equals
+ * `srcAddress`. Fixtures use a REAL compressed public key and its REAL derived mainnet address (the
+ * crypto is not mocked — `getAddressFromPublicKey` passes through `vi.importActual`), so the happy path
+ * matches; the guard tests feed a missing key, a mismatched address, and a non-key string.
  *
  * Section organization:
  *   1. constructor — method surface, network wiring, polling config
@@ -42,11 +42,12 @@
  *   6. getImplContractAddress — readContract for `get-asset-manager-impl`
  *   7. deposit — native vs non-native, raw vs walletProvider, raw-mode invariant
  *   8. getDeposit — native via getSTXBalance, non-native via readTokenBalance
+ *  8b. getWalletBalance / getWalletBalances — the USER's own holdings (contrast getDeposit)
  *   9. sendMessage — raw vs walletProvider, relay-id derivation
  *  10. waitForTransactionReceipt — every tx_status branch + polling defaults
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Cl, type ContractPrincipalCV, type UIntCV } from '@sodax/libs/stacks/core';
+import { Cl, Pc, type ContractPrincipalCV, type UIntCV } from '@sodax/libs/stacks/core';
 import { ChainKeys, getIntentRelayChainId, spokeChainConfig, type Hex, type IStacksWalletProvider } from '@sodax/types';
 
 // --- hoisted mocks --------------------------------------------------------
@@ -59,7 +60,6 @@ const mocks = vi.hoisted(() => ({
   fetchFeeEstimateTransaction: vi.fn(),
   makeUnsignedContractCall: vi.fn(),
   serializePayloadBytes: vi.fn(),
-  validateStacksAddress: vi.fn(),
 }));
 
 vi.mock('@sodax/libs/stacks/core', async () => {
@@ -74,7 +74,6 @@ vi.mock('@sodax/libs/stacks/core', async () => {
     fetchFeeEstimateTransaction: mocks.fetchFeeEstimateTransaction,
     makeUnsignedContractCall: mocks.makeUnsignedContractCall,
     serializePayloadBytes: mocks.serializePayloadBytes,
-    validateStacksAddress: mocks.validateStacksAddress,
   };
 });
 
@@ -114,11 +113,12 @@ const STACKS_TIMEOUT_MS = stacksConfig.pollingConfig.maxTimeoutMs;
 const STACKS_ASSET_MGR_IMPL = 'SP3031RGK734636C8KGW2Y76TEQBTVX59Q472EQH0.asset-manager-impl-v1';
 
 // Per-user / per-flow scratch — no config source.
-// A valid Stacks principal (mainnet 'SP…' single-sig prefix).
-const SRC_ADDR = 'SP2C2YFP12AJZB4MABJBAJ55XECVS7E4PMMZ89YZR';
-// A fake compressed-secp256k1 public key (33 bytes hex = 66 chars). `validateStacksAddress`
-// returns false for this in the happy-path raw deposit (publicKey-as-from invariant).
-const SRC_PUBKEY = '02'.padEnd(66, 'a');
+// A real Stacks account: a compressed public key and the mainnet single-sig address it derives to, so the
+// raw-deposit guard `getAddressFromPublicKey(srcPublicKey) === srcAddress` holds without mocking the crypto.
+const SRC_PUBKEY = '025259f813b57dd5c3fcac09776d767a49f6dd77bba5895823b891e31b10a96a5d';
+const SRC_ADDR = 'SP1D5PA98M0PF9Z4Q4N2CDTMTD7XSZ6GE7QQG5XBX';
+// A different real mainnet address — used to exercise the pubkey↔address mismatch guard.
+const OTHER_ADDR = 'SP2C2YFP12AJZB4MABJBAJ55XECVS7E4PMMZ89YZR';
 // 20-byte HUB destinations as 40-hex strings (Cl.bufferFromHex accepts them).
 const HUB_WALLET: Hex = `0x${'22'.repeat(20)}`;
 const DST_ADDR: Hex = `0x${'33'.repeat(20)}`;
@@ -137,17 +137,13 @@ const mockStacksProvider = {
 // content is opaque to the SUT.
 const FAKE_PAYLOAD_BYTES = new Uint8Array([0xde, 0xad, 0xbe, 0xef]);
 const FAKE_PAYLOAD_HEX = '0xdeadbeef';
-const fakeUnsignedTx = { payload: { type: 'contract-call', _opaque: true } } as unknown as Awaited<
-  ReturnType<typeof import('@sodax/libs/stacks/core').makeUnsignedContractCall>
->;
+const fakeUnsignedTx = { payload: { type: 'contract-call', _opaque: true } };
 
 beforeEach(() => {
   vi.clearAllMocks();
   // Restore mock default behaviour after `clearAllMocks` (which wipes implementations).
   mocks.makeUnsignedContractCall.mockResolvedValue(fakeUnsignedTx);
   mocks.serializePayloadBytes.mockReturnValue(FAKE_PAYLOAD_BYTES);
-  // Default: the fake public key is NOT a valid Stacks address — i.e. raw-mode invariant holds.
-  mocks.validateStacksAddress.mockReturnValue(false);
 });
 
 afterEach(() => {
@@ -248,7 +244,7 @@ describe('StacksSpokeService.getSTXBalance', () => {
     const fetchSpy = vi.fn().mockResolvedValueOnce({
       ok: true,
       json: () => Promise.resolve({ stx: { balance: '1234567' } }),
-    } as unknown as Response);
+    });
     vi.stubGlobal('fetch', fetchSpy);
 
     const result = await stacksSpoke.getSTXBalance(SRC_ADDR);
@@ -258,10 +254,7 @@ describe('StacksSpokeService.getSTXBalance', () => {
   });
 
   it('throws with the upstream statusText when the response is not ok', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValueOnce({ ok: false, statusText: 'Internal Server Error' } as unknown as Response),
-    );
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({ ok: false, statusText: 'Internal Server Error' }));
 
     await expect(stacksSpoke.getSTXBalance(SRC_ADDR)).rejects.toThrow(
       'Error fetching STX balance: Internal Server Error',
@@ -274,10 +267,7 @@ describe('StacksSpokeService.getSTXBalance', () => {
     // TypeError rather than an explicit "unexpected response shape" error.
     // Pinning the behaviour so a future contributor adding a runtime guard
     // knows it's a contract change.
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) } as unknown as Response),
-    );
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) }));
 
     await expect(stacksSpoke.getSTXBalance(SRC_ADDR)).rejects.toThrow(TypeError);
   });
@@ -292,7 +282,7 @@ describe('StacksSpokeService.readTokenBalance', () => {
     // The SUT casts the result to `{ value: UIntCV }`, then returns `.value.value`. The actual
     // shape returned by fetchCallReadOnlyFunction for `get-balance` is `(ok uint)` → a ResponseOk
     // wrapping a UInt — but the SUT reads it via the simpler `{ value: UIntCV }` cast.
-    const fakeResponse = { value: { type: 1, value: 9_999n } as unknown as UIntCV };
+    const fakeResponse = { value: { type: 1, value: 9_999n } };
     mocks.fetchCallReadOnlyFunction.mockResolvedValueOnce(fakeResponse);
 
     const result = await stacksSpoke.readTokenBalance(STACKS_BNUSD, STACKS_ASSET_MGR);
@@ -372,9 +362,9 @@ describe('StacksSpokeService.deposit', () => {
     overrides: Partial<DepositParams<typeof STACKS, Raw>>,
   ): DepositParams<typeof STACKS, Raw> =>
     ({
-      // raw-mode expects a public key here; non-raw mode is fine with either. The default uses the
-      // pubkey so the same fixture works for both branches without per-test surgery.
-      srcAddress: SRC_PUBKEY,
+      // raw-mode needs the signer public key via srcPublicKey; srcAddress is always the real Stacks address.
+      srcAddress: SRC_ADDR,
+      srcPublicKey: SRC_PUBKEY,
       srcChainKey: STACKS,
       to: HUB_WALLET,
       token: STACKS_BNUSD,
@@ -411,6 +401,19 @@ describe('StacksSpokeService.deposit', () => {
     expect(mocks.serializePayloadBytes).toHaveBeenCalledWith(fakeUnsignedTx.payload);
   });
 
+  it('raw=true FT deposit skips the contract-interface fetch and carries no post-conditions', async () => {
+    // Post-conditions cannot ride the serialized payload, so raw mode must not pay (or fail on)
+    // the interface lookup they would need.
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+
+    const result = await stacksSpoke.deposit(depositParams<true>({ raw: true, token: STACKS_BNUSD }));
+
+    expect(result).toEqual({ payload: FAKE_PAYLOAD_HEX });
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(mocks.makeUnsignedContractCall.mock.calls.at(-1)?.[0]?.postConditions).toBeUndefined();
+  });
+
   it('raw=true non-native → first functionArg is someCV(Cl.principal(token))', async () => {
     await stacksSpoke.deposit(depositParams<true>({ raw: true, token: STACKS_BNUSD }));
 
@@ -434,38 +437,107 @@ describe('StacksSpokeService.deposit', () => {
     expect(call?.functionArgs?.[0]).toMatchObject({ type: 'none' });
   });
 
-  it('raw=true → throws when srcAddress validates as a real Stacks address (publicKey-required invariant)', async () => {
-    // Flip validateStacksAddress to return true for this call only — simulates a caller who
-    // passed a Stacks address instead of a public key.
-    mocks.validateStacksAddress.mockReturnValueOnce(true);
-
-    await expect(stacksSpoke.deposit(depositParams<true>({ srcAddress: SRC_ADDR, raw: true }))).rejects.toThrow(
-      'When using raw transactions, the public key must be provided as "from" parameter',
+  it('raw=true → throws when srcPublicKey is missing (needed to build the unsigned tx)', async () => {
+    await expect(stacksSpoke.deposit(depositParams<true>({ srcPublicKey: undefined, raw: true }))).rejects.toThrow(
+      'Stacks raw transactions require srcPublicKey',
     );
     // makeUnsignedContractCall must NOT have been invoked once the invariant fails.
     expect(mocks.makeUnsignedContractCall).not.toHaveBeenCalled();
   });
 
+  it('raw=true → throws when srcPublicKey derives a different address than srcAddress', async () => {
+    // Real key G derives SRC_ADDR; pairing it with a different real address must be rejected — otherwise
+    // the user signs a tx for an account other than the one hub-wallet derivation used.
+    await expect(
+      stacksSpoke.deposit(depositParams<true>({ srcPublicKey: SRC_PUBKEY, srcAddress: OTHER_ADDR, raw: true })),
+    ).rejects.toThrow('does not match srcAddress');
+    expect(mocks.makeUnsignedContractCall).not.toHaveBeenCalled();
+  });
+
+  it('raw=true → throws when srcPublicKey is not a valid public key (e.g. a Stacks address)', async () => {
+    // A c32 address is not hex, so getAddressFromPublicKey fails to parse it — surfaced as a clean error.
+    await expect(stacksSpoke.deposit(depositParams<true>({ srcPublicKey: SRC_ADDR, raw: true }))).rejects.toThrow(
+      'not a valid Stacks public key',
+    );
+    expect(mocks.makeUnsignedContractCall).not.toHaveBeenCalled();
+  });
+
   it('raw=false → delegates to walletProvider.sendTransaction and returns the txId', async () => {
     (mockStacksProvider.sendTransaction as ReturnType<typeof vi.fn>).mockResolvedValueOnce(TX_ID);
+    // getFtAssetName resolves the on-chain `define-fungible-token` name from the contract interface.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ fungible_tokens: [{ name: 'bnusd' }] }),
+      }),
+    );
 
     const result = await stacksSpoke.deposit(
       depositParams<false>({ raw: false, walletProvider: mockStacksProvider, token: STACKS_BNUSD }),
     );
 
     expect(result).toBe(TX_ID);
-    // The reqData passed to the wallet provider must carry the impl-split contract id, the
-    // transfer function name, and the postConditionMode=Allow setting.
+    // The reqData must carry the impl-split contract id, the transfer function name, and a
+    // Deny-mode post-condition capping the caller's spend at `amount`.
     expect(mockStacksProvider.sendTransaction).toHaveBeenCalledWith(
       expect.objectContaining({
         contractAddress: 'SP3031RGK734636C8KGW2Y76TEQBTVX59Q472EQH0',
         contractName: 'asset-manager-impl-v1',
         functionName: 'transfer',
-        postConditionMode: 1, // PostConditionMode.Allow
+        postConditionMode: 2, // PostConditionMode.Deny
+        postConditions: [
+          Pc.principal(SRC_ADDR)
+            .willSendLte(1_000n)
+            .ft(STACKS_BNUSD as `${string}.${string}`, 'bnusd'),
+        ],
       }),
     );
     // raw=false must NOT call the unsigned-tx builder.
     expect(mocks.makeUnsignedContractCall).not.toHaveBeenCalled();
+  });
+
+  it('raw=false native STX → caps the spend with a ustx post-condition, no interface fetch', async () => {
+    (mockStacksProvider.sendTransaction as ReturnType<typeof vi.fn>).mockResolvedValueOnce(TX_ID);
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+
+    await stacksSpoke.deposit(
+      depositParams<false>({ raw: false, walletProvider: mockStacksProvider, token: STACKS_NATIVE }),
+    );
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(mockStacksProvider.sendTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        postConditionMode: 2, // PostConditionMode.Deny
+        postConditions: [Pc.principal(SRC_ADDR).willSendLte(1_000n).ustx()],
+      }),
+    );
+  });
+
+  it('raw=false multi-FT contract (sBTC shape) → one cap per declared fungible token', async () => {
+    // sbtc-token really defines two FTs on mainnet; the unmoved one passes its cap at 0.
+    const SBTC = 'SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token' as const;
+    (mockStacksProvider.sendTransaction as ReturnType<typeof vi.fn>).mockResolvedValueOnce(TX_ID);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ fungible_tokens: [{ name: 'sbtc-token' }, { name: 'sbtc-token-locked' }] }),
+      }),
+    );
+
+    await stacksSpoke.deposit(depositParams<false>({ raw: false, walletProvider: mockStacksProvider, token: SBTC }));
+
+    expect(mockStacksProvider.sendTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        postConditionMode: 2, // PostConditionMode.Deny
+        postConditions: [
+          Pc.principal(SRC_ADDR).willSendLte(1_000n).ft(SBTC, 'sbtc-token'),
+          Pc.principal(SRC_ADDR).willSendLte(1_000n).ft(SBTC, 'sbtc-token-locked'),
+        ],
+      }),
+    );
   });
 });
 
@@ -478,7 +550,7 @@ describe('StacksSpokeService.getDeposit', () => {
     const fetchSpy = vi.fn().mockResolvedValueOnce({
       ok: true,
       json: () => Promise.resolve({ stx: { balance: '42' } }),
-    } as unknown as Response);
+    });
     vi.stubGlobal('fetch', fetchSpy);
 
     const result = await stacksSpoke.getDeposit({
@@ -496,7 +568,7 @@ describe('StacksSpokeService.getDeposit', () => {
     // The non-native branch checks the asset-manager's balance of the token — i.e. how much the
     // user has deposited. A regression that passed `srcAddress` instead would silently return the
     // user's wallet balance, which is a different number.
-    const fakeResponse = { value: { type: 1, value: 5_555n } as unknown as UIntCV };
+    const fakeResponse = { value: { type: 1, value: 5_555n } };
     mocks.fetchCallReadOnlyFunction.mockResolvedValueOnce(fakeResponse);
 
     const result = await stacksSpoke.getDeposit({
@@ -513,6 +585,165 @@ describe('StacksSpokeService.getDeposit', () => {
         senderAddress: STACKS_ASSET_MGR,
       }),
     );
+  });
+});
+
+// =========================================================================
+// 8b. getWalletBalance / getWalletBalances — the user's own holdings
+// =========================================================================
+
+describe('StacksSpokeService.getWalletBalance / getWalletBalances', () => {
+  // Real config tokens — a synthesised principal would let a native/SIP-010 misclassification pass.
+  const STX_TOKEN = stacksConfig.supportedTokens.STX;
+  const BNUSD_TOKEN = stacksConfig.supportedTokens.bnUSD;
+  const SODA_TOKEN = stacksConfig.supportedTokens.SODA;
+
+  // `getSTXBalance` reads only `ok` and `json`, so a full `Response` is unnecessary.
+  const stxBalanceResponse = (balance: string) =>
+    ({ ok: true, json: () => Promise.resolve({ stx: { balance } }) }) as unknown as Response;
+
+  it('native STX → reads the Hiro balances endpoint for the user and issues no contract call', async () => {
+    // isNativeToken matches token.address against config.nativeToken; if they ever diverge the
+    // native branch silently degrades into a SIP-010 read against a non-existent contract.
+    expect(STX_TOKEN.address).toBe(STACKS_NATIVE);
+    const fetchSpy = vi.fn().mockResolvedValueOnce(stxBalanceResponse('7654321'));
+    vi.stubGlobal('fetch', fetchSpy);
+
+    const result = await stacksSpoke.getWalletBalance({
+      srcChainKey: STACKS,
+      srcAddress: SRC_ADDR,
+      token: STX_TOKEN,
+    });
+
+    expect(result).toBe(7_654_321n);
+    expect(fetchSpy).toHaveBeenCalledWith(`${STACKS_RPC_URL}/extended/v1/address/${SRC_ADDR}/balances`);
+    expect(mocks.fetchCallReadOnlyFunction).not.toHaveBeenCalled();
+  });
+
+  it('SIP-010 → calls `get-balance` with the USER as both principal arg and senderAddress', async () => {
+    // The SUT casts the Clarity result to `{ value: UIntCV }` and reads `.value.value`.
+    mocks.fetchCallReadOnlyFunction.mockResolvedValueOnce({ value: { type: 1, value: 8_888n } as unknown as UIntCV });
+
+    const result = await stacksSpoke.getWalletBalance({
+      srcChainKey: STACKS,
+      srcAddress: SRC_ADDR,
+      token: BNUSD_TOKEN,
+    });
+
+    expect(result).toBe(8_888n);
+    // getDeposit passes STACKS_ASSET_MGR here; the holder is the single field separating the two
+    // reads, so a copy-paste regression would silently return the protocol's balance to the user.
+    expect(mocks.fetchCallReadOnlyFunction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        contractAddress: 'SP3031RGK734636C8KGW2Y76TEQBTVX59Q472EQH0',
+        contractName: 'bnusd',
+        functionName: 'get-balance',
+        functionArgs: [Cl.principal(SRC_ADDR)],
+        senderAddress: SRC_ADDR,
+      }),
+    );
+  });
+
+  it('rejects when the SIP-010 read fails — never resolves a fabricated 0n', async () => {
+    // This method used to swallow every error and return 0n, which the UI cannot tell apart from an
+    // empty wallet. The rejection is the contract now.
+    mocks.fetchCallReadOnlyFunction.mockRejectedValueOnce(new Error('Hiro read-only call failed'));
+
+    await expect(
+      stacksSpoke.getWalletBalance({ srcChainKey: STACKS, srcAddress: SRC_ADDR, token: BNUSD_TOKEN }),
+    ).rejects.toThrow('Hiro read-only call failed');
+  });
+
+  it('rejects when the native STX read fails — never resolves a fabricated 0n', async () => {
+    vi.stubGlobal(
+      'fetch',
+      // The failure path reads only `ok` and `statusText`.
+      vi.fn().mockResolvedValueOnce({ ok: false, statusText: 'Bad Gateway' } as unknown as Response),
+    );
+
+    await expect(
+      stacksSpoke.getWalletBalance({ srcChainKey: STACKS, srcAddress: SRC_ADDR, token: STX_TOKEN }),
+    ).rejects.toThrow('Error fetching STX balance: Bad Gateway');
+  });
+
+  it('getWalletBalances → keys successful reads by token.address across both branches', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(stxBalanceResponse('100')));
+    // Same `{ value: UIntCV }` shape the SUT casts to; the real ResponseOkCV wrapper is never read.
+    mocks.fetchCallReadOnlyFunction.mockResolvedValueOnce({ value: { type: 1, value: 700n } as unknown as UIntCV });
+
+    const result = await stacksSpoke.getWalletBalances({
+      srcChainKey: STACKS,
+      srcAddress: SRC_ADDR,
+      tokens: [STX_TOKEN, BNUSD_TOKEN],
+    });
+
+    expect(result).toEqual({
+      [STX_TOKEN.address]: 100n,
+      [BNUSD_TOKEN.address]: 700n,
+    });
+  });
+
+  it('getWalletBalances → a failing token reports 0n via the logger and leaves the others intact', async () => {
+    // A flat map cannot carry the failure, so the SDK logger is the only channel an integrator has
+    // to tell a fabricated 0n apart from a real empty balance — assert it actually fired.
+    const warnSpy = vi.spyOn(sodax.config.logger, 'warn');
+    const rpcError = new Error('HTTP 429');
+    // settleWalletBalances kicks off the reads in token order, so the first `Once` belongs to bnUSD.
+    mocks.fetchCallReadOnlyFunction
+      .mockRejectedValueOnce(rpcError)
+      // The second read succeeds, in the `{ value: UIntCV }` shape the SUT casts to.
+      .mockResolvedValueOnce({ value: { type: 1, value: 250n } as unknown as UIntCV });
+
+    const result = await stacksSpoke.getWalletBalances({
+      srcChainKey: STACKS,
+      srcAddress: SRC_ADDR,
+      tokens: [BNUSD_TOKEN, SODA_TOKEN],
+    });
+
+    expect(mocks.fetchCallReadOnlyFunction.mock.calls[0]?.[0]).toMatchObject({ contractName: 'bnusd' });
+    expect(result[BNUSD_TOKEN.address]).toBe(0n);
+    expect(result[SODA_TOKEN.address]).toBe(250n);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('balance read failed'),
+      expect.objectContaining({ chainKey: STACKS, token: BNUSD_TOKEN.address, error: rpcError.message }),
+    );
+  });
+
+  it('getWalletBalances → rejects when every token in a non-empty batch fails', async () => {
+    // An all-zero map from a dead RPC is indistinguishable from an empty wallet, so the collector
+    // refuses to return one.
+    mocks.fetchCallReadOnlyFunction.mockRejectedValue(new Error('HTTP 503'));
+
+    await expect(
+      stacksSpoke.getWalletBalances({
+        srcChainKey: STACKS,
+        srcAddress: SRC_ADDR,
+        tokens: [BNUSD_TOKEN, SODA_TOKEN],
+      }),
+    ).rejects.toThrow(`every balance read failed on ${STACKS}`);
+  });
+
+  it('getWalletBalances → a genuine on-chain 0n counts as a successful read, not a failure', async () => {
+    // The all-failed guard keys off read outcomes, not values: a wallet that is empty on every
+    // token must still resolve, and must log nothing.
+    const warnSpy = vi.spyOn(sodax.config.logger, 'warn');
+    mocks.fetchCallReadOnlyFunction.mockResolvedValue({ value: { type: 1, value: 0n } as unknown as UIntCV });
+
+    const result = await stacksSpoke.getWalletBalances({
+      srcChainKey: STACKS,
+      srcAddress: SRC_ADDR,
+      tokens: [BNUSD_TOKEN, SODA_TOKEN],
+    });
+
+    expect(result).toEqual({ [BNUSD_TOKEN.address]: 0n, [SODA_TOKEN.address]: 0n });
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it('getWalletBalances → an empty token list resolves to an empty map', async () => {
+    // `attempted === 0` must not trip the all-failed guard.
+    await expect(
+      stacksSpoke.getWalletBalances({ srcChainKey: STACKS, srcAddress: SRC_ADDR, tokens: [] }),
+    ).resolves.toEqual({});
   });
 });
 
@@ -548,9 +779,10 @@ describe('StacksSpokeService.sendMessage', () => {
         publicKey: SRC_PUBKEY,
         fee: 0,
         nonce: 0n,
-        postConditionMode: 1, // PostConditionMode.Allow
       }),
     );
+    // Post-conditions never ride the serialized payload — raw builds don't carry them.
+    expect(mocks.makeUnsignedContractCall.mock.calls.at(-1)?.[0]?.postConditions).toBeUndefined();
   });
 
   it('raw=true → functionArgs are [uintCV(relayChainId), Cl.bufferFromHex(dstAddress), Cl.bufferFromHex(payload)]', async () => {
@@ -598,10 +830,7 @@ describe('StacksSpokeService.sendMessage', () => {
 describe('StacksSpokeService.waitForTransactionReceipt', () => {
   it('maps tx_status === "success" to status:success with the JSON body as the receipt', async () => {
     const receipt = { tx_id: TX_ID, tx_status: 'success', tx_type: 'contract_call' };
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(receipt) } as unknown as Response),
-    );
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(receipt) }));
 
     const result = await stacksSpoke.waitForTransactionReceipt({ chainKey: STACKS, txHash: TX_ID });
 
@@ -612,10 +841,7 @@ describe('StacksSpokeService.waitForTransactionReceipt', () => {
 
   it('maps tx_status === "abort_by_response" to status:failure with a descriptive error', async () => {
     const receipt = { tx_id: TX_ID, tx_status: 'abort_by_response', tx_type: 'contract_call' };
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(receipt) } as unknown as Response),
-    );
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(receipt) }));
 
     const result = await stacksSpoke.waitForTransactionReceipt({ chainKey: STACKS, txHash: TX_ID });
 
@@ -626,10 +852,7 @@ describe('StacksSpokeService.waitForTransactionReceipt', () => {
 
   it('maps tx_status === "abort_by_post_condition" to status:failure with a descriptive error', async () => {
     const receipt = { tx_id: TX_ID, tx_status: 'abort_by_post_condition', tx_type: 'contract_call' };
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(receipt) } as unknown as Response),
-    );
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(receipt) }));
 
     const result = await stacksSpoke.waitForTransactionReceipt({ chainKey: STACKS, txHash: TX_ID });
 
@@ -642,10 +865,7 @@ describe('StacksSpokeService.waitForTransactionReceipt', () => {
     // `pending` tx_status loops without resolving. With `sleep` mocked to a no-op and a tiny
     // `maxTimeoutMs` (0), the loop body runs once at most before `Date.now() < deadline` fails.
     const pendingReceipt = { tx_id: TX_ID, tx_status: 'pending', tx_type: 'contract_call' };
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(pendingReceipt) } as unknown as Response),
-    );
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(pendingReceipt) }));
 
     const result = await stacksSpoke.waitForTransactionReceipt({
       chainKey: STACKS,
@@ -666,7 +886,7 @@ describe('StacksSpokeService.waitForTransactionReceipt', () => {
     const fetchSpy = vi
       .fn()
       .mockRejectedValueOnce(new Error('ECONNRESET'))
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(successReceipt) } as unknown as Response);
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(successReceipt) });
     vi.stubGlobal('fetch', fetchSpy);
 
     const result = await stacksSpoke.waitForTransactionReceipt({
@@ -690,9 +910,7 @@ describe('StacksSpokeService.waitForTransactionReceipt', () => {
     expect(STACKS_TIMEOUT_MS).toBe(120_000);
     // Short-circuit: success on the first poll, so we don't actually wait 120s.
     const successReceipt = { tx_id: TX_ID, tx_status: 'success', tx_type: 'contract_call' };
-    const fetchSpy = vi
-      .fn()
-      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(successReceipt) } as unknown as Response);
+    const fetchSpy = vi.fn().mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(successReceipt) });
     vi.stubGlobal('fetch', fetchSpy);
 
     await stacksSpoke.waitForTransactionReceipt({ chainKey: STACKS, txHash: TX_ID });
@@ -709,10 +927,7 @@ describe('StacksSpokeService.waitForTransactionReceipt', () => {
     // through to the next poll iteration. With `maxTimeoutMs: 0`, the deadline
     // check exits the loop immediately and returns `status: 'timeout'`.
     const submittedReceipt = { tx_id: TX_ID, tx_status: 'submitted', tx_type: 'contract_call' };
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(submittedReceipt) } as unknown as Response),
-    );
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(submittedReceipt) }));
 
     const result = await stacksSpoke.waitForTransactionReceipt({
       chainKey: STACKS,
@@ -729,10 +944,7 @@ describe('StacksSpokeService.waitForTransactionReceipt', () => {
     // With pending forever, the loop must exit when Date.now() exceeds the *caller-supplied*
     // deadline. We pin the timeout message text to match the override (not the default).
     const pendingReceipt = { tx_id: TX_ID, tx_status: 'pending', tx_type: 'contract_call' };
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(pendingReceipt) } as unknown as Response),
-    );
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(pendingReceipt) }));
 
     const result = await stacksSpoke.waitForTransactionReceipt({
       chainKey: STACKS,

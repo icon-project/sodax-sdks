@@ -1,6 +1,6 @@
 # Stellar Trustline Requirements
 
-Stellar blockchain requires trustlines to be established before you can receive or hold tokens. This document explains how to handle trustlines when using Stellar with the Sodax SDK across different operations.
+Stellar blockchain requires trustlines to be established before you can receive or hold tokens. This document explains how to handle trustlines when using Stellar with the SODAX SDK across different operations.
 
 ## Overview
 

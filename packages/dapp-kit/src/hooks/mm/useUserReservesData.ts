@@ -2,6 +2,7 @@ import type { UserReserveData } from '@sodax/sdk';
 import type { SpokeChainKey } from '@sodax/sdk';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
+import { resolveBtcReadAddress } from '../bitcoin/resolveBtcReadAddress.js';
 import type { ReadHookParams } from '../shared/types.js';
 
 export type UseUserReservesDataParams = ReadHookParams<
@@ -30,7 +31,10 @@ export function useUserReservesData({
       if (!spokeChainKey || !userAddress) {
         throw new Error('spokeChainKey and userAddress are required');
       }
-      return sodax.moneyMarket.data.getUserReservesData(spokeChainKey, userAddress);
+      return sodax.moneyMarket.data.getUserReservesData(
+        spokeChainKey,
+        resolveBtcReadAddress(spokeChainKey, userAddress),
+      );
     },
     enabled: !!spokeChainKey && !!userAddress,
     refetchInterval: 5000,

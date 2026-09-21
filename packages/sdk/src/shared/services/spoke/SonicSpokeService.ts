@@ -4,8 +4,6 @@ import {
   decodeAbiParameters,
   encodeFunctionData,
   erc20Abi,
-  http,
-  type HttpTransport,
   type PublicClient,
 } from 'viem';
 import {
@@ -21,6 +19,7 @@ import {
   type TxReturnType,
   type EvmContractCall,
   isSonicChainKey,
+  isNativeToken,
   type WalletProviderSlot,
   type EvmReturnType,
   type HubConfig,
@@ -28,18 +27,24 @@ import {
 import { invariant } from '../../utils/tiny-invariant.js';
 import { encodeAddress, randomUint256 } from '../../utils/shared-utils.js';
 import { getEvmViemChain } from '../../utils/constant-utils.js';
+import { buildEvmRpcTransport } from '../../utils/transport-utils.js';
 import { Erc20Service, type Erc20IsAllowanceParams } from '../erc-20/Erc20Service.js';
 import { wrappedSonicAbi, sonicWalletFactoryAbi } from '../../abis/index.js';
 import { EvmSolverService } from '../../../swap/EvmSolverService.js';
+import { HookService } from '../../../swap/HookService.js';
+import { IntentDataService } from '../../../swap/IntentDataService.js';
 import { isSonicChainKeyType } from '../../guards.js';
 import type {
   WaitForTxReceiptParams,
   WaitForTxReceiptReturnType,
   EstimateGasParams,
   GetDepositParams,
+  GetBalanceParams,
+  GetBalancesParams,
   SendMessageParams,
   DepositParams,
 } from '../../types/spoke-types.js';
+import { createBalanceCollector, settleWalletBalances, type WalletBalanceMap } from './balance-utils.js';
 import type { CreateIntentParams, Intent } from '../../types/intent-types.js';
 import type { ConfigService } from '../../config/ConfigService.js';
 
@@ -71,7 +76,7 @@ export type CreateSonicSwapIntentParams<Raw extends boolean> = {
 export class SonicSpokeService {
   private readonly config: ConfigService;
   // since sonic is sole hub chain we only need one public client
-  public readonly publicClient: PublicClient<HttpTransport>;
+  public readonly publicClient: PublicClient;
   private readonly pollingIntervalMs: number;
   private readonly maxTimeoutMs: number;
 
@@ -79,7 +84,7 @@ export class SonicSpokeService {
     this.config = config;
     const chainConfig = config.getChainConfig(ChainKeys.SONIC_MAINNET);
     this.publicClient = createPublicClient({
-      transport: http(chainConfig.rpcUrl),
+      transport: buildEvmRpcTransport(chainConfig),
       chain: getEvmViemChain(ChainKeys.SONIC_MAINNET),
     });
     this.pollingIntervalMs = chainConfig.pollingConfig.pollingIntervalMs;
@@ -263,19 +268,16 @@ export class SonicSpokeService {
       from: params.srcAddress,
       to: chainConfig.addresses.walletRouter,
       data: txData,
-      value:
-        params.token.toLowerCase() === chainConfig.nativeToken.toLowerCase()
-          ? params.amount
-          : 0n,
+      value: params.token.toLowerCase() === chainConfig.nativeToken.toLowerCase() ? params.amount : 0n,
     };
 
     if (params.raw === true) {
       return rawTx satisfies TxReturnType<SonicChainKey, true> as TxReturnType<SonicChainKey, Raw>;
     }
 
-    return params.walletProvider.sendTransaction(rawTx) satisfies Promise<
-      TxReturnType<SonicChainKey, false>
-    > as Promise<TxReturnType<SonicChainKey, Raw>>;
+    return params.walletProvider.sendTransaction(rawTx, {
+      expectedChainId: getEvmViemChain(ChainKeys.SONIC_MAINNET).id,
+    }) satisfies Promise<TxReturnType<SonicChainKey, false>> as Promise<TxReturnType<SonicChainKey, Raw>>;
   }
 
   public static async createSwapIntent<Raw extends boolean>(
@@ -302,7 +304,11 @@ export class SonicSpokeService {
       `hub asset not found for spoke chain token (intent.outputToken): ${createIntentParams.outputToken}`,
     );
 
-    const [feeData, feeAmount] = EvmSolverService.createIntentFeeData(fee, createIntentParams.inputAmount);
+    // Apply the delivery hook (if any): may override dstAddress and derive deliveryData.
+    const { dstAddress, deliveryData } = HookService.resolveDelivery(createIntentParams);
+    // Encode the partner fee, then fold it together with any delivery payload into the intent `data`.
+    const [feeEnvelope, feeAmount] = EvmSolverService.createIntentFeeData(fee, createIntentParams.inputAmount);
+    const intentData = IntentDataService.composeIntentData(feeEnvelope, deliveryData);
 
     const intentsContract = solverConfig.intentsContract;
     const intent = {
@@ -317,9 +323,9 @@ export class SonicSpokeService {
       srcChain: getIntentRelayChainId(createIntentParams.srcChainKey),
       dstChain: getIntentRelayChainId(createIntentParams.dstChainKey),
       srcAddress: encodeAddress(createIntentParams.srcChainKey, createIntentParams.srcAddress),
-      dstAddress: encodeAddress(createIntentParams.dstChainKey, createIntentParams.dstAddress),
+      dstAddress: encodeAddress(createIntentParams.dstChainKey, dstAddress),
       solver: createIntentParams.solver ?? '0x0000000000000000000000000000000000000000',
-      data: feeData, // fee amount will be deducted from the input amount
+      data: intentData, // fee amount will be deducted from the input amount; may also carry delivery data
     } satisfies Intent;
 
     const txData = EvmSolverService.encodeCreateIntent(intent, intentsContract);
@@ -339,10 +345,9 @@ export class SonicSpokeService {
     }
 
     return [
-      (await params.walletProvider.sendTransaction(rawTx)) satisfies TxReturnType<SonicChainKey, false> as TxReturnType<
-        SonicChainKey,
-        Raw
-      >,
+      (await params.walletProvider.sendTransaction(rawTx, {
+        expectedChainId: getEvmViemChain(ChainKeys.SONIC_MAINNET).id,
+      })) satisfies TxReturnType<SonicChainKey, false> as TxReturnType<SonicChainKey, Raw>,
       intent,
       feeAmount,
       txData.data,
@@ -360,6 +365,84 @@ export class SonicSpokeService {
       functionName: 'balanceOf',
       args: [params.token],
     });
+  }
+
+  /**
+   * Get the user's own wallet balance of a token on the hub (Sonic) chain, in smallest units.
+   * Native coin via `eth_getBalance`; erc20 via `balanceOf`.
+   * @param {GetBalanceParams<SonicChainKey>} params - The chain key, user address, and token.
+   * @returns {Promise<bigint>} The token balance in smallest units.
+   */
+  public async getWalletBalance(params: GetBalanceParams<SonicChainKey>): Promise<bigint> {
+    const { srcChainKey, srcAddress, token } = params;
+
+    if (isNativeToken(srcChainKey, token)) {
+      return this.publicClient.getBalance({ address: srcAddress });
+    }
+
+    const balance = await this.publicClient.readContract({
+      address: token.address as Address,
+      abi: erc20Abi,
+      functionName: 'balanceOf',
+      args: [srcAddress],
+    });
+    return balance ?? 0n;
+  }
+
+  /**
+   * Get the user's own wallet balances of multiple tokens on the hub (Sonic) chain, in smallest
+   * units. Non-native tokens are batched via multicall3 when the chain supports it, otherwise
+   * read in parallel.
+   * @param {GetBalancesParams<SonicChainKey>} params - The chain key, user address, and tokens.
+   * @returns {Promise<WalletBalanceMap>} A map of token address to balance in smallest units.
+   */
+  public async getWalletBalances(params: GetBalancesParams<SonicChainKey>): Promise<WalletBalanceMap> {
+    const { srcChainKey, srcAddress, tokens } = params;
+
+    const nativeTokens = tokens.filter(token => isNativeToken(srcChainKey, token));
+    const nonNativeTokens = tokens.filter(token => !isNativeToken(srcChainKey, token));
+
+    const collector = createBalanceCollector({ logger: this.config.logger, chainKey: srcChainKey });
+    await settleWalletBalances(collector, nativeTokens, token =>
+      this.getWalletBalance({ srcChainKey, srcAddress, token }),
+    );
+
+    if (nonNativeTokens.length === 0) {
+      return collector.finish();
+    }
+
+    if (getEvmViemChain(srcChainKey).contracts?.multicall3) {
+      // allowFailure (viem's default) keeps a single reverting token — or a rate-limited aggregate3
+      // chunk, which viem fans out as a failure entry per call — from discarding the balances that
+      // did resolve. Each failure still goes through the collector so it is logged, not silent.
+      const results = await this.publicClient.multicall({
+        contracts: nonNativeTokens.map(token => ({
+          abi: erc20Abi,
+          address: token.address as Address,
+          functionName: 'balanceOf',
+          args: [srcAddress],
+        })),
+      });
+      nonNativeTokens.forEach((token, index) => {
+        const result = results[index];
+        if (result?.status === 'success') {
+          collector.ok(token.address, BigInt(result.result));
+        } else {
+          collector.fail(token.address, result?.error ?? new Error(`missing multicall result for ${token.address}`));
+        }
+      });
+      return collector.finish();
+    }
+
+    await settleWalletBalances(collector, nonNativeTokens, token =>
+      this.publicClient.readContract({
+        address: token.address as Address,
+        abi: erc20Abi,
+        functionName: 'balanceOf',
+        args: [srcAddress],
+      }),
+    );
+    return collector.finish();
   }
 
   /**
@@ -412,8 +495,8 @@ export class SonicSpokeService {
       return rawTx satisfies TxReturnType<SonicChainKey, true> as TxReturnType<SonicChainKey, Raw>;
     }
 
-    return params.walletProvider.sendTransaction(rawTx) satisfies Promise<
-      TxReturnType<SonicChainKey, false>
-    > as Promise<TxReturnType<SonicChainKey, Raw>>;
+    return params.walletProvider.sendTransaction(rawTx, {
+      expectedChainId: getEvmViemChain(ChainKeys.SONIC_MAINNET).id,
+    }) satisfies Promise<TxReturnType<SonicChainKey, false>> as Promise<TxReturnType<SonicChainKey, Raw>>;
   }
 }

@@ -1,8 +1,7 @@
 import { useMemo } from 'react';
 import { formatUnits } from 'viem';
 
-import type { XToken } from '@sodax/sdk';
-import type { FormatReserveUSDResponse, UserReserveData } from '@sodax/sdk';
+import type { XToken, FormatReserveUSDResponse, UserReserveData } from '@sodax/dapp-kit';
 import { formatCompactNumber } from '@/lib/utils';
 import { AAVE_INDEX_PRECISION } from '@/components/mm/constants';
 
@@ -78,8 +77,7 @@ export function useReserveMetrics({
         Number(formatUnits(BigInt(formattedReserve.availableLiquidity), 18)) + totalVariableDebt;
 
       const ltValue = Number(formattedReserve.formattedReserveLiquidationThreshold);
-      const liquidationThreshold =
-        Number.isFinite(ltValue) && ltValue > 0 ? `${(ltValue * 100).toFixed(2)}%` : '-';
+      const liquidationThreshold = Number.isFinite(ltValue) && ltValue > 0 ? `${(ltValue * 100).toFixed(2)}%` : '-';
 
       let supplyBalanceUSD = '-';
       if (userReserve) {

@@ -5,7 +5,7 @@ type UseTradingWalletReturn = {
 };
 
 /**
- * Returns the Radfi trading wallet address from the persisted session.
+ * Returns the Bound Exchange trading wallet address from the persisted session.
  * Trading wallet is created automatically during authentication — no API call needed.
  */
 export function useTradingWallet(walletAddress: string | undefined): UseTradingWalletReturn {

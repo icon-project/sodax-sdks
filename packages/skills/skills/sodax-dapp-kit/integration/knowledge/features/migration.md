@@ -20,6 +20,11 @@ useMigrationApprove({ mutationOptions });
 useMigrationAllowance({ params: { params: <inner>, action: 'migrate' | 'revert' }, queryOptions });
 ```
 
+`use*Approve` is unchanged and still resolves to one transaction hash, but the SDK may send **two**
+transactions on a token that rejects a non-zero to non-zero allowance change (Ethereum USDT today) —
+the user signs twice and the hash is the **last** one's. An `isPending`-driven "Approving…" should say
+so. See "Approve hooks can prompt the wallet twice" in [`architecture.md`](../architecture.md).
+
 ## Mutation params
 
 ```ts
@@ -115,4 +120,4 @@ await approve({ params: bnUSDParams, walletProvider, action: 'migrate' });
 
 - [`../recipes/migration.md`](../recipes/migration.md) — full worked examples.
 - [`features/migration.md`](../../../migration-v1-to-v2/knowledge/features/migration.md) — v1 → v2 porting (the v1 dapp-kit had a single `useMigrate(spokeProvider)`-style hook; v2 split into 6).
-- `sodax-sdk`: `integration/knowledge/features/icx-bnusd-baln.md` — underlying SDK migration surface.
+- `sodax-sdk`: `integration/knowledge/features/migration.md` — underlying SDK migration surface.

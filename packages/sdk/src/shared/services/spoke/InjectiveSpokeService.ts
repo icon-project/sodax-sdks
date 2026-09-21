@@ -4,27 +4,34 @@ import type {
   DepositParams,
   EstimateGasParams,
   GetDepositParams,
+  GetBalanceParams,
+  GetBalancesParams,
   WaitForTxReceiptParams,
   WaitForTxReceiptReturnType,
 } from '../../types/spoke-types.js';
+import type { WalletBalanceMap } from './balance-utils.js';
 import type { ConfigService } from '../../config/ConfigService.js';
 import { sleep } from '../../utils/shared-utils.js';
 import {
   toBase64,
   ChainGrpcWasmApi,
+  IndexerGrpcAccountPortfolioApi,
   TxGrpcApi,
   fromBase64,
   MsgExecuteContract,
-  createTransactionForAddressAndMsg,
-  CosmosTxV1Beta1TxPb,
+  createTransaction,
+  ChainRestAuthApi,
+  BaseAccount,
 } from '@injectivelabs/sdk-ts';
-import type { CreateTransactionResult } from '@injectivelabs/sdk-ts';
+import { TxRaw } from 'cosmjs-types/cosmos/tx/v1beta1/tx.js';
 import { Network, getNetworkEndpoints, type NetworkEndpoints } from '@injectivelabs/networks';
 import {
   getIntentRelayChainId,
+  isNativeToken,
   ChainKeys,
   type InjectiveChainKey,
   type InjectiveRawTransaction,
+  type InjectiveCoin,
   type Result,
   type JsonObject,
   type InjectiveExecuteResponse,
@@ -95,22 +102,46 @@ export interface State {
  * - Transfer tokens with custom data payloads
  */
 
+/**
+ * Safety multiplier applied to the simulated gas so the broadcast tx doesn't run out of gas.
+ * Matches the default `gasBufferCoefficient` of `@injectivelabs`' `MsgBroadcaster(WithPk)`, which the
+ * non-raw `execute()` path relies on.
+ */
+const GAS_BUFFER_MULTIPLIER = 1.2;
+
+/** Splits a chain-config gas price like `"500000000inj"` into `<amount><denom>`. */
+const GAS_PRICE_REGEX = /^(\d+)(.*)$/;
+
 export class InjectiveSpokeService {
   private readonly config: ConfigService;
   public readonly chainGrpcWasmApi: ChainGrpcWasmApi;
+  public readonly indexerGrpcAccountPortfolioApi: IndexerGrpcAccountPortfolioApi;
   public readonly txClient: TxGrpcApi;
   public readonly endpoints: NetworkEndpoints;
   private readonly pollingIntervalMs: number;
   private readonly maxTimeoutMs: number;
+  private readonly gasPrice: string;
 
   public constructor(config: ConfigService) {
     this.config = config;
     this.endpoints = getNetworkEndpoints(Network.Mainnet);
     this.chainGrpcWasmApi = new ChainGrpcWasmApi(this.endpoints.grpc);
+    this.indexerGrpcAccountPortfolioApi = new IndexerGrpcAccountPortfolioApi(this.endpoints.indexer);
     this.txClient = new TxGrpcApi(this.endpoints.grpc);
     this.pollingIntervalMs =
       this.config.sodaxConfig.chains[ChainKeys.INJECTIVE_MAINNET].pollingConfig.pollingIntervalMs;
     this.maxTimeoutMs = this.config.sodaxConfig.chains[ChainKeys.INJECTIVE_MAINNET].pollingConfig.maxTimeoutMs;
+    this.gasPrice = this.config.getChainConfig(ChainKeys.INJECTIVE_MAINNET).gasPrice;
+  }
+
+  /** Parse a chain-config gas price like `"500000000inj"` into its numeric price and denom. */
+  private parseGasPrice(gasPrice: string): { price: bigint; denom: string } {
+    const match = GAS_PRICE_REGEX.exec(gasPrice);
+    const price = match?.[1];
+    if (price === undefined) {
+      throw new Error(`Invalid Injective gasPrice config: ${gasPrice}`);
+    }
+    return { price: BigInt(price), denom: match?.[2] || 'inj' };
   }
 
   /**
@@ -120,7 +151,7 @@ export class InjectiveSpokeService {
    * @returns {Promise<InjectiveGasEstimate>} The estimated gas for the transaction.
    */
   public async estimateGas({ tx }: EstimateGasParams<InjectiveChainKey>): Promise<InjectiveGasEstimate> {
-    const txRaw = CosmosTxV1Beta1TxPb.TxRaw.fromPartial({
+    const txRaw = TxRaw.fromPartial({
       bodyBytes: tx.signedDoc.bodyBytes,
       authInfoBytes: tx.signedDoc.authInfoBytes,
       signatures: [], // not required for simulation
@@ -169,6 +200,8 @@ export class InjectiveSpokeService {
         from,
         chainConfig.addresses.assetManager,
         msg,
+        undefined,
+        funds,
       )) satisfies TxReturnType<InjectiveChainKey, true> as TxReturnType<InjectiveChainKey, R>;
     }
 
@@ -194,26 +227,104 @@ export class InjectiveSpokeService {
     return BigInt(fromBase64(response.data as unknown as string) as unknown as number);
   }
 
+  /**
+   * Get the user's own wallet balance of a token on Injective, in smallest units. On Injective every
+   * asset is a bank coin, so the native coin (`inj`) and factory/peggy/IBC tokens are all read from the
+   * account's portfolio bank balances and matched by denom. The denom is the chain's native denom for
+   * the native coin and `params.token.address` for standard tokens.
+   * @param {GetBalanceParams<InjectiveChainKey>} params - The chain key, user address, and token.
+   * @returns {Promise<bigint>} The token balance in smallest units, or 0n when the account holds none.
+   */
+  public async getWalletBalance(params: GetBalanceParams<InjectiveChainKey>): Promise<bigint> {
+    const denom = isNativeToken(params.srcChainKey, params.token)
+      ? this.config.getChainConfig(params.srcChainKey).nativeToken
+      : params.token.address;
+
+    const portfolio = await this.indexerGrpcAccountPortfolioApi.fetchAccountPortfolioBalances(params.srcAddress);
+    const balance = portfolio.bankBalancesList.find(_balance => _balance.denom === denom);
+
+    return balance ? BigInt(balance.amount) : 0n;
+  }
+
+  /**
+   * Get the user's own wallet balances of multiple tokens on Injective, in smallest units.
+   * @param {GetBalancesParams<InjectiveChainKey>} params - The chain key, user address, and tokens.
+   * @returns {Promise<WalletBalanceMap>} A map of token address to balance in smallest units.
+   */
+  public async getWalletBalances(params: GetBalancesParams<InjectiveChainKey>): Promise<WalletBalanceMap> {
+    const { srcChainKey, srcAddress, tokens } = params;
+    // One portfolio fetch returns every bank balance, so read once and match each token by denom
+    // instead of fanning out a full portfolio request per token. A failure here is batch-wide —
+    // there is no per-token read to isolate — so it propagates to the router.
+    const portfolio = await this.indexerGrpcAccountPortfolioApi.fetchAccountPortfolioBalances(srcAddress);
+    const amountByDenom = new Map(portfolio.bankBalancesList.map(balance => [balance.denom, BigInt(balance.amount)]));
+    const nativeDenom = this.config.getChainConfig(srcChainKey).nativeToken;
+
+    const balances: WalletBalanceMap = {};
+    for (const token of tokens) {
+      const denom = isNativeToken(srcChainKey, token) ? nativeDenom : token.address;
+      // The bank module omits zero-balance denoms, so an absent denom is a confirmed zero.
+      balances[token.address] = amountByDenom.get(denom) ?? 0n;
+    }
+    return balances;
+  }
+
   public async getRawTransaction(
     chainId: string,
     senderAddress: string,
     contractAddress: string,
     msg: JsonObject,
     memo?: string,
+    funds: InjectiveCoin[] = [],
   ): Promise<InjectiveRawTransaction> {
     const msgExec = MsgExecuteContract.fromJSON({
       contractAddress: contractAddress,
       sender: senderAddress,
       msg: msg as object,
-      funds: [],
+      funds,
     });
-    const { txRaw }: CreateTransactionResult = await createTransactionForAddressAndMsg({
+
+    // Fetch the on-chain account once (number, sequence, pubKey) and reuse it for both the
+    // simulation draft and the final tx — avoids the double account/block fetch that calling
+    // `createTransactionForAddressAndMsg` twice would incur.
+    const accountResponse = await new ChainRestAuthApi(this.endpoints.rest).fetchCosmosAccount(senderAddress);
+    const baseAccount = BaseAccount.fromRestCosmosApi(accountResponse);
+    const pubKey = baseAccount.pubKey.key;
+    if (!pubKey) {
+      throw new Error(`The pubKey for ${senderAddress} is missing — the account has not signed a transaction yet.`);
+    }
+    const txArgs = {
       message: msgExec,
       memo: memo || '',
-      address: senderAddress,
-      endpoint: this.endpoints.grpc,
-      chainId: chainId,
-    });
+      pubKey,
+      sequence: baseAccount.sequence,
+      accountNumber: baseAccount.accountNumber,
+      chainId,
+    };
+
+    // 1. Build a draft (default fee) and simulate it to size the gas. `createTransaction` is pure
+    //    (no network) — sequence + pubKey come from the account fetched above.
+    const draft = createTransaction(txArgs);
+
+    const { gasInfo } = await this.txClient.simulate(
+      TxRaw.fromPartial({
+        bodyBytes: draft.txRaw.bodyBytes,
+        authInfoBytes: draft.txRaw.authInfoBytes,
+        signatures: [], // not required for simulation
+      }),
+    );
+
+    // 2. Build an explicit self-pay fee (no granter/payer) from the simulated gas + chain gasPrice.
+    const gas = Math.ceil(gasInfo.gasUsed * GAS_BUFFER_MULTIPLIER);
+    const { price, denom } = this.parseGasPrice(this.gasPrice);
+    const fee = {
+      amount: [{ denom, amount: (BigInt(gas) * price).toString() }],
+      gas: gas.toString(),
+    };
+
+    // 3. Rebuild with the explicit fee. authInfoBytes now carries the fee, and signDoc carries the
+    //    real account number (the old path discarded it, hardcoding 0 → signature verification failed).
+    const { txRaw, signDoc } = createTransaction({ ...txArgs, fee });
 
     const rawTx = {
       from: senderAddress as Hex,
@@ -221,7 +332,7 @@ export class InjectiveSpokeService {
       signedDoc: {
         bodyBytes: txRaw.bodyBytes,
         chainId: chainId,
-        accountNumber: BigInt(0),
+        accountNumber: BigInt(signDoc.accountNumber),
         authInfoBytes: txRaw.authInfoBytes,
       },
     };

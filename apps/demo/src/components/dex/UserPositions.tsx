@@ -1,15 +1,17 @@
 // apps/demo/src/components/dex/UserPositions.tsx
 import React, { type JSX, useEffect, useState } from 'react';
-import type { Hash, PoolData, PoolKey } from '@sodax/sdk';
-import type { SpokeChainKey } from '@sodax/sdk';
-import type { IWalletProvider } from '@sodax/wallet-sdk-react';
 import {
+  type Hash,
+  type PoolData,
+  type PoolKey,
+  type SpokeChainKey,
   createDecreaseLiquidityParamsProps,
   useDecreaseLiquidity,
   useClaimRewards,
   usePositionInfo,
   useSodaxContext,
 } from '@sodax/dapp-kit';
+import type { IWalletProvider } from '@sodax/wallet-sdk-react';
 import {
   formatCompactNumber,
   formatTokenAmount,
@@ -50,7 +52,12 @@ function PositionListItem({
 }: PositionListItemProps): JSX.Element | null {
   const srcAddress = userAddress as `0x${string}`;
   const [percentageToRemove, setPercentageToRemove] = useState(0);
-  const { data, isLoading, isError, error: positionInfoError } = usePositionInfo({
+  const {
+    data,
+    isLoading,
+    isError,
+    error: positionInfoError,
+  } = usePositionInfo({
     params: { tokenId, poolKey },
   });
   const claimRewardsMutation = useClaimRewards();
@@ -322,7 +329,9 @@ export function UserPositions({
     try {
       const mintPositionEventResult = await sodax.dex.clService.getMintPositionEvent(hubTxHashInput.trim() as Hash);
       if (!mintPositionEventResult.ok) {
-        globalThis.alert(`Find position ID failed: ${mintPositionEventResult.error instanceof Error ? mintPositionEventResult.error.message : 'Unknown error'}`);
+        globalThis.alert(
+          `Find position ID failed: ${mintPositionEventResult.error instanceof Error ? mintPositionEventResult.error.message : 'Unknown error'}`,
+        );
         return;
       }
       saveTokenIdToLocalStorage(userAddress, chainKey, mintPositionEventResult.value.tokenId.toString());

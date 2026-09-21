@@ -129,7 +129,7 @@ describe.skipIf(!PK)('e2e — EVM testnet', () => {
 });
 ```
 
-`apps/node/src/tests/` in this repo follows this pattern — see those test files for live examples.
+Apply the same pattern in your own test suite — construct the provider with a deterministic private key, then assert on the returned address / tx hash.
 
 ---
 

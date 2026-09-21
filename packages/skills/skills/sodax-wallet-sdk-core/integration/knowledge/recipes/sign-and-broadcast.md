@@ -14,6 +14,7 @@ For SDK-mediated flows (deposit, swap, bridge, lend, stake) see [`bridge-to-sdk.
 import type { EvmRawTransaction } from '@sodax/types';
 
 const tx: EvmRawTransaction = {
+  from:  '0x…',                            // required — the sender (your wallet address)
   to:    '0x…',
   value: 1_000_000_000_000_000n,           // 0.001 ETH
   data:  '0x',

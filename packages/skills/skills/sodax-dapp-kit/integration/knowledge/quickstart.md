@@ -21,11 +21,11 @@ pnpm add @sodax/wallet-sdk-react
 import { QueryClientProvider } from '@tanstack/react-query';
 import { SodaxProvider, createSodaxQueryClient } from '@sodax/dapp-kit';
 import { SodaxWalletProvider, type SodaxWalletConfig } from '@sodax/wallet-sdk-react';
-import { ChainKeys, type DeepPartial, type SodaxConfig } from '@sodax/sdk';
+import { ChainKeys, type SodaxOptions } from '@sodax/sdk';
 
 const queryClient = createSodaxQueryClient();
 
-const sodaxConfig: DeepPartial<SodaxConfig> = {
+const sodaxConfig: SodaxOptions = {
   chains: {
     [ChainKeys.SONIC_MAINNET]: { rpcUrl: 'https://sonic-rpc.publicnode.com' },
     [ChainKeys.BSC_MAINNET]: { rpcUrl: 'https://bsc-dataseed.binance.org' },

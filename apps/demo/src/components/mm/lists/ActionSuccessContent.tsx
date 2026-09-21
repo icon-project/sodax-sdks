@@ -4,7 +4,7 @@
 import React, { useState, type ReactElement } from 'react';
 import { Button } from '@/components/ui/button';
 import { DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import type { SpokeChainKey, XToken } from '@sodax/sdk';
+import type { SpokeChainKey, XToken } from '@sodax/dapp-kit';
 import { chainIdToChainName } from '@/constants';
 import { getChainExplorerTxUrl } from '@/lib/utils';
 import { useSodaxScanMessageUrl } from '@/hooks/useSodaxScanMessageUrl';
@@ -31,8 +31,12 @@ export function ActionSuccessContent({ action, data, onClose }: ActionSuccessCon
   // Tracks whether transaction hash was copied to clipboard (for UI feedback)
   const [copied, setCopied] = useState(false);
   // Prefer SodaxScan message URL; fall back to chain explorer when not available
-  const { url: sodaxScanUrl, isLoading: sodaxScanLoading } = useSodaxScanMessageUrl(data.txHash);
-  const explorerUrl = data.txHash ? getChainExplorerTxUrl(data.sourceChainId, data.txHash) : undefined;
+  const { url: sodaxScanUrl, isLoading: sodaxScanLoading } = useSodaxScanMessageUrl({ txHash: data.txHash });
+  // On-demand relay ids (od:<hash>, e.g. Bitcoin borrow/withdraw) are not a transaction on any chain
+  // explorer — only SodaxScan resolves them — so don't build a broken chain-explorer fallback for them.
+  const isRelayMessageId = data.txHash?.startsWith('od:') ?? false;
+  const explorerUrl =
+    data.txHash && !isRelayMessageId ? getChainExplorerTxUrl(data.sourceChainId, data.txHash) : undefined;
   const txUrl = sodaxScanUrl ?? explorerUrl;
 
   // Copy transaction hash to clipboard and show visual feedback

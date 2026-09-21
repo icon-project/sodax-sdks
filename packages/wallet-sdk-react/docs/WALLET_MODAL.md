@@ -324,8 +324,8 @@ function ConnectButton({ connector }: { connector: IXConnector }) {
 
 ## Related docs
 
-- [Connect Flow](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/CONNECT_FLOW.md) — the underlying `useXConnect` lifecycle
-- [Configure SodaxWalletProvider](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/CONFIGURE_PROVIDER.md) — opt in chain-type slots before users can pick them
-- [Chain Detection](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/CHAIN_DETECTION.md) — `useChainGroups` for the chain picker, `useIsWalletInstalled` for filtering
-- [WalletConnect](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/WALLETCONNECT.md) — `walletConnect` slot config + Fireblocks/custody filters
-- [Connectors](https://github.com/icon-project/sodax-sdks/blob/main/packages/wallet-sdk-react/docs/CONNECTORS.md) — `IXConnector` contract for `selectWallet` argument
+- [Connect Flow](./CONNECT_FLOW.md) — the underlying `useXConnect` lifecycle
+- [Configure SodaxWalletProvider](./CONFIGURE_PROVIDER.md) — opt in chain-type slots before users can pick them
+- [Chain Detection](./CHAIN_DETECTION.md) — `useChainGroups` for the chain picker, `useIsWalletInstalled` for filtering
+- [WalletConnect](./WALLETCONNECT.md) — `walletConnect` slot config + Fireblocks/custody filters
+- [Connectors](./CONNECTORS.md) — `IXConnector` contract for `selectWallet` argument

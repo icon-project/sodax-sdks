@@ -30,6 +30,7 @@ export type MoneyMarketCreateIntentErrorCode = CreateIntentErrorCode;
 /** Codes any of the 4 orchestrators (`supply`/`borrow`/`withdraw`/`repay`) can return. */
 export type MoneyMarketOrchestrationErrorCode = Extract<
   SodaxErrorCode,
+  | 'USER_REJECTED'
   | 'VALIDATION_FAILED'
   | 'INTENT_CREATION_FAILED'
   | 'TX_VERIFICATION_FAILED'
@@ -58,6 +59,7 @@ export type MoneyMarketGasEstimationError = SodaxError<MoneyMarketGasEstimationE
 export type MoneyMarketError = SodaxError<MoneyMarketErrorCode>;
 
 const ORCHESTRATION_CODES: ReadonlySet<MoneyMarketOrchestrationErrorCode> = new Set([
+  'USER_REJECTED',
   'VALIDATION_FAILED',
   'INTENT_CREATION_FAILED',
   'TX_VERIFICATION_FAILED',
@@ -69,6 +71,7 @@ const ORCHESTRATION_CODES: ReadonlySet<MoneyMarketOrchestrationErrorCode> = new 
 ]);
 
 const MONEY_MARKET_CODES: ReadonlySet<MoneyMarketErrorCode> = new Set<MoneyMarketErrorCode>([
+  'USER_REJECTED',
   'VALIDATION_FAILED',
   'INTENT_CREATION_FAILED',
   'TX_VERIFICATION_FAILED',

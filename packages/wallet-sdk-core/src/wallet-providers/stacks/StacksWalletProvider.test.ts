@@ -7,6 +7,8 @@ const fetchCallReadOnlyFunction = vi.fn();
 const privateKeyToPublic = vi.fn().mockReturnValue('pub');
 const publicKeyToHex = vi.fn().mockReturnValue('hex');
 const stacksRequest = vi.fn().mockResolvedValue({ txid: 'browser-tx-123' });
+const deserializePayload = vi.fn();
+const addressToString = vi.fn().mockReturnValue('SP000');
 
 // The SUT imports from `@sodax/libs/stacks/core` and `@sodax/libs/stacks/connect` — bundled
 // re-exports added to work around a Turbopack scope-hoisting cycle in Next.js 16. Mock those
@@ -19,6 +21,9 @@ vi.mock('@sodax/libs/stacks/core', () => ({
   getAddressFromPrivateKey: vi.fn().mockReturnValue('SP1ADDR'),
   makeContractCall,
   PostConditionMode: { Allow: 0x01, Deny: 0x02 },
+  deserializePayload,
+  addressToString,
+  PayloadType: { ContractCall: 2 },
   privateKeyToPublic,
   publicKeyToHex,
 }));
@@ -115,10 +120,7 @@ describe('StacksWalletProvider', () => {
         defaults: { postConditionMode: 0x01 },
       });
 
-      await provider.sendTransaction(
-        { ...TX_PARAMS_BASE, postConditionMode: 0x02 },
-        { postConditionMode: 0x01 },
-      );
+      await provider.sendTransaction({ ...TX_PARAMS_BASE, postConditionMode: 0x02 }, { postConditionMode: 0x01 });
 
       const call = makeContractCall.mock.calls[0]?.[0];
       expect(call.postConditionMode).toBe(0x02);
@@ -172,6 +174,62 @@ describe('StacksWalletProvider', () => {
 
       const params = stacksRequest.mock.calls[0]?.[1];
       expect(params.network).toBe('mainnet');
+    });
+  });
+
+  describe('signAndSendTransaction', () => {
+    const CONTRACT_CALL_PAYLOAD = {
+      payloadType: 2, // PayloadType.ContractCall
+      contractAddress: { type: 'address', version: 22, hash160: 'deadbeef' },
+      contractName: { content: 'my-contract' },
+      functionName: { content: 'do-thing' },
+      functionArgs: [],
+    };
+
+    beforeEach(() => {
+      deserializePayload.mockReset().mockReturnValue(CONTRACT_CALL_PAYLOAD);
+      addressToString.mockClear().mockReturnValue('SP000');
+      makeContractCall.mockClear();
+      broadcastTransaction.mockClear();
+      stacksRequest.mockClear().mockResolvedValue({ txid: 'browser-tx-123' });
+    });
+
+    it('PK path: deserializes the payload, reconstructs the contract call, signs + broadcasts', async () => {
+      const provider = new StacksWalletProvider({ privateKey: PK });
+
+      const result = await provider.signAndSendTransaction({ payload: '0xabc' });
+
+      expect(result).toBe('tx-123');
+      expect(deserializePayload).toHaveBeenCalledWith('0xabc');
+      expect(addressToString).toHaveBeenCalledWith(CONTRACT_CALL_PAYLOAD.contractAddress);
+      const call = makeContractCall.mock.calls[0]?.[0];
+      expect(call.contractAddress).toBe('SP000');
+      expect(call.contractName).toBe('my-contract');
+      expect(call.functionName).toBe('do-thing');
+      expect(call.functionArgs).toEqual([]);
+      expect(call.postConditionMode).toBe(0x01); // PostConditionMode.Allow
+    });
+
+    it('browser path: routes the reconstructed call through stx_callContract', async () => {
+      const provider = new StacksWalletProvider({ address: BROWSER_ADDRESS });
+
+      const result = await provider.signAndSendTransaction({ payload: '0xabc' });
+
+      expect(result).toBe('browser-tx-123');
+      const params = stacksRequest.mock.calls[0]?.[1];
+      expect(params.contract).toBe('SP000.my-contract');
+      expect(params.functionName).toBe('do-thing');
+      expect(params.postConditionMode).toBe('allow');
+    });
+
+    it('throws when the payload is not a contract-call payload', async () => {
+      deserializePayload.mockReturnValue({ payloadType: 0 }); // PayloadType.TokenTransfer
+      const provider = new StacksWalletProvider({ privateKey: PK });
+
+      await expect(provider.signAndSendTransaction({ payload: '0xabc' })).rejects.toThrow(
+        'expected a contract-call payload',
+      );
+      expect(makeContractCall).not.toHaveBeenCalled();
     });
   });
 

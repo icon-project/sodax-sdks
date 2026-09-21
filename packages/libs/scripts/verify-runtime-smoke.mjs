@@ -23,11 +23,11 @@ const require = createRequire(import.meta.url);
 
 // Dynamic import() needs a file:// URL on Windows — a bare `C:\…` path is
 // parsed as the unsupported `c:` URL scheme. (require() below takes plain paths.)
-const importDist = (relFile) => import(pathToFileURL(join(distRoot, relFile)).href);
+const importDist = relFile => import(pathToFileURL(join(distRoot, relFile)).href);
 
 let failed = false;
-const ok = (msg) => console.log('OK:', msg);
-const fail = (msg) => {
+const ok = msg => console.log('OK:', msg);
+const fail = msg => {
   console.error('FAIL:', msg);
   failed = true;
 };

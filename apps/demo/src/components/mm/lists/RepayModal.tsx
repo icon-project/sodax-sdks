@@ -1,16 +1,26 @@
 import React, { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { TokenIcon } from '@/components/shared/TokenIcon';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ChainSelector } from '@/components/shared/ChainSelector';
 import { Skeleton } from '@/components/ui/skeleton';
 
-import { getXChainType, useEvmSwitchChain, useWalletProvider, useXAccount, useXService } from '@sodax/wallet-sdk-react';
+import { useEvmSwitchChain, useWalletProvider, useXAccount } from '@sodax/wallet-sdk-react';
 import { formatUnits, parseUnits } from 'viem';
-import { useMMAllowance, useMMApprove, useRepay, useSodaxContext, useXBalances } from '@sodax/dapp-kit';
-import type { MoneyMarketRepayParams, SpokeChainKey, XToken } from '@sodax/sdk';
+import {
+  useMMAllowance,
+  useMMApprove,
+  useRepay,
+  useSodaxContext,
+  useBalances,
+  type MoneyMarketRepayParams,
+  type SpokeChainKey,
+  type XToken,
+} from '@sodax/dapp-kit';
 import { useAppStore } from '@/zustand/useAppStore';
+import { useBtcTradingBalance } from '@/hooks/useBtcTradingBalance';
 import {
   formatDecimalForDisplay,
   getChainsWithThisToken,
@@ -63,19 +73,27 @@ export function RepayModal({
   const dstChainKey: SpokeChainKey = selectedChainId;
 
   const supportedSourceChains = getChainsWithThisToken(sodax, token);
-  const sourceToken = getTokenOnChain(sodax, token.symbol, srcChainKey) ?? token;
+  // Falls back to the originally-selected token so the rest of the form keeps rendering, but only
+  // `sourceTokenOnChain` may reach the balance read below — the SDK reads the chain named by
+  // `chainKey` and never consults `token.chainKey`, so a token from a different chain reads as
+  // `0n` with no error, i.e. a wrong balance rather than a caught mistake.
+  const sourceTokenOnChain = getTokenOnChain(sodax, token.symbol, srcChainKey);
+  const sourceToken = sourceTokenOnChain ?? token;
 
   const { address: srcAddress } = useXAccount({ xChainId: srcChainKey });
   const { address: dstAddress } = useXAccount({ xChainId: dstChainKey });
 
   const sourceWalletProvider = useWalletProvider({ xChainId: srcChainKey });
 
-  const xService = useXService({ xChainType: getXChainType(srcChainKey) });
-  const { data: sourceBalances, isLoading: isBalanceLoading } = useXBalances({
-    params: { xService, xChainId: srcChainKey, xTokens: [sourceToken], address: srcAddress },
+  const { data: sourceBalances, isLoading: isBalanceLoading } = useBalances({
+    params: { chainKey: srcChainKey, tokens: sourceTokenOnChain ? [sourceTokenOnChain] : [], address: srcAddress },
   });
 
   const { mutateAsync: repay, isPending, error, reset: resetRepay } = useRepay();
+
+  // On Bitcoin the repay deposit is pulled from the Bound Exchange trading wallet, so the spendable
+  // balance is the trading-wallet balance, not the personal wallet's UTXO balance.
+  const { isBitcoin, tradingBalanceSats, notReady: btcNotReady } = useBtcTradingBalance({ chainId: srcChainKey });
 
   const isSameChain = srcChainKey === dstChainKey;
 
@@ -86,12 +104,16 @@ export function RepayModal({
   }, [amount]);
 
   const parsedMaxBalance: number | undefined = useMemo(() => {
+    if (isBitcoin) {
+      const num = Number(formatUnits(tradingBalanceSats, 8));
+      return Number.isFinite(num) && num >= 0 ? num : undefined;
+    }
     if (!sourceToken || !sourceBalances) return undefined;
     const raw = sourceBalances[sourceToken.address] ?? 0n;
     const num = Number(formatUnits(raw, sourceToken.decimals));
     if (!Number.isFinite(num) || num < 0) return undefined;
     return num;
-  }, [sourceBalances, sourceToken]);
+  }, [isBitcoin, tradingBalanceSats, sourceBalances, sourceToken]);
 
   const parsedMaxDebt: number | undefined = useMemo(() => {
     if (!maxDebt) return undefined;
@@ -274,7 +296,10 @@ export function RepayModal({
                 onChange={e => setAmount(e.target.value)}
                 disabled={isBusy}
               />
-              <span>{token.symbol}</span>
+              <span className="flex items-center gap-1">
+                <TokenIcon symbol={token.symbol} className="h-4 w-4" />
+                {token.symbol}
+              </span>
               <Button
                 type="button"
                 variant="outline"
@@ -324,6 +349,13 @@ export function RepayModal({
         {error && <ErrorAlert text={getMmErrorText(error)} />}
         {approveError && <ErrorAlert text={getMmErrorText(approveError)} />}
 
+        {btcNotReady && (
+          <p className="text-xs text-amber-600 dark:text-amber-500 bg-amber-50 dark:bg-amber-950/30 p-2 rounded-lg border border-amber-200 dark:border-amber-800">
+            Sign in and top up the <strong>Bitcoin Trading Wallet</strong> section on the Money Market page before
+            repaying with BTC.
+          </p>
+        )}
+
         {!isWrongChain && !!srcAddress && !!parsedAmount && (
           <p className="text-xs text-amber-600 dark:text-amber-500 bg-amber-50 dark:bg-amber-950/30 p-2 rounded-lg border border-amber-200 dark:border-amber-800">
             Make sure you have enough <strong>{getNativeTokenSymbol(srcChainKey)}</strong> on{' '}
@@ -372,7 +404,7 @@ export function RepayModal({
               type="button"
               variant="default"
               onClick={handleRepay}
-              disabled={!params || !sourceWalletProvider || !amount}
+              disabled={!params || !sourceWalletProvider || !amount || btcNotReady}
             >
               Repay {token.symbol}
             </Button>

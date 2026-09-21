@@ -1,6 +1,6 @@
-# Bitcoin (Radfi) — `@sodax/dapp-kit`
+# Bitcoin (Bound Exchange) — `@sodax/dapp-kit`
 
-Bitcoin trading via the Radfi protocol — authenticate, fund a trading wallet, withdraw, manage UTXOs. **Dapp-kit-unique surface** (no SDK equivalent — these flows are React-shaped).
+Bitcoin trading via the Bound Exchange protocol — authenticate, fund a trading wallet, withdraw, manage UTXOs. **Dapp-kit-unique surface** (no SDK equivalent — these flows are React-shaped).
 
 Pair: [`features/bitcoin.md`](../../../migration-v1-to-v2/knowledge/features/bitcoin.md).
 
@@ -11,11 +11,12 @@ Pair: [`features/bitcoin.md`](../../../migration-v1-to-v2/knowledge/features/bit
 // Session lifecycle
 useRadfiAuth({ mutationOptions });               // Authenticate via BIP322 signing
 useRadfiSession(walletProvider);                 // Manage full lifecycle (login, refresh, auto-refresh)
+useEnsureRadfiAccessToken({ mutationOptions });  // Ensure a fresh Bound token; resolves to the token string
 useTradingWallet(walletAddress);                 // Synchronous: read persisted session
 
 // Balances
 useBitcoinBalance({ params: { address, rpcUrl? }, queryOptions });             // Personal wallet (default mempool.space)
-useTradingWalletBalance({ params: { walletProvider, tradingAddress }, queryOptions }); // Radfi API
+useTradingWalletBalance({ params: { walletProvider, tradingAddress }, queryOptions }); // Bound Exchange API
 
 // Operations
 useFundTradingWallet({ mutationOptions });
@@ -24,9 +25,11 @@ useExpiredUtxos({ params: { walletProvider, tradingAddress }, queryOptions }); /
 useRenewUtxos({ mutationOptions });
 ```
 
+`useEnsureRadfiAccessToken` is for raw / server-side `createIntent`: it resolves a valid Bound token to forward as `extras.bound.accessToken` (the Bitcoin-gated `bound` slot) on a `raw: true` swap intent, or as `bound.accessToken` on a backend createIntent DTO. See the `sodax-sdk` skill (swap feature) for the `extras.bound` slot.
+
 ## Session flow
 
-Radfi requires authentication before trading operations. `useRadfiSession` handles the full lifecycle:
+Bound Exchange requires authentication before trading operations. `useRadfiSession` handles the full lifecycle:
 
 ```ts
 // @ai-snippets-skip
@@ -63,6 +66,7 @@ type RenewUtxosVars = { txIdVouts: string[]; walletProvider: IBitcoinWalletProvi
 | Hook | Returns |
 |---|---|
 | `useRadfiAuth` | `SafeUseMutationResult<RadfiAuthResult, Error, UseRadfiAuthVars>` where `RadfiAuthResult = { accessToken, refreshToken, tradingAddress }` (3 fields, NOT `RadfiSession` — the hook persists `publicKey` to localStorage internally but doesn't return it) |
+| `useEnsureRadfiAccessToken` | `SafeUseMutationResult<string, Error, { walletProvider }>` — resolves to a valid Bound Exchange access token (silent refresh when possible, else BIP322 re-auth) |
 | `useFundTradingWallet` | `SafeUseMutationResult<TxId, Error, ...>` |
 | `useRadfiWithdraw` | `SafeUseMutationResult<{ txId, fee }, Error, ...>` |
 | `useRenewUtxos` | `SafeUseMutationResult<TxId, Error, ...>` |
@@ -76,8 +80,8 @@ type RenewUtxosVars = { txIdVouts: string[]; walletProvider: IBitcoinWalletProvi
 
 1. **Authentication required before any trading operation.** `useRadfiSession` manages this automatically — gate buttons on `isAuthed`.
 2. **Trading wallet is created during first authentication** — not a separate step.
-3. **`useTradingWallet(walletAddress)` is synchronous** (no network call). It reads persisted Radfi session from localStorage. Use it when you don't have a `walletProvider` available yet but need the trading address.
-4. **PSBT signing flow for withdrawals.** Radfi server builds an unsigned PSBT, the user signs locally via the wallet provider, then submits back for co-signing and broadcast. The dapp-kit hook orchestrates this — consumers don't see PSBTs directly.
+3. **`useTradingWallet(walletAddress)` is synchronous** (no network call). It reads persisted Bound Exchange session from localStorage. Use it when you don't have a `walletProvider` available yet but need the trading address.
+4. **PSBT signing flow for withdrawals.** Bound Exchange server builds an unsigned PSBT, the user signs locally via the wallet provider, then submits back for co-signing and broadcast. The dapp-kit hook orchestrates this — consumers don't see PSBTs directly.
 5. **Session tokens are for API rate-limiting, not asset access.** Stored in localStorage keyed by wallet address. Compromise of localStorage data doesn't affect funds.
 6. **`useExpiredUtxos` polls every 60s** — set `queryOptions.refetchInterval: false` to disable while UI is hidden.
 

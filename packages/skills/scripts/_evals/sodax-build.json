@@ -1,0 +1,72 @@
+{
+  "skill": "sodax-build",
+  "purpose": "Trigger-regression corpus for the sodax-build front-door / ideation skill. NOT a CI gate today — a fixture for future automated trigger testing. Lives under scripts/ (outside the shipped skills/ tree) so it is never copied into a consumer's install. The dominant failure mode is over-triggering on developers who already decided, so the should-not set is intentionally larger than the should set.",
+  "should_trigger": [
+    { "prompt": "I'm not a developer — what can I build on SODAX?", "why": "No SDK/feature chosen; tier-A ideation." },
+    {
+      "prompt": "I have an idea for a cross-chain app but no idea where to start.",
+      "why": "Idea exists, product undefined."
+    },
+    { "prompt": "Is SODAX the right tool for my idea?", "why": "Fit question, nothing decided." },
+    { "prompt": "Help me turn my idea into a spec for a SODAX app.", "why": "Wants a product brief." },
+    { "prompt": "How could I make money building on SODAX?", "why": "Monetization undecided; front-door framing." },
+    {
+      "prompt": "I want to let users move money across chains — how would I plan that?",
+      "why": "Behavior described, feature not named."
+    },
+    { "prompt": "Where do I even start with SODAX?", "why": "Pure entry-point question." },
+    {
+      "prompt": "Can SODAX power a payments product? Walk me through what it'd take.",
+      "why": "Product framing, no API named."
+    },
+    {
+      "prompt": "What kinds of products can you build on a cross-chain DeFi platform like SODAX?",
+      "why": "Capability discovery."
+    }
+  ],
+  "should_not_trigger": [
+    {
+      "prompt": "Add a useSwap hook to my React app.",
+      "route_to": "sodax-dapp-kit",
+      "why": "Hook named — what is decided."
+    },
+    { "prompt": "How do I call @sodax/sdk from a Node backend?", "route_to": "sodax-sdk", "why": "SDK named." },
+    {
+      "prompt": "Set up an IEvmWalletProvider for signing.",
+      "route_to": "sodax-wallet-sdk-core",
+      "why": "Provider symbol named."
+    },
+    {
+      "prompt": "I need a wallet connect button in my dapp.",
+      "route_to": "sodax-wallet-sdk-react",
+      "why": "Concrete React wallet concern."
+    },
+    {
+      "prompt": "Why is MoneyMarketService returning a Result error?",
+      "route_to": "sodax-sdk",
+      "why": "Debugging a named service."
+    },
+    { "prompt": "Migrate my v1 @sodax/sdk code to v2.", "route_to": "sodax-sdk", "why": "Migration of named SDK." },
+    {
+      "prompt": "Show me how to do a swap with the Sodax class.",
+      "route_to": "sodax-sdk",
+      "why": "Feature + SDK both named."
+    },
+    {
+      "prompt": "Wire ChainKeys.ETHEREUM_MAINNET into my swap params.",
+      "route_to": "sodax-sdk",
+      "why": "Symbol-level work."
+    },
+    {
+      "prompt": "Build a money-market supply page with dapp-kit.",
+      "route_to": "sodax-dapp-kit",
+      "why": "Feature + package decided."
+    },
+    {
+      "prompt": "How do I style this button with Tailwind?",
+      "route_to": "none",
+      "why": "Non-SODAX work — load nothing."
+    },
+    { "prompt": "Use Uniswap to swap tokens in my app.", "route_to": "none", "why": "Explicitly a different protocol." }
+  ]
+}

@@ -9,6 +9,8 @@ const disconnect = vi.fn();
 vi.mock('@sodax/libs/stacks/connect', () => ({ request, disconnect }));
 
 const { StacksXConnector } = await import('./StacksXConnector.js');
+const { STACKS_PROVIDERS } = await import('./constants.js');
+const { WALLET_METADATA } = await import('@/constants.js');
 
 const CONFIG = {
   id: 'LeatherProvider',
@@ -19,7 +21,7 @@ const CONFIG = {
 
 afterEach(() => {
   // Clean up any `window.*` we set during the test so neighbouring tests start clean.
-  for (const key of ['LeatherProvider', 'XverseProviders']) {
+  for (const key of ['LeatherProvider', 'XverseProviders', 'hanaWallet']) {
     if (key in globalThis) {
       delete (globalThis as Record<string, unknown>)[key];
     }
@@ -116,9 +118,7 @@ describe('StacksXConnector.connect', () => {
     vi.stubGlobal('window', {});
     const c = new StacksXConnector(CONFIG);
 
-    await expect(c.connect()).rejects.toThrow(
-      'Leather is not installed. Install the extension and reload the page.',
-    );
+    await expect(c.connect()).rejects.toThrow('Leather is not installed. Install the extension and reload the page.');
   });
 
   it('returns the XAccount when stx_getAddresses yields an entry with purpose="stacks"', async () => {
@@ -126,13 +126,13 @@ describe('StacksXConnector.connect', () => {
     request.mockResolvedValueOnce({
       addresses: [
         { address: 'bc1q...', purpose: 'payment' },
-        { address: 'SP1USERSTACKS', purpose: 'stacks' },
+        { address: 'SP1USERSTACKS', purpose: 'stacks', publicKey: '02deadbeef' },
       ],
     });
 
     const result = await new StacksXConnector(CONFIG).connect();
 
-    expect(result).toEqual({ address: 'SP1USERSTACKS', xChainType: 'STACKS' });
+    expect(result).toEqual({ address: 'SP1USERSTACKS', publicKey: '02deadbeef', xChainType: 'STACKS' });
     // `request` should be called with the provider bound and the JSON-RPC method name.
     expect(request).toHaveBeenCalledWith({ provider: { fake: true } }, 'stx_getAddresses');
   });
@@ -155,6 +155,30 @@ describe('StacksXConnector.connect', () => {
       expect.any(Array),
     );
     warnSpy.mockRestore();
+  });
+});
+
+describe('STACKS_PROVIDERS — Hana entry', () => {
+  const hana = STACKS_PROVIDERS.find(p => p.id === 'hanaWallet.stacks');
+
+  it('is registered with shared WALLET_METADATA.hana icon + install URL', () => {
+    expect(hana).toBeDefined();
+    expect(hana?.name).toBe('Hana Wallet');
+    expect(hana?.icon).toBe(WALLET_METADATA.hana.icon);
+    expect(hana?.installUrl).toBe(WALLET_METADATA.hana.installUrl);
+  });
+
+  it('resolves through the connector dot-walk to window.hanaWallet.stacks', () => {
+    if (!hana) throw new Error('Hana entry missing from STACKS_PROVIDERS');
+    const c = new StacksXConnector(hana);
+
+    vi.stubGlobal('window', {});
+    expect(c.isInstalled).toBe(false);
+
+    const provider = { fake: true };
+    vi.stubGlobal('window', { hanaWallet: { stacks: provider } });
+    expect(c.isInstalled).toBe(true);
+    expect(c.getProvider()).toBe(provider);
   });
 });
 

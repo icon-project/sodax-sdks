@@ -1,6 +1,6 @@
-# Recipe: Bitcoin (Radfi)
+# Recipe: Bitcoin (Bound Exchange)
 
-Bitcoin trading via the Radfi protocol. Authenticate, fund a trading wallet, trade, withdraw, and manage UTXOs.
+Bitcoin trading via the Bound Exchange protocol. Authenticate, fund a trading wallet, trade, withdraw, and manage UTXOs.
 
 **Depends on:** [setup.md](setup.md), [wallet-connectivity.md](wallet-connectivity.md)
 
@@ -10,7 +10,7 @@ Bitcoin trading via the Radfi protocol. Authenticate, fund a trading wallet, tra
 
 | Hook | Type | Purpose |
 |------|------|---------|
-| `useRadfiAuth` | Mutation | Authenticate with Radfi via BIP322 signing |
+| `useRadfiAuth` | Mutation | Authenticate with Bound Exchange via BIP322 signing |
 | `useRadfiSession` | Utility | Manage full session lifecycle (login, refresh, auto-refresh) |
 | `useTradingWallet` | Utility | Get trading wallet address from persisted session (synchronous) |
 
@@ -19,7 +19,7 @@ Bitcoin trading via the Radfi protocol. Authenticate, fund a trading wallet, tra
 | Hook | Type | Purpose |
 |------|------|---------|
 | `useBitcoinBalance` | Query | BTC balance for any address (sums UTXOs from mempool.space) |
-| `useTradingWalletBalance` | Query | Trading wallet balance from Radfi API (confirmed + pending) |
+| `useTradingWalletBalance` | Query | Trading wallet balance from Bound Exchange API (confirmed + pending) |
 
 ### Operations
 
@@ -32,7 +32,7 @@ Bitcoin trading via the Radfi protocol. Authenticate, fund a trading wallet, tra
 
 ## Session Flow
 
-Radfi requires authentication before any trading operation. The typical flow:
+Bound Exchange requires authentication before any trading operation. The typical flow:
 
 ```tsx
 import { useRadfiSession } from '@sodax/dapp-kit';
@@ -49,7 +49,7 @@ function BitcoinAuth() {
 
   return (
     <button onClick={login} disabled={isLoginPending}>
-      {isLoginPending ? 'Signing...' : 'Login to Radfi'}
+      {isLoginPending ? 'Signing...' : 'Login to Bound Exchange'}
     </button>
   );
 }
@@ -77,7 +77,7 @@ function BitcoinBalances({ walletAddress }: { walletAddress: string }) {
     params: { address: walletAddress },
   });
 
-  // Trading wallet balance (from Radfi API). `RadfiWalletBalance` fields:
+  // Trading wallet balance (from Bound Exchange API). `RadfiWalletBalance` fields:
   // `btcSatoshi`, `pendingSatoshi`, `externalPendingSatoshi`, `totalUtxos`.
   const { data: tradingBalance } = useTradingWalletBalance({
     params: { walletProvider, tradingAddress },
@@ -188,6 +188,6 @@ function UtxoManager({ tradingAddress }: { tradingAddress: string }) {
 
 - **Authentication required** before any trading operation. `useRadfiSession` manages this automatically.
 - **Trading wallet** is created during first authentication — not a separate step.
-- **`useTradingWallet(walletAddress)`** is a synchronous utility (no network call) — it reads the persisted Radfi session from localStorage.
+- **`useTradingWallet(walletAddress)`** is a synchronous utility (no network call) — it reads the persisted Bound Exchange session from localStorage.
 - **PSBT signing flow**: withdraw and renew operations build an unsigned PSBT server-side, user signs it locally, then submits back for co-signing and broadcast.
 - **Session tokens** are stored in localStorage keyed by wallet address. They're for API rate-limiting, not for accessing user assets.

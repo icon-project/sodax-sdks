@@ -1,0 +1,9 @@
+{
+  "name": "sodax-skills",
+  "skills": [
+    "./packages/skills/skills/sodax-sdk",
+    "./packages/skills/skills/sodax-wallet-sdk-core",
+    "./packages/skills/skills/sodax-wallet-sdk-react",
+    "./packages/skills/skills/sodax-dapp-kit"
+  ]
+}

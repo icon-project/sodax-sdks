@@ -70,7 +70,7 @@ type EvmSpokeFixture = (typeof EVM_SPOKES)[number];
 
 const SAMPLE_USER = '0x4444444444444444444444444444444444444444' as Address;
 const SAMPLE_TOKEN = '0x2170Ed0880ac9A755fd29B2688956BD959F933F8' as Address;
-const SPOKE_TX_HASH = '0xspokeTxHash' as never;
+const SPOKE_TX_HASH = '0xspokeTxHash';
 
 const mockEvmProvider = {
   chainType: 'EVM',
@@ -163,6 +163,7 @@ describe('StakingService.stake — integration error-path coverage', () => {
     // the error code is in CreateStakeIntentErrorCode (a subset of StakeErrorCode), so
     // `stake()` returns the same SodaxError unchanged — no extra wrap, no code rewrite.
     const intentError = new SodaxError('INTENT_CREATION_FAILED', 'spoke deposit reverted', {
+      feature: 'staking',
       context: { srcChainKey: BSC, action: 'stake', phase: 'intentCreation' },
     });
     vi.spyOn(sodax.staking, 'createStakeIntent').mockResolvedValueOnce({ ok: false, error: intentError });
@@ -202,7 +203,7 @@ describe('StakingService.stake — integration error-path coverage', () => {
 
   it('wraps a relayTxAndWaitPacket failure via mapRelayFailureToStakingError', async () => {
     vi.spyOn(sodax.staking, 'createStakeIntent').mockResolvedValueOnce({ ok: true, value: validIntent });
-    vi.spyOn(sodax.spoke, 'verifyTxHash').mockResolvedValueOnce({ ok: true, value: undefined });
+    vi.spyOn(sodax.spoke, 'verifyTxHash').mockResolvedValueOnce({ ok: true, value: true });
     const relayError = new Error('RELAY_TIMEOUT');
     mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: false, error: relayError });
 
@@ -222,7 +223,9 @@ describe('StakingService.stake — integration error-path coverage', () => {
     // else-branch wraps it as STAKING_STAKE_FAILED with the original on cause —
     // pinning that path here so a future regression that widens isStakeOrchestrationError surfaces
     // immediately. Mirrors the bridge & MM out-of-union wrap-tests.
-    const outOfUnion = new SodaxError('SWAP_RELAY_TIMEOUT' as never, 'foreign code thrown into staking', { feature: 'staking' });
+    const outOfUnion = new SodaxError('SWAP_RELAY_TIMEOUT' as never, 'foreign code thrown into staking', {
+      feature: 'staking',
+    });
     vi.spyOn(sodax.staking, 'createStakeIntent').mockRejectedValueOnce(outOfUnion);
 
     const result = await sodax.staking.stake(stakeInput());
@@ -242,7 +245,9 @@ describe('StakingService.stake — integration error-path coverage', () => {
 
 describe('StakingService — out-of-union wrap-path smoke for non-stake orchestrators', () => {
   it('unstake wraps as STAKING_UNSTAKE_FAILED', async () => {
-    const outOfUnion = new SodaxError('BRIDGE_FAILED' as never, 'foreign code thrown into staking', { feature: 'staking' });
+    const outOfUnion = new SodaxError('BRIDGE_FAILED' as never, 'foreign code thrown into staking', {
+      feature: 'staking',
+    });
     vi.spyOn(sodax.staking, 'createUnstakeIntent').mockRejectedValueOnce(outOfUnion);
 
     const result = await sodax.staking.unstake(unstakeInput());
@@ -255,7 +260,9 @@ describe('StakingService — out-of-union wrap-path smoke for non-stake orchestr
   });
 
   it('instantUnstake wraps as STAKING_INSTANT_UNSTAKE_FAILED', async () => {
-    const outOfUnion = new SodaxError('MM_SUPPLY_FAILED' as never, 'foreign code thrown into staking', { feature: 'staking' });
+    const outOfUnion = new SodaxError('MM_SUPPLY_FAILED' as never, 'foreign code thrown into staking', {
+      feature: 'staking',
+    });
     vi.spyOn(sodax.staking, 'createInstantUnstakeIntent').mockRejectedValueOnce(outOfUnion);
 
     const result = await sodax.staking.instantUnstake(instantUnstakeInput());
@@ -268,7 +275,9 @@ describe('StakingService — out-of-union wrap-path smoke for non-stake orchestr
   });
 
   it('claim wraps as STAKING_CLAIM_FAILED', async () => {
-    const outOfUnion = new SodaxError('SWAP_FAILED' as never, 'foreign code thrown into staking', { feature: 'staking' });
+    const outOfUnion = new SodaxError('SWAP_FAILED' as never, 'foreign code thrown into staking', {
+      feature: 'staking',
+    });
     vi.spyOn(sodax.staking, 'createClaimIntent').mockRejectedValueOnce(outOfUnion);
 
     const result = await sodax.staking.claim(claimInput());
@@ -281,7 +290,9 @@ describe('StakingService — out-of-union wrap-path smoke for non-stake orchestr
   });
 
   it('cancelUnstake wraps as STAKING_CANCEL_UNSTAKE_FAILED', async () => {
-    const outOfUnion = new SodaxError('MM_BORROW_FAILED' as never, 'foreign code thrown into staking', { feature: 'staking' });
+    const outOfUnion = new SodaxError('MM_BORROW_FAILED' as never, 'foreign code thrown into staking', {
+      feature: 'staking',
+    });
     vi.spyOn(sodax.staking, 'createCancelUnstakeIntent').mockRejectedValueOnce(outOfUnion);
 
     const result = await sodax.staking.cancelUnstake(cancelUnstakeInput());
@@ -345,7 +356,7 @@ const claimInputFor = <K extends EvmSpokeFixture>(srcChainKey: K): ClaimAction<K
     },
   }) as ClaimAction<K, false>;
 
-describe.each(EVM_SPOKES)('StakingService — per-chain SODA lookup on srcChainKey=%s', (srcChainKey) => {
+describe.each(EVM_SPOKES)('StakingService — per-chain SODA lookup on srcChainKey=%s', srcChainKey => {
   it('createStakeIntent builds the intent payload without throwing chain-context invariants', async () => {
     vi.spyOn(sodax.hubProvider, 'getUserHubWalletAddress').mockResolvedValueOnce(HUB_WALLET);
     vi.spyOn(sodax.spoke, 'deposit').mockResolvedValueOnce({ ok: true, value: SPOKE_TX_HASH });

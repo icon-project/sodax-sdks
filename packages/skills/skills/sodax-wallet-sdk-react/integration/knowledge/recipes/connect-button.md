@@ -13,7 +13,7 @@ Single-chain connect/disconnect button — pick a connector, connect, read the a
 | `useXConnectors({ xChainType })` | List available connectors for the chain family |
 | `useXConnect()` | React Query mutation — `mutate(connector)` |
 | `useXAccount({ xChainType })` | Read connected account (always returns object — `address` is `undefined` when disconnected) |
-| `useXDisconnect()` | Returns `(xChainType) => Promise<void>` |
+| `useXDisconnect()` | Returns `(args: { xChainType: ChainType }) => Promise<void>` |
 | `sortConnectors(list, { preferred })` | Optional — rank installed/preferred wallets first |
 
 ---

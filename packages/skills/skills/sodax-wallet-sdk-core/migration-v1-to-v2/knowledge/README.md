@@ -65,7 +65,7 @@ pnpm exec tsc --noEmit | grep -iE "wallet-sdk-core|WalletProvider|WalletConfig"
 
 ## Tip: typecheck-driven verification
 
-The repo includes `apps/node/` (Node scripts) and `apps/demo_v1/` (React demo). Running `pnpm exec tsc --noEmit` from either reveals breaking changes — but for wallet-sdk-core specifically, **none of those errors come from this package**. If you see `wallet-sdk-core` in the error output, it's most likely:
+Running `pnpm exec tsc --noEmit` across your codebase reveals breaking changes — but for wallet-sdk-core specifically, **none of those errors come from this package**. If you see `wallet-sdk-core` in the error output, it's most likely:
 
 - A deep import from `src/...` (never supported; the v2 source layout differs).
 - Indirect — a broken `@sodax/sdk` / `@sodax/types` signature that includes a wallet-provider type.

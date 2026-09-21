@@ -15,12 +15,7 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const distRoot = join(__dirname, '..', 'dist');
 
-const BUNDLED_DEPS = [
-  '@stacks/transactions',
-  '@stacks/network',
-  '@stacks/connect',
-  '@injectivelabs/wallet-strategy',
-];
+const BUNDLED_DEPS = ['@stacks/transactions', '@stacks/network', '@stacks/connect', '@injectivelabs/wallet-strategy'];
 
 function walkJs(dir) {
   const out = [];
@@ -42,10 +37,7 @@ for (const file of walkJs(distRoot)) {
   for (const dep of BUNDLED_DEPS) {
     const escaped = dep.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     // Match `from '<dep>'`, `from '<dep>/sub'`, `require('<dep>')`, `import('<dep>')`.
-    const re = new RegExp(
-      `(?:from|require\\(|import\\()\\s*['"]${escaped}(?:/[^'"]*)?['"]`,
-      'g',
-    );
+    const re = new RegExp(`(?:from|require\\(|import\\()\\s*['"]${escaped}(?:/[^'"]*)?['"]`, 'g');
     if (re.test(src)) {
       console.error(`FAIL: ${file.replace(distRoot + '/', '')} references ${dep}`);
       failed = true;

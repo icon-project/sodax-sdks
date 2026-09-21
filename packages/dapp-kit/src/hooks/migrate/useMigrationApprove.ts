@@ -49,9 +49,7 @@ export function useMigrationApprove<K extends SpokeChainKey = SpokeChainKey>({
     mutationFn: async ({ action, ...actionParams }) =>
       unwrapResult(
         await sodax.migration.approve(
-          { ...actionParams, raw: false } as
-            | IcxRevertMigrationAction<false>
-            | UnifiedBnUSDMigrateAction<K, false>,
+          { ...actionParams, raw: false } as IcxRevertMigrationAction<false> | UnifiedBnUSDMigrateAction<K, false>,
           action,
         ),
       ),

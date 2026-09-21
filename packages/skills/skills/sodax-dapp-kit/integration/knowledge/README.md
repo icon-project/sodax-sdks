@@ -15,7 +15,7 @@ This tree documents v2 of the dapp-kit React hooks for **new consumers** buildin
 | [`features/bridge.md`](features/bridge.md) | Bridge hooks: `useBridge`, allowance/approve, bridgeable amount/tokens. |
 | [`features/dex.md`](features/dex.md) | DEX hooks: deposit/withdraw, supply/decrease liquidity, claim rewards, position info, pools. |
 | [`features/migration.md`](features/migration.md) | Migration hooks: ICX/bnUSD/BALN forward + reverse, allowance/approve. |
-| [`features/bitcoin.md`](features/bitcoin.md) | Radfi hooks (dapp-kit-unique): session, trading wallet, fund/withdraw, UTXOs. |
+| [`features/bitcoin.md`](features/bitcoin.md) | Bound Exchange hooks (dapp-kit-unique): session, trading wallet, fund/withdraw, UTXOs. |
 | [`features/auxiliary-services.md`](features/auxiliary-services.md) | Partner, recovery, backend queries, shared (xBalances, gas estimation, trustlines). |
 | [`recipes/`](recipes/) | Copy-paste patterns: setup, wallet connectivity, per-feature flows, mutation error handling, observability, invalidations. |
 | [`reference/`](reference/) | Lookup tables: full hook index, queryKey conventions, public API surface, glossary. |

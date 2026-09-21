@@ -4,7 +4,7 @@ Every v2 design concept the SDK rests on, in a single TOC-navigable file. Read e
 
 ## Section index
 
-1. [Hub-and-spoke model](#1-hub-and-spoke-model) — Sonic is the hub; 19 spoke chains route through it.
+1. [Hub-and-spoke model](#1-hub-and-spoke-model) — Sonic is the hub; 20 spoke chains route through it.
 2. [`SpokeService` router](#2-spokeservice-router) — single internal dispatcher; no per-chain provider classes.
 3. [`Sodax` facade and service graph](#3-sodax-facade-and-service-graph) — one instance owns every feature service.
 4. [`ConfigService`](#4-configservice) — dynamic config from backend with packaged-defaults fallback.
@@ -50,7 +50,7 @@ For most consumers, this whole pipeline is one method call (`sodax.swaps.swap(..
 
 ### Supported chains
 
-20 total. EVM (12): Sonic (hub), Ethereum, Arbitrum, Base, BSC, Optimism, Polygon, Avalanche, HyperEVM, Lightlink, Redbelly, Kaia. Non-EVM (8): Solana, Sui, Stellar, ICON, Injective, NEAR, Stacks, Bitcoin. See [`reference/`](reference/) § "Chain keys" for the full table with relay IDs and address-type mapping.
+22 total. EVM (14): Sonic (hub), Ethereum, Arbitrum, Base, BSC, Optimism, Polygon, Avalanche, HyperEVM, Lightlink, Redbelly, Kaia, Hedera, Robinhood Chain. Non-EVM (8): Solana, Sui, Stellar, ICON, Injective, NEAR, Stacks, Bitcoin. See [`reference/`](reference/) § "Chain keys" for the full table with relay IDs and address-type mapping.
 
 ---
 
@@ -62,7 +62,7 @@ Instead, the SDK has **one** `SpokeService` instance (owned by `Sodax`) which ho
 
 ```
 SpokeService
- ├── EvmSpokeService        (handles all 12 EVM chains)
+ ├── EvmSpokeService        (handles all 14 EVM chains)
  ├── SonicSpokeService      (special-cased for the hub)
  ├── SolanaSpokeService
  ├── SuiSpokeService
@@ -88,6 +88,27 @@ The chain key on the request payload (e.g. `srcChainKey: ChainKeys.ETHEREUM_MAIN
 
 The chain key is the bridge between the type system and runtime routing.
 
+### ERC-20 approval can take two transactions
+
+A few ERC-20s of the 2017 TetherToken lineage reject an allowance change from one non-zero value to
+another, so a wallet holding a stale allowance cannot approve at all until the allowance is zeroed.
+Before a signed approval, `SpokeService` simulates the approve and, when it reverts, sends
+`approve(0)` first, waits for it to be mined, then sends the real approval. The user signs twice.
+
+Detection is behavioural — the simulated approve either reverts or it does not — never a token list,
+so a token added or upgraded later is handled without a code change. Consumer impact:
+
+- **Signed flows (`raw: false`)** are unchanged. Every feature `approve` still resolves to a single
+  transaction hash: the hash of the **last** transaction. Show step progress in the UI if you want,
+  but nothing breaks if you do not.
+- **Unsigned flows (`raw: true`)** still return exactly one transaction from `approve`, which cannot
+  express a two-step plan. Use `sodax.swaps.buildApproveTxs({ params, raw: true })` — or
+  `sodax.bridge.buildApproveTxs` for a bridge — instead; both return `{ approveTx, resetTx? }`.
+  `resetTx` is present only for a guarded token holding a stale allowance — broadcast it and wait for
+  it to be mined first, because `approveTx` is not valid until the reset has landed. Each feature
+  resolves its own spender (a bridge on the hub approves the caller's hub wallet router, a swap the
+  solver's intents contract), so call the one matching the action you are about to take.
+
 ---
 
 ## 3. `Sodax` facade and service graph
@@ -95,7 +116,7 @@ The chain key is the bridge between the type system and runtime routing.
 The `Sodax` class is the public entry point. It constructs and wires every service once at construction time, then reuses them across calls:
 
 ```ts
-const sodax = new Sodax(/* optional DeepPartial<SodaxConfig> */);
+const sodax = new Sodax(/* optional SodaxOptions */);
 await sodax.config.initialize();   // fetch dynamic config; fall back to packaged defaults
 
 // All feature services accessed off the instance:
@@ -116,7 +137,8 @@ Sodax
  ├── migration       — MigrationService       (ICX/bnUSD/BALN migration)
  ├── partners        — PartnerService         (partner fee claiming)
  ├── recovery        — RecoveryService        (withdraw stuck hub-wallet assets)
- ├── backendApi      — BackendApiService      (intent lookup, swap submission, config fetching)
+ ├── backendApi      — BackendApiService      (intent lookup, orderbook, money-market reads, config fetching)
+ ├── api             — alias for backendApi; `api.swaps` is SwapsApiService (typed Swaps API client)
  ├── config          — ConfigService          (dynamic config; see § 4)
  ├── hubProvider     — HubProvider            (hub contract interactions; concrete impl `EvmHubProvider`)
  └── spoke           — SpokeService           (per-chain-family router; see § 2)
@@ -127,21 +149,23 @@ All feature services receive `{ hubProvider, config, spoke }` via constructor in
 ### Constructor
 
 ```ts
-import { Sodax, type SodaxConfig, type DeepPartial } from '@sodax/sdk';
+import { Sodax, type SodaxOptions } from '@sodax/sdk';
 
-new Sodax(config?: DeepPartial<SodaxConfig>): Sodax;
+new Sodax(config?: SodaxOptions): Sodax;
 ```
 
-`SodaxConfig` has exactly **10 fields** (all required at the type level, but `DeepPartial` makes every leaf optional):
+`SodaxOptions` is `DeepPartial<SodaxDefaultConfig> & { logger?: SodaxLoggerOption; fee?: PartnerFee }` — a deep-partial override of the `SodaxDefaultConfig` data contract, plus the client-side options (`logger` sink + global partner `fee`) kept off `SodaxDefaultConfig` itself: the integrator sets them, they are resolved once, and the backend never fetches or overwrites them. Read the resolved global fee back via `sodax.config.fee`. The global `fee` is the **default applied to any feature whose own `partnerFee` is unset** — the effective fee is `featureFee ?? fee`, resolved via `sodax.config.swapPartnerFee` / `moneyMarketPartnerFee` / `bridgePartnerFee` / `leverageYieldPartnerFee`. (See [`recipes/logging.md`](recipes/logging.md) for the `logger` precedent.)
 
-- `fee: PartnerFee | undefined` — global partner fee, applied unless a feature-level config overrides.
-- `chains: Record<SpokeChainKey, SpokeChainConfig>` — per-spoke-chain config. Each entry carries `rpcUrl`, polling config, and chain-family-specific extras (`BitcoinSpokeChainConfig`, `StellarSpokeChainConfig`, etc.).
-- `swaps: SwapsConfig` — supported solver tokens per chain.
-- `moneyMarket: MoneyMarketConfig` — money market contracts + supported tokens.
+`SodaxDefaultConfig` has exactly **10 fields** (all required at the type level, but `DeepPartial` makes every leaf optional):
+
+- `chains: Record<SpokeChainKey, SpokeChainConfig>` — per-spoke-chain config. Each entry carries `rpcUrl`, polling config, and chain-family-specific extras (`BitcoinSpokeChainConfig`, `StellarSpokeChainConfig`, etc.). EVM hub/Sonic entries also accept an optional `rpcUrls` failover list (see [`recipes/initialize-sodax.md`](recipes/initialize-sodax.md)).
+- `swaps: SwapsConfig` — supported solver tokens per chain (+ optional per-feature `partnerFee` override).
+- `moneyMarket: MoneyMarketConfig` — money market contracts + supported tokens (+ optional per-feature `partnerFee` override).
 - `bridge: BridgeConfig` — bridge `{ partnerFee }` override.
 - `dex: DexConfig` — DEX pool/asset config.
-- `hub: HubConfig` — hub-chain (Sonic) full address map + RPC URL + polling config.
-- `api: ApiConfig` — backend API endpoint (`{ baseURL, timeout, headers }`).
+- `leverageYield: LeverageYieldConfig` — registry of leverage-yield ERC-4626 vaults on the hub.
+- `hub: HubConfig` — hub-chain (Sonic) full address map + RPC URL + polling config. Accepts an optional `rpcUrls` failover list (and `rpcOptions` tuning) — see [`recipes/initialize-sodax.md`](recipes/initialize-sodax.md).
+- `api: ApiConfig` — backend API config: flat `BackendApiConfig` (`{ baseURL, basePath?, timeout, headers }`, shared by `sodax.backendApi` and the swaps client `sodax.api.swaps`) or nested `CustomApiConfig` (`{ baseApiConfig?, swapsApiConfig? }`) to point the swaps API at its own endpoint. `baseURL` is the gateway root; each service appends its own path below it.
 - `solver: SolverConfig` — `{ intentsContract, solverApiEndpoint, protocolIntentsContract }`.
 - `relay: RelayConfig` — intent relay endpoint + chain-id map.
 
@@ -180,15 +204,16 @@ Chain configs (vault addresses, supported tokens, fee parameters) change between
 
 ### Custom backend
 
-Point at a custom backend URL via `SodaxConfig.api.baseURL`:
+Point at a custom backend URL via `SodaxConfig.api`. `baseURL` is the gateway root; the data API's `/be`
+mount is appended below it, so a sandbox serving `/config/*` at its bare origin needs `basePath: ''`:
 
 ```ts
 const sodax = new Sodax({
-  api: { baseURL: 'https://sandbox-api.example.com' },
+  api: { baseApiConfig: { baseURL: 'https://sandbox-api.example.com', basePath: '' } },
 });
 ```
 
-`SodaxConfig.api` is `ApiConfig` (`{ baseURL, timeout, headers }`) — pass any subset via `DeepPartial`. v2 does not provide a typed slot to inject a custom `IConfigApi` implementation at construction; if you need to mock the backend for tests, point `baseURL` at a local mock server, or construct your own `BackendApiService`-compatible mock and inject it where you control the `Sodax` instance (e.g. dependency-injected in your app layer).
+`SodaxConfig.api` is `ApiConfig` — the flat `BackendApiConfig` (`{ baseURL, basePath?, timeout, headers }`) shared by both backend clients, or the nested `CustomApiConfig` (`{ baseApiConfig?, swapsApiConfig? }`) to point the swaps API (`sodax.api.swaps`) at its own endpoint. `baseURL` is the gateway root and every service appends its own path below it (`/be`, `/swaps`, `/bridge`, `/sponsorships/stellar`), so it must never carry a service segment; `basePath` overrides the data API's mount for a non-gateway deployment. Pass any subset via `DeepPartial`. v2 does not provide a typed slot to inject a custom `IConfigApiV1` implementation at construction; if you need to mock the backend for tests, point `baseURL` at a local mock server (with `basePath: ''` when it serves the routes at its origin), or construct your own `BackendApiService`-compatible mock and inject it where you control the `Sodax` instance (e.g. dependency-injected in your app layer).
 
 ---
 
@@ -229,7 +254,7 @@ This is what allows `sodax.swaps.createIntent({ params: { srcChainKey: ChainKeys
 ```ts
 import { getChainType, isEvmChainKeyType, isSolanaChainKeyType, isBitcoinChainKeyType, /* … */ } from '@sodax/sdk';
 
-getChainType(chainKey);        // 'EVM' | 'BITCOIN' | 'SOLANA' | 'STELLAR' | 'SUI' | 'ICON' | 'INJECTIVE' | 'STACKS' | 'NEAR' | 'SONIC'
+getChainType(chainKey);        // 'EVM' | 'BITCOIN' | 'SOLANA' | 'STELLAR' | 'SUI' | 'ICON' | 'INJECTIVE' | 'STACKS' | 'NEAR'
 isEvmChainKeyType(chainKey);   // boolean (with type guard)
 ```
 
@@ -346,7 +371,7 @@ The canonical error class. Every SDK-emitted error is a `SodaxError<C>` paramete
 ```ts
 class SodaxError<C extends SodaxErrorCode = SodaxErrorCode> extends Error {
   readonly code: C;                 // closed 13-code reason union
-  readonly feature: SodaxFeature;   // 'swap' | 'moneyMarket' | 'bridge' | 'staking' | 'migration' | 'dex' | 'partner' | 'recovery'
+  readonly feature: SodaxFeature;   // 'swap' | 'moneyMarket' | 'bridge' | 'staking' | 'migration' | 'dex' | 'partner' | 'recovery' | 'backend' | 'leverageYield'
   readonly cause?: unknown;
   readonly context?: SodaxErrorContext;
 
@@ -356,23 +381,7 @@ class SodaxError<C extends SodaxErrorCode = SodaxErrorCode> extends Error {
 
 ### The 13 codes
 
-| Code | Meaning |
-|---|---|
-| `VALIDATION_FAILED` | Pre-flight invariant tripped. |
-| `INTENT_CREATION_FAILED` | Building the intent / payload failed. |
-| `EXECUTION_FAILED` | Orchestrator-level catch-all for multi-step ops. |
-| `TX_VERIFICATION_FAILED` | Spoke-side `verifyTxHash` returned false / threw. |
-| `TX_SUBMIT_FAILED` | Spoke tx landed; relay POST submit failed. |
-| `RELAY_TIMEOUT` | Destination packet didn't reach `executed` within timeout. |
-| `RELAY_FAILED` | Relay polling outage / unrecognised relay error. |
-| `APPROVE_FAILED` | Token approval call failed. |
-| `ALLOWANCE_CHECK_FAILED` | Reading on-chain allowance failed. |
-| `GAS_ESTIMATION_FAILED` | Gas estimation returned an error. |
-| `LOOKUP_FAILED` | Read-only on-chain query / off-chain config fetch. |
-| `EXTERNAL_API_ERROR` | Upstream API call failed (solver, backend). |
-| `UNKNOWN` | Last-resort catch in an outer `try`. Should be rare. |
-
-The full per-code semantics, common context fields, per-feature narrow unions, and retry guidance are in [`reference/`](reference/) § "Error codes".
+The closed code vocabulary is the same 13 names across every feature — see [`reference/error-codes.md`](reference/error-codes.md) for the full table, per-code semantics, common `context` field shapes, per-feature narrow unions, and retry guidance.
 
 ### `(feature, code)` discrimination
 
@@ -398,7 +407,7 @@ Public methods declare narrow code unions via `Extract<SodaxErrorCode, ...>`:
 ```ts
 type CreateSupplyIntentErrorCode = Extract<
   SodaxErrorCode,
-  'VALIDATION_FAILED' | 'INTENT_CREATION_FAILED' | 'UNKNOWN'
+  'USER_REJECTED' | 'VALIDATION_FAILED' | 'INTENT_CREATION_FAILED' | 'UNKNOWN'
 >;
 ```
 
@@ -464,8 +473,8 @@ Use these in cross-bundle code (apps with mixed ESM/CJS resolution, monorepos wi
 
 Cross-chain coordination is exposed as two top-level functions (re-exported from `@sodax/sdk`'s barrel):
 
-- `submitTransaction({ relayerApiEndpoint, srcChainKey, txHash, payload })` — POSTs the spoke transaction to the relay submit endpoint and resolves the relay's first-stage acknowledgement.
-- `relayTxAndWaitPacket({ relayerApiEndpoint, srcChainKey, dstChainKey, txHash, payload, timeout? })` — runs `submitTransaction` and then polls until the destination packet reaches `executed`.
+- `submitTransaction(payload, apiUrl)` — TWO positional args: `payload: IntentRelayRequest<'submit'>` and `apiUrl: HttpUrl` (not an options object). POSTs the spoke transaction to the relay submit endpoint and resolves the relay's first-stage acknowledgement.
+- `relayTxAndWaitPacket({ srcTxHash, data, chainKey, relayerApiEndpoint, timeout, pollTxHash? })` — `RelayAndWaitParams`: `data` is the whole `RelayExtraData` / `OnDemandRelayData` object and `chainKey` is the source `SpokeChainKey`. Runs `submitTransaction` and then polls until the destination packet reaches `executed`.
 
 These functions are **not** exposed on the `Sodax` instance. Consumers don't call them directly — every feature service (`swaps.swap`, `bridge.bridge`, `staking.stake`, …) wraps the spoke→hub leg internally. If you genuinely need custom relay orchestration (rare), import `relayTxAndWaitPacket` / `submitTransaction` from `@sodax/sdk` and pass the same `relayerApiEndpoint` your `Sodax` instance uses.
 
@@ -491,7 +500,7 @@ The single shared mapper from a relay-layer error to a `SodaxError`. Every featu
 import { mapRelayFailure, relayTxAndWaitPacket } from '@sodax/sdk';
 
 try {
-  await relayTxAndWaitPacket({ /* relayerApiEndpoint, srcChainKey, dstChainKey, txHash, payload, timeout? */ });
+  await relayTxAndWaitPacket({ /* srcTxHash, data, chainKey, relayerApiEndpoint, timeout, pollTxHash? */ });
 } catch (e) {
   const sodaxError = mapRelayFailure(e, {
     feature: 'swap',
@@ -518,7 +527,7 @@ You drop down to the relay layer only when:
 
 ### Cross-references
 
-- `RecoveryService` for pulling stuck hub-wallet assets back to a spoke chain: see [`features/auxiliary-services.md`](features/auxiliary-services.md).
+- `RecoveryService` for pulling stuck hub-wallet assets back to a spoke chain: see [`features/recovery.md`](features/recovery.md).
 - Per-feature error codes related to relay (e.g. `'TX_SUBMIT_FAILED'`, `'RELAY_TIMEOUT'`): [`reference/`](reference/) § "Error codes".
 
 ---
@@ -531,3 +540,38 @@ You drop down to the relay layer only when:
 - Per-feature usage: [`features/`](features/).
 - Non-EVM chain quirks: [`chain-specifics.md`](chain-specifics.md).
 - v1 → v2 porting context: [`README.md`](../../migration-v1-to-v2/knowledge/README.md).
+
+### RWA classification and token logos
+
+`XToken.isRwa === true` marks a registered tokenized stock, ETF or commodity,
+including registered cross-chain representations. An omitted flag means no RWA
+classification is declared; it is not a general-purpose crypto/stablecoin taxonomy.
+Chain membership and symbol spelling do not determine RWA status.
+
+Use `isRealWorldAsset({ chainKey, address })` to resolve metadata from the packaged
+SDK registry when your token data comes from an API without the flag. It returns
+false for unknown chains or addresses, ignores symbols, and compares EVM addresses
+case-insensitively while preserving non-EVM identifier casing. It does not read
+custom constructor config or validate swap/money-market support. New registry
+metadata requires an SDK update; it does not automatically update backend payloads.
+
+```typescript
+import { ChainKeys, getSupportedSolverTokens, isRealWorldAsset, tokenLogo } from '@sodax/sdk';
+
+const tokens = getSupportedSolverTokens(ChainKeys.ROBINHOOD_MAINNET);
+const rwaTokens = tokens.filter(isRealWorldAsset);
+const rows = tokens.map(token => ({
+  symbol: token.symbol,
+  isRwa: isRealWorldAsset(token),
+  logo: tokenLogo(token.symbol),
+}));
+```
+
+For API responses using `xChainId`, pass it as `chainKey` alongside the token's
+on-chain `address`. Resolve each chain/address before grouping directory rows;
+keep feature support and UI visibility filters separate from classification.
+
+`tokenLogo(symbol)` serves shared PNGs from the SDK repository's `main` branch.
+Robinhood equity/ETF entries use the Robinhood mark; xStocks retain their own
+artwork. Image replacements become available after merge, subject to caching,
+without an SDK release. Consumers must use these URLs to receive the replacements.

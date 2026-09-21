@@ -22,11 +22,11 @@ RPC URLs are injected via `config.chains` — each chain entry takes `{ rpcUrl: 
 // providers.tsx
 import { QueryClientProvider } from '@tanstack/react-query';
 import { SodaxProvider, createSodaxQueryClient } from '@sodax/dapp-kit';
-import { ChainKeys, type DeepPartial, type SodaxConfig } from '@sodax/sdk';
+import { ChainKeys, type SodaxOptions } from '@sodax/sdk';
 
 const queryClient = createSodaxQueryClient();
 
-const sodaxConfig: DeepPartial<SodaxConfig> = {
+const sodaxConfig: SodaxOptions = {
   chains: {
     [ChainKeys.ARBITRUM_MAINNET]: { rpcUrl: 'https://arb1.arbitrum.io/rpc' },
     [ChainKeys.BASE_MAINNET]: { rpcUrl: 'https://mainnet.base.org' },
@@ -54,7 +54,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 ```tsx
 // @ai-snippets-skip — illustrative; uses placeholder values + JSX without surrounding imports
 // ✅ Static config — module constant (preferred when nothing depends on runtime state).
-const sodaxConfig: DeepPartial<SodaxConfig> = {
+const sodaxConfig: SodaxOptions = {
   chains: { [ChainKeys.SONIC_MAINNET]: { rpcUrl: '...' } },
 };
 
@@ -162,7 +162,7 @@ ChainKeys.INJECTIVE_MAINNET;   // 'injective-1'
 ChainKeys.NEAR_MAINNET;        // 'near'
 ChainKeys.STACKS_MAINNET;      // 'stacks'
 ChainKeys.BITCOIN_MAINNET;     // 'bitcoin'
-// HyperEVM, Lightlink, Redbelly, Kaia also available.
+// HyperEVM, Lightlink, Redbelly, Kaia, Hedera also available.
 ```
 
 **v1 → v2:** the legacy `*_MAINNET_CHAIN_ID` constants (e.g. `BSC_MAINNET_CHAIN_ID`) are gone. Use `ChainKeys.X_MAINNET` namespace access.

@@ -33,7 +33,7 @@ For each feature your app uses, walk the matching `migration/features/<feature>.
 - [ ] [`features/bridge.md`](features/bridge.md) — bridge.
 - [ ] [`features/dex.md`](features/dex.md) — deposit / supply liquidity / etc.
 - [ ] [`features/migration.md`](features/migration.md) — ICX / bnUSD / BALN. **Note:** v1's `useMigrate(spokeProvider)` is gone; v2 has 6 per-action hooks.
-- [ ] [`features/bitcoin.md`](features/bitcoin.md) — Radfi.
+- [ ] [`features/bitcoin.md`](features/bitcoin.md) — Bound Exchange.
 - [ ] [`features/auxiliary-services.md`](features/auxiliary-services.md) — partner, recovery, backend queries, shared utilities.
 
 The cross-cutting pattern at every call site:

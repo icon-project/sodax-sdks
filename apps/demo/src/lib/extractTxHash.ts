@@ -4,8 +4,7 @@ export function extractTxHash(result: unknown): string | undefined {
   }
 
   const directCandidate =
-    (result as { txHash?: unknown; hash?: unknown }).txHash ??
-    (result as { txHash?: unknown; hash?: unknown }).hash;
+    (result as { txHash?: unknown; hash?: unknown }).txHash ?? (result as { txHash?: unknown; hash?: unknown }).hash;
 
   if (typeof directCandidate === 'string' && directCandidate.length > 0) {
     return directCandidate;

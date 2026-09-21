@@ -49,9 +49,9 @@ const config: BitcoinWalletConfig = {
 };
 
 const radfiConfig: RadfiConfig = {
-  url: IS_TESTNET ? 'https://api.signet.radfi.co/api' : 'https://staging.api.radfi.co/api',
+  url: IS_TESTNET ? 'https://signet.api.bound.exchange/api' : 'https://staging.api.bound.exchange/api',
   apiKey: 'YOUR_API_KEY',
-  umsUrl: IS_TESTNET ? 'https://signet.ums.radfi.co/api' : 'https://staging.ums.radfi.co/api',
+  umsUrl: IS_TESTNET ? 'https://signet.api.ums.bound.exchange/api' : 'https://staging.api.ums.bound.exchange/api',
 }
 
 const spokeBitcoinWallet = new BitcoinWalletProvider(config);

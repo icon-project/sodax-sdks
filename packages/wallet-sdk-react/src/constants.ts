@@ -3,6 +3,8 @@
  * Centralized so consumers and tests have a single source of truth.
  */
 
+import type { SuiAdapterFields } from './types/config.js';
+
 // ─── Stacks ─────────────────────────────────────────────────────────────────
 export const STACKS_DEFAULT_RPC_URL = 'https://api.mainnet.hiro.so';
 export const STACKS_DEFAULT_NETWORK = 'mainnet' as const;
@@ -10,6 +12,14 @@ export const STACKS_DEFAULT_NETWORK = 'mainnet' as const;
 // ─── Sui ────────────────────────────────────────────────────────────────────
 export const SUI_DEFAULT_NETWORK = 'mainnet' as const;
 export const SUI_DEFAULT_AUTO_CONNECT = true;
+/**
+ * Default gRPC-web endpoint per Sui network. Keyed off the config union, so the networks we
+ * offer and the endpoints we ship cannot drift apart.
+ */
+export const SUI_DEFAULT_GRPC_URLS: Record<NonNullable<SuiAdapterFields['network']>, string> = {
+  mainnet: 'https://fullnode.mainnet.sui.io',
+  testnet: 'https://fullnode.testnet.sui.io',
+};
 
 // ─── EVM ────────────────────────────────────────────────────────────────────
 export const EVM_DEFAULT_RECONNECT_ON_MOUNT = false;
@@ -29,7 +39,7 @@ export const STELLAR_DEFAULT_HORIZON_RPC_URL = 'https://horizon.stellar.org';
 export const STELLAR_DEFAULT_SOROBAN_RPC_URL = 'https://rpc.ankr.com/stellar_soroban';
 
 // ─── NEAR ───────────────────────────────────────────────────────────────────
-export const NEAR_DEFAULT_RPC_URL = 'https://1rpc.io/near';
+export const NEAR_DEFAULT_RPC_URL = 'https://free.rpc.fastnear.com';
 
 // ─── Wallet metadata (install URLs + icons for extension-based wallets) ────
 // Keys are wallet-level, not per-connector: one OKX extension serves both
@@ -42,8 +52,7 @@ export const WALLET_METADATA = {
   },
   xverse: {
     installUrl: 'https://chromewebstore.google.com/detail/xverse-bitcoin-crypto-wal/idnnbdplmphpflfnlkomgpfbpcgelopg',
-    icon:
-      'https://cdn.brandfetch.io/iddzGN5Rcv/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1771902357797',
+    icon: 'https://cdn.brandfetch.io/iddzGN5Rcv/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1771902357797',
   },
   okx: {
     installUrl: 'https://chromewebstore.google.com/detail/okx-wallet/mcohilncbfahbmgdjkbpemcciiolgcge',

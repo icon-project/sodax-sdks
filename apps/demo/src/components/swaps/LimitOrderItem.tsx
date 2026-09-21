@@ -2,10 +2,15 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { TableCell, TableRow } from '@/components/ui/table';
 import { formatUnits } from 'viem';
-import type { IntentResponse, Intent, IntentRelayChainId } from '@sodax/sdk';
+import {
+  type IntentResponse,
+  type Intent,
+  type IntentRelayChainId,
+  type SpokeChainKey,
+  useCancelLimitOrder,
+  useSodaxContext,
+} from '@sodax/dapp-kit';
 import { useMemo } from 'react';
-import type { SpokeChainKey } from '@sodax/sdk';
-import { useCancelLimitOrder, useSodaxContext } from '@sodax/dapp-kit';
 import { useWalletProvider } from '@sodax/wallet-sdk-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { X } from 'lucide-react';

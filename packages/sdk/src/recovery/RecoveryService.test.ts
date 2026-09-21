@@ -7,6 +7,8 @@ import type { HubProvider } from '../shared/types/types.js';
 import type { SpokeService } from '../shared/services/spoke/SpokeService.js';
 import { assetManagerAbi } from '../shared/abis/index.js';
 import { encodeAddress } from '../shared/utils/shared-utils.js';
+import { invariant } from '../shared/utils/tiny-invariant.js';
+import { noopAnalytics } from '../shared/analytics.js';
 import { RecoveryService } from './RecoveryService.js';
 
 describe('RecoveryService.withdrawHubAsset', () => {
@@ -20,6 +22,7 @@ describe('RecoveryService.withdrawHubAsset', () => {
 
     const config = {
       getSpokeTokenFromOriginalAssetAddress: vi.fn(() => ({ hubAsset })),
+      analytics: noopAnalytics,
     } as unknown as ConfigService;
     const hubProvider = {
       config,
@@ -50,7 +53,7 @@ describe('RecoveryService.withdrawHubAsset', () => {
     const sendMessageParams = vi.mocked(spoke.sendMessage).mock.calls[0]?.[0] as { payload: Hex };
     const [calls] = decodeAbiParameters(parseAbiParameters('(address,uint256,bytes)[]'), sendMessageParams.payload);
     const transferCall = calls[0];
-    expect(transferCall).toBeDefined();
+    invariant(transferCall, 'expected one encoded transfer call');
 
     const decodedTransfer = decodeFunctionData({
       abi: assetManagerAbi,

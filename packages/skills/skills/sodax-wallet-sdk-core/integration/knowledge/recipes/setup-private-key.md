@@ -101,10 +101,10 @@ grep -rn "from '@sodax/wallet-sdk-core" <script-dir>
 
 | Error | Cause | Fix |
 |---|---|---|
-| `Invalid EVM wallet config` | Mixed PK and browser-extension fields in one object | Pick **one** variant. Don't pass both `privateKey` and `walletClient`. |
+| `Invalid EVM wallet config` | Config matches neither variant — no valid `privateKey` (`0x…`) and not both `walletClient` + `publicClient` | Supply exactly one valid variant. (Note: if you DO pass a valid `privateKey`, PK mode wins even if browser fields are also present — no throw.) |
 | TS2322: `'string'` is not assignable to `` `0x${string}` `` | Missing hex prefix or wrong type | Read from env with `as \`0x${string}\`` after a runtime check. |
 | TS: `Property 'secret' is missing` (Injective) | Used `privateKey` at top level | Wrap in `{ secret: { privateKey } }` or `{ secret: { mnemonics } }`. See [`../features/injective.md`](../features/injective.md). |
-| `Cannot find module 'viem/chains'` for unknown chain | Passed an EVM chain key not in `getEvmViemChain` | Use a `ChainKeys.*_MAINNET` constant — the function is exhaustive. |
+| `Unsupported EVM chain key: <key>` | Passed an EVM chain key not handled by `getEvmViemChain` | Use a `ChainKeys.*_MAINNET` constant — `chainId` is typed `EvmChainKey` and the switch is exhaustive, so this is normally a compile-time error. |
 
 ---
 

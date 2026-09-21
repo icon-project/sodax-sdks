@@ -32,8 +32,6 @@ import {
   type EvmSpokeChainConfig,
   type SpokeChainConfig,
   type IconAddress,
-  type SubmitSwapTxResponse,
-  type SubmitSwapTxStatusResponse,
   isSonicChainKey,
   isBitcoinChainKey,
   isSolanaChainKey,
@@ -65,6 +63,43 @@ export function isEvmSpokeChainConfig(value: SpokeChainConfig): value is EvmSpok
 
 export function isIconAddress(value: unknown): value is IconAddress {
   return typeof value === 'string' && /^hx[a-f0-9]{40}$|^cx[a-f0-9]{40}$/.test(value);
+}
+
+// NEAR account-id grammar (nomicon): 2-64 chars of lowercase alnum segments joined by -_.
+const NEAR_ACCOUNT_ID_REGEX = /^(([a-z\d]+[-_])*[a-z\d]+\.)*([a-z\d]+[-_])*[a-z\d]+$/;
+
+export function isValidNearAccountId(accountId: string): boolean {
+  return accountId.length >= 2 && accountId.length <= 64 && NEAR_ACCOUNT_ID_REGEX.test(accountId);
+}
+
+// Injective: bech32 'inj' prefix over a 20-byte account or 32-byte CosmWasm contract payload
+// → inj1 + 38 or 58 chars of the bech32 charset.
+const INJECTIVE_ADDRESS_REGEX = /^inj1(?:[02-9ac-hj-np-z]{38}|[02-9ac-hj-np-z]{58})$/;
+
+// BIP-173 bech32 checksum verification (verify-only; Cosmos addresses use classic bech32).
+const BECH32_CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+const BECH32_GENERATOR = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3] as const;
+
+function bech32ChecksumVerifies(hrp: string, dataChars: string): boolean {
+  const values = [
+    ...[...hrp].map(c => c.charCodeAt(0) >>> 5),
+    0,
+    ...[...hrp].map(c => c.charCodeAt(0) & 31),
+    ...[...dataChars].map(c => BECH32_CHARSET.indexOf(c)),
+  ];
+  let chk = 1;
+  for (const value of values) {
+    const top = chk >>> 25;
+    chk = ((chk & 0x1ffffff) << 5) ^ value;
+    for (let i = 0; i < 5; i++) {
+      if ((top >>> i) & 1) chk ^= BECH32_GENERATOR[i] as number;
+    }
+  }
+  return chk === 1;
+}
+
+export function isValidInjectiveAddress(address: string): boolean {
+  return INJECTIVE_ADDRESS_REGEX.test(address) && bech32ChecksumVerifies('inj', address.slice(4));
 }
 
 export function isResponseAddressType(value: unknown): value is ResponseAddressType {
@@ -208,6 +243,17 @@ export function isSpokeApproveParamsStellar<K extends SpokeChainKey, Raw extends
   return isStellarChainKeyType(params.srcChainKey);
 }
 
+/**
+ * Whether `value` is a chain family a SODAX approve route can act on — the hub, an EVM spoke, or
+ * Stellar; the same partition `isSpokeApproveParamsHub`/`isSpokeApproveParamsEvmSpoke`/
+ * `isSpokeApproveParamsStellar` resolve to. Single exported source for that three-way split so a
+ * consumer outside this package (e.g. dapp-kit's approval-plan routing) doesn't re-derive its own
+ * copy of "which chains support approval".
+ */
+export function isApprovalSupportedChainKeyType(value: SpokeChainKey): boolean {
+  return isHubChainKeyType(value) || isEvmSpokeOnlyChainKeyType(value) || isStellarChainKeyType(value);
+}
+
 // export function isSpokeApproveParamsEvmSpoke(params: SpokeApproveParams<K, Raw>, K extends SpokeChainKey, Raw extends boolean): params is SpokeApproveParamsEvmSpoke<K, Raw> {
 //   return isEvmSpokeOnlyChainKeyType(params.srcChainKey);
 // }
@@ -222,34 +268,6 @@ export function isRawDestinationParams(value: unknown): value is RawDestinationP
   if (!('dstChainKey' in obj) || !('dstAddress' in obj)) return false;
   if (typeof obj.dstAddress !== 'string') return false;
   return typeof obj.dstChainKey === 'string' && spokeChainKeysSet.has(obj.dstChainKey as SpokeChainKey);
-}
-
-// Backend API response guards
-export function isSubmitSwapTxResponse(value: unknown): value is SubmitSwapTxResponse {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    typeof (value as Record<string, unknown>).success === 'boolean' &&
-    typeof (value as Record<string, unknown>).message === 'string'
-  );
-}
-
-export function isSubmitSwapTxStatusResponse(value: unknown): value is SubmitSwapTxStatusResponse {
-  if (typeof value !== 'object' || value === null) return false;
-  const obj = value as Record<string, unknown>;
-  if (typeof obj.success !== 'boolean') return false;
-  if (typeof obj.data !== 'object' || obj.data === null) return false;
-  const data = obj.data as Record<string, unknown>;
-  if (typeof data.txHash !== 'string') return false;
-  if (typeof data.srcChainKey !== 'string') return false;
-  if (typeof data.status !== 'string') return false;
-  if (typeof data.failedAttempts !== 'number') return false;
-  if (data.result !== undefined) {
-    if (typeof data.result !== 'object' || data.result === null) return false;
-    const result = data.result as Record<string, unknown>;
-    if (typeof result.dstIntentTxHash !== 'string') return false;
-  }
-  return true;
 }
 
 // Concrete-typed discriminant guards refine `IWalletProvider` to its specific variant via the

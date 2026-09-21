@@ -10,7 +10,7 @@ Per-feature porting playbooks. Each file shows the v1 → v2 delta for one featu
 | [`bridge.md`](bridge.md) | Field renames in `useBridge` params (`srcChainId` → `srcChainKey`, `recipient` → `dstAddress`). `useGetBridgeableAmount` shape change. |
 | [`dex.md`](dex.md) | Two-step flow stayed the same; field renames + `srcChainKey` requirement. `useSupplyLiquidity` mint/increase routing. |
 | [`migration.md`](migration.md) | **Biggest change**: v1's `useMigrate(spokeProvider)` → 6 per-action hooks. |
-| [`bitcoin.md`](bitcoin.md) | Radfi flow shapes are mostly unchanged; provider/session lifecycle hooks tightened. |
+| [`bitcoin.md`](bitcoin.md) | Bound Exchange flow shapes are mostly unchanged; provider/session lifecycle hooks tightened. |
 | [`auxiliary-services.md`](auxiliary-services.md) | Partner / recovery / backend queries / shared utilities — small per-hook changes. |
 
 ## Pair-completeness

@@ -1,4 +1,4 @@
-import type { Base64String, Hex } from '../shared/shared.js';
+import type { Hex } from '../shared/shared.js';
 import type { ICoreWallet } from '../wallet/wallet.js';
 
 export type SuiReturnType<Raw extends boolean> = Raw extends true
@@ -11,7 +11,8 @@ export type SuiRawTransaction = {
   from: Hex;
   to: string;
   value: bigint;
-  data: Base64String;
+  /** The @mysten/sui Transaction JSON from `Transaction#serialize()`; reconstruct with `Transaction.from()`. */
+  data: string;
 };
 
 export type SuiTransaction = {
@@ -22,6 +23,7 @@ export type SuiArgument = 'GasCoin' | { Input: number } | { Result: number } | {
 
 export interface SuiExecutionResult {
   mutableReferenceOutputs?: [SuiArgument, number[], string][];
+  /** `[bcsBytes, moveTypeTag]`. The type tag is always `''`: Sui's core client returns bytes only. */
   returnValues?: [number[], string][];
 }
 
@@ -30,7 +32,8 @@ export interface SuiCoinStruct {
   coinObjectId: string;
   coinType: string;
   digest: string;
-  previousTransaction: string;
+  /** Absent over gRPC — Sui's `Coin` message does not carry it. */
+  previousTransaction?: string;
   version: string;
 }
 export interface SuiPaginatedCoins {
@@ -101,13 +104,25 @@ export type SuiTransactionEffects = {
   transactionDigest: string;
   gasObject: SuiOwnedObjectRef;
   dependencies?: string[];
+  /**
+   * Object-change buckets. All absent over gRPC: the effects message carries one flat
+   * `changedObjects` list keyed by `inputState` / `outputState` / `idOperation`, and the
+   * transport does not re-derive the buckets from it.
+   */
   created?: SuiOwnedObjectRef[];
+  /** Absent over gRPC — see `created`. */
   mutated?: SuiOwnedObjectRef[];
+  /** Absent over gRPC — see `created`. */
   deleted?: SuiObjectRef[];
+  /** Absent over gRPC — see `created`. */
   wrapped?: SuiObjectRef[];
+  /** Absent over gRPC — see `created`. */
   unwrapped?: SuiOwnedObjectRef[];
+  /** Absent over gRPC — see `created`. */
   unwrappedThenDeleted?: SuiObjectRef[];
+  /** Absent over gRPC — see `created`. */
   sharedObjects?: SuiObjectRef[];
+  /** Absent over gRPC — see `created`. */
   modifiedAtVersions?: SuiTransactionEffectsModifiedAtVersions[];
   eventsDigest?: string | null;
 };

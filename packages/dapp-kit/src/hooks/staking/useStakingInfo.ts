@@ -17,10 +17,10 @@ export type UseStakingInfoParams = ReadHookParams<
  * deriving the hub wallet from the spoke `srcAddress` + `srcChainKey`. Throws on `!ok` so React
  * Query lands in `error` state.
  */
-export function useStakingInfo({ params, queryOptions }: UseStakingInfoParams = {}): UseQueryResult<
-  StakingInfo,
-  Error
-> {
+export function useStakingInfo({
+  params,
+  queryOptions,
+}: UseStakingInfoParams = {}): UseQueryResult<StakingInfo, Error> {
   const { sodax } = useSodaxContext();
   const srcAddress = params?.srcAddress;
   const srcChainKey = params?.srcChainKey;

@@ -35,11 +35,7 @@ const warnedShortIdentifiers = new Set<string>();
 export function matchesConnectorIdentifier(connector: IXConnector, identifier: string): boolean {
   const needle = identifier.toLowerCase();
 
-  if (
-    needle.length > 0 &&
-    needle.length < SHORT_IDENTIFIER_THRESHOLD &&
-    !warnedShortIdentifiers.has(needle)
-  ) {
+  if (needle.length > 0 && needle.length < SHORT_IDENTIFIER_THRESHOLD && !warnedShortIdentifiers.has(needle)) {
     warnedShortIdentifiers.add(needle);
     console.warn(
       `[matchesConnectorIdentifier] identifier "${identifier}" is ${needle.length} chars — substring matching on short strings frequently hits unintended connectors. Use a more distinctive wallet brand name, or match a single connector via useXConnectors(chainType).find(c => c.id === '...') directly.`,

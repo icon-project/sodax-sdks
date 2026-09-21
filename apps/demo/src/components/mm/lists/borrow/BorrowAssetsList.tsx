@@ -4,17 +4,20 @@ import {
   useReservesUsdFormat,
   useBackendAllMoneyMarketAssets,
   useUserFormattedSummary,
-  useXBalances,
+  useBalances,
   useSodaxContext,
+  ChainKeys,
+  type SpokeChainKey,
+  type XToken,
 } from '@sodax/dapp-kit';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { getXChainType, useXAccount, useXService } from '@sodax/wallet-sdk-react';
+import { useXAccount } from '@sodax/wallet-sdk-react';
 import { BorrowAssetsListItem } from './BorrowAssetsListItem';
 import { formatTokenAmount } from '@/lib/utils';
+import { useBtcTradingBalance } from '@/hooks/useBtcTradingBalance';
 import { getBorrowableAssetsWithMarketData } from '@/lib/borrowUtils';
 import { BorrowModal } from '../BorrowModal';
-import { ChainKeys, type SpokeChainKey, type XToken } from '@sodax/sdk';
 import { ChainSelector } from '@/components/shared/ChainSelector';
 import { RepayModal } from '../RepayModal';
 import { Info, Wallet } from 'lucide-react';
@@ -75,13 +78,14 @@ export function BorrowAssetsList({ initialChainId }: BorrowAssetsListProps): JSX
     );
   }, [sodax, allMoneyMarketAssets, selectedChainId]);
 
+  // On Bitcoin the wallet balance shown is the Bound Exchange trading wallet, not the personal wallet.
+  const { isBitcoin, tradingBalanceSats } = useBtcTradingBalance({ chainId: selectedChainId });
+
   const tokensOnSelectedChain = sodax.moneyMarket.getSupportedTokensByChainId(selectedChainId);
-  const xService = useXService({ xChainType: getXChainType(selectedChainId) });
-  const { data: balances } = useXBalances({
+  const { data: balances } = useBalances({
     params: {
-      xService,
-      xChainId: selectedChainId,
-      xTokens: tokensOnSelectedChain,
+      chainKey: selectedChainId,
+      tokens: tokensOnSelectedChain,
       address,
     },
   });
@@ -240,9 +244,12 @@ export function BorrowAssetsList({ initialChainId }: BorrowAssetsListProps): JSX
                         token={asset.token}
                         disabled={!hasCollateral}
                         walletBalance={
-                          asset.token?.chainKey === selectedChainId && balances?.[asset.token.address]
-                            ? formatTokenAmount(balances[asset.token.address], asset.token.decimals, 6)
-                            : '-'
+                          isBitcoin && asset.token?.chainKey === selectedChainId
+                            ? // BTC funds live in the trading wallet (8-decimal sats), not the personal wallet
+                              formatTokenAmount(tradingBalanceSats, 8, 6)
+                            : asset.token?.chainKey === selectedChainId && balances?.[asset.token.address]
+                              ? formatTokenAmount(balances[asset.token.address], asset.token.decimals, 6)
+                              : '-'
                         }
                         formattedReserves={formattedReserves || []}
                         userReserves={userReserves?.[0] || []}

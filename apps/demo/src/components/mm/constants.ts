@@ -16,6 +16,13 @@ export const MIN_BORROW_USD = 1;
 export const DUST_THRESHOLD = 0.00001;
 
 /**
+ * Bitcoin protocol dust limit, in satoshis (546). The flat token-unit DUST_THRESHOLD is far too
+ * coarse for BTC (8 decimals, high value), so for BTC we use this instead. Mirrors the SDK's
+ * internal Bitcoin dust value (BitcoinSpokeService uses 546 sats; it is not exported).
+ */
+export const BITCOIN_DUST_SATS = 546;
+
+/**
  * Safety margin applied to max borrow calculations.
  * Reduces the maximum borrowable amount by 1% to account for price fluctuations
  * and prevent users from borrowing exactly at their limit.

@@ -128,6 +128,8 @@ export interface ISolanaWalletProvider extends ICoreWallet {
   readonly chainType: 'SOLANA';
   getWalletAddress: () => Promise<string>;
   sendTransaction: (rawTransaction: Uint8Array | Array<number>) => Promise<TransactionSignature>;
+  /** Deserialize, sign, and broadcast an unsigned `SolanaRawTransaction` (e.g. from the Swaps API). */
+  signAndSendTransaction?: (params: SolanaRawTransaction) => Promise<TransactionSignature>;
   waitForConfirmation: (
     signature: TransactionSignature,
     commitment: Commitment,
