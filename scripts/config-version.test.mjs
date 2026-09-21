@@ -285,6 +285,14 @@ test('A8: the CLI prints the number for a valid version', { skip: process.platfo
   assert.equal(stdout.trim(), '2020006');
 });
 
+test('A8: the CLI prints the bare number even when FORCE_COLOR is set', { skip: process.platform === 'win32' }, () => {
+  const stdout = execFileSync('node', [join(REPO_ROOT, 'scripts/config-version.mjs'), '2.2.0-rc.6'], {
+    encoding: 'utf8',
+    env: { ...process.env, FORCE_COLOR: '1' },
+  });
+  assert.equal(stdout, '2020006\n');
+});
+
 test('A8: the CLI exits non-zero on an invalid version', { skip: process.platform === 'win32' }, () => {
   assert.throws(() =>
     execFileSync('node', [join(REPO_ROOT, 'scripts/config-version.mjs'), '2.2.100'], {

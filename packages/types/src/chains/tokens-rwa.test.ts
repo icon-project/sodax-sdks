@@ -10,12 +10,36 @@ import {
 } from './tokens.js';
 
 describe('RWA metadata', () => {
-  const equities = ['SPCX', 'NVDA', 'GME', 'MSTR', 'AAPL', 'TSLA', 'MU', 'SNDK', 'SPY', 'QQQ', 'SGOV', 'USO', 'SLV'];
-  const robinhoodOnlyEquities = ['GOOGL', 'AMZN', 'MSFT', 'META', 'CRCL', 'COIN', 'PLTR', 'TSM', 'AMD', 'INTC', 'BABA'];
+  const equities = [
+    'SPCX',
+    'NVDA',
+    'GME',
+    'MSTR',
+    'AAPL',
+    'TSLA',
+    'MU',
+    'SNDK',
+    'SPY',
+    'QQQ',
+    'SGOV',
+    'USO',
+    'SLV',
+    'GOOGL',
+    'AMZN',
+    'MSFT',
+    'META',
+    'CRCL',
+    'COIN',
+    'PLTR',
+    'TSM',
+    'AMD',
+    'INTC',
+    'BABA',
+  ];
   const xstocks = ['CRCLx', 'TSLAx', 'SPYx', 'NVDAx', 'QQQx', 'MSTRx', 'COINx', 'GOOGLx'];
   const expectedByChain: Partial<Record<string, readonly string[]>> = {
-    [ChainKeys.ROBINHOOD_MAINNET]: [...equities, ...robinhoodOnlyEquities],
-    [ChainKeys.SONIC_MAINNET]: [...equities, ...robinhoodOnlyEquities],
+    [ChainKeys.ROBINHOOD_MAINNET]: equities,
+    [ChainKeys.SONIC_MAINNET]: equities,
     [ChainKeys.STELLAR_MAINNET]: equities,
     [ChainKeys.HEDERA_MAINNET]: equities,
     [ChainKeys.SOLANA_MAINNET]: xstocks,
