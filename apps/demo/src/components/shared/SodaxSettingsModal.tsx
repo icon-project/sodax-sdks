@@ -42,6 +42,7 @@ type Draft = {
   env: SolverEnv;
   swapUseBackendSubmitTx: SubmitTxChoice;
   bridgeUseBackendSubmitTx: SubmitTxChoice;
+  leverageYieldUseBackendSubmitTx: SubmitTxChoice;
 } & Record<TextField, string>;
 
 /** The effective default text per field — what an unset override resolves to. `gatewayUrl` is
@@ -75,6 +76,8 @@ function seedDraft(env: SolverEnv, s: SodaxSettings): Draft {
     env,
     swapUseBackendSubmitTx: s.swapUseBackendSubmitTx === null ? 'auto' : s.swapUseBackendSubmitTx ? 'on' : 'off',
     bridgeUseBackendSubmitTx: s.bridgeUseBackendSubmitTx === null ? 'auto' : s.bridgeUseBackendSubmitTx ? 'on' : 'off',
+    leverageYieldUseBackendSubmitTx:
+      s.leverageYieldUseBackendSubmitTx === null ? 'auto' : s.leverageYieldUseBackendSubmitTx ? 'on' : 'off',
     solverApiEndpoint: s.solverApiEndpoint ?? defaults.solverApiEndpoint,
     intentsContract: s.intentsContract ?? defaults.intentsContract,
     protocolIntentsContract: s.protocolIntentsContract ?? defaults.protocolIntentsContract,
@@ -137,6 +140,8 @@ function draftToSettings(draft: Draft): SodaxSettings {
     swapUseBackendSubmitTx: draft.swapUseBackendSubmitTx === 'auto' ? null : draft.swapUseBackendSubmitTx === 'on',
     bridgeUseBackendSubmitTx:
       draft.bridgeUseBackendSubmitTx === 'auto' ? null : draft.bridgeUseBackendSubmitTx === 'on',
+    leverageYieldUseBackendSubmitTx:
+      draft.leverageYieldUseBackendSubmitTx === 'auto' ? null : draft.leverageYieldUseBackendSubmitTx === 'on',
     solverApiEndpoint: url('solverApiEndpoint'),
     intentsContract: address('intentsContract'),
     protocolIntentsContract: address('protocolIntentsContract'),
@@ -170,6 +175,12 @@ function draftToDebugJson(draft: Draft): string {
       swapUseBackendSubmitTx: submitTxChoiceToBoolean(draft.swapUseBackendSubmitTx, swapBackendSubmitTx),
       bridgeSubmitTxMode: draft.bridgeUseBackendSubmitTx,
       bridgeUseBackendSubmitTx: submitTxChoiceToBoolean(draft.bridgeUseBackendSubmitTx, true),
+      leverageYieldSubmitTxMode: draft.leverageYieldUseBackendSubmitTx,
+      leverageYieldUseBackendSubmitTx: submitTxChoiceToBoolean(
+        draft.leverageYieldUseBackendSubmitTx,
+        // Same Auto rule as swap, so the same computed value.
+        swapBackendSubmitTx,
+      ),
       solverApiEndpoint: draft.solverApiEndpoint.trim(),
       intentsContract: draft.intentsContract.trim(),
       protocolIntentsContract: draft.protocolIntentsContract.trim(),
@@ -335,6 +346,10 @@ export function SodaxSettingsModal({ open, onOpenChange }: { open: boolean; onOp
   const swapAutoSubmitTx = defaultUseBackendSubmitTx(effectiveSolverEndpoint(draft));
   const bridgeAutoSubmitTx = true;
   const swapSubmitTxMismatch = draft.swapUseBackendSubmitTx === 'on' && !swapAutoSubmitTx;
+  // A vault swap is a solver intent posted through the swaps pipeline, so it inherits swap's Auto
+  // rule and swap's staging mismatch — not bridge's unconditional on.
+  const leverageYieldAutoSubmitTx = swapAutoSubmitTx;
+  const leverageYieldSubmitTxMismatch = draft.leverageYieldUseBackendSubmitTx === 'on' && !leverageYieldAutoSubmitTx;
 
   // Show the basis points the percent resolves to — that is the number the SDK and both APIs get.
   const feeBps = percentTextToBps(draft.partnerFeePercent);
@@ -385,6 +400,7 @@ export function SodaxSettingsModal({ open, onOpenChange }: { open: boolean; onOp
       ...prev,
       swapUseBackendSubmitTx: 'auto',
       bridgeUseBackendSubmitTx: 'auto',
+      leverageYieldUseBackendSubmitTx: 'auto',
       ...defaultsFor(prev.env),
     }));
   };
@@ -471,6 +487,28 @@ export function SodaxSettingsModal({ open, onOpenChange }: { open: boolean; onOp
             error={errors.bridgeApiBaseUrl}
             hint="Used by the Bridge API page only — override it for a custom bridge-api deployment. Bridge SDK calls follow the gateway below."
             onChange={value => set('bridgeApiBaseUrl', value)}
+          />
+
+          <SectionTitle>Leverage Yield SDK</SectionTitle>
+
+          <p className="text-xs text-muted-foreground">
+            Vault deposits and withdrawals on the Leverage Yield page. A vault swap is a solver intent, so it follows
+            the swap solver env above — leverage positions are a separate on-chain flow and ignore this row.
+          </p>
+
+          <SubmitTxRow
+            label="Submit-tx"
+            value={draft.leverageYieldUseBackendSubmitTx}
+            autoEnabled={leverageYieldAutoSubmitTx}
+            warning={
+              leverageYieldSubmitTxMismatch
+                ? 'Backend submit posts to the production leverage-yield API, which runs the production swaps pipeline — the selected solver never sees the intent and its /status stays NOT_FOUND.'
+                : undefined
+            }
+            hint="Used by the Leverage Yield page. On: leverage-yield API relays + post-executes. Off: client-side relay, then /execute on the solver above. Auto follows the swap rule (off on Staging)."
+            onText="On — backend submit via leverage-yield API"
+            offText="Off — client-side relay to the solver"
+            onChange={value => set('leverageYieldUseBackendSubmitTx', value)}
           />
 
           <SectionTitle>Partner fee</SectionTitle>

@@ -21,7 +21,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ChainSelector } from '@/components/shared/ChainSelector';
 import { fmtBps, fmtHealthFactor } from '@/lib/utils';
 import {
-  useSwapsApiSubmitTx,
   useQuote,
   useSodaxContext,
   useSwapAllowance,
@@ -43,7 +42,6 @@ import {
   type PartnerFee,
   type SolverIntentQuoteRequest,
   type SpokeChainKey,
-  type SubmitTxRequestV2,
   type XToken,
 } from '@sodax/dapp-kit';
 import {
@@ -184,9 +182,7 @@ export default function LeverageYieldPage() {
       address: userAccount.address,
     },
   });
-  const userBalance: bigint | undefined = userToken
-    ? userBalances?.[userToken.address]
-    : undefined;
+  const userBalance: bigint | undefined = userToken ? userBalances?.[userToken.address] : undefined;
 
   // ─── Amount + quote ──────────────────────────────────────────────────────
 
@@ -252,19 +248,12 @@ export default function LeverageYieldPage() {
   });
 
   const { mutateAsyncSafe: approve, isPending: isApproving } = useSwapApprove();
-  const { mutateAsyncSafe: submitSwapTx, isPending: isSubmitting } = useSwapsApiSubmitTx();
   const { mutateAsync: vaultSwap, isPending: isSwapping } = useLeverageYieldVaultSwap();
 
   // Leverage-yield intent builders. `mutateAsyncSafe` returns `Result<LeverageYieldSwapPayload>`
   // and never rejects, so `prepare()` branches on `.ok` exactly like the SDK's own builder did.
   const { mutateAsyncSafe: buildDepositIntent } = useLeverageYieldDeposit();
   const { mutateAsyncSafe: buildWithdrawIntent } = useLeverageYieldWithdraw();
-
-  // ─── Submit-tx API toggle ────────────────────────────────────────────────
-  // When OFF (default): `useLeverageYieldVaultSwap` creates the intent, relays it, and
-  // notifies the solver (withdraw routes via the hub-wallet `sendMessage` internally).
-  // When ON: createVaultIntent → POST to BES → poll the BES status endpoint.
-  const [useSubmitTxApi, setUseSubmitTxApi] = useState(false);
 
   // ─── Shares across ALL connected chains' hub wallets ─────────────────────
   // Users may hold shares under multiple hub wallets — one per spoke chain they
@@ -411,11 +400,14 @@ export default function LeverageYieldPage() {
    * Executes the prepared intent. Tab-agnostic — the action-shaped `intentOrderPayload`
    * already encodes deposit vs withdraw (withdraw carries `hubWalletSwap: true`, handled
    * inside `vaultSwap()` / `createVaultIntent()`), so it spreads into either call
-   * unchanged. Two modes via the submit-tx toggle:
-   *  - OFF (default): `useLeverageYieldVaultSwap` creates the intent, relays it, and
-   *    notifies the solver, returning full delivery info. Order renders in 'solver' mode.
-   *  - ON: `createVaultIntent` + BES `submitSwapTx` — POSTs the spoke tx to the backend,
-   *    which drives the relay/solver. Order renders in 'submit-tx' mode.
+   * unchanged.
+   *
+   * One call, whichever transport is configured. `leverageYield.useBackendSubmitTx` (Sodax
+   * Settings → Leverage Yield SDK) decides inside `vaultSwap()` whether the broadcast intent
+   * goes to the leverage-yield API or is relayed client-side, and either way the resolved value
+   * is the same `VaultSwapResponse` — so the order always renders in 'solver' mode. This page
+   * used to own that choice itself and POST to the *swaps* submit-tx route, which meant a vault
+   * swap submitted without its `operation` discriminator and with no relay fallback.
    */
   const handleSwap = async () => {
     if (!intentOrderPayload || !sourceWalletProvider) return;
@@ -424,69 +416,28 @@ export default function LeverageYieldPage() {
     // "AMOUNT TOKEN (NETWORK) => AMOUNT TOKEN (NETWORK)" snapshot for the order card.
     const summary = buildOrderSummary(src, dst, sourceAmount, quote?.quoted_amount);
 
-    if (!useSubmitTxApi) {
-      try {
-        const { solverExecutionResponse, intent, intentDeliveryInfo } = await vaultSwap({
-          ...intentOrderPayload,
-          walletProvider: sourceWalletProvider,
-        });
-        setOrders(prev =>
-          appendOrder(prev, {
-            mode: 'solver',
-            intentHash: solverExecutionResponse.intent_hash,
-            orderId: intent.intentId.toString(),
-            dstTxHash: intentDeliveryInfo.dstTxHash as string,
-            srcTxHash: intentDeliveryInfo.srcTxHash,
-            srcChainKey: intentDeliveryInfo.srcChainKey,
-            statusEndpoint: sodax.config.solver.solverApiEndpoint,
-            createdAt: Date.now(),
-            summary,
-          }),
-        );
-        resetAfterSubmit();
-      } catch (e) {
-        setActionError(`Swap failed: ${e instanceof Error ? e.message : String(e)}`);
-      }
-      return;
+    try {
+      const { solverExecutionResponse, intent, intentDeliveryInfo } = await vaultSwap({
+        ...intentOrderPayload,
+        walletProvider: sourceWalletProvider,
+      });
+      setOrders(prev =>
+        appendOrder(prev, {
+          mode: 'solver',
+          intentHash: solverExecutionResponse.intent_hash,
+          orderId: intent.intentId.toString(),
+          dstTxHash: intentDeliveryInfo.dstTxHash as string,
+          srcTxHash: intentDeliveryInfo.srcTxHash,
+          srcChainKey: intentDeliveryInfo.srcChainKey,
+          statusEndpoint: sodax.config.solver.solverApiEndpoint,
+          createdAt: Date.now(),
+          summary,
+        }),
+      );
+      resetAfterSubmit();
+    } catch (e) {
+      setActionError(`Swap failed: ${e instanceof Error ? e.message : String(e)}`);
     }
-
-    // Submit-tx (BES) path: create the intent, then hand the spoke tx to the backend.
-    const createResult = await sodax.leverageYield.createVaultIntent({
-      ...intentOrderPayload,
-      raw: false,
-      walletProvider: sourceWalletProvider,
-    });
-    if (!createResult.ok) {
-      setActionError(`Create intent failed: ${(createResult.error as Error)?.message ?? 'unknown'}`);
-      return;
-    }
-    const { tx: spokeTxHash, intent, relayData } = createResult.value;
-
-    // BES locates the tx on `srcChainKey` — the spoke chain the user signed on (`userChain`
-    // for both tabs; withdraw signs a `sendMessage` there).
-    const request: SubmitTxRequestV2 = {
-      txHash: spokeTxHash as string,
-      srcChainKey: userChain,
-      walletAddress: intentOrderPayload.params.srcAddress,
-      intent,
-      relayData: relayData.payload,
-    };
-    const submitResult = await submitSwapTx({ request });
-    if (!submitResult.ok) {
-      setActionError(`BES submit failed: ${(submitResult.error as Error)?.message ?? 'unknown'}`);
-      return;
-    }
-
-    setOrders(prev =>
-      appendOrder(prev, {
-        mode: 'submit-tx',
-        txHash: spokeTxHash as string,
-        srcChainKey: userChain,
-        createdAt: Date.now(),
-        summary,
-      }),
-    );
-    resetAfterSubmit();
   };
 
   // ─── Render ──────────────────────────────────────────────────────────────
@@ -827,22 +778,6 @@ export default function LeverageYieldPage() {
                     className="h-7 w-24 text-xs"
                   />
                 </div>
-
-                {/* Submit-tx API toggle — mirrors the solver page. ON: createVaultIntent →
-                    BES POST → poll status. OFF: useLeverageYieldVaultSwap (waits for relay
-                    packet inline). */}
-                <div className="flex items-center gap-2 pt-1">
-                  <input
-                    id="ly-submit-tx-toggle"
-                    type="checkbox"
-                    checked={useSubmitTxApi}
-                    onChange={e => setUseSubmitTxApi(e.target.checked)}
-                    className="h-4 w-4 cursor-pointer"
-                  />
-                  <label htmlFor="ly-submit-tx-toggle" className="text-xs cursor-pointer">
-                    Submit tx to API
-                  </label>
-                </div>
               </div>
 
               {/* Action — only the user's spoke wallet matters. Dst address is always
@@ -872,14 +807,8 @@ export default function LeverageYieldPage() {
                   {isApproving ? 'Approving…' : 'Approve'}
                 </Button>
               ) : (
-                <Button onClick={handleSwap} disabled={isSubmitting || isSwapping} className="w-full">
-                  {isSubmitting || isSwapping
-                    ? isSwapping
-                      ? 'Swapping…'
-                      : 'Submitting…'
-                    : tab === 'deposit'
-                      ? 'Deposit'
-                      : 'Withdraw'}
+                <Button onClick={handleSwap} disabled={isSwapping} className="w-full">
+                  {isSwapping ? 'Swapping…' : tab === 'deposit' ? 'Deposit' : 'Withdraw'}
                 </Button>
               )}
 

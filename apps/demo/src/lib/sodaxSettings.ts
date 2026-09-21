@@ -8,6 +8,9 @@ export type SodaxSettings = {
   swapUseBackendSubmitTx: boolean | null;
   /** null = Auto: bridge backend submit-tx follows the SDK default (on). */
   bridgeUseBackendSubmitTx: boolean | null;
+  /** null = Auto: same rule as swap, not bridge — a vault swap is filled by the solver, and the
+   *  backend route posts to the production API, so Auto is off on Staging (see gh-401). */
+  leverageYieldUseBackendSubmitTx: boolean | null;
   solverApiEndpoint: HttpUrl | null;
   intentsContract: Address | null;
   protocolIntentsContract: Address | null;
@@ -29,6 +32,7 @@ export type SodaxSettings = {
 export const DEFAULT_SODAX_SETTINGS: SodaxSettings = {
   swapUseBackendSubmitTx: null,
   bridgeUseBackendSubmitTx: null,
+  leverageYieldUseBackendSubmitTx: null,
   solverApiEndpoint: null,
   intentsContract: null,
   protocolIntentsContract: null,
@@ -121,6 +125,9 @@ export function loadSodaxSettings(): SodaxSettings {
   return {
     swapUseBackendSubmitTx: typeof legacySwapSubmitTx === 'boolean' ? legacySwapSubmitTx : null,
     bridgeUseBackendSubmitTx: typeof raw.bridgeUseBackendSubmitTx === 'boolean' ? raw.bridgeUseBackendSubmitTx : null,
+    // No legacy storage key to honour — leverage yield never had one.
+    leverageYieldUseBackendSubmitTx:
+      typeof raw.leverageYieldUseBackendSubmitTx === 'boolean' ? raw.leverageYieldUseBackendSubmitTx : null,
     solverApiEndpoint: isHttpUrl(raw.solverApiEndpoint) ? raw.solverApiEndpoint : null,
     intentsContract: isEvmAddress(raw.intentsContract) ? raw.intentsContract : null,
     protocolIntentsContract: isEvmAddress(raw.protocolIntentsContract) ? raw.protocolIntentsContract : null,
