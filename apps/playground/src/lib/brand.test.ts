@@ -10,6 +10,7 @@ import {
   readBrandField,
   readColor,
   resolvedColors,
+  surfaceTheme,
   writeBrand,
 } from './brand';
 
@@ -129,6 +130,23 @@ describe('writeBrand', () => {
     expect(readBrand(`?${params}`)).toEqual(original);
   });
 
+  // The pre-paint script in index.html reads this URL and does no colour maths, so a link that left
+  // the theme implicit would paint the stored or system one and then correct itself.
+  it('spells out the theme a surface implies', () => {
+    const params = new URLSearchParams();
+    writeBrand(params, brand({ surface: '#101214' }));
+
+    expect(params.get('theme')).toBe('dark');
+    expect(readBrand(`?${params}`).theme).toBe('dark');
+  });
+
+  it('leaves the theme out when there is no surface to imply one', () => {
+    const params = new URLSearchParams();
+    writeBrand(params, brand({ accent: '#7c3aed' }));
+
+    expect(params.get('theme')).toBeNull();
+  });
+
   // A copied `<iframe>` should not be full of `%23`.
   it('writes a colour without the hash', () => {
     const params = new URLSearchParams();
@@ -147,7 +165,7 @@ describe('writeBrand', () => {
 
 describe('brandStyles', () => {
   it('emits nothing at all when nothing is set', () => {
-    expect(brandStyles(NO_BRAND)).toEqual({ css: '', notes: [] });
+    expect(brandStyles(NO_BRAND)).toEqual({ css: '', notes: { light: [], dark: [] } });
   });
 
   // index.css maps its dark roles under `:root[data-theme="dark"]`, which outranks a bare `:root`.
@@ -183,14 +201,15 @@ describe('brandStyles', () => {
 
   // The same parameter needs correcting on white and not on our dark card, which is the whole
   // reason the two blocks are computed separately rather than emitted twice.
-  it('corrects an accent used as text per theme, and says so once', () => {
+  it('corrects an accent used as text per theme, and reports it under that theme only', () => {
     const { css, notes } = brandStyles(brand({ accent: '#ffd92f' }));
     const [light, dark] = blocks(css);
 
     expect(contrast(light['--accent'], DEFAULT_SURFACE.light)).toBeGreaterThanOrEqual(4.5);
     expect(light['--accent']).not.toBe('#ffd92f');
     expect(dark['--accent']).toBe('#ffd92f');
-    expect(notes).toHaveLength(1);
+    expect(notes.light).toHaveLength(1);
+    expect(notes.dark).toEqual([]);
   });
 
   it('leaves the flow title on the exact brand colour, being decorative-large', () => {
@@ -200,11 +219,23 @@ describe('brandStyles', () => {
   });
 
   it('re-derives the text ramp from a partner surface, or their ground would carry our ink', () => {
-    const [light] = blocks(brandStyles(brand({ surface: '#101828' })).css);
+    const [, dark] = blocks(brandStyles(brand({ surface: '#101828' })).css);
 
-    expect(light['--surface-card']).toBe('#101828');
-    expect(contrast(light['--text-heading'], '#101828')).toBeGreaterThanOrEqual(4.5);
-    expect(contrast(light['--text-body'], '#101828')).toBeGreaterThanOrEqual(4.5);
+    expect(dark['--surface-card']).toBe('#101828');
+    expect(contrast(dark['--text-heading'], '#101828')).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(dark['--text-body'], '#101828')).toBeGreaterThanOrEqual(4.5);
+  });
+
+  // A brand states one ground, and the theme it is renders it exactly. The other theme has to come
+  // from somewhere, and ours would be their accent on our palette — so it is derived from theirs.
+  it('derives the counterpart ground from the surface, and reports it under that theme', () => {
+    const { css, notes } = brandStyles(brand({ surface: '#ffffff' }));
+    const [light, dark] = blocks(css);
+
+    expect(light['--surface-card']).toBe('#ffffff');
+    expect(contrast(dark['--surface-card'], '#ffffff')).toBeGreaterThan(4.5);
+    expect(notes.dark.some(note => note.includes('the dark theme darkens it'))).toBe(true);
+    expect(notes.light).toEqual([]);
   });
 
   it.each([
@@ -212,10 +243,12 @@ describe('brandStyles', () => {
     '#808080',
     '#ffffff',
     '#000000',
-  ])('keeps all derived text and the button label readable on %s', surface => {
-    const [roles] = blocks(brandStyles(brand({ surface, cta: surface, text: '#777777' })).css);
-    for (const role of ['--text-heading', '--text-body', '--text-muted', '--text-faint', '--cta-fg']) {
-      expect(contrast(roles[role], surface)).toBeGreaterThanOrEqual(4.5);
+  ])('keeps all derived text and the button label readable in both themes, from %s', surface => {
+    for (const roles of blocks(brandStyles(brand({ surface, cta: surface, text: '#777777' })).css)) {
+      for (const role of ['--text-heading', '--text-body', '--text-muted', '--text-faint']) {
+        expect(contrast(roles[role], roles['--surface-card'])).toBeGreaterThanOrEqual(4.5);
+      }
+      expect(contrast(roles['--cta-fg'], roles['--cta-bg'])).toBeGreaterThanOrEqual(4.5);
     }
   });
 
@@ -223,7 +256,7 @@ describe('brandStyles', () => {
     const [light] = blocks(brandStyles(brand({ surface: '#ffffff', text: '#101828' })).css);
 
     expect(light['--text-heading']).toBe('#101828');
-    expect(brandStyles(brand({ surface: '#ffffff', text: '#101828' })).notes).toEqual([]);
+    expect(brandStyles(brand({ surface: '#ffffff', text: '#101828' })).notes.light).toEqual([]);
   });
 
   it('reports a text colour it had to move rather than correcting it silently', () => {
@@ -231,7 +264,18 @@ describe('brandStyles', () => {
     const [light] = blocks(css);
 
     expect(contrast(light['--text-heading'], '#ffffff')).toBeGreaterThanOrEqual(4.5);
-    expect(notes.some(note => note.includes('4.5:1'))).toBe(true);
+    expect(notes.light.some(note => note.includes('Text colour adjusted'))).toBe(true);
+  });
+
+  // Editorial's register: an ink button on paper, which on a ground we derived would be ink on ink.
+  it('keeps a button visible on a ground it derived, while rendering it as stated on the other', () => {
+    const { css, notes } = brandStyles(brand({ surface: '#e9edec', cta: '#1a1e1b' }));
+    const [light, dark] = blocks(css);
+
+    expect(light['--cta-bg']).toBe('#1a1e1b');
+    expect(contrast(dark['--cta-bg'], dark['--surface-card'])).toBeGreaterThanOrEqual(3);
+    expect(notes.dark.some(note => note.includes('Button colour adjusted'))).toBe(true);
+    expect(notes.light).toEqual([]);
   });
 
   it('prefers an explicit cta over the accent for the button only', () => {
@@ -260,6 +304,32 @@ describe('brandStyles', () => {
       for (const value of Object.values(block)) {
         expect(value).not.toMatch(/[;{}]/);
       }
+    }
+  });
+});
+
+// What a brand with no `theme` resolves to, and what the pre-paint script in index.html mirrors:
+// a partner who states a ground has chosen a theme, whether or not they named one.
+describe('surfaceTheme', () => {
+  it.each([
+    ['#ffffff', 'light'],
+    ['#f5f2f2', 'light'],
+    ['#e9edec', 'light'],
+    ['#808080', 'light'],
+    ['#777777', 'dark'],
+    ['#101828', 'dark'],
+    ['#1b1926', 'dark'],
+    ['#000000', 'dark'],
+  ] as const)('reads %s as a %s ground', (surface, expected) => {
+    expect(surfaceTheme(surface)).toBe(expected);
+  });
+
+  it('agrees with the ground each theme block actually renders', () => {
+    for (const surface of ['#ffffff', '#101828', '#dce8f5', '#1b1926']) {
+      const theme = surfaceTheme(surface);
+      const [light, dark] = blocks(brandStyles(brand({ surface })).css);
+
+      expect((theme === 'dark' ? dark : light)['--surface-card']).toBe(surface);
     }
   });
 });

@@ -1,6 +1,7 @@
 import type { ChainKey, PartnerFeePercentage, XToken } from '@sodax/dapp-kit';
 import { DENSITIES, FONT_STACKS, RADIUS_SCALES } from './brand';
 import { chainKeyExpression } from './chains';
+import { EMBED_MIN_HEIGHT } from './embedMessages';
 
 export type SnippetState = {
   srcChain: ChainKey;
@@ -12,7 +13,7 @@ export type SnippetState = {
   partnerFee: PartnerFeePercentage | undefined;
 };
 
-export type Snippet = { id: string; label: string; code: string };
+export type Snippet = { id: string; label: string; code: string; note?: string };
 
 function feeExpression(fee: PartnerFeePercentage): string {
   return `{ address: '${fee.address}', percentage: ${fee.percentage} }`;
@@ -26,7 +27,7 @@ function embedSnippet(embedUrl: string): string {
   src="${embedUrl}"
   title="SODAX swap"
   width="480"
-  height="760"
+  height="${EMBED_MIN_HEIGHT}"
   loading="lazy"
   referrerpolicy="origin"
   allow="ethereum; solana; clipboard-write"
@@ -44,7 +45,7 @@ function embedSnippet(embedUrl: string): string {
         frame.dispatchEvent(new CustomEvent('sodax:swap', { detail: { status: data.status } }));
       }
       if (data.type === 'sodax:resize' && 'height' in data && typeof data.height === 'number' && Number.isFinite(data.height)) {
-        frame.height = String(Math.max(360, Math.min(1600, data.height)));
+        frame.height = String(Math.max(${EMBED_MIN_HEIGHT}, Math.min(1600, data.height)));
       }
     });
   })();
@@ -59,7 +60,7 @@ import { useEffect, useRef } from 'react';
 type SwapStatus = 'started' | 'submitted' | 'completed' | 'failed';
 type SodaxSwapWidgetProps = { src?: string; height?: number; onSwapStatus?: (status: SwapStatus) => void };
 
-export function SodaxSwapWidget({ src = '${embedUrl}', height = 760, onSwapStatus }: SodaxSwapWidgetProps) {
+export function SodaxSwapWidget({ src = '${embedUrl}', height = ${EMBED_MIN_HEIGHT}, onSwapStatus }: SodaxSwapWidgetProps) {
   const frame = useRef<HTMLIFrameElement>(null);
   useEffect(() => {
     const onMessage = (event: MessageEvent<unknown>) => {
@@ -72,7 +73,7 @@ export function SodaxSwapWidget({ src = '${embedUrl}', height = 760, onSwapStatu
         onSwapStatus?.(status);
       }
       if (data.type === 'sodax:resize' && 'height' in data && typeof data.height === 'number' && Number.isFinite(data.height)) {
-        element.style.height = String(Math.max(360, Math.min(1600, data.height))) + 'px';
+        element.style.height = String(Math.max(${EMBED_MIN_HEIGHT}, Math.min(1600, data.height))) + 'px';
       }
     };
     window.addEventListener('message', onMessage);
@@ -151,12 +152,80 @@ const minOutputAmount = quote && (BigInt(quote.quotedAmount) * ${bps}n) / 10_000
 }
 
 /**
+ * The same embed as instructions for a coding agent. It states the constraints an agent cannot infer
+ * from the markup — the query string is the configuration, the allow attribute is load-bearing, and
+ * the widget spends real funds — because those are what an agent otherwise "tidies" away.
+ */
+function agentPrompt(state: SnippetState, embedUrl: string): string {
+  const { srcChain, dstChain, srcToken, dstToken } = state;
+
+  return `Add the SODAX swap widget to this app.
+
+It is a hosted page embedded in an iframe. Do not install any @sodax/* package, do not build a
+wallet connection for it, and do not rewrite or drop the query string in the URL below — it carries
+the configured pair, amount, slippage and theme. The widget connects its own wallet.
+
+1. Put this where the swap should appear, matching the framework this app already uses (in React or
+   Next, a client component wrapping the same iframe):
+
+<iframe
+  src="${embedUrl}"
+  title="SODAX swap"
+  width="480"
+  height="${EMBED_MIN_HEIGHT}"
+  loading="lazy"
+  referrerpolicy="origin"
+  allow="ethereum; solana; clipboard-write"
+  style="border: 0; border-radius: 24px; max-width: 100%"
+></iframe>
+
+2. Keep the allow attribute exactly as written. Brave exposes window.ethereum and window.solana to a
+   third-party frame only when the host page grants those features; without it the connect buttons
+   find no wallet.
+
+3. Optional, and worth doing: listen for the widget's messages on window, and ignore any whose
+   event.source is not that iframe's contentWindow or whose event.origin is not the URL's origin.
+   - { type: 'sodax:resize', height } — set the iframe height, clamped to ${EMBED_MIN_HEIGHT}-1600.
+   - { type: 'sodax:swap', status } — 'started', 'submitted', 'completed' or 'failed'. Status only:
+     no addresses and no transaction hashes, so do not expect them.
+   - Post { type: 'sodax:theme', theme: 'light' | 'dark' | 'auto' } to it to follow this app's theme.
+
+4. Verify by loading the page: the widget should render on ${srcToken?.symbol ?? 'the source token'} (${chainKeyExpression(srcChain)}) to ${dstToken?.symbol ?? 'the destination token'} (${chainKeyExpression(dstChain)}), and resize to its content.
+   It swaps real funds on mainnet — check that it loads and quotes, and leave executing a swap to a
+   human with a funded wallet.`;
+}
+
+/**
  * The hosted embed owns execution; the quote tab is an optional lower-level integration example.
+ *
+ * Labels are one word so four tabs hold one row in the builder's column; the note carries what the
+ * label used to, and every tab has one so the panel does not resize as the reader moves between them.
  */
 export function buildSnippets(state: SnippetState, embedUrl: string): Snippet[] {
   return [
-    { id: 'embed', label: 'HTML embed', code: embedSnippet(embedUrl) },
-    { id: 'widget', label: 'React iframe', code: widgetSnippet(embedUrl) },
-    { id: 'quote', label: 'SDK quote', code: quoteSnippet(state) },
+    {
+      id: 'embed',
+      label: 'HTML',
+      code: embedSnippet(embedUrl),
+      note: 'One iframe and a listener, for any page that serves HTML.',
+    },
+    {
+      id: 'widget',
+      label: 'React',
+      code: widgetSnippet(embedUrl),
+      note: 'The same embed as a component, for a React host.',
+    },
+    {
+      id: 'agent',
+      label: 'Agent',
+      code: agentPrompt(state, embedUrl),
+      note: 'Paste this prompt into your coding agent to get the widget installed.',
+    },
+    {
+      id: 'quote',
+      label: 'SDK',
+      code: quoteSnippet(state),
+      note: 'The lower-level route: install @sodax/dapp-kit and quote the swap yourself.',
+    },
   ];
 }

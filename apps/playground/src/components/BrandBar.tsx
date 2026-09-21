@@ -2,13 +2,14 @@ import { useState } from 'react';
 import type { BrandControls } from '../hooks/useBrand';
 import { type Brand, type ColorField, DENSITIES, FONT_STACKS, RADIUS_SCALES, readBrandField } from '../lib/brand';
 import { PRESETS, SODAX_SWATCH, activePreset } from '../lib/presets';
+import { Dropdown } from './Dropdown';
 
 /** Hints are `title` tooltips, not a line under each cell: eight of those cost ~90px of height. */
 const COLOR_FIELDS: readonly { key: ColorField; label: string; hint: string }[] = [
   { key: 'accent', label: 'Accent', hint: 'Emphasis, and the button unless one is set below' },
   { key: 'cta', label: 'Button', hint: 'Its label colour is derived from this fill' },
   { key: 'surface', label: 'Surface', hint: 'Borders, insets and the text ramp follow it' },
-  { key: 'text', label: 'Text', hint: 'Corrected if it fails 4.5:1 on the surface' },
+  { key: 'text', label: 'Text', hint: 'Adjusted if it is hard to read on the surface' },
 ];
 
 /** Layer 2's own values, so the control shows what is rendering before a partner overrides it. */
@@ -18,7 +19,7 @@ const CHOICE_FIELDS = [
     label: 'Theme',
     choices: { auto: null, light: null, dark: null },
     fallback: 'auto',
-    hint: 'auto follows the visitor',
+    hint: 'auto follows the visitor; a surface colour sets the starting theme',
   },
   {
     key: 'radius',
@@ -147,20 +148,15 @@ export function BrandBar({ controls }: { controls: BrandControls }) {
         ))}
 
         {CHOICE_FIELDS.filter(field => advanced || field.key === 'theme').map(field => (
-          <label className="brand-cell" key={field.key} title={field.hint}>
+          <div className="brand-cell" key={field.key} title={field.hint}>
             <span className="brand-label">{field.label}</span>
-            <select
-              className="select"
+            <Dropdown
+              label={field.label}
               value={brand[field.key] ?? field.fallback}
-              onChange={event => update(field.key, readBrandField(field.key, event.target.value))}
-            >
-              {Object.keys(field.choices).map(option => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          </label>
+              options={Object.keys(field.choices).map(option => ({ value: option, label: option }))}
+              onChange={option => update(field.key, readBrandField(field.key, option))}
+            />
+          </div>
         ))}
       </div>
 

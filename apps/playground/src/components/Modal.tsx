@@ -5,12 +5,15 @@ export function Modal({
   open,
   onClose,
   busy = false,
+  bare = false,
   children,
 }: {
   title: string;
   open: boolean;
   onClose: () => void;
   busy?: boolean;
+  /** Close in the corner and nothing else: the content is its own heading. `title` still names it. */
+  bare?: boolean;
   children: ReactNode;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -28,9 +31,15 @@ export function Modal({
         if (busy) event.preventDefault();
       }}
     >
-      <header className="row-between">
-        <h2>{title}</h2>
-        <button className="btn" type="button" onClick={onClose} disabled={busy} aria-label={`Close ${title}`}>
+      <header className={bare ? 'modal-header-bare' : 'row-between'}>
+        {!bare && <h2>{title}</h2>}
+        <button
+          className={bare ? 'modal-close' : 'btn'}
+          type="button"
+          onClick={onClose}
+          disabled={busy}
+          aria-label={`Close ${title}`}
+        >
           ×
         </button>
       </header>

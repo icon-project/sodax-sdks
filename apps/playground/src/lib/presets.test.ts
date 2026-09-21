@@ -7,11 +7,13 @@ import {
   brandStyles,
   contrast,
   readBrand,
+  surfaceTheme,
   writeBrand,
 } from './brand';
 import { PRESETS, activePreset } from './presets';
 
 const AA_TEXT = 4.5;
+const AA_CONTROL = 3;
 
 describe('PRESETS', () => {
   it('gives every preset a distinct id', () => {
@@ -53,6 +55,12 @@ describe('PRESETS', () => {
     }
   });
 
+  // A brand with no `theme` resolves from its surface, so a preset whose two disagreed would render
+  // one way here and the other from a link that dropped the parameter.
+  it.each(PRESETS)('$id declares the theme its own surface already is', preset => {
+    expect(surfaceTheme(preset.brand.surface as string)).toBe(preset.brand.theme);
+  });
+
   it.each(PRESETS)('$id survives the round trip an embed link makes', preset => {
     const params = new URLSearchParams();
     writeBrand(params, preset.brand);
@@ -62,23 +70,34 @@ describe('PRESETS', () => {
   // The point of shipping these: a visitor clicking one gets a readable widget, not a correction
   // note telling them the palette we picked failed.
   it.each(PRESETS)('$id derives without a contrast correction', preset => {
-    expect(brandStyles(preset.brand).notes).toEqual([]);
+    expect(brandStyles(preset.brand).notes[preset.brand.theme === 'dark' ? 'dark' : 'light']).toEqual([]);
+  });
+
+  // Each preset declares the theme it was drawn for; the other is derived from its surface. A
+  // partner page that toggles gets that one, so it has to be readable rather than merely emitted.
+  it.each(PRESETS)('$id stays readable in the theme it was not drawn for', preset => {
+    for (const decls of blocksOf(preset.brand)) {
+      expect(contrast(decls['--text-body'], decls['--surface-card'])).toBeGreaterThanOrEqual(AA_TEXT);
+      expect(contrast(decls['--text-heading'], decls['--surface-card'])).toBeGreaterThanOrEqual(AA_TEXT);
+      expect(contrast(decls['--cta-fg'], decls['--cta-bg'])).toBeGreaterThanOrEqual(AA_TEXT);
+      expect(contrast(decls['--cta-bg'], decls['--surface-card'])).toBeGreaterThanOrEqual(AA_CONTROL);
+    }
   });
 
   it.each(PRESETS)('$id keeps its button label readable on the fill', preset => {
-    const { decls } = declarations(preset.brand);
+    const [decls] = blocksOf(preset.brand);
     expect(contrast(decls['--cta-fg'], decls['--cta-bg'])).toBeGreaterThanOrEqual(AA_TEXT);
   });
 
   it.each(PRESETS)('$id keeps body copy readable on the surface', preset => {
-    const { decls } = declarations(preset.brand);
+    const [decls] = blocksOf(preset.brand);
     expect(contrast(decls['--text-body'], decls['--surface-card'])).toBeGreaterThanOrEqual(AA_TEXT);
   });
 
   // The loudest shape in the widget. A preset that sets a radius but leaves buttons as pills is
   // the bug that made every palette read as the same product.
   it.each(PRESETS)('$id reshapes its buttons with the rest of the scale', preset => {
-    const { decls } = declarations(preset.brand);
+    const [decls] = blocksOf(preset.brand);
     expect(decls['--radius-pill']).toBe(RADIUS_SCALES[preset.brand.radius as RadiusChoice].pill);
   });
 });
@@ -100,17 +119,20 @@ describe('activePreset', () => {
   });
 });
 
-/** The emitted `:root` block as a record, so a test can read a single derived role. */
-function declarations(brand: Brand): { decls: Record<string, string> } {
-  const [root] = brandStyles(brand).css.split('\n\n');
-  const decls = Object.fromEntries(
-    root
-      .split('\n')
-      .slice(1, -1)
-      .map(line => {
-        const [name, value] = line.trim().replace(/;$/, '').split(': ');
-        return [name, value];
-      }),
-  );
-  return { decls };
+/** The emitted blocks as records, `:root` first, so a test can read a single derived role off one. */
+function blocksOf(brand: Brand): Record<string, string>[] {
+  return brandStyles(brand)
+    .css.split('\n\n')
+    .filter(Boolean)
+    .map(block =>
+      Object.fromEntries(
+        block
+          .split('\n')
+          .slice(1, -1)
+          .map(line => {
+            const [name, value] = line.trim().replace(/;$/, '').split(': ');
+            return [name, value];
+          }),
+      ),
+    );
 }
