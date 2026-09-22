@@ -16,7 +16,7 @@ All 14 codes the SDK can emit. Each error is `SodaxError<C>` where `C` is one of
 | `ALLOWANCE_CHECK_FAILED` | Reading on-chain allowance failed. | `phase: 'allowanceCheck'` | Yes — read-only retry is cheap. |
 | `GAS_ESTIMATION_FAILED` | Gas estimation returned an error. | `phase: 'gasEstimation'` | Yes — re-estimate is the norm. |
 | `LOOKUP_FAILED` | Read-only on-chain query / off-chain config fetch. | `method`, `phase: 'lookup'` | Yes — read-only retry is cheap. |
-| `EXTERNAL_API_ERROR` | Upstream API call failed (solver, backend). | `api: 'solver' \| 'backend'`; for solver: `solverCode`, `solverDetail` | Sometimes — depends on `solverCode`. |
+| `EXTERNAL_API_ERROR` | Upstream API call failed (solver, backend). | `api: 'solver' \| 'backend'`; for solver: `solverCode`, `solverDetail` | Sometimes — call `getSolverErrorRetryability(solverCode)`. |
 | `UNKNOWN` | Last-resort catch in an outer `try`. | (none guaranteed) | Treat as unrecoverable; surface the underlying cause. |
 
 ### Features
@@ -66,6 +66,24 @@ type RelayCode =
 ```
 
 This is the lower-level relay-layer code that `mapRelayFailure` maps from. Surfaces on `error.context.relayCode` when the error originated in `IntentRelayApiService`.
+
+### `SolverIntentErrorCode` (`error.context.solverCode`)
+
+The solver's own numeric code, surfaced on `EXTERNAL_API_ERROR` when `context.api === 'solver'`. It is a numeric enum, **not** a string union — full table in [SOLVER_API_ENDPOINTS.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SOLVER_API_ENDPOINTS.md). Match on the code, never on `solverDetail.message`.
+
+Rather than maintaining your own list of which codes are worth retrying, ask the SDK:
+
+```ts
+import { getSolverErrorRetryability } from '@sodax/sdk';
+
+type SolverErrorRetryability = 'retryable' | 'not-retryable' | 'unknown';
+
+declare function getSolverErrorRetryability(code: number | undefined): SolverErrorRetryability;
+```
+
+- `'retryable'` — `NO_PATH_FOUND` (`-4`, liquidity-dependent) and `STOPPED` (`-16`, solver not serving). Back off and retry the same request.
+- `'not-retryable'` — the quote-service block `-20`…`-25` (invalid quote type / tokens / amount, input too low, unimplemented algorithm, unknown dex id). The request itself has to change.
+- `'unknown'` — everything the solver contract does not classify, plus `undefined`. This includes `-8`, which `NOT_ENOUGH_PRIVATE_LIQUIDITY` and `QUOTE_NOT_FOUND` share, making it unresolvable by code. Treat `'unknown'` as "decide for yourself", not as permission to retry.
 
 ---
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { isCodeMember, isFeatureError } from './guards.js';
+import { SolverIntentErrorCode } from '@sodax/types';
+import { getSolverErrorRetryability, isCodeMember, isFeatureError } from './guards.js';
 import { SodaxError } from './SodaxError.js';
 import type { SodaxErrorCode } from './codes.js';
 
@@ -42,5 +43,46 @@ describe('isCodeMember', () => {
   it('returns false for non-SodaxError values', () => {
     expect(isCreateIntentError(new Error('plain'))).toBe(false);
     expect(isCreateIntentError({ code: 'VALIDATION_FAILED' })).toBe(false);
+  });
+});
+
+describe('getSolverErrorRetryability', () => {
+  it.each([
+    ['NO_PATH_FOUND', SolverIntentErrorCode.NO_PATH_FOUND],
+    ['STOPPED', SolverIntentErrorCode.STOPPED],
+  ])('classifies %s as retryable', (_name, code) => {
+    expect(getSolverErrorRetryability(code)).toBe('retryable');
+  });
+
+  it.each([
+    ['INVALID_QUOTE_TYPE', SolverIntentErrorCode.INVALID_QUOTE_TYPE],
+    ['INVALID_TOKENS', SolverIntentErrorCode.INVALID_TOKENS],
+    ['INVALID_AMOUNT', SolverIntentErrorCode.INVALID_AMOUNT],
+    ['INPUT_AMOUNT_TOO_LOW', SolverIntentErrorCode.INPUT_AMOUNT_TOO_LOW],
+    ['ALGORITHM_NOT_IMPLEMENTED', SolverIntentErrorCode.ALGORITHM_NOT_IMPLEMENTED],
+    ['UNKNOWN_DEX_ID', SolverIntentErrorCode.UNKNOWN_DEX_ID],
+  ])('classifies %s as not-retryable', (_name, code) => {
+    expect(getSolverErrorRetryability(code)).toBe('not-retryable');
+  });
+
+  // NOT_ENOUGH_PRIVATE_LIQUIDITY (transient) and QUOTE_NOT_FOUND (terminal) both serialize as -8,
+  // so no classifier can tell them apart — 'unknown' is the only honest answer.
+  it('classifies the ambiguous -8 as unknown', () => {
+    expect(SolverIntentErrorCode.NOT_ENOUGH_PRIVATE_LIQUIDITY).toBe(SolverIntentErrorCode.QUOTE_NOT_FOUND);
+    expect(getSolverErrorRetryability(-8)).toBe('unknown');
+  });
+
+  it.each([
+    ['UNCLASSIFIED', SolverIntentErrorCode.UNCLASSIFIED],
+    ['QUOTE_EXPIRED', SolverIntentErrorCode.QUOTE_EXPIRED],
+    ['UNKNOWN', SolverIntentErrorCode.UNKNOWN],
+  ])('classifies unsourced code %s as unknown', (_name, code) => {
+    expect(getSolverErrorRetryability(code)).toBe('unknown');
+  });
+
+  it('classifies a missing or unrecognised code as unknown', () => {
+    expect(getSolverErrorRetryability(undefined)).toBe('unknown');
+    expect(getSolverErrorRetryability(-6)).toBe('unknown');
+    expect(getSolverErrorRetryability(0)).toBe('unknown');
   });
 });

@@ -42,7 +42,46 @@ type SolverErrorResponse = {
 
 `SolverIntentErrorCode` is an enum defined in `@sodax/sdk`. On unhandled exceptions the code is `SolverIntentErrorCode.UNKNOWN`.
 
-To branch on solver errors, inspect `result.error.detail.code`:
+Match on `code`, not on `message`: codes are stable, messages are not part of the contract and may be reworded.
+
+### Codes
+
+| Code | Name | Meaning |
+|------|------|---------|
+| `-1` | `UNCLASSIFIED` | Solver catch-all: malformed payload, or a handler error with no specific code |
+| `-4` | `NO_PATH_FOUND` | No route between the two tokens at this size |
+| `-5` | `NO_PRIVATE_LIQUIDITY` | Path found, but no private liquidity on the destination chain |
+| `-7` | `NO_EXECUTION_MODULE_FOUND` | Path and liquidity found, but execution modules unavailable |
+| `-8` | `NOT_ENOUGH_PRIVATE_LIQUIDITY` | Path found, but not enough private liquidity on the destination chain |
+| `-8` | `QUOTE_NOT_FOUND` | On execute: the given `quote_uuid` does not exist |
+| `-9` | `QUOTE_NOT_MATCH` | On execute: the given `quote_uuid` does not match the quote |
+| `-10` | `INTENT_DATA_NOT_MATCH_QUOTE` | Intent data disagrees with the quoted terms |
+| `-11` | `NO_GAS_HANDLER_FOR_BLOCKCHAIN` | No gas handler registered for the chain |
+| `-12` | `INTENT_NOT_FOUND` | No intent for the given hash |
+| `-13` | `QUOTE_EXPIRED` | Quote is past its validity window — request a fresh one |
+| `-14` | `MAX_INPUT_AMOUNT` | Input exceeds the solver's per-intent maximum |
+| `-15` | `MAX_DIFF_OUTPUT` | Output deviates too far from the quoted amount |
+| `-16` | `STOPPED` | Solver is not serving — retry with backoff |
+| `-17` | `NO_ORACLE_MODULE_FOUND` | No price oracle available for the pair |
+| `-18` | `NEGATIVE_INPUT_AMOUNT` | Input amount was negative |
+| `-19` | `INTENT_ALREADY_IN_ORDERBOOK` | Intent was already submitted |
+| `-20` | `INVALID_QUOTE_TYPE` | Unsupported `quote_type` |
+| `-21` | `INVALID_TOKENS` | One of the tokens is not compatible with the quote service |
+| `-22` | `INVALID_AMOUNT` | Amount could not be parsed |
+| `-23` | `INPUT_AMOUNT_TOO_LOW` | Input is below the solver's minimum — increase it |
+| `-24` | `ALGORITHM_NOT_IMPLEMENTED` | Requested routing algorithm is not implemented |
+| `-25` | `UNKNOWN_DEX_ID` | Unrecognised entry in `exclude_dex_ids` |
+| `-998` | `CREATE_INTENT_ORDER_FAILED` | Solver could not create the intent order |
+| `-999` | `UNKNOWN` | SDK-synthesized: network failure, timeout, or an unhandled exception |
+
+Two caveats worth coding against:
+
+- **`-8` is shared** by `NOT_ENOUGH_PRIVATE_LIQUIDITY` and `QUOTE_NOT_FOUND`. They are indistinguishable by code, so a `-8` cannot be classified — the numbering is retained because renumbering either would break existing consumers.
+- **`-20` and `-24` are reserved.** The solver wires both but raises neither today; a rejected `quote_type` currently answers `-4`. Handle them defensively rather than expecting them in traffic.
+
+The `-20`…`-25` block mirrors `error_codes` in the solver (`rust-modules/quote-caching/src/error.rs`), which is the source of truth for every value above.
+
+### Branching on a code
 
 ```ts
 import { SolverIntentErrorCode } from '@sodax/sdk';
@@ -54,6 +93,26 @@ if (!quoteResult.ok) {
   }
 }
 ```
+
+To decide whether repeating the request could help, use `getSolverErrorRetryability` rather than hand-maintaining a code list:
+
+```ts
+import { getSolverErrorRetryability } from '@sodax/sdk';
+
+switch (getSolverErrorRetryability(quoteResult.error.detail.code)) {
+  case 'retryable':
+    // -4 (liquidity-dependent) and -16 (solver not serving) — retry with backoff
+    break;
+  case 'not-retryable':
+    // -20…-25 — the request itself has to change; surface it to the user
+    break;
+  case 'unknown':
+    // The solver contract gives no verdict (including the ambiguous -8). Caller's judgement.
+    break;
+}
+```
+
+`'unknown'` is deliberate, not a gap to paper over: it covers codes the solver contract does not classify, plus `-8`, which no classifier can resolve. Treat it as "decide for yourself", not as permission to retry.
 
 ---
 
