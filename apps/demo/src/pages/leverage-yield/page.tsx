@@ -315,9 +315,8 @@ export default function LeverageYieldPage() {
   // 30s refresh: faster than APR since LTV shifts with each rebalance/rate tick.
   const { data: vaultPosition } = useLeverageYieldPosition({ params: { vault: selectedVault?.vault } });
 
-  // Accumulated orders — each one polls the BES status endpoint via <OrderStatus> and
-  // shows live progress. Mirrors the solver page's pattern so users see the same UX
-  // whether they deposit/withdraw via this page or swap via /solver.
+  // Accumulated orders — each tracks its vault swap through <OrderStatus>, which reads the status
+  // router, so it answers whether the backend submit-tx path or the relay fallback carried the swap.
   // Own localStorage key (separate from the solver page) since this is a different feature.
   const [orders, setOrders] = useState<Order[]>(() => loadOrders(LEVERAGE_YIELD_ORDERS_KEY));
 
@@ -495,6 +494,7 @@ export default function LeverageYieldPage() {
         onDismiss={handleDismissOrder}
         onSettle={handleSettleOrder}
         storageKey={LEVERAGE_YIELD_PANEL_KEY}
+        feature="leverage-yield"
       />
 
       {/* Solver-environment switcher — same control as on /solver. Drives `solverEnvironment`
