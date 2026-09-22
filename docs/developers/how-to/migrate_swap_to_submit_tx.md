@@ -115,12 +115,17 @@ signing boundary, or a UI that reports each phase. You reimplement what `swap()`
 
 Unchanged. Keep all three returned values — the submit-tx request needs each of them.
 
+The bindings below are shared by every step in this section:
+
 ```typescript
-import { ChainKeys } from '@sodax/sdk';
-import type { IEvmWalletProvider } from '@sodax/sdk';
+import type { IEvmWalletProvider, SpokeChainKey } from '@sodax/sdk';
 
 declare const evmWalletProvider: IEvmWalletProvider;
+declare const srcChainKey: SpokeChainKey; // === createIntentParams.srcChainKey
+declare const timeoutMs: number;          // your per-attempt budget, e.g. DEFAULT_RELAY_TX_TIMEOUT
+```
 
+```typescript
 const created = await sodax.swaps.createIntent({
   params: createIntentParams,
   walletProvider: evmWalletProvider,
@@ -150,6 +155,21 @@ Two fields are easy to get wrong: `relayData` is `relayData.payload`, and `walle
 **Persist `request` before you submit it.** If the process dies after broadcasting, this record is what
 lets you resume; re-submitting the same `(txHash, srcChainKey)` is idempotent and answers
 `data.status: 'duplicate'`. Never sign a second deposit to recover.
+
+`request.intent` carries `bigint` fields (`intentId`, `inputAmount`, `minOutputAmount`, `deadline`,
+`srcChain`, `dstChain`), so a plain `JSON.stringify(request)` **throws** — in the exact crash window
+this step exists to survive. Serialize them explicitly and restore them on the way back in:
+
+```typescript
+const serialized = JSON.stringify(request, (_key, value) =>
+  typeof value === 'bigint' ? value.toString() : value,
+);
+
+// On resume, parse back and coerce the bigint fields before reusing the request.
+```
+
+The SDK's own wire client does the same thing internally, which is why passing `intent` straight to
+`submitTx` needs no conversion from you — only your own storage does.
 
 ### Step 3 — submit, and check both flags
 
@@ -300,8 +320,11 @@ same reason.
 
 - **Solana and Bitcoin** deposits commit only a *hash* of the relay payload on-chain, so the relayer can
   correlate a submission only with the exact original bytes. Keep the `relayData` that `createIntent`
-  returned. If it is gone, recover byte-identical data with `sodax.swaps.getIntentSubmitTxExtraData({ txHash })`
-  or, fully offline from a populated `Intent`, `sodax.swaps.reconstructRelayData(intent)`.
+  returned. If it is gone, recover byte-identical data with
+  `sodax.swaps.getIntentSubmitTxExtraData({ txHash })` — note that `txHash` there is the **hub-chain**
+  transaction hash, not the source-chain `spokeTxHash` used everywhere else in this guide, because the
+  lookup reads the intent off the hub. From a populated `Intent` you already hold,
+  `sodax.swaps.reconstructRelayData(intent)` derives the same bytes offline with no RPC call.
 - **Sonic as the source chain** has no relay leg — the spoke transaction already is the hub transaction.
   The fallback must skip the relay and go straight to `postExecution`.
 - **Stellar destinations** still need a trustline before the swap; see

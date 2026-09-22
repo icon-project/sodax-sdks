@@ -4,6 +4,16 @@
 
 When they do own the steps, reproduce **both** paths. The orchestration helpers behind `swap()` are package-internal — `SwapService.submitTx` and `SwapService.fallbackSwapSteps` are private, and the attempt budget and poll loop are not exported — so the loop is hand-written from the public pieces below.
 
+Bindings shared by every step below:
+
+```ts
+import type { IEvmWalletProvider, SpokeChainKey } from '@sodax/sdk';
+
+declare const evmWallet: IEvmWalletProvider;
+declare const srcChainKey: SpokeChainKey;   // === params.srcChainKey
+declare const timeoutMs: number;            // per-attempt budget, e.g. DEFAULT_RELAY_TX_TIMEOUT
+```
+
 ## 1. Create the intent, keep all three values
 
 ```ts
@@ -28,6 +38,14 @@ const request: SubmitTxRequestV2 = {
 ```
 
 Persist `request` **before** submitting. Re-submitting the same `(txHash, srcChainKey)` is idempotent (`data.status: 'duplicate'`); never sign a second deposit to recover.
+
+`request.intent` carries `bigint` fields (`intentId`, `inputAmount`, `minOutputAmount`, `deadline`, `srcChain`, `dstChain`), so plain `JSON.stringify(request)` THROWS — in the exact crash window this step exists to survive. Serialize them, and coerce them back on resume:
+
+```ts
+const serialized = JSON.stringify(request, (_k, v) => (typeof v === 'bigint' ? v.toString() : v));
+```
+
+Passing `intent` straight to `submitTx` still needs no conversion — the wire client serializes internally. Only your own storage does.
 
 ## 3. Submit — check both flags
 
@@ -103,7 +121,7 @@ async function fallback() {
 
 - **Two budgets, never one.** The backend attempt gets a timeout; the fallback relay gets a *fresh* one. A single shared deadline leaves the fallback only what the backend did not spend — that is how a relay that needs longer ends in a timeout.
 - **Falling back is safe.** Re-relaying and re-posting an already-processed swap is idempotent: the relay deduplicates and returns the existing `executed` packet, and the solver re-affirms the intent rather than filling twice. It is also load-bearing — the backend keeps processing after the poll gives up, so the two relays can race.
-- **Solana / Bitcoin need the exact `relayData` bytes** — those deposits commit only a hash of the payload on-chain. If the runtime value is gone, recover it with `sodax.swaps.getIntentSubmitTxExtraData({ txHash })` or offline via `sodax.swaps.reconstructRelayData(intent)`.
+- **Solana / Bitcoin need the exact `relayData` bytes** — those deposits commit only a hash of the payload on-chain. If the runtime value is gone, recover it with `sodax.swaps.getIntentSubmitTxExtraData({ txHash })`, where `txHash` is the **hub-chain** tx hash (it reads the intent off the hub) — not the source-chain `spokeTxHash` used elsewhere here. From an `Intent` you already hold, `sodax.swaps.reconstructRelayData(intent)` derives the same bytes offline.
 - **Read status with `getDetailedStatus`**, which routes between the backend record and the solver — do not hand-roll that fallback too.
 - Opting out entirely is a config flag, not hand-written code: `new Sodax({ swaps: { useBackendSubmitTx: false } })` makes `swap()` take the client-side path only.
 
