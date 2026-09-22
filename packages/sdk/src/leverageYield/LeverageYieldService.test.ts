@@ -1698,6 +1698,7 @@ describe('LeverageYieldService.vaultSwap — backend submit-tx extras.apiKey on 
   };
 
   const runKeyedVaultSwap = async (extras?: { apiKey?: string }) => {
+    const before = wireFetch.mock.calls.length;
     stubKeyedCreated();
     const args = {
       params: vaultIntentParams(ARBITRUM, { dstChainKey: ARBITRUM as SpokeChainKey, dstAddress: SAMPLE_USER }),
@@ -1707,7 +1708,8 @@ describe('LeverageYieldService.vaultSwap — backend submit-tx extras.apiKey on 
     expect(result.ok).toBe(true);
     // The value round-tripped through the real transport + schemas, not a stubbed method.
     if (result.ok) expect(result.value.intentDeliveryInfo.dstTxHash).toBe('0xDST');
-    expect(wireFetch).toHaveBeenCalledTimes(2);
+    // Two legs per run — counted as a delta so a test can run several swaps in sequence.
+    expect(wireFetch.mock.calls.length - before).toBe(2);
   };
 
   it('sends extras.apiKey over the instance key on both the submit POST and the status poll', async () => {
@@ -1726,6 +1728,26 @@ describe('LeverageYieldService.vaultSwap — backend submit-tx extras.apiKey on 
     await runKeyedVaultSwap({ apiKey: '' });
     expect(keySentTo('/v1/leverage-yield/submit-tx', 'POST')).toBe('instance-key');
     expect(keySentTo('/v1/leverage-yield/submit-tx/status', 'GET')).toBe('instance-key');
+  });
+
+  it('keys each action on its own — a per-action key does not leak into the next', async () => {
+    // The case the option exists for: several keys through ONE instance, which used to mean one
+    // `Sodax` per key. The override is per call, so it must neither persist nor overwrite the
+    // instance key.
+    await runKeyedVaultSwap({ apiKey: 'tenant-A' });
+    await runKeyedVaultSwap({ apiKey: 'tenant-B' });
+    await runKeyedVaultSwap();
+    await runKeyedVaultSwap({ apiKey: 'tenant-A' });
+
+    const submitPosts = wireFetch.mock.calls.filter(
+      call => new URL(String(call[0])).pathname === '/v1/leverage-yield/submit-tx' && call[1]?.method === 'POST',
+    );
+    expect(submitPosts.map(call => new Headers(call[1]?.headers).get('x-api-key'))).toEqual([
+      'tenant-A',
+      'tenant-B',
+      'instance-key',
+      'tenant-A',
+    ]);
   });
 });
 
