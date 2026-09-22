@@ -208,10 +208,20 @@ opens on. Unknown values are discarded rather than guessed at.
 | `amount`, `slippage` | Decimal amount and percentage tolerance |
 | `allowedSrc`, `allowedDst` | Comma-separated chain keys. Absent or empty means every listed network |
 | `allowedSrcTokens`, `allowedDstTokens` | Comma-separated `chainKey:symbol`. Absent means all; present but empty permits none |
-| `lockSrc`, `lockDst` | `1` locks that side to its default token and network. Supply both explicitly |
+| `lockSrc`, `lockDst` | `1` pins that side to the pair already in the URL. `lockSrc` needs `srcChain` **and** `srcToken`, `lockDst` needs `dstChain` **and** `dstToken` |
 | `theme` | `light`, `dark` or `auto` |
 | `accent`, `cta`, `surface`, `text` | Six-digit hex, without `#` |
 | `radius`, `font`, `density` | Named scales offered in **Appearance** |
+
+A lock filters the side down to exactly the chain and token it was given, so it only does something
+next to `embed=1` and a pair. On its own it matches nothing and the side lists no assets at all:
+
+```
+https://widget.sodax.com/?embed=1&srcChain=0x2105.base&srcToken=USDC&lockSrc=1&dstChain=solana
+```
+
+That URL fixes the user on Base USDC and leaves them free to pick anything on the destination side.
+The builder writes the pair for you whenever you tick a lock.
 
 Restrictions shape this UI, not access to the public API. A restriction that currently matches no
 listed asset permits no route, rather than substituting a different one — including a locked default
