@@ -146,8 +146,14 @@ const abortFetchImpl = (_url: string, init: { signal: AbortSignal }) =>
     });
   });
 
-beforeEach(() => mockFetch.mockReset());
-afterEach(() => vi.restoreAllMocks());
+// Braces matter: `mockReset()` returns the mock, and a `beforeEach` that returns a function
+// registers it as a teardown — vitest 4 leaves the impl in place, so it would fire the stub.
+beforeEach(() => {
+  mockFetch.mockReset();
+});
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 // =========================================================================
 // URL + HTTP method coverage for all 21 endpoints. Asserts the exact path

@@ -34,6 +34,14 @@ export function canExecute(chain: ChainKey | undefined): boolean {
 }
 
 /**
+ * Source-chain extras the swaps API needs to build the intent. Stacks alone: a Stacks address cannot
+ * yield its signer public key, so the wallet is the only place the intent can get one.
+ */
+export function sourceExtras(type: ChainType, publicKey: string | undefined): { srcPublicKey?: string } {
+  return type === 'STACKS' && publicKey ? { srcPublicKey: publicKey } : {};
+}
+
+/**
  * The `{ from, to, value, data }` payload EVM, Solana, Sui, Stellar and Bitcoin all share. The
  * chain type — never the shape — decides which wallet signs it; these members are indistinguishable.
  */
@@ -137,6 +145,8 @@ export type ExecutionDependencies = {
   sign: (tx: RawTxReturnType) => Promise<string>;
   onPhase: (phase: ExecutionPhase) => void;
   onBroadcast: (request: SubmitTxRequestV2, intent: IntentResponseV2) => void;
+  /** The relay holds the deposit. Durable, because only a resubmission can move one it does not. */
+  onRelayAccepted: () => void;
 };
 
 /** Persist the broadcast before relay submission; retries must never sign a second deposit. */
@@ -185,6 +195,7 @@ export async function executeSwap(body: CreateIntentParamsV2, deps: ExecutionDep
   const submitted = await api.submitTx(request);
   if (!submitted.ok) throw submitted.error;
   if (!submitted.value.success) throw new Error('The relay has not accepted this swap yet. Retry tracking.');
+  deps.onRelayAccepted();
 }
 
 export function isUserRejection(error: unknown): boolean {

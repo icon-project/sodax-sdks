@@ -8,6 +8,7 @@ import {
   advanceNotFoundStreak,
   getSwapStatusRefetchInterval,
   INITIAL_NOT_FOUND_STREAK,
+  isSolverNotFound,
 } from './getSwapStatusRefetchInterval.js';
 
 export type UseStatusParams = ReadHookParams<
@@ -46,7 +47,7 @@ export const useStatus = ({
       notFoundStreakRef.current = advanceNotFoundStreak(
         notFoundStreakRef.current,
         intentTxHash,
-        query.state.data,
+        isSolverNotFound(query.state.data),
         query.state.dataUpdateCount,
       );
       return getSwapStatusRefetchInterval(query.state.data, notFoundStreakRef.current.consecutiveNotFound);

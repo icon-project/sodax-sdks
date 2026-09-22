@@ -7,6 +7,7 @@ import {
   brandStyles,
   isBranded,
   resolvedColors,
+  surfaceTheme,
 } from '../lib/brand';
 import { initialUrl } from '../lib/initialUrl';
 
@@ -34,11 +35,16 @@ function storedTheme(): Theme | undefined {
 /**
  * `?theme=light|dark` wins: in an embed the partner's page has already decided, and the visitor's
  * own stored preference is for our demo page, not for a widget inside someone else's product.
- * `auto` and an absent parameter fall through to that stored choice and then to the OS.
+ * `auto` asks for the OS explicitly, so it is honoured even against a brand's own surface.
+ *
+ * With no theme parameter a brand that states a surface resolves to that surface's own theme, not
+ * to the stored choice or the OS. Inverting a ground a partner chose is never what silence meant,
+ * and it is what left a light brand carrying our dark alerts, tooltips and disabled controls.
  */
-export function resolveTheme(choice: ThemeChoice | undefined, systemDark: boolean): Theme {
-  if (choice === 'light' || choice === 'dark') return choice;
-  if (choice === 'auto') return systemDark ? 'dark' : 'light';
+export function resolveTheme(brand: Brand, systemDark: boolean): Theme {
+  if (brand.theme === 'light' || brand.theme === 'dark') return brand.theme;
+  if (brand.theme === 'auto') return systemDark ? 'dark' : 'light';
+  if (brand.surface) return surfaceTheme(brand.surface);
   return storedTheme() ?? (systemDark ? 'dark' : 'light');
 }
 
@@ -86,7 +92,7 @@ export function useBrand(applyToDocument = true) {
     return () => query.removeEventListener('change', onChange);
   }, []);
 
-  const theme = resolveTheme(brand.theme, systemDark);
+  const theme = resolveTheme(brand, systemDark);
   const { css, notes } = useMemo(() => brandStyles(brand), [brand]);
 
   useEffect(() => {
@@ -119,5 +125,5 @@ export function useBrand(applyToDocument = true) {
   }, [applyToDocument]);
 
   const colors = resolvedColors(brand, theme);
-  return { brand, theme, colors, notes, isBranded: isBranded(brand), update, apply, reset };
+  return { brand, theme, colors, notes: notes[theme], isBranded: isBranded(brand), update, apply, reset };
 }

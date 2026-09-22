@@ -138,9 +138,16 @@ export function readBrandField<K extends keyof Brand>(key: K, value: string | nu
   return readBrand(params.toString())[key];
 }
 
-/** Colours are written without the `#`, so a copied `<iframe>` carries no `%23` noise. */
+/**
+ * Colours are written without the `#`, so a copied `<iframe>` carries no `%23` noise.
+ *
+ * A surface with no theme writes the theme it implies rather than nothing. `resolveTheme` would
+ * derive the same value, but the pre-paint script in `index.html` reads the URL and does no colour
+ * maths — spelling it out is what keeps the first painted theme and the rendered one the same.
+ */
 export function writeBrand(params: URLSearchParams, brand: Brand): void {
   if (brand.theme) params.set('theme', brand.theme);
+  else if (brand.surface) params.set('theme', surfaceTheme(brand.surface));
   if (brand.accent) params.set('accent', brand.accent.slice(1));
   if (brand.cta) params.set('cta', brand.cta.slice(1));
   if (brand.surface) params.set('surface', brand.surface.slice(1));
@@ -174,6 +181,8 @@ export const BRAND_DEFAULTS = {
 export type ColorField = keyof typeof BRAND_DEFAULTS;
 
 const AA_TEXT = 4.5;
+/** WCAG's bar for a control's own edge against what is behind it, rather than for its label. */
+const AA_CONTROL = 3;
 
 function toRgb(hex: string): Rgb {
   const value = Number.parseInt(hex.slice(1), 16);
@@ -217,6 +226,14 @@ function ink(background: string): string {
   return contrast(INK_LIGHT, background) >= AA_TEXT ? INK_LIGHT : '#000000';
 }
 
+/**
+ * Which theme a ground already is, decided by the ink it needs rather than a luminance threshold, so
+ * every colour classifies. A brand states one surface; this is what the other theme derives from.
+ */
+export function surfaceTheme(surface: string): 'light' | 'dark' {
+  return contrast(INK_LIGHT, surface) > contrast(INK_DARK, surface) ? 'dark' : 'light';
+}
+
 /** Toward the colour's own ink: darkens a light colour, lightens a dark one. */
 function step(hex: string, weight: number): string {
   return mix(hex, ink(hex), weight);
@@ -230,6 +247,20 @@ function lift(hex: string, weight: number): string {
 /** Both themes frame the app in something darker than the card, so this one goes to black either way. */
 function darken(hex: string, weight: number): string {
   return mix(hex, '#000000', weight);
+}
+
+/** Far enough to invert the ground, short of the extreme so a saturated surface keeps a trace of hue. */
+const COUNTERPART = 0.9;
+
+/**
+ * The ground a theme renders on. A brand names one surface, and asked for the other theme — a partner
+ * page that toggles, or `theme=auto` on a visitor whose OS disagrees — the counterpart is derived from
+ * it. Dropping the brand instead would answer a theme switch with our palette wearing their accent.
+ */
+function ground(brand: Brand, theme: 'light' | 'dark'): string {
+  if (!brand.surface) return DEFAULT_SURFACE[theme];
+  if (surfaceTheme(brand.surface) === theme) return brand.surface;
+  return mix(brand.surface, theme === 'dark' ? '#000000' : '#ffffff', COUNTERPART);
 }
 
 /** Nudges a colour toward the surface's ink until it clears `target`, so brand text stays readable. */
@@ -254,10 +285,16 @@ export type BrandNote = string;
 function colorRoles(brand: Brand, theme: 'light' | 'dark'): { decls: Declarations; notes: BrandNote[] } {
   const decls: Declarations = {};
   const notes: BrandNote[] = [];
-  const surface = brand.surface ?? DEFAULT_SURFACE[theme];
+  const surface = ground(brand, theme);
   const onSurface = ink(surface);
+  const derivedGround = Boolean(brand.surface) && surface !== brand.surface;
 
   if (brand.surface) {
+    if (derivedGround) {
+      const shade = theme === 'light' ? 'lightens' : 'darkens';
+      notes.push(`Your surface is ${surfaceTheme(brand.surface)}, so the ${theme} theme ${shade} it.`);
+    }
+
     Object.assign(decls, {
       '--surface-card': surface,
       '--surface-page': surface,
@@ -275,21 +312,22 @@ function colorRoles(brand: Brand, theme: 'light' | 'dark'): { decls: Declaration
       '--border-subtle': step(surface, 0.12),
       '--border-inset': step(surface, 0.08),
       '--border-strong': step(surface, 0.22),
-      '--flip-bg': step(surface, 0.08),
-      '--flip-bg-hover': step(surface, 0.15),
-      '--flip-fg': mix(surface, onSurface, 0.8),
+      '--flip-bg': step(surface, 0.12),
+      '--flip-bg-hover': step(surface, 0.2),
+      '--flip-fg': onSurface,
       '--chip-shadow': step(surface, 0.28),
       '--logo-shadow': step(surface, 0.2),
     });
   }
 
   // A partner-set surface re-derives the whole text ramp even with no `text`, or their ground would
-  // carry our ink — a dark surface with charcoal body copy.
-  const heading = brand.text ?? (brand.surface ? onSurface : undefined);
+  // carry our ink — a dark surface with charcoal body copy. A derived ground drops their `text` too:
+  // it was picked for the ground they stated, and correcting it across only reaches a washed-out grey.
+  const heading = derivedGround ? onSurface : (brand.text ?? (brand.surface ? onSurface : undefined));
 
   if (heading) {
     const checked = readable(heading, surface, AA_TEXT);
-    if (checked.corrected) notes.push('Text colour was moved toward readable — it failed 4.5:1 on that surface.');
+    if (checked.corrected) notes.push('Text colour adjusted — yours was hard to read on this background.');
 
     Object.assign(decls, {
       '--text-heading': checked.value,
@@ -301,7 +339,7 @@ function colorRoles(brand: Brand, theme: 'light' | 'dark'): { decls: Declaration
 
   if (brand.accent) {
     const checked = readable(brand.accent, surface, AA_TEXT);
-    if (checked.corrected) notes.push('Accent was darkened or lightened where it is used as text — it failed 4.5:1.');
+    if (checked.corrected) notes.push('Accent adjusted — yours was hard to read on this background.');
 
     decls['--accent'] = checked.value;
     decls['--accent-hover'] = step(checked.value, 0.14);
@@ -312,12 +350,17 @@ function colorRoles(brand: Brand, theme: 'light' | 'dark'): { decls: Declaration
   const cta = brand.cta ?? brand.accent;
 
   if (cta) {
+    // A stated fill is rendered as given. On a ground we derived, an ink button on ink-black paper
+    // would vanish into a ground its owner never chose, so that one case is corrected.
+    const fill = derivedGround ? readable(cta, surface, AA_CONTROL) : { value: cta, corrected: false };
+    if (fill.corrected) notes.push('Button colour adjusted — yours was hard to see on this background.');
+
     Object.assign(decls, {
-      '--cta-bg': cta,
-      '--cta-bg-hover': step(cta, 0.12),
-      '--cta-bg-active': lift(cta, 0.14),
-      '--cta-fg': ink(cta),
-      '--cta-ring': lift(cta, 0.2),
+      '--cta-bg': fill.value,
+      '--cta-bg-hover': step(fill.value, 0.12),
+      '--cta-bg-active': lift(fill.value, 0.14),
+      '--cta-fg': ink(fill.value),
+      '--cta-ring': lift(fill.value, 0.2),
     });
   }
 
@@ -354,7 +397,7 @@ function block(selector: string, decls: Declarations): string {
   return body ? `${selector} {\n${body}\n}` : '';
 }
 
-export type BrandStyles = { css: string; notes: BrandNote[] };
+export type BrandStyles = { css: string; notes: Record<'light' | 'dark', BrandNote[]> };
 
 /**
  * The stylesheet a brand resolves to, as one block per theme.
@@ -362,6 +405,8 @@ export type BrandStyles = { css: string; notes: BrandNote[] };
  * The dark block is not optional even when the two derive to the same values: `index.css` maps its
  * dark roles under `:root[data-theme="dark"]`, which outranks a bare `:root`, so a light-only
  * override would be won back on every token the dark theme sets.
+ *
+ * Notes stay per theme rather than pooled: a correction the theme on screen did not make is noise.
  */
 export function brandStyles(brand: Brand): BrandStyles {
   const light = colorRoles(brand, 'light');
@@ -371,16 +416,20 @@ export function brandStyles(brand: Brand): BrandStyles {
     .filter(Boolean)
     .join('\n\n');
 
-  return { css, notes: [...new Set([...light.notes, ...dark.notes])] };
+  return { css, notes: { light: light.notes, dark: dark.notes } };
 }
 
-/** Resolved values for the controls, including the active theme and derived text corrections. */
+/**
+ * Resolved values for the controls, including the active theme and derived text corrections. The
+ * surface is the exception: the picker edits that field, so it shows what was set, not the ground a
+ * derived counterpart is rendering.
+ */
 export function resolvedColors(brand: Brand, theme: 'light' | 'dark'): Record<ColorField, string> {
   const { decls } = colorRoles(brand, theme);
   return {
     accent: decls['--accent'] ?? (theme === 'dark' ? '#ffd92f' : '#a55c55'),
     cta: decls['--cta-bg'] ?? (theme === 'dark' ? '#ecc100' : '#a55c55'),
-    surface: decls['--surface-embed'] ?? (theme === 'dark' ? '#17100f' : '#f5f2f2'),
+    surface: brand.surface ?? (theme === 'dark' ? '#17100f' : '#f5f2f2'),
     text: decls['--text-heading'] ?? (theme === 'dark' ? '#ffffff' : '#483434'),
   };
 }

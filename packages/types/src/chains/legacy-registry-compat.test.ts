@@ -31,6 +31,23 @@ const EQUITY_SYMBOLS = [
   'SLV',
 ] as const;
 
+// Second batch: Robinhood Chain is the only spoke, so these extend the Sonic and Robinhood sequences only.
+const ROBINHOOD_ONLY_EQUITY_SYMBOLS = [
+  'GOOGL',
+  'AMZN',
+  'MSFT',
+  'META',
+  'CRCL',
+  'COIN',
+  'PLTR',
+  'TSM',
+  'AMD',
+  'INTC',
+  'BABA',
+] as const;
+
+const ALL_EQUITY_SYMBOLS = [...EQUITY_SYMBOLS, ...ROBINHOOD_ONLY_EQUITY_SYMBOLS] as const;
+
 const LEGACY_HUB_VAULT_SYMBOLS: readonly string[] = [
   'sodaAVAX',
   'sodaBNB',
@@ -320,16 +337,16 @@ const LEGACY_MONEY_MARKET_RESERVE_ASSETS: readonly string[] = [
 
 const identify = (tokens: readonly XToken[]): string[] => tokens.map(token => `${token.symbol}:${token.address}`);
 
-const equityIds = (registry: Record<(typeof EQUITY_SYMBOLS)[number], XToken>): string[] =>
-  EQUITY_SYMBOLS.map(symbol => `${symbol}:${registry[symbol].address}`);
+const equityIds = <Ticker extends string>(registry: Record<Ticker, XToken>, symbols: readonly Ticker[]): string[] =>
+  symbols.map(symbol => `${symbol}:${registry[symbol].address}`);
 
 describe('legacy hub vault registries are unchanged prefixes', () => {
   it('HubVaultSymbols appends the equity symbols after the legacy order', () => {
-    expect([...HubVaultSymbols]).toEqual([...LEGACY_HUB_VAULT_SYMBOLS, ...EQUITY_SYMBOLS]);
+    expect([...HubVaultSymbols]).toEqual([...LEGACY_HUB_VAULT_SYMBOLS, ...ALL_EQUITY_SYMBOLS]);
   });
 
   it('SodaTokens keys append the equity symbols after the legacy order', () => {
-    expect(Object.keys(SodaTokens)).toEqual([...LEGACY_SODA_TOKEN_KEYS, ...EQUITY_SYMBOLS]);
+    expect(Object.keys(SodaTokens)).toEqual([...LEGACY_SODA_TOKEN_KEYS, ...ALL_EQUITY_SYMBOLS]);
   });
 });
 
@@ -343,7 +360,7 @@ describe('legacy spoke registries are unchanged prefixes', () => {
   });
 
   it('robinhoodSupportedTokens', () => {
-    expect(Object.keys(robinhoodSupportedTokens)).toEqual([...LEGACY_ROBINHOOD_TOKEN_KEYS, ...EQUITY_SYMBOLS]);
+    expect(Object.keys(robinhoodSupportedTokens)).toEqual([...LEGACY_ROBINHOOD_TOKEN_KEYS, ...ALL_EQUITY_SYMBOLS]);
   });
 
   it('Stellar trustline configs', () => {
@@ -359,28 +376,28 @@ describe('legacy production swap sequences are unchanged prefixes', () => {
     expect(identify(swapSupportedTokens[ChainKeys.SONIC_MAINNET])).toEqual([
       ...LEGACY_SWAP_SONIC_PREFIX,
       ...identify(Object.values(LsodaTokens)),
-      ...equityIds(SodaTokens),
+      ...equityIds(SodaTokens, ALL_EQUITY_SYMBOLS),
     ]);
   });
 
   it('Stellar', () => {
     expect(identify(swapSupportedTokens[ChainKeys.STELLAR_MAINNET])).toEqual([
       ...LEGACY_SWAP_STELLAR,
-      ...equityIds(stellarSupportedTokens),
+      ...equityIds(stellarSupportedTokens, EQUITY_SYMBOLS),
     ]);
   });
 
   it('Hedera', () => {
     expect(identify(swapSupportedTokens[ChainKeys.HEDERA_MAINNET])).toEqual([
       ...LEGACY_SWAP_HEDERA,
-      ...equityIds(hederaSupportedTokens),
+      ...equityIds(hederaSupportedTokens, EQUITY_SYMBOLS),
     ]);
   });
 
   it('Robinhood', () => {
     expect(identify(swapSupportedTokens[ChainKeys.ROBINHOOD_MAINNET])).toEqual([
       ...LEGACY_SWAP_ROBINHOOD,
-      ...equityIds(robinhoodSupportedTokens),
+      ...equityIds(robinhoodSupportedTokens, ALL_EQUITY_SYMBOLS),
     ]);
   });
 });

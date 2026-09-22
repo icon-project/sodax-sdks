@@ -3,12 +3,25 @@ import type { PairDimensions } from './analytics';
 import { isChainKey } from './chains';
 import { toIntentRequest } from './execution';
 
-export const ACTIVITY_KEY = 'sodax-widget-activity-v1';
+/**
+ * v2 adds what the dialog is rebuilt from; a v1 record has none of it and cannot restore one.
+ *
+ * A v1 record is left in storage rather than removed: it still carries the hash, intent and relay
+ * payload `submissionFor` needs, so deleting it would destroy the only recoverable trace of a swap
+ * this version cannot display. Nothing reads it today — a deployment that reached real users on v1
+ * needs a migration or a legacy recovery view before that becomes acceptable.
+ */
+export const ACTIVITY_KEY = 'sodax-widget-activity-v2';
 
 export type Activity = {
   txHash: string;
   srcChainKey: ChainKey;
   dstChainKey: ChainKey;
+  /** Spoke-side, as reviewed: `intent`'s own token fields are hub assets and name nothing on a spoke. */
+  srcTokenAddress: string;
+  dstTokenAddress: string;
+  /** The gross the visitor confirmed. `intent.inputAmount` is net of the partner fee and restates it lower. */
+  inputAmount: string;
   walletAddress: string;
   recipient: string;
   summary: string;
@@ -16,11 +29,24 @@ export type Activity = {
   intent: IntentResponseV2;
   relayData: string;
   pair?: PairDimensions;
+  /** The relay has the deposit. Absent means it still needs submitting — the one state a reload must
+      not lose, because the deposit is already broadcast and only resubmission can move it. */
+  relaySubmitted?: boolean;
   settlementReported?: boolean;
 };
 
 function record(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+/** Every family spells an address its own way, so only presence and a length bound are checkable. */
+function isAddressText(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0 && value.length <= 200;
+}
+
+/** A smallest-unit amount, as the intent carries one: decimal digits and nothing else. */
+function isAmountText(value: unknown): value is string {
+  return typeof value === 'string' && /^\d{1,78}$/.test(value);
 }
 
 function isIntent(value: unknown): value is IntentResponseV2 {
@@ -72,6 +98,9 @@ export function readActivity(value: string | null): Activity | undefined {
       !isChainKey(data.srcChainKey) ||
       typeof data.dstChainKey !== 'string' ||
       !isChainKey(data.dstChainKey) ||
+      !isAddressText(data.srcTokenAddress) ||
+      !isAddressText(data.dstTokenAddress) ||
+      !isAmountText(data.inputAmount) ||
       typeof data.walletAddress !== 'string' ||
       typeof data.recipient !== 'string' ||
       typeof data.summary !== 'string' ||
@@ -87,6 +116,9 @@ export function readActivity(value: string | null): Activity | undefined {
       txHash: data.txHash,
       srcChainKey: data.srcChainKey,
       dstChainKey: data.dstChainKey,
+      srcTokenAddress: data.srcTokenAddress,
+      dstTokenAddress: data.dstTokenAddress,
+      inputAmount: data.inputAmount,
       walletAddress: data.walletAddress,
       recipient: data.recipient,
       summary: data.summary,
@@ -94,6 +126,7 @@ export function readActivity(value: string | null): Activity | undefined {
       relayData: data.relayData,
       intent: data.intent,
       ...(readPair(data.pair) ? { pair: readPair(data.pair) } : {}),
+      ...(data.relaySubmitted === true ? { relaySubmitted: true } : {}),
       ...(data.settlementReported === true ? { settlementReported: true } : {}),
     };
   } catch {
