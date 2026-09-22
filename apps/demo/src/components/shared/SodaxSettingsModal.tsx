@@ -250,6 +250,7 @@ function TextRow({
   error,
   hint,
   secret = false,
+  placeholder,
   onChange,
 }: {
   label: string;
@@ -258,6 +259,8 @@ function TextRow({
   error?: string;
   hint?: ReactNode;
   secret?: boolean;
+  /** What an empty field means — a masked row is otherwise indistinguishable from an unset one. */
+  placeholder?: string;
   onChange: (value: string) => void;
 }) {
   const [revealed, setRevealed] = useState(false);
@@ -272,6 +275,7 @@ function TextRow({
         <Input
           value={value}
           type={secret && !revealed ? 'password' : 'text'}
+          placeholder={placeholder}
           autoComplete={secret ? 'off' : undefined}
           onChange={e => onChange(e.target.value)}
           className={`h-9 text-sm font-mono flex-1 min-w-0 ${modified ? 'border-amber-400' : ''}`}
@@ -385,6 +389,8 @@ export function SodaxSettingsModal({ open, onOpenChange }: { open: boolean; onOp
   // rule and swap's staging mismatch — not bridge's unconditional on.
   const leverageYieldAutoSubmitTx = swapAutoSubmitTx;
   const leverageYieldSubmitTxMismatch = draft.leverageYieldUseBackendSubmitTx === 'on' && !leverageYieldAutoSubmitTx;
+  // What the per-action row falls back to: the typed instance key, or the env one behind it.
+  const inheritedApiKey = draft.apiKey.trim() !== '' || Boolean(envSodaxApiKey);
 
   // Show the basis points the percent resolves to — that is the number the SDK and both APIs get.
   const feeBps = percentTextToBps(draft.partnerFeePercent);
@@ -552,6 +558,7 @@ export function SodaxSettingsModal({ open, onOpenChange }: { open: boolean; onOp
             defaultValue={defaults.leverageYieldApiKey}
             error={errors.leverageYieldApiKey}
             secret
+            placeholder={inheritedApiKey ? 'Inheriting the instance key — hidden' : 'Not set'}
             hint="Per-action `extras.apiKey` for the Leverage Yield page's vault swap — keys the submit POST and its status polls over the instance key. Unset inherits that key. The client-side relay path sends none."
             onChange={value => set('leverageYieldApiKey', value)}
           />
@@ -621,6 +628,7 @@ export function SodaxSettingsModal({ open, onOpenChange }: { open: boolean; onOp
             value={draft.apiKey}
             defaultValue={defaults.apiKey}
             secret
+            placeholder={envSodaxApiKey ? 'Set by VITE_SODAX_API_KEY — hidden' : 'Not set'}
             hint={
               envSodaxApiKey
                 ? 'x-api-key on every backend call. Left empty it inherits VITE_SODAX_API_KEY, which is never shown here.'
