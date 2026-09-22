@@ -1612,7 +1612,11 @@ export class LeverageYieldService {
     // whole intent. Clamp rather than override, since a per-call timeout *replaces* the configured
     // one and would otherwise lengthen the request for a consumer who configured something stricter.
     const timeout = Math.min(RECONCILE_TIMEOUT_MS, this.backendApi.requestTimeoutMs);
-    const intent = await this.backendApi.getIntentByTxHash(request.intent_tx_hash, { timeout });
+    // The override keys this leg too — a third request, on the data API rather than the leverage-yield
+    // one, and whether that deployment checks a key must not be assumed here. No `|| this.config.apiKey`
+    // as on the solver leg: `BackendApiService` bakes the instance key into its headers, and an empty
+    // string sends no header at all, so both fall back on their own.
+    const intent = await this.backendApi.getIntentByTxHash(request.intent_tx_hash, { timeout, apiKey });
     const settled = intent.ok
       ? intent.value.events.filter(isFillEvent).find(fill => fill.intentState.remainingInput === '0')
       : undefined;
@@ -1664,9 +1668,9 @@ export class LeverageYieldService {
    * A point-in-time read; poll it yourself, or use dapp-kit's `useLeverageYieldDetailedStatus`.
    *
    * @param params - `srcChainKey` and `srcTxHash` of the source-chain vault-swap transaction.
-   * @param config - Optional per-request override. Its `apiKey` reaches every authenticated leg —
-   *   the backend read and the solver read — so one override keys the whole call. The relay leg is
-   *   unauthenticated and takes none.
+   * @param config - Optional per-request override. Its `apiKey` reaches every keyed leg — the
+   *   submit-tx record read, the solver read, and the durable-intent read a solver `NOT_FOUND` falls
+   *   back to — so one override keys the whole call. The relay leg is unauthenticated and takes none.
    * @returns A `Result` containing a {@link DetailedLeverageYieldStatus}. Fails with `LOOKUP_FAILED`
    *   when no source can answer yet. Branch on `error.context.reason`:
    *   `DETAILED_STATUS_NOT_DELIVERED` is the ambiguous miss a caller should bound with a retry

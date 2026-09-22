@@ -1936,6 +1936,22 @@ describe('LeverageYieldService.getDetailedStatus', () => {
     expect(mocks.solverGetStatus.mock.calls[0]?.[4]).toBe('per-action-key');
   });
 
+  it('sends the per-request key to the durable-record read behind a solver NOT_FOUND', async () => {
+    // The reconcile is a third request, and on another service — a key that is not also the instance
+    // key would silently drop off the one leg that can prove a forgotten intent was filled.
+    backendFails('not found', 404);
+    packets(delivered);
+    solverSays(SolverIntentStatusCode.NOT_FOUND);
+    const intentSpy = vi
+      .spyOn(sodaxDS.api, 'getIntentByTxHash')
+      .mockResolvedValueOnce({ ok: true, value: { events: [] } } as never);
+
+    await sodaxDS.leverageYield.getDetailedStatus(key, { apiKey: 'per-action-key' });
+
+    // The clamped reconcile timeout still rides along; the key is additional, not a replacement.
+    expect(intentSpy.mock.calls[0]?.[1]).toMatchObject({ apiKey: 'per-action-key', timeout: expect.any(Number) });
+  });
+
   it.each([401, 403])('treats a rejected API key as terminal instead of degrading (%i)', async status => {
     backendFails('rejected', status);
 
