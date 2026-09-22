@@ -98,16 +98,19 @@ registry, custom recipients, exact-output quotes, and a full transaction-history
 | `VITE_EMBED_ORIGIN` | Stable origin for the hosted widget. Set this before distributing copied embeds. |
 | `VITE_SWAPS_API_KEY` | Optional public browser API key, sent through the SDK. Never use a privileged key. |
 | `VITE_WALLETCONNECT_PROJECT_ID` | Enables the EVM WalletConnect connector; configure allowed origins in its dashboard. |
-| `VITE_SOLANA_RPC_URL` | Browser-approved Solana mainnet RPC for both SDK balance reads and wallet signing/broadcast. Configure allowed origins and public-key restrictions with your RPC provider. |
+| `VITE_SOLANA_RPC_URL` | Overrides the built-in Solana mainnet endpoint used for both SDK balance reads and wallet signing/broadcast. Optional. Configure allowed origins and public-key restrictions with your RPC provider. |
 | `VITE_PARTNER_FEE_RECIPIENT` | Partner's Sonic fee address. Configure with the basis-point rate below. |
 | `VITE_PARTNER_FEE_BPS` | Integer basis points, within `FEE_BPS_MAX` in `src/lib/fee.ts`. Invalid fee configuration blocks execution. |
 | `VITE_GTM_ID` | Optional analytics container. Unset means no analytics container loads. |
 | `VITE_GTM_IN_EMBED` | Set to `1` only when analytics should also load inside partner frames. |
 
 All Vite variables are public browser configuration; never put a private RPC credential here.
-Without `VITE_SOLANA_RPC_URL`, Solana uses the SDK's public endpoint, which may reject browser traffic
-with HTTP 403 or rate-limit it. Set a browser-approved mainnet endpoint and rebuild/restart the app.
-Other networks retain their SDK RPC defaults; validate those against expected production traffic.
+Solana is the one network the app does not leave on its SDK default: that endpoint answers browser
+traffic with HTTP 403, which surfaces as an empty balance and a refused swap rather than as an
+outage, so `src/config.ts` falls back to a working public endpoint. Set `VITE_SOLANA_RPC_URL` to
+put a keyed provider in its place, and rebuild — Vite inlines these at build time, so changing the
+variable without a rebuild changes nothing. Other networks retain their SDK RPC defaults; validate
+those against expected production traffic.
 
 ## Analytics
 
