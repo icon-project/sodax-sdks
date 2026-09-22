@@ -95,8 +95,10 @@ All swap methods are accessible through `sodax.swaps`:
 - `createIntent(params)` — Create an intent on the source spoke chain; supports both signed (`raw: false`) and raw (`raw: true`) modes
 - `createLimitOrder(params)` — Full end-to-end limit order (no deadline, must be cancelled manually); signed execution only
 - `createLimitOrderIntent(params)` — Create a limit order intent only (no relay/solver notify); supports raw and signed modes
-- `submitIntent(payload)` — Submit a spoke tx to the relay API (low-level, called automatically by `swap`)
-- `postExecution(request)` — Notify the solver that an intent is live on the hub chain (low-level, called automatically by `swap`)
+- `submitIntent(payload)` — Submit a spoke tx to the relay API (low-level, called automatically by `swap` on its fallback path)
+- `postExecution(request)` — Notify the solver that an intent is live on the hub chain (low-level, called automatically by `swap` on its fallback path)
+
+Driving these steps yourself instead of calling `swap`? See [Migrate a manual swap to the backend submit-tx flow](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/MIGRATE_SWAP_TO_SUBMIT_TX.md).
 
 #### Backend 2-step submit
 
@@ -653,11 +655,12 @@ if (createIntentResult.ok) {
 The `swap` method is the recommended way to perform a complete cross-chain swap. It orchestrates the full lifecycle automatically:
 
 1. Calls `createIntent` to submit the intent transaction on the source spoke chain
-2. Verifies the spoke transaction landed on-chain
-3. For non-hub source chains: submits the spoke tx to the relayer and waits for the relay packet to land on the hub (Sonic)
-4. Calls `postExecution` to notify the solver, triggering it to fill the intent
+2. **Backend attempt** (default, `swaps.useBackendSubmitTx`): hands the broadcast tx to `sodax.api.swaps.submitTx` — which verifies, relays and post-executes server-side — then polls submit-tx status until the intent is `solved`
+3. **On any non-success, falls back** to the fully client-side path: verifies the spoke transaction landed on-chain, then for non-hub source chains submits the spoke tx to the relayer and waits for the relay packet to land on the hub (Sonic), then calls `postExecution` to notify the solver, triggering it to fill the intent
 
-`swap` is signed-only (no `raw: true` mode) — use `createIntent` if you need raw transaction data.
+Both paths return an identical `SwapResponse`. See [Backend 2-step submit](#backend-2-step-submit) for the flag, the fallback conditions and why re-relaying is safe.
+
+`swap` is signed-only (no `raw: true` mode) — use `createIntent` if you need raw transaction data. If you orchestrate the steps yourself instead of calling `swap`, see [Migrate a manual swap to the backend submit-tx flow](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/MIGRATE_SWAP_TO_SUBMIT_TX.md) — the backend attempt and the fallback are not automatic on that path.
 
 ```typescript
 import { Sodax, ChainKeys } from '@sodax/sdk';
@@ -881,7 +884,7 @@ if (cancelRelayData.ok) {
 
 ## Submit Intent to Relay API
 
-Called automatically by `swap`. Use this manually if you called `createIntent` separately.
+Called automatically by `swap` — but only on its **fallback** path; the backend attempt relays server-side instead. Use this manually if you called `createIntent` separately. If you are orchestrating the steps yourself, try `sodax.api.swaps.submitTx` first and keep this as your fallback — see [Migrate a manual swap to the backend submit-tx flow](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/MIGRATE_SWAP_TO_SUBMIT_TX.md).
 
 ```typescript
 import type { IntentRelayRequest } from '@sodax/sdk';
@@ -945,7 +948,7 @@ if (intentResult.ok) {
 
 ## Post Execution to Solver API
 
-Called automatically by `swap` after the relay packet lands on the hub. Use this manually when orchestrating the swap steps yourself.
+Called automatically by `swap` after the relay packet lands on the hub — on its **fallback** path only; the backend attempt post-executes server-side. Use this manually when orchestrating the swap steps yourself; [Migrate a manual swap to the backend submit-tx flow](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/MIGRATE_SWAP_TO_SUBMIT_TX.md) shows where it belongs in the two-path model.
 
 ```typescript
 import type { SolverExecutionRequest } from '@sodax/sdk';

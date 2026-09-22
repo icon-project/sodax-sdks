@@ -280,20 +280,32 @@ const { tx: spokeTxHash, intent, relayData } = result.value;
 
 ### Backend submit-tx flow
 
+Submitting is only the first half. `swap()` also polls to a terminal status and falls back to the client-side relay on any non-success — code that drives the steps itself must do both. Full recipe: [`../recipes/manual-submit-tx-with-fallback.md`](../recipes/manual-submit-tx-with-fallback.md).
+
 ```ts
 const submitResult = await sodax.api.swaps.submitTx({
   txHash: spokeTxHash as string,
   srcChainKey: ChainKeys.ARBITRUM_MAINNET,
-  walletAddress: '0x…',
+  walletAddress: '0x…',           // the SOURCE address that signed
   intent,                         // IntentRequestV2 — CreateIntentResult.value.intent passes through
   relayData: relayData.payload,   // string (not the object)
 });
 
-if (!submitResult.ok) {
+// `ok` is transport-level only; a 200 can still report the submission was not queued.
+if (!submitResult.ok || !submitResult.value.success) {
   // submitResult.error.code: 'EXTERNAL_API_ERROR' with context.api: 'swaps'
-  return;
+  return fallbackToClientSideRelay();
 }
+
+// Then poll `sodax.api.swaps.getSubmitTxStatus({ txHash, srcChainKey })`:
+//   status 'solved' AND result.dstIntentTxHash AND result.intent_hash → done
+//   status 'failed', or `abandonedAt` set                             → terminal, fall back
+//   401/403 (isAuthFailure)                                           → stop polling, fall back
+//   pending | relaying | relayed | posting_execution | posted_execution → keep polling
+//   budget exhausted                                                  → fall back
 ```
+
+Do NOT call `verifyTxHash` before submitting — the backend verifies itself, so a client-side confirmation wait only delays every backend success. Verification belongs to the fallback path. The fallback relay also needs its own FRESH timeout, never the remainder of the backend attempt's.
 
 ### Raw-tx flow
 
@@ -373,6 +385,7 @@ Solver-specific context on `EXTERNAL_API_ERROR`:
 
 ## Cross-references
 
+- Driving the steps yourself (backend submit-tx + fallback): [`../recipes/manual-submit-tx-with-fallback.md`](../recipes/manual-submit-tx-with-fallback.md).
 - v1 → v2 swap migration: [`features/swap.md`](../../../migration-v1-to-v2/knowledge/features/swap.md).
 - Error model: [`../architecture.md`](../architecture.md) § 8 and [`../reference/`](../reference/) § 3.
 - Stellar destinations require a trustline first: [`../chain-specifics.md`](../chain-specifics.md) § "Stellar trustline".

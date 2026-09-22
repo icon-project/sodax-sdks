@@ -14,6 +14,7 @@ For a shorter complete ESM example, start with [Your first swap](https://github.
 | Submit a swap | [Execution](#step-7-execute-the-swap) |
 | Track settlement | [Intent status](#step-8-check-intent-status) |
 | Handle execution failures | [Errors](#step-9-handle-errors) |
+| Orchestrate the steps yourself | [Migrate a manual swap to submit-tx](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/MIGRATE_SWAP_TO_SUBMIT_TX.md) |
 | Look up fields and error codes | [Swap reference](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SWAPS.md) |
 
 ## Prerequisites
