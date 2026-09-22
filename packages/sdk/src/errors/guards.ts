@@ -69,7 +69,6 @@ export function isAuthFailure(error: unknown): boolean {
 export type SolverErrorRetryability = 'retryable' | 'not-retryable' | 'unknown';
 
 const RETRYABLE_SOLVER_CODES: ReadonlySet<number> = new Set([
-  SolverIntentErrorCode.NO_PATH_FOUND, // liquidity-dependent, so a later attempt may route
   SolverIntentErrorCode.STOPPED, // solver is not serving; retry with backoff
 ]);
 
@@ -87,9 +86,11 @@ const NOT_RETRYABLE_SOLVER_CODES: ReadonlySet<number> = new Set([
  * repeating the same request could succeed.
  *
  * Three-state because only some codes carry a sourced verdict. `'unknown'` means the solver contract does
- * not say — treat it as the caller's judgement call, not as a licence to retry. Notably
- * `NOT_ENOUGH_PRIVATE_LIQUIDITY` (transient) and `QUOTE_NOT_FOUND` (terminal) share `-8`, so that code is
- * unclassifiable by construction rather than merely undocumented.
+ * not say — treat it as the caller's judgement call, not as a licence to retry. Two codes are ambiguous by
+ * construction rather than merely undocumented, and both classify as `'unknown'`:
+ * `NOT_ENOUGH_PRIVATE_LIQUIDITY` (transient) and `QUOTE_NOT_FOUND` (terminal) share `-8`; and
+ * `NO_PATH_FOUND` answers both a dead pair (liquidity-dependent, so retrying may route) and a leg that is
+ * merely too small, where retrying the same amount can never succeed — see `isNoRouteRefusal`.
  *
  * @example
  *   if (getSolverErrorRetryability(result.error.detail.code) === 'not-retryable') {

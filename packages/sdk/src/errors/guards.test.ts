@@ -47,11 +47,14 @@ describe('isCodeMember', () => {
 });
 
 describe('getSolverErrorRetryability', () => {
-  it.each([
-    ['NO_PATH_FOUND', SolverIntentErrorCode.NO_PATH_FOUND],
-    ['STOPPED', SolverIntentErrorCode.STOPPED],
-  ])('classifies %s as retryable', (_name, code) => {
-    expect(getSolverErrorRetryability(code)).toBe('retryable');
+  it('classifies STOPPED as retryable', () => {
+    expect(getSolverErrorRetryability(SolverIntentErrorCode.STOPPED)).toBe('retryable');
+  });
+
+  // -4 answers both a dead pair and a leg that is merely too small (see isNoRouteRefusal). Retrying the
+  // same amount never fixes the second, so it must not be reported as flatly retryable.
+  it('classifies the ambiguous NO_PATH_FOUND as unknown', () => {
+    expect(getSolverErrorRetryability(SolverIntentErrorCode.NO_PATH_FOUND)).toBe('unknown');
   });
 
   it.each([

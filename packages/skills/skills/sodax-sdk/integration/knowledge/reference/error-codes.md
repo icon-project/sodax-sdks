@@ -81,9 +81,9 @@ type SolverErrorRetryability = 'retryable' | 'not-retryable' | 'unknown';
 declare function getSolverErrorRetryability(code: number | undefined): SolverErrorRetryability;
 ```
 
-- `'retryable'` — `NO_PATH_FOUND` (`-4`, liquidity-dependent) and `STOPPED` (`-16`, solver not serving). Back off and retry the same request.
+- `'retryable'` — `STOPPED` (`-16`, solver not serving). Back off and retry the same request.
 - `'not-retryable'` — the quote-service block `-20`…`-25` (invalid quote type / tokens / amount, input too low, unimplemented algorithm, unknown dex id). The request itself has to change.
-- `'unknown'` — everything the solver contract does not classify, plus `undefined`. This includes `-8`, which `NOT_ENOUGH_PRIVATE_LIQUIDITY` and `QUOTE_NOT_FOUND` share, making it unresolvable by code. Treat `'unknown'` as "decide for yourself", not as permission to retry.
+- `'unknown'` — everything the solver contract does not classify, plus `undefined`, plus two codes that are ambiguous by construction: `-8`, shared by `NOT_ENOUGH_PRIVATE_LIQUIDITY` and `QUOTE_NOT_FOUND`, and `-4` (`NO_PATH_FOUND`), which answers both a dead pair and a leg that is merely too small — retrying the same amount fixes only the first. Treat `'unknown'` as "decide for yourself", not as permission to retry.
 
 ---
 
