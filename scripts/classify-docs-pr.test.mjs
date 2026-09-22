@@ -47,6 +47,7 @@ const createRepo = t => {
 
   // Engineering tabs, generated and hand-written.
   write(root, 'docs/developers/how-to/estimate_gas.md', generated('Estimate Gas', 'packages/sdk/docs/ESTIMATE_GAS.md'));
+  write(root, 'docs/developers/how-to/payout-wallet.md', page('Partner payout wallet'));
   write(root, 'docs/developers/technical-overview/intro.md', page('Technical Overview'));
   write(root, 'docs/developers/http-api/swaps.md', page('Swaps API'));
   write(root, 'docs/solana/index.md', page('Solana'));
@@ -135,6 +136,14 @@ test('false for an HTTP API page, hand-written but engineering-owned', t => {
   const head = commit(root, 'reword the api page');
 
   assert.match(classify(root, base, head), /marketing_only=false[\s\S]*is not a marketing-tab page/);
+});
+
+test('false for a payout-wallet wording change, even though it only touches docs', t => {
+  const { root, base } = createRepo(t);
+  write(root, 'docs/developers/how-to/payout-wallet.md', page('Partner payout wallet') + 'Use partnerFee.address.\n');
+  const head = commit(root, 'clarify the fee receiver');
+
+  assert.match(classify(root, base, head), /marketing_only=false[\s\S]*payout-wallet\.md is not a marketing-tab page/);
 });
 
 test('false for a network guide', t => {
@@ -272,6 +281,37 @@ test('writes the verdict to GITHUB_OUTPUT', t => {
   });
 
   assert.match(readFileSync(outFile, { encoding: 'utf8' }), /marketing_only=true/);
+});
+
+const outputs = (root, base, head) => {
+  const outFile = join(root, 'gh-output');
+  execFileSync('bash', [SCRIPT, base, head], {
+    cwd: root,
+    encoding: 'utf8',
+    env: { ...process.env, GITHUB_OUTPUT: outFile },
+  });
+  return readFileSync(outFile, { encoding: 'utf8' });
+};
+
+// The list the approval titles the PR from, so a wrong one renames a page marketing did edit.
+test('lists every accepted page in GITHUB_OUTPUT', t => {
+  const { root, base } = createRepo(t);
+  write(root, 'docs/introduction.md', page('Introduction') + 'more\n');
+  write(root, 'docs/resources/blog.md', page('Blog') + 'more\n');
+  const head = commit(root, 'reword two');
+
+  assert.match(outputs(root, base, head), /pages<<CLASSIFY_PAGES\ndocs\/introduction\.md\ndocs\/resources\/blog\.md\nCLASSIFY_PAGES/);
+});
+
+test('lists no pages on a false verdict, so no title is written from a rejected diff', t => {
+  const { root, base } = createRepo(t);
+  write(root, 'docs/introduction.md', page('Introduction') + 'more\n');
+  write(root, 'packages/sdk/src/index.ts', 'export const n = 2;\n');
+  const head = commit(root, 'reword and touch source');
+
+  const written = outputs(root, base, head);
+  assert.match(written, /marketing_only=false/);
+  assert.match(written, /pages<<CLASSIFY_PAGES\nCLASSIFY_PAGES/);
 });
 
 // Against the real docs.json, because nothing else keeps the allowlist and the tabs in step:
