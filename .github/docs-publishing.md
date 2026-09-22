@@ -21,14 +21,16 @@ editor marks a page as generated. Marketing owns 18 pages across four tabs:
 | Help | `contact`, `developers/faq` |
 
 Everything else is engineering's — **API, SDK, How To, Protocol**, which is `docs/developers/`
-(minus `faq`) and `docs/solana/`. That covers all 25 `generatedFrom` pages *and* the
+(minus `faq`) and `docs/solana/`. That covers every `generatedFrom` page *and* the
 hand-written feature pages beside them: HTTP API reference, technical overview, network
 guides, deployments, security. A reworded feature page still describes SDK behaviour, so it
 goes to an engineer.
 
 `MARKETING_PAGE` in [`scripts/classify-docs-pr.sh`](scripts/classify-docs-pr.sh) is an
-allowlist, so a new directory under `docs/` is engineering's until someone adds it there. The
-marketing block in [`CODEOWNERS`](CODEOWNERS) holds the same set; change both together.
+allowlist, so a new directory under `docs/` — the `Widget` tab, for instance — is
+engineering's until someone adds it there. This is the only place the boundary is written.
+[`CODEOWNERS`](CODEOWNERS) deliberately does **not** mirror it: a dashboard publish that needs
+a human is one this classifier rejected, and routing those to engineering is the point.
 
 ## What gates what
 
@@ -136,11 +138,15 @@ pages` on `main`.
 Editing the title fires `edited`, which **Lint PR** listens for and **Docs auto-merge** does
 not, so there is no loop.
 
-**Known, and not worth a repository-wide change:** `Validate PR title` stays red on a Mintlify
-PR. It checks the *commit* message too, and that one is Mintlify's, which we cannot change
-without force-pushing marketing's branch. The check is advisory — it is not in the ruleset's
-required checks, so it blocks nothing, and the subject that reaches `main` is the composed one
-either way.
+**Validate PR title** does not run on a dashboard publish. It checks the *commit* message too,
+and that one is Mintlify's `Updated mintlify pages`, which we cannot change without
+force-pushing marketing's branch — so the check could only ever be red there, whatever the
+title says. [`lint-pr.yaml`](workflows/lint-pr.yaml) skips the job for the shared
+`usr-icon-foundation` account and for Mintlify's `sodax/draft-*` branches, matching on both so
+an editor who authorizes GitHub individually is still covered. Skipping is safe because the
+check is not in the ruleset's required checks, and the subject reaching `main` is the composed
+one either way. A red check marketing is told to ignore is worse than no check: it trains them
+past **Docs site**, which is the one that matters.
 
 [`approve-docs-pr.sh`](scripts/approve-docs-pr.sh) binds both privileged calls to the commit
 the classifier read: it re-reads the live head and bails if it has moved, then pins the
@@ -180,38 +186,43 @@ Consequences worth knowing before the first PR:
   which classifies as false and goes to a reviewer.
 - **Renames and deletions are not auto-merged.** Both move published URLs.
 - **The generatedFrom check is now defence in depth.** No allowlisted page is generated today,
-  so the path allowlist already excludes all 25. The check catches the case where one of
-  marketing's pages later becomes generated.
+  so the path allowlist already excludes every one of them. The check catches the case where
+  one of marketing's pages later becomes generated.
 
-## Steps only a repo admin or org owner can do
+## Steps only a repo admin can do
 
-None of these are in the diff.
+None of these are in the diff. There is no team to create and no CODEOWNERS prerequisite:
+`require_code_owner_review` is `false`, so CODEOWNERS routes reviewers and gates nothing.
 
-1. **Create the team** `icon-project/docs-marketing` and give it **write** access to
-   `icon-project/sodax-sdks`. A team with no write access is not a valid code owner, and an
-   unresolvable owner makes the whole CODEOWNERS file invalid — so the CODEOWNERS change in
-   this branch must not merge before the team exists.
-2. **Enable auto-merge** on the repository (Settings → General → Pull Requests). It is
+1. **Enable auto-merge** on the repository (Settings → General → Pull Requests). It is
    currently off, and `gh pr merge --auto` fails without it.
-3. **Apply the ruleset PATCH** above. Requires repo admin.
-4. **Create the GitHub App** for the approval, owned by `icon-project` and installed on this
+2. **Apply the ruleset PATCH** above.
+3. **Create the GitHub App** for the approval, owned by `icon-project` and installed on this
    repo, with repository permissions **Contents: write**, **Pull requests: write**,
    **Metadata: read**. Pull requests: write submits the review; enabling auto-merge needs
    repository write, which for an App is Contents: write. Do not add it as a ruleset bypass
    actor — it satisfies the approval, it does not skip it, and with `main` still requiring a
    PR the write permission cannot push there directly.
-5. **Store its credentials** as repository secrets `DOCS_PUBLISH_APP_ID` and
+4. **Store its credentials** as repository secrets `DOCS_PUBLISH_APP_ID` and
    `DOCS_PUBLISH_APP_PRIVATE_KEY` (the full PEM). The private key is a credential that can
    approve merges to `main`: it belongs in secrets only, and rotates on a schedule.
-6. **Grant the Mintlify App write access** if it does not have it, so it can push the branch
-   it offers to create.
-No repository merge or title-lint setting changes. `squash_merge_commit_title` stays
-`COMMIT_OR_PR_TITLE` and `lint-pr.yaml` keeps its single-commit options; the commit subject is
-named per merge instead, so an SDK pull request behaves exactly as it did before.
 
-A machine-user PAT works in place of steps 4–5, but it is a long-lived credential attached to
+The Mintlify App already has the write access it needs — it is opening these pull requests
+today. No repository merge setting changes either: `squash_merge_commit_title` stays
+`COMMIT_OR_PR_TITLE`, and the commit subject is named per merge instead, so an SDK pull
+request behaves exactly as it did before.
+
+A machine-user PAT works in place of steps 3–4, but it is a long-lived credential attached to
 a seat and tied to one person's account. The App is scoped to this repo and its tokens expire
 in an hour.
+
+## One prerequisite for marketing, not for the repo
+
+**Every editor must authorize GitHub at `app.mintlify.com/settings/account`.** Until they do,
+Mintlify commits under the single shared `usr-icon-foundation` account and no page history
+says who changed what. It also matters to the ruleset: `require_extra_approval_for_unattributed_changes`
+is on, and an individually attributed commit cannot trip it. Mintlify support confirmed the
+per-user attribution behaviour in August.
 
 ## Verify on the first PR
 
@@ -219,21 +230,23 @@ in an hour.
 reviews toward a required approving review, which is why the App exists. Confirm on a
 throwaway PR:
 
-1. Edit one marketing page. Expect: App approval, **Docs site** green, squash-merged with no
+1. **Do this one first.** From the dashboard, publish an edit to one marketing page and check
+   whether `require_extra_approval_for_unattributed_changes` (on, and a GitHub preview)
+   demands a second approval. It is documented as applying to unattributed Copilot pull
+   requests, so it should not — but if it does, one App approval is not enough and the design
+   needs revisiting before the App is built. Publishing as an editor who has authorized GitHub
+   is the configuration this lane assumes.
+2. Edit one marketing page. Expect: App approval, **Docs site** green, squash-merged with no
    human involved.
-2. Push `packages/sdk/src/**` onto that same PR. Expect: the ruleset dismisses the approval on
+3. Push `packages/sdk/src/**` onto that same PR. Expect: the ruleset dismisses the approval on
    the push, the workflow turns auto-merge off, and the PR waits for a reviewer.
-3. Edit a page in the SDK, How To or Protocol tab on a new PR. Expect: no App token, no
+4. Edit a page in the SDK, How To or Protocol tab on a new PR. Expect: no App token, no
    approval, a green auto-merge job even without App secrets, and the PR waits for a human.
-4. On an SDK PR, leave an approval from a bot that is not the docs App (or enable auto-merge
+5. On an SDK PR, leave an approval from a bot that is not the docs App (or enable auto-merge
    by hand) while App secrets are still unset. Expect: a green auto-merge job, that approval
    or human-queued merge left in place, and the PR waiting for a human.
-5. On the PR from step 2, confirm the title went back to the one Mintlify wrote and the
+6. On the PR from step 3, confirm the title went back to the one Mintlify wrote and the
    generated page list is gone from the description.
-6. Check whether `require_extra_approval_for_unattributed_changes` (on, and a GitHub preview)
-   fires on a Mintlify-authored PR. It is documented as applying to unattributed Copilot pull
-   requests, so it should not — but if it demands a second approval, the single App approval
-   will not be enough.
 
 The marketing-facing Notion card (Marketing → *Action: Editing docs.sodax.com*) already
 describes this flow, and carries a banner saying it is not switched on yet. Clear that banner
