@@ -1,7 +1,7 @@
 import { ChainKeys, type XToken } from '@sodax/dapp-kit';
 import { describe, expect, it } from 'vitest';
 import { NO_BRAND } from './brand';
-import { embedUrl, readUrlState, toSearch } from './urlState';
+import { embedUrl, readUrlState, toBrowserSearch, toSearch } from './urlState';
 
 const SRC_CHAIN = ChainKeys.BASE_MAINNET;
 const DST_CHAIN = ChainKeys.SOLANA_MAINNET;
@@ -132,6 +132,55 @@ describe('toSearch', () => {
 
   it('omits a token the chain could not supply', () => {
     expect(toSearch({ ...base, srcToken: undefined })).not.toContain('srcToken=');
+  });
+});
+
+describe('toBrowserSearch', () => {
+  const defaults = {
+    srcChain: SRC_CHAIN,
+    dstChain: DST_CHAIN,
+    srcSymbol: 'USDC',
+    dstSymbol: 'WETH',
+    amount: '1.5',
+    slippage: '0.5',
+  };
+  const base = {
+    srcChain: SRC_CHAIN,
+    dstChain: DST_CHAIN,
+    srcToken: USDC,
+    dstToken: WETH,
+    amount: '1.5',
+    slippage: '0.5',
+  };
+
+  it('writes nothing for a form nobody has touched', () => {
+    expect(toBrowserSearch(base, defaults)).toBe('');
+  });
+
+  it('writes only what the visitor changed', () => {
+    expect(toBrowserSearch({ ...base, amount: '3' }, defaults)).toBe('amount=3');
+  });
+
+  it('omits a default symbol reached on another chain, which the reader resolves the same way', () => {
+    const moved = { ...base, dstChain: SRC_CHAIN };
+
+    expect(toBrowserSearch(moved, defaults)).toBe(`dstChain=${SRC_CHAIN}`);
+  });
+
+  // What it leaves out is what the widget seeds anyway, so the pair survives the shorter URL.
+  it('reads back as the same form through the defaults', () => {
+    const changed = { ...base, srcToken: WETH };
+    const read = readUrlState(`?${toBrowserSearch(changed, defaults)}`);
+
+    expect(read.srcSymbol ?? defaults.srcSymbol).toBe('WETH');
+    expect(read.srcChain ?? defaults.srcChain).toBe(SRC_CHAIN);
+    expect(read.amount ?? defaults.amount).toBe('1.5');
+  });
+
+  it('keeps styling and restrictions, which have no default to fall back to', () => {
+    const styled = { ...base, brand: { ...NO_BRAND, accent: '#7c3aed' }, embed: true };
+
+    expect(toBrowserSearch(styled, defaults)).toBe('embed=1&accent=7c3aed');
   });
 });
 
