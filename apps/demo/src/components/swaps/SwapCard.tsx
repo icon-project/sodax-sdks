@@ -13,7 +13,12 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { calculateExchangeRate, formatMutationFailureMessage, formatTokenAmount } from '@/lib/utils';
+import {
+  calculateExchangeRate,
+  formatMutationFailureMessage,
+  formatSolverQuoteError,
+  formatTokenAmount,
+} from '@/lib/utils';
 import { parseUnits, formatUnits } from 'viem';
 import BigNumber from 'bignumber.js';
 import { ArrowDownUp, ArrowLeftRight, Loader2 } from 'lucide-react';
@@ -565,7 +570,9 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
         </div>
 
         <div className="">
-          {quoteQuery.data?.ok === false && <div className="text-red-500">{quoteQuery.data.error.detail.message}</div>}
+          {quoteQuery.data?.ok === false && (
+            <div className="text-red-500">{formatSolverQuoteError(quoteQuery.data.error)}</div>
+          )}
         </div>
 
         {availableHookKind && (

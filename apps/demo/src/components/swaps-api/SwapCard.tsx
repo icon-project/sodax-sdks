@@ -57,6 +57,7 @@ import { loadSwapsApiSelection, saveSwapsApiSelection } from '@/components/swaps
 import { toIntentRequest, toXToken } from '@/components/swaps-api/lib/mappers';
 import {
   formatSwapsApiError,
+  formatSwapsApiQuoteError,
   retryUnlessSwapsApiAuthFailure,
   useSwapsApiClient,
 } from '@/components/swaps-api/lib/swapsApi';
@@ -742,9 +743,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
         )}
 
         <div className="">
-          {quoteQuery.error && (
-            <div className="text-red-500">{formatSwapsApiError(quoteQuery.error, 'Quote failed')}</div>
-          )}
+          {quoteQuery.error && <div className="text-red-500">{formatSwapsApiQuoteError(quoteQuery.error)}</div>}
         </div>
 
         <Dialog

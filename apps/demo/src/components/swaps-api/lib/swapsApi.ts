@@ -1,8 +1,8 @@
 import { SwapsApi, SwapsApiError } from '@sodax/swaps-api';
-import { DEFAULT_BACKEND_API_TIMEOUT, isAuthStatus } from '@sodax/dapp-kit';
+import { DEFAULT_BACKEND_API_TIMEOUT, isAmountTooSmallRefusal, isAuthStatus } from '@sodax/dapp-kit';
 import { useMemo } from 'react';
 import { effectiveSodaxApiKey, effectiveSwapsApiBaseUrl } from '@/lib/sodaxSettings';
-import { formatMutationFailureMessage } from '@/lib/utils';
+import { AMOUNT_TOO_SMALL_MESSAGE, formatMutationFailureMessage } from '@/lib/utils';
 import { useAppStore } from '@/zustand/useAppStore';
 
 /**
@@ -52,6 +52,14 @@ function backendMessage(body: unknown): string | undefined {
 export function formatSwapsApiError(error: unknown, fallback: string): string {
   const fromBackend = error instanceof SwapsApiError ? backendMessage(error.context.body) : undefined;
   return fromBackend ?? formatMutationFailureMessage(error, fallback);
+}
+
+/**
+ * {@link formatSwapsApiError} for the quote query. The backend relays the solver's too-small refusal
+ * verbatim ("Failed to get quote: Input amount too low"), which is not something to show a user.
+ */
+export function formatSwapsApiQuoteError(error: unknown): string {
+  return isAmountTooSmallRefusal(error) ? AMOUNT_TOO_SMALL_MESSAGE : formatSwapsApiError(error, 'Quote failed');
 }
 
 /**

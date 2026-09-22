@@ -83,6 +83,8 @@ export function getSwapQuoteQueryOptions({
  * - The quote is automatically refreshed every 3 seconds
  * - The query is disabled when payload is undefined
  * - Returns the SDK `Result` as `data`; branch on `data?.ok` rather than reading `isError`
+ * - An amount below the solver's floor fails with `isAmountTooSmallRefusal(data.error)`; it is
+ *   terminal for that amount, so ask for a larger one rather than waiting on the next poll
  */
 export const useQuote = ({ params, queryOptions }: UseQuoteParams = {}): UseQueryResult<SwapQuote> => {
   const { sodax } = useSodaxContext();
