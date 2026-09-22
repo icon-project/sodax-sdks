@@ -11,6 +11,7 @@ import { defaultUseBackendSubmitTx, productionSolverConfig, stagingSolverConfig 
 import {
   DEFAULT_BRIDGE_API_BASE_URL,
   envBridgeApiBaseUrl,
+  envLeverageYieldApiBaseUrl,
   envSodaxApiKey,
   envSwapsApiBaseUrl,
   bpsToPercentText,
@@ -30,10 +31,11 @@ const URL_FIELDS = [
   'apiBaseUrl',
   'swapsApiBaseUrl',
   'bridgeApiBaseUrl',
+  'leverageYieldApiBaseUrl',
   'relayerApiEndpoint',
 ] as const;
 const ADDRESS_FIELDS = ['intentsContract', 'protocolIntentsContract', 'partnerFeeAddress'] as const;
-const TEXT_FIELDS = [...URL_FIELDS, ...ADDRESS_FIELDS, 'partnerFeePercent', 'apiKey'] as const;
+const TEXT_FIELDS = [...URL_FIELDS, ...ADDRESS_FIELDS, 'partnerFeePercent', 'apiKey', 'leverageYieldApiKey'] as const;
 
 type TextField = (typeof TEXT_FIELDS)[number];
 
@@ -56,6 +58,10 @@ function defaultsFor(env: SolverEnv, gatewayUrl: string = DEFAULT_API_BASE_URL):
     apiBaseUrl: DEFAULT_API_BASE_URL,
     swapsApiBaseUrl: envSwapsApiBaseUrl ?? gatewayUrl,
     bridgeApiBaseUrl: envBridgeApiBaseUrl ?? DEFAULT_BRIDGE_API_BASE_URL,
+    // Unlike bridge's canary default, the leverage-yield API rides the gateway, same as swaps.
+    leverageYieldApiBaseUrl: envLeverageYieldApiBaseUrl ?? gatewayUrl,
+    // Unset means the action inherits the instance key below.
+    leverageYieldApiKey: '',
     // The demo ships no partner fee: unset means the SDK charges nothing.
     partnerFeeAddress: '',
     partnerFeePercent: '',
@@ -84,6 +90,8 @@ function seedDraft(env: SolverEnv, s: SodaxSettings): Draft {
     apiBaseUrl: s.apiBaseUrl ?? defaults.apiBaseUrl,
     swapsApiBaseUrl: s.swapsApiBaseUrl ?? defaults.swapsApiBaseUrl,
     bridgeApiBaseUrl: s.bridgeApiBaseUrl ?? defaults.bridgeApiBaseUrl,
+    leverageYieldApiBaseUrl: s.leverageYieldApiBaseUrl ?? defaults.leverageYieldApiBaseUrl,
+    leverageYieldApiKey: s.leverageYieldApiKey ?? defaults.leverageYieldApiKey,
     partnerFeeAddress: s.partnerFeeAddress ?? defaults.partnerFeeAddress,
     partnerFeePercent: s.partnerFeeBps === null ? defaults.partnerFeePercent : bpsToPercentText(s.partnerFeeBps),
     apiKey: s.apiKey ?? defaults.apiKey,
@@ -148,6 +156,8 @@ function draftToSettings(draft: Draft): SodaxSettings {
     apiBaseUrl: url('apiBaseUrl'),
     swapsApiBaseUrl: url('swapsApiBaseUrl'),
     bridgeApiBaseUrl: url('bridgeApiBaseUrl'),
+    leverageYieldApiBaseUrl: url('leverageYieldApiBaseUrl'),
+    leverageYieldApiKey: norm('leverageYieldApiKey'),
     apiKey: norm('apiKey'),
     relayerApiEndpoint: url('relayerApiEndpoint'),
     partnerFeeAddress: address('partnerFeeAddress'),
@@ -187,6 +197,8 @@ function draftToDebugJson(draft: Draft): string {
       apiBaseUrl: draft.apiBaseUrl.trim(),
       swapsApiBaseUrl: draft.swapsApiBaseUrl.trim(),
       bridgeApiBaseUrl: draft.bridgeApiBaseUrl.trim(),
+      leverageYieldApiBaseUrl: draft.leverageYieldApiBaseUrl.trim(),
+      leverageYieldApiKey: draft.leverageYieldApiKey.trim() ? '(set)' : '(unset)',
       partnerFeeAddress: draft.partnerFeeAddress.trim() || '(unset)',
       // The percent is the input unit; bps is what the SDK and both APIs actually receive.
       partnerFeeBps: percentTextToBps(draft.partnerFeePercent) ?? '(unset)',
@@ -509,6 +521,24 @@ export function SodaxSettingsModal({ open, onOpenChange }: { open: boolean; onOp
             onText="On — backend submit via leverage-yield API"
             offText="Off — client-side relay to the solver"
             onChange={value => set('leverageYieldUseBackendSubmitTx', value)}
+          />
+
+          <TextRow
+            label="Leverage Yield action API key"
+            value={draft.leverageYieldApiKey}
+            defaultValue={defaults.leverageYieldApiKey}
+            error={errors.leverageYieldApiKey}
+            hint="Per-action `extras.apiKey` for the Leverage Yield page's vault swap — keys the submit POST and its status polls over the instance key. Unset inherits that key. The client-side relay path sends none."
+            onChange={value => set('leverageYieldApiKey', value)}
+          />
+
+          <TextRow
+            label="Leverage Yield API base URL"
+            value={draft.leverageYieldApiBaseUrl}
+            defaultValue={defaults.leverageYieldApiBaseUrl}
+            error={errors.leverageYieldApiBaseUrl}
+            hint="Used by the Leverage Yield API page only — override it for a local leverage-yield API. The Leverage Yield SDK page follows the gateway below."
+            onChange={value => set('leverageYieldApiBaseUrl', value)}
           />
 
           <SectionTitle>Partner fee</SectionTitle>

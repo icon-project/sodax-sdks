@@ -107,7 +107,7 @@ function fmtLeverage(multWad: bigint | undefined, digits = 2): string {
 export default function LeverageYieldPage() {
   const { sodax } = useSodaxContext();
   const queryClient = useQueryClient();
-  const { openWalletModal, solverEnvironment, setSolverEnvironment } = useAppStore();
+  const { openWalletModal, solverEnvironment, setSolverEnvironment, sodaxSettings } = useAppStore();
 
   // ─── Vault selection ─────────────────────────────────────────────────────
 
@@ -419,6 +419,9 @@ export default function LeverageYieldPage() {
       const { solverExecutionResponse, intent, intentDeliveryInfo } = await vaultSwap({
         ...intentOrderPayload,
         walletProvider: sourceWalletProvider,
+        // Per-action key from Sodax Settings; omitted entirely when unset, so the backend legs fall
+        // back to the instance key rather than being handed an empty credential.
+        ...(sodaxSettings.leverageYieldApiKey ? { extras: { apiKey: sodaxSettings.leverageYieldApiKey } } : {}),
       });
       setOrders(prev =>
         appendOrder(prev, {
