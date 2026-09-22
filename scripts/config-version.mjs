@@ -139,7 +139,8 @@ if (isMain) {
     } else if (argument === undefined) {
       throw new Error('usage: node scripts/config-version.mjs <version> | --check');
     } else {
-      console.log(configVersionForOrThrow(argument));
+      // A string, not a number: console.log colors numbers under FORCE_COLOR, corrupting the captured value.
+      console.log(String(configVersionForOrThrow(argument)));
     }
   } catch (error) {
     console.error(error.message);
