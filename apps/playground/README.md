@@ -4,6 +4,9 @@ A hosted cross-network swap widget with a visual integration playground. Visitor
 quotes before connecting a wallet. For executable routes they connect, review the receiving address
 and minimum output, approve when needed, and sign inside the widget.
 
+The partner-facing page is [Swap widget](https://docs.sodax.com/widget); this README is the
+repo-side reference behind it.
+
 ## Run
 
 ```bash
@@ -134,8 +137,6 @@ Storage blocking or simultaneous tabs prevent an exactly-once analytics guarante
 
 ## Not yet
 
-- **Docs.** The widget is not yet on docs.sodax.com: it has no `docs/` page, no
-  `scripts/docs-pages-map.json` entry and no `docs.json` nav entry. Planned, not done.
 - **CI.** `Build Apps` in `.github/workflows/ci.yml` does not build this app, so a broken
   production build is not caught before deploy.
 - **Bundle.** The entry chunk is a single ~10.6 MB (~2.5 MB gzipped) file with no code splitting,
@@ -182,7 +183,7 @@ both `event.origin` and `event.source === frame.contentWindow` in a host listene
 
 | Outgoing message | Meaning |
 | --- | --- |
-| `{ type: 'sodax:resize', height }` | Content height; generated listeners clamp it to 360–1600px |
+| `{ type: 'sodax:resize', height }` | Content height; generated listeners clamp it to `EMBED_MIN_HEIGHT`–1600px |
 | `{ type: 'sodax:ready' }` | Widget mounted; does not assert that assets or wallets are ready |
 | `{ type: 'sodax:swap', status: 'started' }` | User confirmed a review and execution checks began |
 | `{ type: 'sodax:swap', status: 'submitted' }` | Deposit broadcast and recovery data saved or attempted; settlement remains pending |

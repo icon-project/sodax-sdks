@@ -79,6 +79,12 @@ pnpm check:ai-dev-files
 ## Embed and UI
 
 - `?embed=1` renders only the widget; URL rewrites preserve embed mode, branding and restrictions.
+- The address bar is rewritten through `toBrowserSearch`, which omits every value equal to the seeded
+  default, so a visitor who opens the widget and changes nothing keeps a bare URL. That is lossless
+  only because the reader applies the same defaults for an absent key — move a default and both sides
+  move together. A framed widget keeps the complete `toSearch` string: a lock resolves its pinned pair
+  from `seed`, and a stripped URL would unpin it on the frame's own reload. `toSearch` stays complete
+  for the share link and the exported snippet, which must state the pair a partner chose.
 - Token allowlists use chain-and-symbol identities; empty explicit lists and unavailable locked defaults
   permit no route. Flip must respect both sides’ restrictions.
 - Network and token options come from the swaps API; names/logos/explorers come from SDK exports.
