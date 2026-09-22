@@ -22,7 +22,7 @@ import {
   percentTextToBps,
   type SodaxSettings,
 } from '@/lib/sodaxSettings';
-import { Check, Copy, RotateCcw } from 'lucide-react';
+import { Check, Copy, Eye, EyeOff, RotateCcw } from 'lucide-react';
 
 type SubmitTxChoice = 'auto' | 'on' | 'off';
 
@@ -65,7 +65,9 @@ function defaultsFor(env: SolverEnv, gatewayUrl: string = DEFAULT_API_BASE_URL):
     // The demo ships no partner fee: unset means the SDK charges nothing.
     partnerFeeAddress: '',
     partnerFeePercent: '',
-    apiKey: envSodaxApiKey ?? '',
+    // Deliberately NOT `envSodaxApiKey`: prefilling would print the deployment's key into the
+    // modal, a tooltip and the clipboard. Empty means "inherit it", which the hint says out loud.
+    apiKey: '',
     relayerApiEndpoint: DEFAULT_RELAYER_API_ENDPOINT,
   };
 }
@@ -236,13 +238,18 @@ function CopyButton({ text, label }: { text: string; label: string }) {
   );
 }
 
-/** Label · input · copy — with an amber ring and a ↺ reset button while overriding the default. */
+/**
+ * Label · input · copy — with an amber ring and a ↺ reset button while overriding the default.
+ * `secret` masks the value until the eye is clicked, and keeps it out of the reset tooltip: a key
+ * belongs in the request, not on a screen being shared.
+ */
 function TextRow({
   label,
   value,
   defaultValue,
   error,
   hint,
+  secret = false,
   onChange,
 }: {
   label: string;
@@ -250,8 +257,10 @@ function TextRow({
   defaultValue: string;
   error?: string;
   hint?: ReactNode;
+  secret?: boolean;
   onChange: (value: string) => void;
 }) {
+  const [revealed, setRevealed] = useState(false);
   const modified = value.trim() !== defaultValue;
   return (
     <div className="grid sm:grid-cols-[10rem_1fr] items-center gap-x-3 gap-y-1">
@@ -262,9 +271,23 @@ function TextRow({
       <div className="flex items-center gap-1.5 min-w-0">
         <Input
           value={value}
+          type={secret && !revealed ? 'password' : 'text'}
+          autoComplete={secret ? 'off' : undefined}
           onChange={e => onChange(e.target.value)}
           className={`h-9 text-sm font-mono flex-1 min-w-0 ${modified ? 'border-amber-400' : ''}`}
         />
+        {secret && value.trim() !== '' && (
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="h-9 w-9 shrink-0"
+            onClick={() => setRevealed(r => !r)}
+            title={revealed ? `Hide ${label}` : `Reveal ${label}`}
+          >
+            {revealed ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+          </Button>
+        )}
         {modified && (
           <Button
             type="button"
@@ -272,7 +295,7 @@ function TextRow({
             size="icon"
             className="h-9 w-9 shrink-0"
             onClick={() => onChange(defaultValue)}
-            title={`Reset to default${defaultValue ? `: ${defaultValue}` : ''}`}
+            title={secret || !defaultValue ? 'Reset to default' : `Reset to default: ${defaultValue}`}
           >
             <RotateCcw className="w-4 h-4" />
           </Button>
@@ -528,6 +551,7 @@ export function SodaxSettingsModal({ open, onOpenChange }: { open: boolean; onOp
             value={draft.leverageYieldApiKey}
             defaultValue={defaults.leverageYieldApiKey}
             error={errors.leverageYieldApiKey}
+            secret
             hint="Per-action `extras.apiKey` for the Leverage Yield page's vault swap — keys the submit POST and its status polls over the instance key. Unset inherits that key. The client-side relay path sends none."
             onChange={value => set('leverageYieldApiKey', value)}
           />
@@ -596,9 +620,10 @@ export function SodaxSettingsModal({ open, onOpenChange }: { open: boolean; onOp
             label="API key"
             value={draft.apiKey}
             defaultValue={defaults.apiKey}
+            secret
             hint={
               envSodaxApiKey
-                ? 'x-api-key on every backend call. At its default it follows VITE_SODAX_API_KEY.'
+                ? 'x-api-key on every backend call. Left empty it inherits VITE_SODAX_API_KEY, which is never shown here.'
                 : 'x-api-key on every backend call. Keys typed here live in this browser only.'
             }
             onChange={value => set('apiKey', value)}
