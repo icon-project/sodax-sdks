@@ -8,7 +8,7 @@ const queryClient = createSodaxQueryClient();
 
 const sodaxConfig: SodaxOptions = {
   ...(swapsApiKey ? { apiKey: swapsApiKey } : {}),
-  ...(solanaRpcUrl ? { chains: { [ChainKeys.SOLANA_MAINNET]: { rpcUrl: solanaRpcUrl } } } : {}),
+  chains: { [ChainKeys.SOLANA_MAINNET]: { rpcUrl: solanaRpcUrl } },
 };
 
 const walletConfig: SodaxWalletConfig = {
@@ -19,7 +19,7 @@ const walletConfig: SodaxWalletConfig = {
   },
   SOLANA: {
     autoConnect: false,
-    ...(solanaRpcUrl ? { chains: { [ChainKeys.SOLANA_MAINNET]: { rpcUrl: solanaRpcUrl } } } : {}),
+    chains: { [ChainKeys.SOLANA_MAINNET]: { rpcUrl: solanaRpcUrl } },
   },
   SUI: { autoConnect: false },
   // The remaining families use SDK defaults; Bitcoin execution is not mounted.
