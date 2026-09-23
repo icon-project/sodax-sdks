@@ -94,14 +94,19 @@ Leverage-yield has **no dedicated approve hook**. A deposit is a swap-style inte
 
 ## Return shapes
 
-Read hooks here are **already unwrapped** — they throw on SDK `!ok` so `isError` / `error` / `retry` engage. Read `data` directly; do NOT branch on `data.ok`. **`useLeverageYieldQuote` is the one exception**: it returns the SDK `Result` as `data`, matching `useQuote` on the swap side, because a quote failure ("no path", thin liquidity) is an expected UI branch and the `Result` preserves the solver's `detail.code`. Branch on `data?.ok` for that one hook only.
+Read hooks here are **already unwrapped** — they throw on SDK `!ok` so `isError` / `error` / `retry` engage. Read `data` directly; do NOT branch on `data.ok`. **Two hooks are the exception** and return the SDK `Result` as `data`:
+
+- `useLeverageYieldQuote`, matching `useQuote` on the swap side, because a quote failure ("no path", thin liquidity) is an expected UI branch and the `Result` preserves the solver's `detail.code`.
+- `useLeverageYieldDetailedStatus`, matching `useDetailedStatus`, because a lookup miss is an expected state while a vault swap is in flight. Narrow `data?.ok`, then `data.value.source` (`'backend'` | `'solver'`); on `!ok`, `error.context.reason` separates the ambiguous not-yet-delivered miss from a failing dependency.
+
+Branch on `data?.ok` for those two hooks only.
 
 | Hook | Returns |
 |---|---|
 | `useLeverageYieldQuote` | `UseQueryResult<Result<SolverIntentQuoteResponse, SolverErrorResponse \| LeverageYieldLookupError> \| undefined, Error>` (Result **not** unwrapped; `undefined` while `payload` is undefined). Guard the error with `isSodaxError` — the `SolverErrorResponse` arm has `detail.code`, the `SodaxError` arm has `.code` (`VALIDATION_FAILED` / `LOOKUP_FAILED` / `UNKNOWN`) |
 | `useLeverageYieldDeposit` / `useLeverageYieldWithdraw` | `SafeUseMutationResult<LeverageYieldSwapPayload, Error, …>` (builder — `data` is the payload to spread into `useLeverageYieldVaultSwap`) |
 | `useLeverageYieldVaultSwap` | `SafeUseMutationResult<VaultSwapResponse, Error, …>` (`{ solverExecutionResponse, intent, intentDeliveryInfo }`) |
-| `useLeverageYieldDetailedStatus` | `UseQueryResult<Result<DetailedLeverageYieldStatus, SodaxError> \| undefined>` — Result-wrapped, narrow the value on `source` (`'backend'` \| `'solver'`) |
+| `useLeverageYieldDetailedStatus` | `UseQueryResult<Result<DetailedLeverageYieldStatus, LeverageYieldDetailedStatusError> \| undefined>` — Result-wrapped, narrow the value on `source` (`'backend'` \| `'solver'`) |
 | `useLeverageYieldNotifySolver` | `SafeUseMutationResult<SolverExecutionResponse, Error, …>` (`{ answer: 'OK', intent_hash }`) |
 | `useLeverageYieldEffectiveApr` | `UseQueryResult<LeverageYieldEffectiveApr, Error>` |
 | `useLeverageYieldPosition` | `UseQueryResult<LeverageYieldPosition, Error>` |
