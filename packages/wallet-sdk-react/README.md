@@ -122,7 +122,7 @@ The full guide lives in [`docs/`](https://github.com/icon-project/sodax-sdks/tre
 
 ### Solana balance batching
 
-Multi-token Solana balance reads batch the legacy SPL Token and Token-2022 associated-account candidates in requests of at most 100 accounts. Native SOL remains a separate balance request.
+Multi-token Solana balance reads batch the legacy SPL Token and Token-2022 associated-account candidates in requests of at most 100 accounts. A rejected account batch is retried once immediately with the same account keys and no backoff; if that retry also fails, the multi-token balance read rejects instead of reporting zero balances for the failed batch. It does not fall back to per-token RPC calls. Native SOL remains a separate balance request.
 
 ## AI agent docs
 

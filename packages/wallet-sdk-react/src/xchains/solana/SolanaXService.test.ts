@@ -37,6 +37,14 @@ const TOKEN: XToken = {
 // getBalance only forwards the AccountInfo to the mocked unpackAccount, so a tagged stub is enough.
 const accountInfo = (tag: string) => ({ tag });
 
+function deferredRejection<T>() {
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((_resolve, promiseReject) => {
+    reject = promiseReject;
+  });
+  return { promise, reject };
+}
+
 const token = (index: number): XToken => ({
   ...TOKEN,
   symbol: `TOKEN_${index}`,
@@ -232,24 +240,55 @@ describe('SolanaXService.getBalances', () => {
     expect(await makeService({}).getBalances(undefined, [valid])).toEqual({});
   });
 
-  it('isolates failed native and account batches without per-token fallback calls', async () => {
+  it('retries a rejected account batch once with the same keys', async () => {
     const native = { ...TOKEN, symbol: 'SOL', address: 'native' };
     const tokens = Array.from({ length: 51 }, (_, index) => token(index));
     isNativeToken.mockImplementation(xToken => xToken === native);
     const getBalance = vi.fn().mockRejectedValue(new Error('native RPC failed'));
-    const getMultipleAccountsInfo = vi
-      .fn()
-      .mockRejectedValueOnce(new Error('batch RPC failed'))
-      .mockResolvedValueOnce([accountInfo('legacy'), accountInfo('token-2022')]);
+    const failedChunk = deferredRejection<unknown[]>();
+    const getMultipleAccountsInfo = vi.fn().mockImplementation(keys => {
+      const hundredKeyCalls = getMultipleAccountsInfo.mock.calls.filter(call => call[0].length === 100);
+      if (keys.length === 100 && hundredKeyCalls.length === 1) return failedChunk.promise;
+      return Promise.resolve(
+        keys.map((_key: unknown, index: number) => (index % 2 === 0 ? accountInfo('legacy') : null)),
+      );
+    });
     unpackAccount.mockReturnValue({ amount: 3n });
     const service = makeService({ getBalance, getMultipleAccountsInfo });
 
-    const result = await service.getBalances(OWNER, [native, ...tokens]);
+    const resultPromise = service.getBalances(OWNER, [native, ...tokens]);
+
+    // Both chunks are dispatched before the first one settles.
+    expect(getMultipleAccountsInfo.mock.calls.map(call => call[0].length)).toEqual([100, 2]);
+    failedChunk.reject(new Error('batch RPC failed'));
+    const result = await resultPromise;
 
     expect(result.native).toBe(0n);
-    expect(tokens.slice(0, 50).every(xToken => result[xToken.address] === 0n)).toBe(true);
-    expect(result[tokens[50]!.address]).toBe(6n);
+    expect(tokens.every(xToken => result[xToken.address] === 3n)).toBe(true);
     expect(getBalance).toHaveBeenCalledTimes(1);
+    expect(getMultipleAccountsInfo).toHaveBeenCalledTimes(3);
+    const hundredKeyCalls = getMultipleAccountsInfo.mock.calls.filter(call => call[0].length === 100);
+    expect(hundredKeyCalls).toHaveLength(2);
+    expect(hundredKeyCalls[1]?.[0]).toBe(hundredKeyCalls[0]?.[0]);
+    expect(getMultipleAccountsInfo.mock.calls.filter(call => call[0].length === 2)).toHaveLength(1);
+  });
+
+  it('propagates the retry error when an account batch fails twice', async () => {
+    const firstError = new Error('first batch RPC failure');
+    const retryError = new Error('retry batch RPC failure');
+    isNativeToken.mockReturnValue(false);
+    const getBalance = vi.fn();
+    const getMultipleAccountsInfo = vi
+      .fn()
+      .mockRejectedValueOnce(firstError)
+      .mockRejectedValueOnce(retryError);
+    const service = makeService({ getBalance, getMultipleAccountsInfo });
+
+    await expect(service.getBalances(OWNER, [TOKEN])).rejects.toBe(retryError);
+
     expect(getMultipleAccountsInfo).toHaveBeenCalledTimes(2);
+    expect(getMultipleAccountsInfo.mock.calls[1]?.[0]).toBe(getMultipleAccountsInfo.mock.calls[0]?.[0]);
+    expect(getBalance).not.toHaveBeenCalled();
+    expect(unpackAccount).not.toHaveBeenCalled();
   });
 });

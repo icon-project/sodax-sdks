@@ -90,9 +90,11 @@ export class SolanaXService extends XService {
         entry.candidates.map(candidate => ({ ...candidate, index: entry.index })),
       );
 
+      const accountKeys = candidates.map(candidate => candidate.ata);
       batchPromises.push(
         connection
-          .getMultipleAccountsInfo(candidates.map(candidate => candidate.ata))
+          .getMultipleAccountsInfo(accountKeys)
+          .catch(() => connection.getMultipleAccountsInfo(accountKeys))
           .then(accounts => {
             for (const [candidateIndex, candidate] of candidates.entries()) {
               const info = accounts[candidateIndex];
@@ -104,9 +106,6 @@ export class SolanaXService extends XService {
                 // Not a token account for this candidate's program — ignore it.
               }
             }
-          })
-          .catch(() => {
-            // Keep this batch's balances at zero without falling back to per-token RPC calls.
           }),
       );
     }
