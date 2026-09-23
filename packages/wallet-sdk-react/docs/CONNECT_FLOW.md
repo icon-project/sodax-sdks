@@ -190,7 +190,7 @@ function DisconnectButton() {
 
 The callback delegates to `ChainActions.disconnect()`. If no actions are registered (chain not enabled in config), it logs a warning and resolves silently — no throw.
 
-Which layer clears the store differs by chain family. Non-provider chains clear it inside the action implementation: the default `disconnect` calls `unsetXConnection(xChainType)` in a `finally`, so the store clears even when the wallet's native disconnect throws (NEAR overrides `disconnect` with the same pattern). Solana and Sui actions only trigger the native adapter's disconnect and leave the write to their Hydrator. EVM is the exception to that single-writer rule — `EvmActions.disconnect` calls `unsetXConnection('EVM')` and `markUserDisconnected('EVM')` synchronously before awaiting wagmi's disconnect, so the UI stays consistent whether wagmi throws or hangs.
+Which layer clears the store differs by chain family. Non-provider chains clear it inside the action implementation: the default `disconnect` calls `unsetXConnection(xChainType)` in a `finally`, so the store clears even when the wallet's native disconnect throws (NEAR overrides `disconnect` with the same pattern). Solana and Sui actions only trigger the native adapter's disconnect and leave the write to their Hydrator. EVM is the exception to that single-writer rule — `EvmActions.disconnect` calls `unsetXConnection('EVM')` and `markUserDisconnected('EVM')` synchronously before awaiting wagmi's disconnect, so the UI stays consistent whether wagmi throws or hangs. It disconnects **every** wagmi connection, not only the current one: the SDK treats EVM as a single connection, so a wallet connected earlier in the session must not come back through a later connect without its own sign-in.
 
 ---
 
