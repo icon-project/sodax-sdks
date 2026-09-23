@@ -146,11 +146,16 @@ Two fields work together to support modern bundlers and legacy `moduleResolution
     "./xchains/*": {
       "types": "./dist/xchains/*/index.d.ts",
       "import": "./dist/xchains/*/index.mjs"
+    },
+    "./privy": {
+      "types": "./dist/privy/index.d.ts",
+      "import": "./dist/privy/index.mjs"
     }
   },
   "typesVersions": {
     "*": {
-      "xchains/*": ["./dist/xchains/*/index.d.ts"]
+      "xchains/*": ["./dist/xchains/*/index.d.ts"],
+      "privy": ["./dist/privy/index.d.ts"]
     }
   }
 }
@@ -161,10 +166,13 @@ Two fields work together to support modern bundlers and legacy `moduleResolution
 | `exports['.']` | All bundlers (Vite, Webpack, esbuild, Next.js), modern Node | Resolves `@sodax/wallet-sdk-react` to the ESM artifact + types |
 | `exports['./xchains/*']` | Same | Wildcard maps `@sodax/wallet-sdk-react/xchains/<chain>` to the matching `dist/xchains/<chain>/index.mjs` |
 | `typesVersions['xchains/*']` | TypeScript with `moduleResolution: "node"` (legacy) | Fallback for TS configs that don't honor the `exports` field's `types` condition |
+| `exports['./privy']` | Same | The opt-in Privy email login (`privy()` for `EVM.privy`). The only entry that imports `@privy-io/react-auth`, an optional peer — see [`WALLET_PRIVY.md`](./WALLET_PRIVY.md) |
 
 Modern projects with `"moduleResolution": "bundler"` or `"node16"` only need `exports`. `typesVersions` ensures sub-path types resolve for older configs that still see `@sodax/wallet-sdk-react/xchains/bitcoin` as a path traversal.
 
 If a consumer reports "Cannot find module" for sub-paths in TypeScript, check their `tsconfig.json` `moduleResolution` setting first.
+
+`./privy` is guarded after every build by `scripts/check-privy-isolation.mjs`: no emitted file outside `dist/privy/` may import `@privy-io/*`. With `splitting: true`, a single value import of Privy from a module the main entry also reaches would land in a shared chunk and break every partner who has not installed Privy — keep Privy imports inside `src/privy/`, and `import type` anywhere else.
 
 ---
 
