@@ -35,6 +35,8 @@ const URL_FIELDS = [
   'relayerApiEndpoint',
 ] as const;
 const ADDRESS_FIELDS = ['intentsContract', 'protocolIntentsContract', 'partnerFeeAddress'] as const;
+/** Fields whose unset default is the effective gateway — see `defaultsFor`. */
+const GATEWAY_INHERITED_FIELDS = ['swapsApiBaseUrl', 'leverageYieldApiBaseUrl'] as const;
 const TEXT_FIELDS = [...URL_FIELDS, ...ADDRESS_FIELDS, 'partnerFeePercent', 'apiKey', 'leverageYieldApiKey'] as const;
 
 type TextField = (typeof TEXT_FIELDS)[number];
@@ -417,14 +419,17 @@ export function SodaxSettingsModal({ open, onOpenChange }: { open: boolean; onOp
     });
   };
 
-  // A swaps URL still at its gateway-inherited default follows the new gateway instead of
-  // becoming an explicit override pinned to the old one.
+  // A gateway-inherited URL still at its default follows the new gateway instead of becoming an
+  // explicit override pinned to the old one.
   const handleGatewayChange = (apiBaseUrl: string) => {
     setDraft(prev => {
       const next = { ...prev, apiBaseUrl };
-      const prevDefault = defaultsFor(prev.env, effectiveGateway(prev.apiBaseUrl)).swapsApiBaseUrl;
-      if (prev.swapsApiBaseUrl.trim() === prevDefault) {
-        next.swapsApiBaseUrl = defaultsFor(prev.env, effectiveGateway(apiBaseUrl)).swapsApiBaseUrl;
+      const prevDefaults = defaultsFor(prev.env, effectiveGateway(prev.apiBaseUrl));
+      const nextDefaults = defaultsFor(prev.env, effectiveGateway(apiBaseUrl));
+      for (const field of GATEWAY_INHERITED_FIELDS) {
+        if (prev[field].trim() === prevDefaults[field]) {
+          next[field] = nextDefaults[field];
+        }
       }
       return next;
     });
