@@ -5,7 +5,8 @@ const isWatchMode = process.argv.includes('--watch');
 export default defineConfig({
   // Multi-entry: barrel + per-chain sub-paths (e.g. @sodax/wallet-sdk-react/xchains/bitcoin).
   // Adding a new chain? Create src/xchains/<chain>/index.ts — the glob picks it up automatically.
-  entry: ['src/index.ts', 'src/xchains/*/index.ts', 'src/xchains/*/index.tsx'],
+  // `privy` is opt-in: nothing outside `src/privy/` may value-import it (checked after build).
+  entry: ['src/index.ts', 'src/xchains/*/index.ts', 'src/xchains/*/index.tsx', 'src/privy/index.ts'],
   outDir: 'dist',
   format: ['esm'],
   // splitting shares class identity across entry points (barrel + sub-path exports),
