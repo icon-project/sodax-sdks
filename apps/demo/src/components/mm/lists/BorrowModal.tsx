@@ -37,7 +37,7 @@ import { useReserveMetrics } from '@/hooks/useReserveMetrics';
 import { MAX_BORROW_SAFETY_MARGIN, ZERO_ADDRESS, AMOUNT_DISPLAY_DECIMALS } from '../constants';
 import { isUserReserveDataArray, isValidEvmAddress } from '../typeGuards';
 import { extractTxHash } from '@/lib/extractTxHash';
-import { ErrorAlert } from '../ErrorAlert';
+import { ErrorAlert } from '@/components/shared/ErrorAlert';
 import { getChainName } from '@/constants';
 import { ActionSuccessContent, type ActionSuccessData } from './ActionSuccessContent';
 import { Loader2 } from 'lucide-react';
