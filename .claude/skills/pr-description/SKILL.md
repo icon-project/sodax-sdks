@@ -16,6 +16,18 @@ One or two sentences explaining what this PR does. If it closes a ticket, write:
 "This PR closes __[Ticket Title]__."
 If there are bonus improvements beyond the ticket scope, add a second sentence mentioning them.
 
+## ⚠️ Breaking change (omit only when there is genuinely none)
+
+Before writing this section, diff the **published** packages (`packages/types`, `packages/sdk`, `packages/dapp-kit`, `packages/swaps-api`, `packages/bridge-api`) against the base branch and ask what a consumer compiles or branches against:
+
+- a removed or renamed export, or a changed signature / return type
+- changed runtime behaviour of an exported helper (does the new one ever return `false` where the old returned `true`? does a thrown `Error.message` change?)
+- **a widened enum or union** — adding a member breaks an exhaustive `Record<Enum, T>`, a `satisfies` map, or a `switch` with a `never` default in consumer code
+
+Green gates do **not** clear you: no package in this repo uses those patterns, so a real consumer break passes `build` / `checkTs` / `test`. Verify by writing the consumer snippet in a scratch file and running `tsc` on it.
+
+When there is one, put this section **directly after Description**, before Key Changes, and include: what breaks, the actual compiler error or behaviour delta, and the migration. If a behaviour change is *not* breaking, say so explicitly with the evidence rather than omitting it — a "Breaking change" heading that hides two public behaviour changes reads as a complete accounting when it isn't.
+
 ## Key Changes
 
 Group changes into relevant sections. Common sections for this codebase:
@@ -79,6 +91,7 @@ Bullet list of what was manually tested. Be specific — mention component names
 - Don't invent ticket names — if you don't know the ticket title, write `__[Ticket Title]__` as a placeholder.
 - Keep Testing Notes concrete and specific, not generic.
 - Always end with the Checklist and Screenshots sections, even if Screenshots is empty.
+- Never omit the Breaking change section just because the change looks additive — check the enum/union case explicitly, and say "no breaking change" in the PR only after you have looked.
 
 ---
 
