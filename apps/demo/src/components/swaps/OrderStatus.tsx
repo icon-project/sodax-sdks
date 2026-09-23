@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  isAuthFailure,
   useLeverageYieldDetailedStatus,
   useSodaxContext,
   useSwapsApiSubmitTxStatus,
@@ -13,6 +14,7 @@ import { cn, getChainExplorerTxUrl, statusCodeToMessage } from '@/lib/utils';
 import { getChainIcon, getChainName } from '@/constants';
 import { sodaxScanSearchUrl } from '@/lib/sodaxScan';
 import { useSolverStatus } from '@/hooks/useSolverStatus';
+import { useAppStore } from '@/zustand/useAppStore';
 
 /** One side of a swap, for the "AMOUNT TOKEN (NETWORK)" summary. `chain` is a chain key. */
 export type OrderLeg = { amount: string; symbol: string; chain: string };
@@ -433,7 +435,8 @@ function SubmitTxLiveCard({
  * Derives the card fields from a `getDetailedStatus` read. The two arms speak different vocabularies
  * — the backend record's string statuses and the solver's numeric codes — and both are terminal
  * labels this panel already knows. A failed read stays `pending`: the hook keeps polling it, and the
- * ones that never resolve are stopped by its own NOT_FOUND budget, not by this card.
+ * ones that never resolve are stopped by its own NOT_FOUND budget, not by this card. A rejected API
+ * key also stops the hook, so it carries an error — otherwise the card would sit on `pending` silently.
  */
 function deriveDetailed(read: UseLeverageYieldDetailedStatusResult): {
   label: string;
@@ -441,7 +444,9 @@ function deriveDetailed(read: UseLeverageYieldDetailedStatusResult): {
   extraRows: DetailRowData[];
 } {
   if (!read?.ok) {
-    return { label: 'pending', extraRows: [] };
+    return read && isAuthFailure(read.error)
+      ? { label: 'pending', error: 'Status read rejected the API key — fix it in Settings and reload.', extraRows: [] }
+      : { label: 'pending', extraRows: [] };
   }
   if (read.value.source === 'backend') {
     return deriveSubmitTx(read.value.data);
@@ -470,9 +475,15 @@ function LeverageYieldLiveCard({
   onDismiss?: () => void;
   onSettle: SettleFn;
 }) {
+  // The same per-action key the vault swap submitted with; never persisted on the order itself.
+  const apiKey = useAppStore(state => state.sodaxSettings.leverageYieldApiKey);
   const { data: read } = useLeverageYieldDetailedStatus({
-    // Orders persist as JSON scalars, so the chain key is widened to `string` on the way in.
-    params: { srcChainKey: order.srcChainKey as SpokeChainKey, srcTxHash: order.srcTxHash },
+    params: {
+      // Orders persist as JSON scalars, so the chain key is widened to `string` on the way in.
+      srcChainKey: order.srcChainKey as SpokeChainKey,
+      srcTxHash: order.srcTxHash,
+      ...(apiKey ? { apiConfig: { apiKey } } : {}),
+    },
   });
 
   const derived = useMemo(() => deriveDetailed(read), [read]);
