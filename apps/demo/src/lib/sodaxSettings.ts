@@ -8,6 +8,9 @@ export type SodaxSettings = {
   swapUseBackendSubmitTx: boolean | null;
   /** null = Auto: bridge backend submit-tx follows the SDK default (on). */
   bridgeUseBackendSubmitTx: boolean | null;
+  /** null = Auto: same rule as swap, not bridge — a vault swap is filled by the solver, and the
+   *  backend route posts to the production API, so Auto is off on Staging (see gh-401). */
+  leverageYieldUseBackendSubmitTx: boolean | null;
   solverApiEndpoint: HttpUrl | null;
   intentsContract: Address | null;
   protocolIntentsContract: Address | null;
@@ -16,6 +19,11 @@ export type SodaxSettings = {
   swapsApiBaseUrl: HttpUrl | null;
   /** Per-call base URL for the Bridge API showcase page. */
   bridgeApiBaseUrl: HttpUrl | null;
+  /** Per-call base URL for the Leverage Yield API showcase page. */
+  leverageYieldApiBaseUrl: HttpUrl | null;
+  /** Per-action `x-api-key` for the Leverage Yield page's vault swap (`extras.apiKey`). Keys the
+   *  backend submit-tx legs of that one action only, over the instance key below. */
+  leverageYieldApiKey: string | null;
   /** Instance-wide `x-api-key` → `SodaxOptions.apiKey`. */
   apiKey: string | null;
   relayerApiEndpoint: HttpUrl | null;
@@ -29,12 +37,15 @@ export type SodaxSettings = {
 export const DEFAULT_SODAX_SETTINGS: SodaxSettings = {
   swapUseBackendSubmitTx: null,
   bridgeUseBackendSubmitTx: null,
+  leverageYieldUseBackendSubmitTx: null,
   solverApiEndpoint: null,
   intentsContract: null,
   protocolIntentsContract: null,
   apiBaseUrl: null,
   swapsApiBaseUrl: null,
   bridgeApiBaseUrl: null,
+  leverageYieldApiBaseUrl: null,
+  leverageYieldApiKey: null,
   apiKey: null,
   relayerApiEndpoint: null,
   partnerFeeAddress: null,
@@ -121,12 +132,17 @@ export function loadSodaxSettings(): SodaxSettings {
   return {
     swapUseBackendSubmitTx: typeof legacySwapSubmitTx === 'boolean' ? legacySwapSubmitTx : null,
     bridgeUseBackendSubmitTx: typeof raw.bridgeUseBackendSubmitTx === 'boolean' ? raw.bridgeUseBackendSubmitTx : null,
+    // No legacy storage key to honour — leverage yield never had one.
+    leverageYieldUseBackendSubmitTx:
+      typeof raw.leverageYieldUseBackendSubmitTx === 'boolean' ? raw.leverageYieldUseBackendSubmitTx : null,
     solverApiEndpoint: isHttpUrl(raw.solverApiEndpoint) ? raw.solverApiEndpoint : null,
     intentsContract: isEvmAddress(raw.intentsContract) ? raw.intentsContract : null,
     protocolIntentsContract: isEvmAddress(raw.protocolIntentsContract) ? raw.protocolIntentsContract : null,
     apiBaseUrl: isHttpUrl(raw.apiBaseUrl) ? raw.apiBaseUrl : null,
     swapsApiBaseUrl: isHttpUrl(raw.swapsApiBaseUrl) ? raw.swapsApiBaseUrl : null,
     bridgeApiBaseUrl: isHttpUrl(raw.bridgeApiBaseUrl) ? raw.bridgeApiBaseUrl : null,
+    leverageYieldApiBaseUrl: isHttpUrl(raw.leverageYieldApiBaseUrl) ? raw.leverageYieldApiBaseUrl : null,
+    leverageYieldApiKey: nonEmptyEnv(raw.leverageYieldApiKey) ? raw.leverageYieldApiKey : null,
     apiKey: nonEmptyEnv(raw.apiKey) ? raw.apiKey : null,
     relayerApiEndpoint: isHttpUrl(raw.relayerApiEndpoint) ? raw.relayerApiEndpoint : null,
     partnerFeeAddress: isEvmAddress(raw.partnerFeeAddress) ? raw.partnerFeeAddress : null,
@@ -159,6 +175,11 @@ export const envBridgeApiBaseUrl: HttpUrl | undefined = isHttpUrl(bridgeApiBaseU
   ? bridgeApiBaseUrlEnv
   : undefined;
 
+const leverageYieldApiBaseUrlEnv: unknown = import.meta.env.VITE_LEVERAGE_YIELD_API_BASE_URL;
+export const envLeverageYieldApiBaseUrl: HttpUrl | undefined = isHttpUrl(leverageYieldApiBaseUrlEnv)
+  ? leverageYieldApiBaseUrlEnv
+  : undefined;
+
 // Instance-wide SODAX API key: `x-api-key` on every backend call, sponsoring included while it
 // targets the packaged gateway (VITE_SPONSORING_API_KEY is only for an independently hosted one).
 const sodaxApiKeyEnv: unknown = import.meta.env.VITE_SODAX_API_KEY;
@@ -171,6 +192,16 @@ export const envSodaxApiKey: string | undefined = nonEmptyEnv(sodaxApiKeyEnv) ? 
  */
 export function effectiveSwapsApiBaseUrl(settings: SodaxSettings): HttpUrl {
   return settings.swapsApiBaseUrl ?? envSwapsApiBaseUrl ?? settings.apiBaseUrl ?? DEFAULT_API_BASE_URL;
+}
+
+/**
+ * The Leverage Yield API host the showcase page calls, same precedence as the swaps one. The scheme
+ * is required: `makeRequest` concatenates `baseURL + endpoint` for `fetch`, so a bare `host:port`
+ * parses as an unknown scheme rather than a host. The value is the gateway ROOT — the SDK appends
+ * `/leverage-yield/*` itself (a local leverage-yield API mounts them at the bare origin).
+ */
+export function effectiveLeverageYieldApiBaseUrl(settings: SodaxSettings): HttpUrl {
+  return settings.leverageYieldApiBaseUrl ?? envLeverageYieldApiBaseUrl ?? settings.apiBaseUrl ?? DEFAULT_API_BASE_URL;
 }
 
 /** The `x-api-key` the SDK sends, so a direct client authenticates with the same credential. */

@@ -12,8 +12,9 @@ import { SolverEnv, useAppStore } from '@/zustand/useAppStore';
  *
  * The solver-environment switcher is the same control as on `/solver` and `/leverage-yield`; it
  * re-keys the app-wide SDK config (see `providers.tsx`). Note the leverage-yield endpoints
- * themselves run against whatever backend `LEVERAGE_YIELD_API_CONFIG.baseURL` points at — the
- * switcher drives the client SDK's solver/chain config, not that backend's own environment.
+ * themselves run against whatever backend the Sodax Settings "Leverage Yield API base URL" row
+ * resolves to (`effectiveLeverageYieldApiBaseUrl`) — the switcher drives the client SDK's
+ * solver/chain config, not that backend's own environment.
  */
 export default function LeverageYieldApiPage() {
   const { solverEnvironment, setSolverEnvironment } = useAppStore();

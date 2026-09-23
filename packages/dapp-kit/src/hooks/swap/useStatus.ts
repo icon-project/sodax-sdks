@@ -4,12 +4,8 @@ import { useRef } from 'react';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
 import type { ReadHookParams } from '../shared/types.js';
-import {
-  advanceNotFoundStreak,
-  getSwapStatusRefetchInterval,
-  INITIAL_NOT_FOUND_STREAK,
-  isSolverNotFound,
-} from './getSwapStatusRefetchInterval.js';
+import { advanceNotFoundStreak, INITIAL_NOT_FOUND_STREAK } from '../shared/notFoundStreak.js';
+import { getSolverStatusRefetchInterval, isSolverNotFound } from '../shared/solverStatusPolicy.js';
 
 export type UseStatusParams = ReadHookParams<
   Result<SolverIntentStatusResponse, SolverErrorResponse> | undefined,
@@ -50,7 +46,7 @@ export const useStatus = ({
         isSolverNotFound(query.state.data),
         query.state.dataUpdateCount,
       );
-      return getSwapStatusRefetchInterval(query.state.data, notFoundStreakRef.current.consecutiveNotFound);
+      return getSolverStatusRefetchInterval(query.state.data, notFoundStreakRef.current.consecutiveNotFound);
     },
     ...queryOptions,
   });

@@ -204,13 +204,18 @@ To send a single leverage-yield call elsewhere, use the per-call `RequestOverrid
 
 ## Backend submit-tx flow (SDK option)
 
-Opting into `new Sodax({ leverageYield: { useBackendSubmitTx: true } })` routes the **feature
-service** (`sodax.leverageYield.vaultSwap`) through this client's `submitTx` + `getSubmitTxStatus` (relay +
-post-execution server-side), polling until `'solved'` and falling back to the client-side relay on any
-non-success — the leverage-yield mirror of `swaps.useBackendSubmitTx`, except that it defaults **off**.
-Read the effective value on `sodax.config.leverageYieldUseBackendSubmitTx`. `timeout` is a per-attempt
-budget: the backend attempt gets it and the fallback relay gets a fresh one. See
-[`leverage-yield.md`](leverage-yield.md).
+`sodax.leverageYield.vaultSwap` routes through this client's `submitTx` + `getSubmitTxStatus` (relay +
+post-execution server-side) **by default**, polling until `'solved'` and falling back to the client-side
+relay on any non-success — the leverage-yield mirror of `swaps.useBackendSubmitTx`, defaulting on the same
+way. Opt out with `new Sodax({ leverageYield: { useBackendSubmitTx: false } })`; read the effective value
+on `sodax.config.leverageYieldUseBackendSubmitTx`. `timeout` is a per-attempt budget: the backend attempt
+gets it and the fallback relay gets a fresh one.
+
+`POST /leverage-yield/submit-tx` declares an API-key scope (`swaps:write`) where
+`GET /leverage-yield/submit-tx/status` declares none. Enforcement is per-deployment, so a keyless submit
+is not necessarily rejected; where it is, the caller spends one rejected attempt per vault swap before the
+fallback completes it. Configure `apiKey`, pass `extras.apiKey` per call, or opt out. `swaps/submit-tx`
+declares the same scope — this is not specific to leverage yield. See [`leverage-yield.md`](leverage-yield.md).
 
 ## Error handling
 

@@ -2,13 +2,12 @@ import { SolverIntentErrorCode, SolverIntentStatusCode } from '@sodax/sdk';
 import { describe, expect, it } from 'vitest';
 import {
   advanceNotFoundStreak,
-  getSwapStatusRefetchInterval,
   INITIAL_NOT_FOUND_STREAK,
   MAX_NOT_FOUND_POLLS,
-  isSolverNotFound,
   nextNotFoundStreak,
   STATUS_POLL_MS,
-} from './getSwapStatusRefetchInterval.js';
+} from './notFoundStreak.js';
+import { getSolverStatusRefetchInterval, isSolverNotFound } from './solverStatusPolicy.js';
 
 /**
  * Guards the polling-stop invariant for `useStatus.refetchInterval`: keep polling until SOLVED/
@@ -24,31 +23,31 @@ const solverError = {
   error: { detail: { code: SolverIntentErrorCode.INTENT_NOT_FOUND, message: 'missing' } },
 };
 
-describe('getSwapStatusRefetchInterval', () => {
+describe('getSolverStatusRefetchInterval', () => {
   it('stops immediately on SOLVED (3) and FAILED (4), even at consecutive count 1', () => {
-    expect(getSwapStatusRefetchInterval(ok(SolverIntentStatusCode.SOLVED), 1)).toBe(false);
-    expect(getSwapStatusRefetchInterval(ok(SolverIntentStatusCode.FAILED), 1)).toBe(false);
+    expect(getSolverStatusRefetchInterval(ok(SolverIntentStatusCode.SOLVED), 1)).toBe(false);
+    expect(getSolverStatusRefetchInterval(ok(SolverIntentStatusCode.FAILED), 1)).toBe(false);
   });
 
   it('keeps polling NOT_FOUND until MAX_NOT_FOUND_POLLS consecutive, then stops', () => {
-    expect(getSwapStatusRefetchInterval(ok(SolverIntentStatusCode.NOT_FOUND), MAX_NOT_FOUND_POLLS - 1)).toBe(
+    expect(getSolverStatusRefetchInterval(ok(SolverIntentStatusCode.NOT_FOUND), MAX_NOT_FOUND_POLLS - 1)).toBe(
       STATUS_POLL_MS,
     );
-    expect(getSwapStatusRefetchInterval(ok(SolverIntentStatusCode.NOT_FOUND), MAX_NOT_FOUND_POLLS)).toBe(false);
+    expect(getSolverStatusRefetchInterval(ok(SolverIntentStatusCode.NOT_FOUND), MAX_NOT_FOUND_POLLS)).toBe(false);
   });
 
   it('never stops in-flight NOT_STARTED_YET (1) or STARTED_NOT_FINISHED (2), even at a high count', () => {
-    expect(getSwapStatusRefetchInterval(ok(SolverIntentStatusCode.NOT_STARTED_YET), 100)).toBe(STATUS_POLL_MS);
-    expect(getSwapStatusRefetchInterval(ok(SolverIntentStatusCode.STARTED_NOT_FINISHED), 100)).toBe(STATUS_POLL_MS);
+    expect(getSolverStatusRefetchInterval(ok(SolverIntentStatusCode.NOT_STARTED_YET), 100)).toBe(STATUS_POLL_MS);
+    expect(getSolverStatusRefetchInterval(ok(SolverIntentStatusCode.STARTED_NOT_FINISHED), 100)).toBe(STATUS_POLL_MS);
   });
 
   it('keeps polling the first NOT_FOUND after a long in-flight streak', () => {
-    expect(getSwapStatusRefetchInterval(ok(SolverIntentStatusCode.NOT_FOUND), 1)).toBe(STATUS_POLL_MS);
+    expect(getSolverStatusRefetchInterval(ok(SolverIntentStatusCode.NOT_FOUND), 1)).toBe(STATUS_POLL_MS);
   });
 
   it('keeps polling when no status has arrived yet (undefined) or the Result is ok: false', () => {
-    expect(getSwapStatusRefetchInterval(undefined, 1)).toBe(STATUS_POLL_MS);
-    expect(getSwapStatusRefetchInterval(solverError, MAX_NOT_FOUND_POLLS)).toBe(STATUS_POLL_MS);
+    expect(getSolverStatusRefetchInterval(undefined, 1)).toBe(STATUS_POLL_MS);
+    expect(getSolverStatusRefetchInterval(solverError, MAX_NOT_FOUND_POLLS)).toBe(STATUS_POLL_MS);
   });
 });
 
@@ -88,7 +87,7 @@ describe('advanceNotFoundStreak', () => {
     state = advanceNotFoundStreak(state, HASH_A, isSolverNotFound(ok(SolverIntentStatusCode.STARTED_NOT_FINISHED)), 40);
     state = advanceNotFoundStreak(state, HASH_A, isSolverNotFound(ok(SolverIntentStatusCode.NOT_FOUND)), 41);
     expect(state.consecutiveNotFound).toBe(1);
-    expect(getSwapStatusRefetchInterval(ok(SolverIntentStatusCode.NOT_FOUND), state.consecutiveNotFound)).toBe(
+    expect(getSolverStatusRefetchInterval(ok(SolverIntentStatusCode.NOT_FOUND), state.consecutiveNotFound)).toBe(
       STATUS_POLL_MS,
     );
   });

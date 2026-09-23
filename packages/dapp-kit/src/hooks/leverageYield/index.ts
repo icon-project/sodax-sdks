@@ -6,6 +6,7 @@ export * from './useLeverageYieldPreviewRedeem.js';
 export * from './useLeverageYieldShareBalances.js';
 export * from './useLeverageYieldDeposit.js';
 export * from './useLeverageYieldNotifySolver.js';
+export * from './useLeverageYieldDetailedStatus.js';
 export * from './useLeverageYieldVaultSwap.js';
 export * from './useLeverageYieldWithdraw.js';
 export * from './useLeveragePositions.js';
