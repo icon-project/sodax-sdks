@@ -50,6 +50,7 @@ Only after the connect UX works should you add:
 - Switch active EVM network ([`recipes/switch-chain.md`](./recipes/switch-chain.md))
 - Chain & wallet detection patterns ([`recipes/chain-detection.md`](./recipes/chain-detection.md))
 - WalletConnect ([`recipes/walletconnect-setup.md`](./recipes/walletconnect-setup.md))
+- Email login with Privy ([`recipes/privy-email-login.md`](./recipes/privy-email-login.md))
 - Batch connect / disconnect ([`recipes/batch-operations.md`](./recipes/batch-operations.md))
 
 Each is independent — apply only what the user asked for.
