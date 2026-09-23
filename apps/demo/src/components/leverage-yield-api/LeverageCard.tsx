@@ -42,7 +42,7 @@ import {
 } from '@sodax/dapp-kit';
 import { getXChainType, useEvmSwitchChain, useWalletProvider, useXAccount, useXService } from '@sodax/wallet-sdk-react';
 import type { LeverageYieldApiOrder } from '@/components/leverage-yield-api/OrderStatus';
-import { LEVERAGE_YIELD_API_CONFIG } from '@/components/leverage-yield-api/lib/config';
+import { effectiveLeverageYieldApiBaseUrl } from '@/lib/sodaxSettings';
 import { toIntentRequest } from '@/components/swaps-api/lib/mappers';
 import { isSignableSwapsApiChain, signAndBroadcastSwapsApiTx } from '@/components/swaps-api/lib/signAndBroadcast';
 import { useDebouncedValue } from '@/components/swaps-api/lib/useDebouncedValue';
@@ -137,8 +137,9 @@ export default function LeverageCard({
   setOrders: (value: SetStateAction<LeverageYieldApiOrder[]>) => void;
 }) {
   const { sodax } = useSodaxContext();
-  const { openWalletModal } = useAppStore();
-  const apiConfig = LEVERAGE_YIELD_API_CONFIG;
+  const { openWalletModal, sodaxSettings } = useAppStore();
+  // Per-call, so this page can point at a local leverage-yield API without moving the app-wide SDK.
+  const apiConfig = useMemo(() => ({ baseURL: effectiveLeverageYieldApiBaseUrl(sodaxSettings) }), [sodaxSettings]);
   const supportedChains = useMemo(() => sodax.config.getSupportedSpokeChains() as string[], [sodax]);
 
   const [slippage, setSlippage] = useState<string>('0.5');

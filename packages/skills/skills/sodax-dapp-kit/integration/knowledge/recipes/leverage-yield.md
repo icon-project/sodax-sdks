@@ -12,7 +12,7 @@ Leveraged-yield ERC-4626 vaults on Sonic. Deposit any token → `lsoda*` shares,
 |------|---------|
 | `useLeverageYieldDeposit` | Build a deposit payload (any token → `lsoda*`) |
 | `useLeverageYieldWithdraw` | Build a withdraw payload (`lsoda*` → any token) |
-| `useLeverageYieldVaultSwap` | Execute a built payload end-to-end (create → relay → notify solver) |
+| `useLeverageYieldVaultSwap` | Execute a built payload end-to-end (backend submit-tx by default, client-side relay as fallback) |
 | `useSwapApprove` | Approve the spoke `inputToken` (deposit only — swap-domain hook) |
 
 ### Queries

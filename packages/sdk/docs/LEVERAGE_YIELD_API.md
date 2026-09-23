@@ -201,9 +201,14 @@ per-call `RequestOverrideConfig`. A legacy `/be`-suffixed value — configured o
 to the root, exactly as for swaps and bridge. See [`SWAPS_API.md`](SWAPS_API.md) § Configuration and
 [`BACKEND_API.md`](BACKEND_API.md).
 
-The end-to-end orchestrator routes through this API only when you opt in with
-`new Sodax({ leverageYield: { useBackendSubmitTx: true } })` (default OFF, unlike the swaps and bridge
-toggles) — see [`CONFIGURE_SDK.md`](CONFIGURE_SDK.md) and [`LEVERAGE_YIELD.md`](LEVERAGE_YIELD.md).
+The end-to-end orchestrator routes through this API by default: `leverageYield.useBackendSubmitTx`
+resolves to `true` when omitted, like the swaps and bridge toggles. Opt out with
+`new Sodax({ leverageYield: { useBackendSubmitTx: false } })` to keep the client-side relay. On any
+backend non-success — including a rejected key — `vaultSwap` falls back to that relay on its own, so
+the default costs one wasted attempt at worst. `POST /leverage-yield/submit-tx` declares the
+`swaps:write` scope; whether a deployment checks the key at all is its own setting, so pass one
+(`new Sodax({ apiKey })`, or per action via `extras.apiKey`) rather than assume either. See
+[`CONFIGURE_SDK.md`](CONFIGURE_SDK.md) and [`LEVERAGE_YIELD.md`](LEVERAGE_YIELD.md).
 
 ## Result\<T\> and Error Handling
 

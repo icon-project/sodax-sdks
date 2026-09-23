@@ -50,6 +50,14 @@ export type LeverageYieldAllowanceCheckErrorCode = AllowanceCheckErrorCode;
 export type LeverageYieldLookupErrorCode = LookupErrorCode;
 
 /**
+ * The only code `getDetailedStatus` returns: no status source could produce a usable answer.
+ * Narrower than {@link LeverageYieldLookupErrorCode}, which also admits `VALIDATION_FAILED` /
+ * `UNKNOWN`. Prefixed because swap's equivalent is not — the root barrel is a flat `export *`, so
+ * an unprefixed `DetailedStatusError` here would collide with it.
+ */
+export type LeverageYieldDetailedStatusErrorCode = Extract<SodaxErrorCode, 'LOOKUP_FAILED'>;
+
+/**
  * Codes returnable by the solver-notify step inside `vaultSwap`. Mirrors the swap
  * domain's `PostExecutionErrorCode` — duplicated deliberately so the leverage-yield
  * error surface stands alone (see `vaultSwap`).
@@ -98,6 +106,7 @@ export type LeverageYieldCreateIntentError = SodaxError<LeverageYieldCreateInten
 export type LeverageYieldApproveError = SodaxError<LeverageYieldApproveErrorCode>;
 export type LeverageYieldAllowanceCheckError = SodaxError<LeverageYieldAllowanceCheckErrorCode>;
 export type LeverageYieldLookupError = SodaxError<LeverageYieldLookupErrorCode>;
+export type LeverageYieldDetailedStatusError = SodaxError<LeverageYieldDetailedStatusErrorCode>;
 export type LeverageYieldPostExecutionError = SodaxError<LeverageYieldPostExecutionErrorCode>;
 export type LeverageYieldSwapError = SodaxError<LeverageYieldSwapErrorCode>;
 export type LeverageYieldError = SodaxError<LeverageYieldErrorCode>;
