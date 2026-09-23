@@ -114,9 +114,8 @@ source file. Reviewed, and every check below runs against it.
 
 **In the Mintlify dashboard** — the docs and marketing team, on the hand-written pages.
 `main` requires a pull request, so Publish opens one from a `sodax/draft-*` branch and the
-checks below run there, before anything is live. For marketing's own pages
-[`.github/docs-publishing.md`](../.github/docs-publishing.md) replaces the reviewer with those
-checks; until its admin steps are applied, every dashboard publish is merged by hand.
+checks below run there, before anything is live. It then needs an engineer's approval and is
+merged by hand like any other pull request; tag someone in the SODAX team when it is urgent.
 
 Which branch the dashboard targets is a setting there, recorded nowhere in this repo. Pointed
 at a branch that does not require a pull request, Publish commits straight to it, and the

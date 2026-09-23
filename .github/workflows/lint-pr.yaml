@@ -10,7 +10,7 @@ jobs:
   main:
     name: Validate PR title
     # A dashboard publish commits "Updated mintlify pages", which no PR title can match;
-    # docs-auto-merge.yml composes the squash subject for those instead.
+    # whoever merges it sets a conventional squash subject instead.
     if: >-
       github.event.pull_request.head.repo.full_name != github.repository ||
       !startsWith(github.event.pull_request.head.ref, 'sodax/draft-')

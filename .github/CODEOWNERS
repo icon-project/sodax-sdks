@@ -17,12 +17,7 @@
 /scripts/sync-docs-pages.mjs @icon-project/frontend-write
 
 # The published site. Root-anchored: bare `docs/` would also claim packages/*/docs/.
-# Engineering by default, which keeps every generated page and the API, SDK, How To and
-# Protocol tabs here.
 /docs/ @icon-project/frontend-write
-
-# Marketing's own pages stay with engineering here on purpose: a dashboard publish that needs
-# a human is one classify-docs-pr.sh rejected, and those are engineering's to resolve.
 
 # Last, so they hold even if a docs root above ever grows to cover them: navigation and
 # redirects decide every published URL, and the stylesheet and widget are the site's look.
