@@ -291,9 +291,15 @@ const submitResult = await sodax.api.swaps.submitTx({
   relayData: relayData.payload,   // string (not the object)
 });
 
-// `ok` is transport-level only; a 200 can still report the submission was not queued.
-if (!submitResult.ok || !submitResult.value.success) {
-  // submitResult.error.code: 'EXTERNAL_API_ERROR' with context.api: 'swaps'
+// Two distinct failure arms — the reason lives in a different place on each.
+if (!submitResult.ok) {
+  // Transport / HTTP / validation: submitResult.error.code is 'EXTERNAL_API_ERROR'
+  // with context.api: 'swaps'. There is no `value`.
+  return fallbackToClientSideRelay();
+}
+if (!submitResult.value.success) {
+  // 200, but the backend did NOT queue it. There is no `error` here — the reason is
+  // on the payload: submitResult.value.data.message.
   return fallbackToClientSideRelay();
 }
 

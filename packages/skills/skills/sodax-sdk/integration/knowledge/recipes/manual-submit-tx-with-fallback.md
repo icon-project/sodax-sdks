@@ -47,35 +47,63 @@ const serialized = JSON.stringify(request, (_k, v) => (typeof v === 'bigint' ? v
 
 Passing `intent` straight to `submitTx` still needs no conversion — the wire client serializes internally. Only your own storage does.
 
-## 3. Submit — check both flags
+## 3. Open the attempt budget, then submit
+
+The attempt starts **before** the POST — the submit draws on the same budget as the poll, so a stalled POST costs the attempt instead of silently extending it. Cap every request at the budget left, never above the service's own timeout.
 
 ```ts
-const submitted = await sodax.api.swaps.submitTx(request);
+const serviceTimeoutMs = sodax.api.swaps.getTimeout();
+const attemptDeadline = Date.now() + timeoutMs;
 
-// `ok` is transport-level only. A 200 can still report the submission was not queued,
-// and then there is nothing to poll for.
-if (!submitted.ok || !submitted.value.success) return fallback();
+const remaining = () => Math.max(0, attemptDeadline - Date.now());
+const requestTimeout = (): number | null => {
+  const capped = Math.min(remaining(), serviceTimeoutMs);
+  return capped > 0 ? capped : null;   // null → issue no request at all
+};
+
+const submitBudget = requestTimeout();
+if (submitBudget === null) return fallback();
+
+const submitted = await sodax.api.swaps.submitTx(request, { timeout: submitBudget });
+
+// Two distinct arms — the reason lives in a different place on each.
+if (!submitted.ok) return fallback();              // transport: submitted.error.code
+if (!submitted.value.success) return fallback();   // 200 not queued: submitted.value.data.message
 ```
 
 Do **not** call `verifyTxHash` before this. The backend verifies itself, so a client-side confirmation wait only delays every backend success. Verification belongs to the fallback.
 
 ## 4. Poll until `solved`
 
+Same budget, same cap per request, and no sleep the attempt cannot outlast — that wait only delays the fallback.
+
 ```ts
 import { isAuthFailure } from '@sodax/sdk';
-import type { SubmitTxStatusQueryV2 } from '@sodax/sdk';
+import type { Result, SubmitTxStatusQueryV2, SwapResponse } from '@sodax/sdk';
 
 const query: SubmitTxStatusQueryV2 = { txHash: spokeTxHash as string, srcChainKey };
-const deadline = Date.now() + 120_000;
+const intervalMs = 1_000;
 
-while (Date.now() < deadline) {
-  const snapshot = await sodax.api.swaps.getSubmitTxStatus(query);
+for (let budget = requestTimeout(); budget !== null; budget = requestTimeout()) {
+  const snapshot = await sodax.api.swaps.getSubmitTxStatus(query, { timeout: budget });
 
   if (snapshot.ok) {
     const { status, result, abandonedAt } = snapshot.value.data;
     // Terminal success needs BOTH fields.
     if (status === 'solved' && result?.dstIntentTxHash && result.intent_hash) {
-      return { dstTxHash: result.dstIntentTxHash, intentHash: result.intent_hash };
+      const value: SwapResponse = {
+        solverExecutionResponse: { answer: 'OK', intent_hash: result.intent_hash as `0x${string}` },
+        intent,
+        intentDeliveryInfo: {
+          srcChainKey,
+          srcTxHash: spokeTxHash as string,
+          srcAddress: params.srcAddress,
+          dstChainKey: params.dstChainKey,
+          dstTxHash: result.dstIntentTxHash,
+          dstAddress: params.dstAddress,
+        },
+      };
+      return { ok: true, value } satisfies Result<SwapResponse>;
     }
     if (status === 'failed' || abandonedAt) break;          // terminal failure
     // pending | relaying | relayed | posting_execution | posted_execution → keep polling
@@ -83,7 +111,8 @@ while (Date.now() < deadline) {
     break;   // a rejected API key cannot become success by waiting
   }
 
-  await new Promise(r => setTimeout(r, 1_000));
+  if (remaining() <= intervalMs) break;
+  await new Promise(r => setTimeout(r, intervalMs));
 }
 
 return fallback();   // every exit other than `solved` is a non-success
@@ -91,10 +120,13 @@ return fallback();   // every exit other than `solved` is a non-success
 
 ## 5. Fallback — the client-side relay
 
+Returns the **same** `SwapResponse` as the backend path, so callers handle completion through one contract whichever path ran — as `swap()` does.
+
 ```ts
 import { relayTxAndWaitPacket, RELAY_FALLBACK_FLOOR_MS, isHubChainKeyType } from '@sodax/sdk';
+import type { Result, SwapResponse } from '@sodax/sdk';
 
-async function fallback() {
+async function fallback(): Promise<Result<SwapResponse>> {
   const verified = await sodax.spoke.verifyTxHash({ txHash: spokeTxHash as string, chainKey: srcChainKey });
   if (!verified.ok) return verified;
 
@@ -113,7 +145,24 @@ async function fallback() {
     hubTxHash = packet.value.dst_tx_hash;
   }
 
-  return sodax.swaps.postExecution({ intent_tx_hash: hubTxHash as `0x${string}` });
+  const posted = await sodax.swaps.postExecution({ intent_tx_hash: hubTxHash as `0x${string}` });
+  if (!posted.ok) return posted;
+
+  return {
+    ok: true,
+    value: {
+      solverExecutionResponse: posted.value,
+      intent,
+      intentDeliveryInfo: {
+        srcChainKey,
+        srcTxHash: spokeTxHash as string,
+        srcAddress: params.srcAddress,
+        dstChainKey: params.dstChainKey,
+        dstTxHash: hubTxHash,
+        dstAddress: params.dstAddress,
+      },
+    },
+  };
 }
 ```
 

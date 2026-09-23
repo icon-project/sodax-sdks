@@ -167,15 +167,37 @@ const serialized = JSON.stringify(request, (_key, value) =>
 The SDK's own wire client does the same thing internally, which is why passing `intent` straight to
 `submitTx` needs no conversion from you — only your own storage does.
 
-### Step 3 — submit, and check both flags
+### Step 3 — open the attempt budget, then submit
+
+The attempt starts **before** the POST, not after it: the submit request draws on the same budget as
+the poll, so a stalled POST costs the attempt rather than silently extending it. Every backend request
+is capped at the budget left, but never above the API service's own timeout.
 
 ```typescript
-const submitted = await sodax.api.swaps.submitTx(request);
+const serviceTimeoutMs = sodax.api.swaps.getTimeout();
+const attemptDeadline = Date.now() + timeoutMs;
 
-// `ok` is transport-level only. A 200 can still report the submission was not queued,
-// and then there is nothing to poll for — fall back now rather than waiting.
-if (!submitted.ok || !submitted.value.success) {
-  return fallbackSwapSteps(); // Step 5
+const remaining = (): number => Math.max(0, attemptDeadline - Date.now());
+// `null` means no request should go out at all — fall back rather than arm an abort at 0 ms.
+const requestTimeout = (): number | null => {
+  const capped = Math.min(remaining(), serviceTimeoutMs);
+  return capped > 0 ? capped : null;
+};
+
+const submitBudget = requestTimeout();
+if (submitBudget === null) return fallbackSwapSteps(); // Step 5
+
+const submitted = await sodax.api.swaps.submitTx(request, { timeout: submitBudget });
+
+if (!submitted.ok) {
+  // Transport / HTTP / validation failure — `submitted.error.code` is 'EXTERNAL_API_ERROR'
+  // with `context.api: 'swaps'`.
+  return fallbackSwapSteps();
+}
+if (!submitted.value.success) {
+  // A 200 can still report the submission was not queued. There is nothing to poll for, and the
+  // reason is on the payload, not on an error: `submitted.value.data.message`.
+  return fallbackSwapSteps();
 }
 ```
 
@@ -185,23 +207,37 @@ fail a swap the backend would have completed. Verification belongs to the fallba
 
 ### Step 4 — poll until `solved`
 
+Same budget, same cap on every request — and no sleep that the attempt cannot outlast, since that
+would be dead wait standing between you and the fallback.
+
 ```typescript
 import { isAuthFailure } from '@sodax/sdk';
-import type { SubmitTxStatusQueryV2 } from '@sodax/sdk';
+import type { Result, SubmitTxStatusQueryV2, SwapResponse } from '@sodax/sdk';
 
 const query: SubmitTxStatusQueryV2 = { txHash: spokeTxHash as string, srcChainKey };
-const deadline = Date.now() + 120_000;
 const intervalMs = 1_000;
 
-while (Date.now() < deadline) {
-  const snapshot = await sodax.api.swaps.getSubmitTxStatus(query);
+for (let budget = requestTimeout(); budget !== null; budget = requestTimeout()) {
+  const snapshot = await sodax.api.swaps.getSubmitTxStatus(query, { timeout: budget });
 
   if (snapshot.ok) {
     const { status, result, abandonedAt } = snapshot.value.data;
 
     // Terminal success needs BOTH fields — without them there is no SwapResponse to build.
     if (status === 'solved' && result?.dstIntentTxHash && result.intent_hash) {
-      return { dstTxHash: result.dstIntentTxHash, intentHash: result.intent_hash };
+      const value: SwapResponse = {
+        solverExecutionResponse: { answer: 'OK', intent_hash: result.intent_hash as `0x${string}` },
+        intent,
+        intentDeliveryInfo: {
+          srcChainKey,
+          srcTxHash: spokeTxHash as string,
+          srcAddress: createIntentParams.srcAddress,
+          dstChainKey: createIntentParams.dstChainKey,
+          dstTxHash: result.dstIntentTxHash,
+          dstAddress: createIntentParams.dstAddress,
+        },
+      };
+      return { ok: true, value } satisfies Result<SwapResponse>;
     }
     // Terminal failure: the backend is done and will not finish this swap.
     if (status === 'failed' || abandonedAt) break;
@@ -212,6 +248,8 @@ while (Date.now() < deadline) {
     break;
   }
 
+  // Give up rather than sleep past the attempt — that wait only delays the fallback.
+  if (remaining() <= intervalMs) break;
   await new Promise(resolve => setTimeout(resolve, intervalMs));
 }
 
@@ -222,12 +260,15 @@ Every way out of that loop other than `solved` means "the backend did not finish
 
 ### Step 5 — fall back to the client-side relay
 
-This is the flow you already have, with one addition: the relay gets its **own** fresh timeout.
+This is the flow you already have, with two additions: the relay gets its **own** fresh timeout, and it
+returns the **same** `SwapResponse` the backend path does — so callers handle completion through one
+contract no matter which path ran, exactly as `swap()` does.
 
 ```typescript
 import { relayTxAndWaitPacket, RELAY_FALLBACK_FLOOR_MS, isHubChainKeyType } from '@sodax/sdk';
+import type { Result, SwapResponse } from '@sodax/sdk';
 
-async function fallbackSwapSteps() {
+async function fallbackSwapSteps(): Promise<Result<SwapResponse>> {
   const verified = await sodax.spoke.verifyTxHash({ txHash: spokeTxHash as string, chainKey: srcChainKey });
   if (!verified.ok) return verified;
 
@@ -248,7 +289,25 @@ async function fallbackSwapSteps() {
     hubTxHash = packet.value.dst_tx_hash;
   }
 
-  return sodax.swaps.postExecution({ intent_tx_hash: hubTxHash as `0x${string}` });
+  const posted = await sodax.swaps.postExecution({ intent_tx_hash: hubTxHash as `0x${string}` });
+  if (!posted.ok) return posted;
+
+  // Same shape Step 4 returns on the backend path.
+  return {
+    ok: true,
+    value: {
+      solverExecutionResponse: posted.value,
+      intent,
+      intentDeliveryInfo: {
+        srcChainKey,
+        srcTxHash: spokeTxHash as string,
+        srcAddress: createIntentParams.srcAddress,
+        dstChainKey: createIntentParams.dstChainKey,
+        dstTxHash: hubTxHash,
+        dstAddress: createIntentParams.dstAddress,
+      },
+    },
+  };
 }
 ```
 
