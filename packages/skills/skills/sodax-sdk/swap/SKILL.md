@@ -23,6 +23,7 @@ Swap has materially different code paths depending on the answers. Don't skip:
    - Unsigned → `raw: true`, you handle relay yourself.
 3. **One-shot `swap()` or step-by-step (`createIntent` → backend submit → `postExecution`)?**
    - One-shot is the default for frontends. Step-by-step is for backends that already have a relay/orchestration layer.
+   - Step-by-step code must reproduce BOTH paths `swap()` runs internally — the backend submit-tx attempt *and* the client-side relay fallback on any non-success. The helpers behind `swap()` are package-internal, so the loop is hand-written: [`../integration/knowledge/recipes/manual-submit-tx-with-fallback.md`](../integration/knowledge/recipes/manual-submit-tx-with-fallback.md).
 4. **Market order or limit order?** Limit orders use a different params shape — `deadline` becomes optional (forced to `0n` internally), not required.
 
 ## Integration workflow (writing new v2 swap code)

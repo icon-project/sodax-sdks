@@ -103,6 +103,12 @@
       "icon": "list-check"
     },
     {
+      "src": "packages/sdk/docs/MIGRATE_SWAP_TO_SUBMIT_TX.md",
+      "dest": "developers/how-to/migrate_swap_to_submit_tx.md",
+      "title": "Migrate a manual swap to submit-tx",
+      "icon": "rotate"
+    },
+    {
       "src": "packages/sdk/docs/MONETIZE_SDK.md",
       "dest": "developers/how-to/monetize_sdk.md",
       "icon": "sack-dollar"
