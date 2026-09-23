@@ -51,18 +51,10 @@ describe('SolverIntentErrorCode value collisions', () => {
   ].sort((a, b) => a - b);
 
   // -8 is the one known collision (NOT_ENOUGH_PRIVATE_LIQUIDITY / QUOTE_NOT_FOUND) and is retained
-  // deliberately; renumbering either is breaking. This ratchet fails on any NEW collision.
+  // deliberately; renumbering either is breaking. This ratchet fails on any NEW collision, including
+  // one between a pre-existing code and the quote-service block.
   it('has exactly one known collision, on -8', () => {
     expect(duplicated).toEqual([-8]);
     expect(SolverIntentErrorCode.NOT_ENOUGH_PRIVATE_LIQUIDITY).toBe(SolverIntentErrorCode.QUOTE_NOT_FOUND);
-  });
-
-  it('keeps the quote-service block clear of every pre-existing code', () => {
-    const quoteServiceBlock = [-20, -21, -22, -23, -24, -25];
-    const preExisting = members.filter(([, value]) => !quoteServiceBlock.includes(value)).map(([, value]) => value);
-
-    for (const code of quoteServiceBlock) {
-      expect(preExisting).not.toContain(code);
-    }
   });
 });

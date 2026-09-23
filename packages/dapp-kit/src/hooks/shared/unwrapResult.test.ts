@@ -34,6 +34,13 @@ describe('unwrapResult', () => {
     expect(() => unwrapResult({ ok: false, error: { detail: { code: -999 } } })).toThrow('-999');
   });
 
+  it('treats a blank message as absent rather than throwing Error("")', () => {
+    // `??` preserves an empty string, so an empty detail.message would otherwise win outright.
+    expect(() => unwrapResult({ ok: false, error: { detail: { code: -4, message: '' } } })).toThrow('-4');
+    expect(() => unwrapResult({ ok: false, error: { detail: { code: -4, message: '   ' } } })).toThrow('-4');
+    expect(() => unwrapResult({ ok: false, error: { detail: { message: '' } } })).toThrow('SDK call failed');
+  });
+
   it('falls back to a top-level message, then to a generic string', () => {
     expect(() => unwrapResult({ ok: false, error: { message: 'plain object failure' } })).toThrow(
       'plain object failure',
