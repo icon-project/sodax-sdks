@@ -12,7 +12,7 @@ jobs:
     # A dashboard publish commits "Updated mintlify pages", which no PR title can match;
     # docs-auto-merge.yml composes the squash subject for those instead.
     if: >-
-      github.event.pull_request.user.login != 'usr-icon-foundation' &&
+      github.event.pull_request.head.repo.full_name != github.repository ||
       !startsWith(github.event.pull_request.head.ref, 'sodax/draft-')
     runs-on: ubuntu-latest
     steps:

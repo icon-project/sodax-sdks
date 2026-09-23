@@ -468,6 +468,15 @@ test('the change leaves the repository-wide title lint alone', () => {
   assert.match(lintPr, /validateSingleCommitMatchesPrTitle: true/);
 });
 
+// A branch name is contributor-controlled, so the exemption also needs an in-repository head.
+test('the title lint exempts only in-repository Mintlify draft branches', () => {
+  const lintPr = readFileSync(join(REPO, '.github/workflows/lint-pr.yaml'), 'utf8');
+
+  assert.match(lintPr, /github\.event\.pull_request\.head\.repo\.full_name != github\.repository \|\|/);
+  assert.match(lintPr, /!startsWith\(github\.event\.pull_request\.head\.ref, 'sodax\/draft-'\)/);
+  assert.doesNotMatch(lintPr, /usr-icon-foundation/);
+});
+
 test('the workflow retitles only a marketing-only pull request that minted a token', () => {
   const retitle = step('Retitle the pull request');
 

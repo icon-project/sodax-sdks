@@ -141,9 +141,11 @@ not, so there is no loop.
 **Validate PR title** does not run on a dashboard publish. It checks the *commit* message too,
 and that one is Mintlify's `Updated mintlify pages`, which we cannot change without
 force-pushing marketing's branch — so the check could only ever be red there, whatever the
-title says. [`lint-pr.yaml`](workflows/lint-pr.yaml) skips the job for the shared
-`usr-icon-foundation` account and for Mintlify's `sodax/draft-*` branches, matching on both so
-an editor who authorizes GitHub individually is still covered. Skipping is safe because the
+title says. [`lint-pr.yaml`](workflows/lint-pr.yaml) skips the job only for Mintlify's
+`sodax/draft-*` branches pushed to this repository: a fork cannot name its way past the check,
+and matching on the branch rather than the shared `usr-icon-foundation` account keeps an SDK
+PR from that account linted and still covers an editor who authorizes GitHub individually.
+Skipping is safe because the
 check is not in the ruleset's required checks, and the subject reaching `main` is the composed
 one either way. A red check marketing is told to ignore is worse than no check: it trains them
 past **Docs site**, which is the one that matters.
