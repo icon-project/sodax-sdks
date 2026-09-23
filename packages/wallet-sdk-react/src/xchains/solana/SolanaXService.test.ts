@@ -165,11 +165,7 @@ describe('SolanaXService.getBalances', () => {
     expect(getBalance).toHaveBeenCalledTimes(1);
     expect(getMultipleAccountsInfo).toHaveBeenCalledTimes(1);
     expect(getMultipleAccountsInfo.mock.calls[0]?.[0]).toHaveLength(4);
-    expect(unpackAccount.mock.calls.map(call => call[2])).toEqual([
-      LEGACY_PROGRAM,
-      LEGACY_PROGRAM,
-      TOKEN_2022_PROGRAM,
-    ]);
+    expect(unpackAccount.mock.calls.map(call => call[2])).toEqual([LEGACY_PROGRAM, LEGACY_PROGRAM, TOKEN_2022_PROGRAM]);
   });
 
   it('uses exactly two RPC calls for one native plus 20 non-native tokens', async () => {
@@ -177,9 +173,11 @@ describe('SolanaXService.getBalances', () => {
     const tokens = Array.from({ length: 20 }, (_, index) => token(index));
     isNativeToken.mockImplementation(xToken => xToken === native);
     const getBalance = vi.fn().mockResolvedValue(55);
-    const getMultipleAccountsInfo = vi.fn().mockImplementation(async keys =>
-      keys.map((_key: unknown, index: number) => (index % 2 === 0 ? accountInfo('legacy') : null)),
-    );
+    const getMultipleAccountsInfo = vi
+      .fn()
+      .mockImplementation(async keys =>
+        keys.map((_key: unknown, index: number) => (index % 2 === 0 ? accountInfo('legacy') : null)),
+      );
     unpackAccount.mockReturnValue({ amount: 7n });
     const service = makeService({ getBalance, getMultipleAccountsInfo });
 
@@ -198,9 +196,11 @@ describe('SolanaXService.getBalances', () => {
   ])('keeps complete token pairs within the 100-account limit for %i tokens', async (count, keyCounts) => {
     const tokens = Array.from({ length: count }, (_, index) => token(index));
     isNativeToken.mockReturnValue(false);
-    const getMultipleAccountsInfo = vi.fn().mockImplementation(async keys =>
-      keys.map((_key: unknown, index: number) => (index % 2 === 0 ? accountInfo('legacy') : null)),
-    );
+    const getMultipleAccountsInfo = vi
+      .fn()
+      .mockImplementation(async keys =>
+        keys.map((_key: unknown, index: number) => (index % 2 === 0 ? accountInfo('legacy') : null)),
+      );
     unpackAccount.mockReturnValue({ amount: 1n });
     const service = makeService({ getMultipleAccountsInfo, getBalance: vi.fn() });
 
@@ -214,12 +214,9 @@ describe('SolanaXService.getBalances', () => {
     const valid = token(0);
     const malformed = { ...TOKEN, address: 'not a public key' };
     isNativeToken.mockReturnValue(false);
-    const getMultipleAccountsInfo = vi.fn().mockResolvedValue([
-      accountInfo('first-legacy'),
-      null,
-      accountInfo('second-legacy'),
-      null,
-    ]);
+    const getMultipleAccountsInfo = vi
+      .fn()
+      .mockResolvedValue([accountInfo('first-legacy'), null, accountInfo('second-legacy'), null]);
     unpackAccount.mockReturnValueOnce({ amount: 4n }).mockReturnValueOnce({ amount: 9n });
     const service = makeService({ getMultipleAccountsInfo });
 
@@ -232,11 +229,10 @@ describe('SolanaXService.getBalances', () => {
     expect(await makeService({}).getBalances(undefined, [valid])).toEqual({});
   });
 
-  it('isolates failed native and account batches without per-token fallback calls', async () => {
-    const native = { ...TOKEN, symbol: 'SOL', address: 'native' };
+  it('rejects when an account batch fails, without per-token fallback calls', async () => {
     const tokens = Array.from({ length: 51 }, (_, index) => token(index));
-    isNativeToken.mockImplementation(xToken => xToken === native);
-    const getBalance = vi.fn().mockRejectedValue(new Error('native RPC failed'));
+    isNativeToken.mockReturnValue(false);
+    const getBalance = vi.fn();
     const getMultipleAccountsInfo = vi
       .fn()
       .mockRejectedValueOnce(new Error('batch RPC failed'))
@@ -244,12 +240,21 @@ describe('SolanaXService.getBalances', () => {
     unpackAccount.mockReturnValue({ amount: 3n });
     const service = makeService({ getBalance, getMultipleAccountsInfo });
 
-    const result = await service.getBalances(OWNER, [native, ...tokens]);
-
-    expect(result.native).toBe(0n);
-    expect(tokens.slice(0, 50).every(xToken => result[xToken.address] === 0n)).toBe(true);
-    expect(result[tokens[50]!.address]).toBe(6n);
-    expect(getBalance).toHaveBeenCalledTimes(1);
+    await expect(service.getBalances(OWNER, tokens)).rejects.toThrow('batch RPC failed');
+    expect(getBalance).not.toHaveBeenCalled();
     expect(getMultipleAccountsInfo).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects when the native balance request fails', async () => {
+    const native = { ...TOKEN, symbol: 'SOL', address: 'native' };
+    const tokens = [token(0)];
+    isNativeToken.mockImplementation(xToken => xToken === native);
+    const getBalance = vi.fn().mockRejectedValue(new Error('native RPC failed'));
+    const getMultipleAccountsInfo = vi.fn().mockResolvedValue([accountInfo('legacy'), null]);
+    unpackAccount.mockReturnValue({ amount: 3n });
+    const service = makeService({ getBalance, getMultipleAccountsInfo });
+
+    await expect(service.getBalances(OWNER, [native, ...tokens])).rejects.toThrow('native RPC failed');
+    expect(getBalance).toHaveBeenCalledTimes(1);
   });
 });

@@ -27,10 +27,11 @@ export class SolanaXService extends XService {
     return SolanaXService.instance;
   }
 
-  override async getBalances(
-    address: string | undefined,
-    xTokens: readonly XToken[],
-  ): Promise<Record<string, bigint>> {
+  /**
+   * Batches native SOL and SPL / Token-2022 balance reads into as few RPC calls as possible.
+   * Rejects when any RPC request fails, so a failed request is never reported as zero balances.
+   */
+  override async getBalances(address: string | undefined, xTokens: readonly XToken[]): Promise<Record<string, bigint>> {
     if (!address) return {};
 
     const balances = xTokens.map(() => 0n);
@@ -77,10 +78,7 @@ export class SolanaXService extends XService {
     }
 
     const nativeBalancePromise = nativeIndexes.length
-      ? connection
-          .getBalance(owner)
-          .then(balance => BigInt(balance))
-          .catch(() => 0n)
+      ? connection.getBalance(owner).then(balance => BigInt(balance))
       : Promise.resolve(0n);
 
     const batchPromises: Promise<void>[] = [];
@@ -91,23 +89,18 @@ export class SolanaXService extends XService {
       );
 
       batchPromises.push(
-        connection
-          .getMultipleAccountsInfo(candidates.map(candidate => candidate.ata))
-          .then(accounts => {
-            for (const [candidateIndex, candidate] of candidates.entries()) {
-              const info = accounts[candidateIndex];
-              if (!info) continue;
-              try {
-                balances[candidate.index] =
-                  (balances[candidate.index] ?? 0n) + unpackAccount(candidate.ata, info, candidate.programId).amount;
-              } catch {
-                // Not a token account for this candidate's program — ignore it.
-              }
+        connection.getMultipleAccountsInfo(candidates.map(candidate => candidate.ata)).then(accounts => {
+          for (const [candidateIndex, candidate] of candidates.entries()) {
+            const info = accounts[candidateIndex];
+            if (!info) continue;
+            try {
+              balances[candidate.index] =
+                (balances[candidate.index] ?? 0n) + unpackAccount(candidate.ata, info, candidate.programId).amount;
+            } catch {
+              // Not a token account for this candidate's program — ignore it.
             }
-          })
-          .catch(() => {
-            // Keep this batch's balances at zero without falling back to per-token RPC calls.
-          }),
+          }
+        }),
       );
     }
 
