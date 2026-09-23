@@ -76,7 +76,8 @@ const SOLVER_CODE_COPY: ReadonlyMap<number, SolverCodeCopy> = new Map([
 const RETRY_ADVICE = {
   retryable: 'The solver is temporarily unavailable. Wait a few seconds and try again.',
   'not-retryable': 'Retrying the same request will not help — change the amount or the token pair.',
-  unknown: 'The solver did not say whether this is temporary. Refresh the quote; if it repeats, change the amount or the pair.',
+  unknown:
+    'The solver did not say whether this is temporary. Refresh the quote; if it repeats, change the amount or the pair.',
 } as const;
 
 /** Reads the solver code off a thrown `SodaxError`. Returns undefined when there is none. */

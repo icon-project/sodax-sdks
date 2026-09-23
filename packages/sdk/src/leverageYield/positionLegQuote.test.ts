@@ -24,11 +24,15 @@ describe('isNoRouteRefusal', () => {
   });
 
   it('does not treat other solver refusals as routing ones', () => {
-    expect(isNoRouteRefusal({ detail: { code: SolverIntentErrorCode.STOPPED, message: 'Service temporarily unavailable.' } })).toBe(
-      false,
-    );
     expect(
-      isNoRouteRefusal({ detail: { code: SolverIntentErrorCode.INPUT_AMOUNT_TOO_LOW, message: 'Input amount too low' } }),
+      isNoRouteRefusal({
+        detail: { code: SolverIntentErrorCode.STOPPED, message: 'Service temporarily unavailable.' },
+      }),
+    ).toBe(false);
+    expect(
+      isNoRouteRefusal({
+        detail: { code: SolverIntentErrorCode.INPUT_AMOUNT_TOO_LOW, message: 'Input amount too low' },
+      }),
     ).toBe(false);
   });
 
