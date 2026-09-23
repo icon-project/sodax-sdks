@@ -3,6 +3,7 @@ import type { SwapFlow } from '../hooks/useSwapFlow';
 import { chainName, executableFamilies } from '../lib/chains';
 import { canExecute } from '../lib/execution';
 import { networkAllowed, tokenId } from '../lib/widgetSettings';
+import { Dropdown } from './Dropdown';
 
 function SideSettings({ flow, source }: { flow: SwapFlow; source: boolean }) {
   const [search, setSearch] = useState('');
@@ -14,6 +15,7 @@ function SideSettings({ flow, source }: { flow: SwapFlow; source: boolean }) {
   const chain = source ? flow.srcChain : flow.dstChain;
   const token = source ? flow.srcToken : flow.dstToken;
   const label = source ? 'Send from' : 'Receive on';
+  const onChain = choices.filter(choice => choice.chain === chain);
   const permitted = flow.widget[tokensKey];
   const options = flow.allChoices.filter(choice => networkAllowed(choice.chain, flow.widget[networksKey]));
   const visible = options.filter(choice =>
@@ -26,50 +28,33 @@ function SideSettings({ flow, source }: { flow: SwapFlow; source: boolean }) {
     <fieldset className="setup-side">
       <legend>{label}</legend>
       <div className="setup-pair">
-        <label className="brand-cell">
+        <div className="brand-cell">
           <span>Default network</span>
-          <select
-            className="select"
-            aria-label={`${label} default network`}
-            value={chain ?? ''}
-            onChange={event => {
-              const next = networks.find(value => value === event.target.value);
+          <Dropdown
+            label={`${label} default network`}
+            placeholder="No networks available"
+            value={chain}
+            options={networks.map(value => ({ value, label: chainName(value) }))}
+            onChange={next => {
               if (source) flow.setSrcChain(next);
               else flow.setDstChain(next);
             }}
-          >
-            {!networks.length && <option value="">No networks available</option>}
-            {networks.map(value => (
-              <option key={value} value={value}>
-                {chainName(value)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="brand-cell">
+          />
+        </div>
+        <div className="brand-cell">
           <span>Default token</span>
-          <select
-            className="select"
-            aria-label={`${label} default token`}
-            value={token?.symbol ?? ''}
-            onChange={event => {
-              const next = choices.find(
-                choice => choice.chain === chain && choice.token.symbol === event.target.value,
-              )?.token;
+          <Dropdown
+            label={`${label} default token`}
+            placeholder="No tokens available"
+            value={token?.symbol}
+            options={onChain.map(choice => ({ value: choice.token.symbol, label: choice.token.symbol }))}
+            onChange={symbol => {
+              const next = onChain.find(choice => choice.token.symbol === symbol)?.token;
               if (source) flow.setSrcToken(next);
               else flow.setDstToken(next);
             }}
-          >
-            {!choices.some(choice => choice.chain === chain) && <option value="">No tokens available</option>}
-            {choices
-              .filter(choice => choice.chain === chain)
-              .map(choice => (
-                <option key={tokenId(choice)} value={choice.token.symbol}>
-                  {choice.token.symbol}
-                </option>
-              ))}
-          </select>
-        </label>
+          />
+        </div>
       </div>
       <label className="check-row">
         <input

@@ -85,6 +85,38 @@ export function toSearch(state: UrlStateSource): string {
   return params.toString();
 }
 
+/** What the widget applies for a key the URL leaves out, so a rewrite can leave that key out too. */
+export type UrlDefaults = {
+  srcChain: string;
+  dstChain: string;
+  srcSymbol: string;
+  dstSymbol: string;
+  amount: string;
+  slippage: string;
+};
+
+/**
+ * The form as the address bar should carry it: only what differs from the defaults, so a visitor who
+ * opens the widget and changes nothing keeps a bare URL. Lossless — an absent key reads as its
+ * default — but only for the tab the visitor sees. A framed widget keeps the complete `toSearch`,
+ * because a lock reads the pair off its own URL and a stripped one would unpin it on reload.
+ */
+export function toBrowserSearch(state: UrlStateSource, defaults: UrlDefaults): string {
+  const params = new URLSearchParams(toSearch(state));
+  const defaulted: [string, string][] = [
+    ['srcChain', defaults.srcChain],
+    ['dstChain', defaults.dstChain],
+    ['srcToken', defaults.srcSymbol],
+    ['dstToken', defaults.dstSymbol],
+    ['amount', defaults.amount],
+    ['slippage', defaults.slippage],
+  ];
+  for (const [key, value] of defaulted) {
+    if (params.get(key) === value) params.delete(key);
+  }
+  return params.toString();
+}
+
 /** The address a host page frames: the current form, chrome off. `origin` is set per deployment. */
 export function embedUrl(origin: string, state: UrlStateSource): string {
   return `${origin}/?${toSearch({ ...state, embed: true })}`;

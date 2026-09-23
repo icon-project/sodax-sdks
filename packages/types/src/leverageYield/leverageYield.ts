@@ -236,9 +236,9 @@ export type LeverageYieldOptions = {
   positionFactory?: Address;
   /**
    * Route `vaultSwap()` (and so `deposit`/`withdraw`) through the backend submit-tx flow. Default
-   * `false` — the backend leverage-yield submit-tx path is opt-in while it beds in, unlike the
-   * swaps/bridge toggles which default on. Client-side only — not part of backend SodaxDefaultConfig.
-   * Read the effective value via `sodax.config.leverageYieldUseBackendSubmitTx`.
+   * `true`, like the swaps/bridge toggles — omitting it leaves the backend path ON. Set `false` to
+   * opt out and force the fully client-side relay. Client-side only — not part of backend
+   * SodaxDefaultConfig. Read the effective value via `sodax.config.leverageYieldUseBackendSubmitTx`.
    */
   useBackendSubmitTx?: boolean;
 };

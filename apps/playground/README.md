@@ -4,6 +4,9 @@ A hosted cross-network swap widget with a visual integration playground. Visitor
 quotes before connecting a wallet. For executable routes they connect, review the receiving address
 and minimum output, approve when needed, and sign inside the widget.
 
+The partner-facing page is [Swap widget](https://docs.sodax.com/widget); this README is the
+repo-side reference behind it.
+
 ## Run
 
 ```bash
@@ -64,13 +67,20 @@ The builder has three panels: **Setup**, **Appearance**, and **Integrate**.
   token blocks the route rather than silently substituting another asset.
 - The live preview is a real iframe at 480px or 375px (limited by available screen width). Dialogs,
   media queries, and wallet connections belong to that frame. Trying a different trade in the
-  preview does not change the exported defaults in Setup.
+  preview does not change the exported defaults in Setup. The builder caption explains that preview
+  swaps use real funds; the swap review repeats the warning before confirmation.
 - Appearance updates the preview without reloading it or restyling the builder. The color controls
   show resolved theme colors and accept hex entry; font, radius, density and secondary colors sit
   under Advanced appearance. Derived text and CTA labels are checked for contrast.
-- Integrate provides HTML, a React iframe wrapper, and a separate SDK quote example. The React
-  wrapper owns no wallet provider and supports an optional `onSwapStatus` callback.
+- Integrate provides HTML, a React iframe wrapper, an Agent prompt, and a separate SDK quote example.
+  The React wrapper owns no wallet provider and supports an optional `onSwapStatus` callback. The
+  Agent tab is the configured embed written as a prompt for a coding agent, stating what the markup
+  cannot: the query string is the configuration, `allow` is load-bearing, there is no `@sodax/*`
+  package to install, and the widget moves real funds. Its info tooltip uses the frontend bubble
+  style above the icon, with viewport positioning outside the scrolling panel.
 - Share copies a configuration URL. Reset all restores the default trade, restrictions, and theme.
+  A copy confirms itself on the button that was pressed, so nothing resizes and the configuration
+  tabs stay put; the line below the buttons carries only the paths that need an instruction.
   Setup and Appearance pause while a wallet dialog, review, preparation or activity is active in
   the preview, so an edit cannot replace an in-progress swap.
 - The compact swap form shows minimum received, estimated time, and applicable partner fees before
@@ -88,16 +98,19 @@ registry, custom recipients, exact-output quotes, and a full transaction-history
 | `VITE_EMBED_ORIGIN` | Stable origin for the hosted widget. Set this before distributing copied embeds. |
 | `VITE_SWAPS_API_KEY` | Optional public browser API key, sent through the SDK. Never use a privileged key. |
 | `VITE_WALLETCONNECT_PROJECT_ID` | Enables the EVM WalletConnect connector; configure allowed origins in its dashboard. |
-| `VITE_SOLANA_RPC_URL` | Browser-approved Solana mainnet RPC for both SDK balance reads and wallet signing/broadcast. Configure allowed origins and public-key restrictions with your RPC provider. |
+| `VITE_SOLANA_RPC_URL` | Overrides the built-in Solana mainnet endpoint used for both SDK balance reads and wallet signing/broadcast. Optional. Configure allowed origins and public-key restrictions with your RPC provider. |
 | `VITE_PARTNER_FEE_RECIPIENT` | Partner's Sonic fee address. Configure with the basis-point rate below. |
 | `VITE_PARTNER_FEE_BPS` | Integer basis points, within `FEE_BPS_MAX` in `src/lib/fee.ts`. Invalid fee configuration blocks execution. |
 | `VITE_GTM_ID` | Optional analytics container. Unset means no analytics container loads. |
 | `VITE_GTM_IN_EMBED` | Set to `1` only when analytics should also load inside partner frames. |
 
 All Vite variables are public browser configuration; never put a private RPC credential here.
-Without `VITE_SOLANA_RPC_URL`, Solana uses the SDK's public endpoint, which may reject browser traffic
-with HTTP 403 or rate-limit it. Set a browser-approved mainnet endpoint and rebuild/restart the app.
-Other networks retain their SDK RPC defaults; validate those against expected production traffic.
+Solana is the one network the app does not leave on its SDK default: that endpoint answers browser
+traffic with HTTP 403, which surfaces as an empty balance and a refused swap rather than as an
+outage, so `src/config.ts` falls back to a working public endpoint. Set `VITE_SOLANA_RPC_URL` to
+put a keyed provider in its place, and rebuild — Vite inlines these at build time, so changing the
+variable without a rebuild changes nothing. Other networks retain their SDK RPC defaults; validate
+those against expected production traffic.
 
 ## Analytics
 
@@ -127,8 +140,6 @@ Storage blocking or simultaneous tabs prevent an exactly-once analytics guarante
 
 ## Not yet
 
-- **Docs.** The widget is not yet on docs.sodax.com: it has no `docs/` page, no
-  `scripts/docs-pages-map.json` entry and no `docs.json` nav entry. Planned, not done.
 - **CI.** `Build Apps` in `.github/workflows/ci.yml` does not build this app, so a broken
   production build is not caught before deploy.
 - **Bundle.** The entry chunk is a single ~10.6 MB (~2.5 MB gzipped) file with no code splitting,
@@ -160,6 +171,12 @@ Unknown chain names are discarded. Restrictions control this UI, not access to t
 A configured restriction with no currently listed assets cannot execute a swap. Fee settings are
 never taken from URL parameters.
 
+A `surface` with no `theme` decides the theme itself, and both themes derive from it. Every link
+this builder writes spells out that implied `theme` as well, because the pre-paint script in
+`index.html` reads the URL without doing colour maths. Keep both parameters when hand-writing an
+embed URL: with only `surface`, the first paint uses the visitor's stored or system theme and flips
+to the surface's own once the widget mounts.
+
 ### Host messages
 
 Messages target the direct host origin (from `ancestorOrigins`, then the referrer), never `*`.
@@ -169,7 +186,7 @@ both `event.origin` and `event.source === frame.contentWindow` in a host listene
 
 | Outgoing message | Meaning |
 | --- | --- |
-| `{ type: 'sodax:resize', height }` | Content height; generated listeners clamp it to 360–1600px |
+| `{ type: 'sodax:resize', height }` | Content height; generated listeners clamp it to `EMBED_MIN_HEIGHT`–1600px |
 | `{ type: 'sodax:ready' }` | Widget mounted; does not assert that assets or wallets are ready |
 | `{ type: 'sodax:swap', status: 'started' }` | User confirmed a review and execution checks began |
 | `{ type: 'sodax:swap', status: 'submitted' }` | Deposit broadcast and recovery data saved or attempted; settlement remains pending |
@@ -196,10 +213,13 @@ The deployment allows framing with `frame-ancestors *`.
 3. Review the recipient, minimum received and partner fee. Network fees are confirmed in the wallet.
 4. Recheck the quote and allowance; confirm any allowance reset/approval through dapp-kit.
 5. Recheck the price after approval, get a fresh deadline, build the intent and request a signature.
-6. Persist the broadcast hash, intent and relay payload before submitting to the backend.
+6. Persist the broadcast hash, intent, reviewed token addresses and amount, and relay payload before
+   submitting to the backend.
 7. Track settlement until solved, failed or abandoned, with explorer links and support access.
 
 **Retry tracking** resubmits the saved transaction hash and payload; it never signs a new deposit.
+It is offered from the record rather than from the error that raised it, so a reload between the
+broadcast and a relay that has not accepted the deposit still reaches it.
 The latest activity is restored after refresh when local storage is available. If storage is blocked,
 the widget warns the user to retain the transaction hash. Failed/abandoned swaps show a support path;
 an integrated on-chain refund workflow is not implemented in this widget.

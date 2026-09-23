@@ -83,7 +83,7 @@ if (status.source === 'backend') status.data.processingAttempts;
 
 Routing: backend record while it is in play (`success: true` and not abandoned) → `source: 'backend'`. **Any** unusable backend response — 404, `success: false`, transport/server error, or a record the backend gave up on (`failed` or `abandonedAt`) — resolves the hub tx hash and asks the solver → `source: 'solver'`. On the default path the abandoned-record branch is the common one, not the 404: the record usually exists, and abandonment is what signals the client-side fallback ran.
 
-The only error is `LOOKUP_FAILED`, meaning no source could answer — usually the relay has not delivered the packet, so there is no hub tx hash. When polling, branch on `error.context.reason`: `DETAILED_STATUS_NOT_DELIVERED` is the ambiguous miss (indistinguishable from "still in flight" — bound it with a retry budget), set only when the backend also answered. Anything else, including a relay miss behind a backend outage, is a dependency failing right now and should be retried until it recovers. Point-in-time — poll it yourself, or use dapp-kit's `useDetailedStatus`.
+The only error is `LOOKUP_FAILED`, meaning no source could answer — usually the relay has not delivered the packet, so there is no hub tx hash. When polling, branch on `error.context.reason`: `DETAILED_STATUS_NOT_DELIVERED` is the ambiguous miss (indistinguishable from "still in flight" — bound it with a retry budget), set only when the backend also answered. Anything else, including a relay miss behind a backend outage, is a dependency failing right now and should be retried until it recovers. A 401/403 from the backend does not route on at all — it surfaces directly with `context.status` lifted, so `isAuthFailure(error)` is true and polling should stop; only a corrected key changes the answer. Point-in-time — poll it yourself, or use dapp-kit's `useDetailedStatus`.
 
 ## Action params shape
 
@@ -280,20 +280,38 @@ const { tx: spokeTxHash, intent, relayData } = result.value;
 
 ### Backend submit-tx flow
 
+Submitting is only the first half. `swap()` also polls to a terminal status and falls back to the client-side relay on any non-success — code that drives the steps itself must do both. Full recipe: [`../recipes/manual-submit-tx-with-fallback.md`](../recipes/manual-submit-tx-with-fallback.md).
+
 ```ts
 const submitResult = await sodax.api.swaps.submitTx({
   txHash: spokeTxHash as string,
   srcChainKey: ChainKeys.ARBITRUM_MAINNET,
-  walletAddress: '0x…',
+  walletAddress: '0x…',           // the SOURCE address that signed
   intent,                         // IntentRequestV2 — CreateIntentResult.value.intent passes through
   relayData: relayData.payload,   // string (not the object)
 });
 
+// Two distinct failure arms — the reason lives in a different place on each.
 if (!submitResult.ok) {
-  // submitResult.error.code: 'EXTERNAL_API_ERROR' with context.api: 'swaps'
-  return;
+  // Transport / HTTP / validation: submitResult.error.code is 'EXTERNAL_API_ERROR'
+  // with context.api: 'swaps'. There is no `value`.
+  return fallbackToClientSideRelay();
 }
+if (!submitResult.value.success) {
+  // 200, but the backend did NOT queue it. There is no `error` here — the reason is
+  // on the payload: submitResult.value.data.message.
+  return fallbackToClientSideRelay();
+}
+
+// Then poll `sodax.api.swaps.getSubmitTxStatus({ txHash, srcChainKey })`:
+//   status 'solved' AND result.dstIntentTxHash AND result.intent_hash → done
+//   status 'failed', or `abandonedAt` set                             → terminal, fall back
+//   401/403 (isAuthFailure)                                           → stop polling, fall back
+//   pending | relaying | relayed | posting_execution | posted_execution → keep polling
+//   budget exhausted                                                  → fall back
 ```
+
+Do NOT call `verifyTxHash` before submitting — the backend verifies itself, so a client-side confirmation wait only delays every backend success. Verification belongs to the fallback path. The fallback relay also needs its own FRESH timeout, never the remainder of the backend attempt's.
 
 ### Raw-tx flow
 
@@ -373,6 +391,7 @@ Solver-specific context on `EXTERNAL_API_ERROR`:
 
 ## Cross-references
 
+- Driving the steps yourself (backend submit-tx + fallback): [`../recipes/manual-submit-tx-with-fallback.md`](../recipes/manual-submit-tx-with-fallback.md).
 - v1 → v2 swap migration: [`features/swap.md`](../../../migration-v1-to-v2/knowledge/features/swap.md).
 - Error model: [`../architecture.md`](../architecture.md) § 8 and [`../reference/`](../reference/) § 3.
 - Stellar destinations require a trustline first: [`../chain-specifics.md`](../chain-specifics.md) § "Stellar trustline".

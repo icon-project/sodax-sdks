@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { trackSnippetCopied } from '../lib/analytics';
 import type { Snippet } from '../lib/snippet';
-
-const SNIPPET_HINT = 'Exports the defaults in Setup. Addresses and decimals come from the SODAX swaps API';
+import { CopyLabel } from './CopyLabel';
+import { SnippetHint } from './SnippetHint';
 
 /** Renders whichever flow's snippets it is handed — the view decides what those are. */
 export function CodePanel({ snippets, initialId }: { snippets: Snippet[]; initialId: string }) {
@@ -45,36 +45,16 @@ export function CodePanel({ snippets, initialId }: { snippets: Snippet[]; initia
           ))}
         </div>
         <div className="code-actions">
-          <span className="hint">
-            <button type="button" className="hint-trigger" aria-label={SNIPPET_HINT}>
-              {/* lucide's `info`, inlined — the playground carries no icon dependency. */}
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                aria-hidden="true"
-              >
-                <circle cx="12" cy="12" r="10" />
-                <path d="M12 16v-4" />
-                <path d="M12 8h.01" />
-              </svg>
-            </button>
-            <span className="hint-bubble" role="tooltip">
-              {SNIPPET_HINT}
-            </span>
-          </span>
+          <SnippetHint />
           <button type="button" className="btn" onClick={copy}>
-            {copied ? 'Copied' : 'Copy'}
+            <CopyLabel label="Copy" copied={copied} />
           </button>
           <a className="btn btn-docs" href="https://docs.sodax.com/" target="_blank" rel="noreferrer">
             Docs ↗
           </a>
         </div>
       </header>
+      {active.note && <p className="muted small snippet-note">{active.note}</p>}
       {copyError && (
         <p role="status" className="muted small">
           {copyError}

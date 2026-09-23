@@ -40,7 +40,10 @@ export const DEFAULT_PAIR = {
 export const EXCHANGE_URL = 'https://www.sodax.com/exchange/swap';
 
 export const walletConnectProjectId = env.VITE_WALLETCONNECT_PROJECT_ID;
-export const solanaRpcUrl = env.VITE_SOLANA_RPC_URL?.trim() || undefined;
+// The SDK's packaged Solana endpoint refuses browser traffic with 403, which reads as an empty
+// balance and a failed swap; a deployment overrides this with its own keyed provider.
+const SOLANA_FALLBACK_RPC_URL = 'https://solana-rpc.publicnode.com';
+export const solanaRpcUrl = env.VITE_SOLANA_RPC_URL?.trim() || SOLANA_FALLBACK_RPC_URL;
 export const deploymentFeeInput = {
   address: env.VITE_PARTNER_FEE_RECIPIENT ?? '',
   bps: env.VITE_PARTNER_FEE_BPS ?? '',

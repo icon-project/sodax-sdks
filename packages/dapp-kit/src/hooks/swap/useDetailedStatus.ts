@@ -3,12 +3,12 @@ import { useRef } from 'react';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
 import type { ReadHookParams } from '../shared/types.js';
+import { advanceNotFoundStreak, INITIAL_NOT_FOUND_STREAK } from '../shared/notFoundStreak.js';
 import {
-  advanceNotFoundStreak,
-  getDetailedStatusRefetchInterval,
-  INITIAL_NOT_FOUND_STREAK,
+  getSolverDetailedStatusRefetchInterval,
+  isSolverNotFound,
   toNotFoundBudgetRead,
-} from './getSwapStatusRefetchInterval.js';
+} from '../shared/solverStatusPolicy.js';
 
 export type UseDetailedStatusResult = Result<DetailedSwapStatus, DetailedStatusError> | undefined;
 
@@ -25,9 +25,9 @@ export type UseDetailedStatusParams = ReadHookParams<
  * `data.value` is discriminated on `source`, and each variant carries that source's payload
  * unmodified.
  *
- * Polls every 3s. Stops once the answering source is terminal, and — like `useStatus` — after 40
- * consecutive *ambiguous* reads: a solver `NOT_FOUND`, or a `LOOKUP_FAILED` whose relay has no
- * packet for the tx. Neither can distinguish "still in flight" from "never will be", so the budget
+ * Polls every 3s. Stops once the answering source is terminal, once the backend rejects the API
+ * key, and — like `useStatus` — after 40 consecutive *ambiguous* reads: a solver `NOT_FOUND`, or a
+ * `LOOKUP_FAILED` whose relay has no packet for the tx. Neither can distinguish "still in flight" from "never will be", so the budget
  * is what stops a swap nothing can resolve. A dependency outage — relay unreachable, solver down —
  * keeps polling instead, so the read recovers by itself; any real status resets the budget.
  * Override with `queryOptions.refetchInterval`.
@@ -60,10 +60,10 @@ export const useDetailedStatus = ({
       notFoundStreakRef.current = advanceNotFoundStreak(
         notFoundStreakRef.current,
         pollKey,
-        toNotFoundBudgetRead(query.state.data),
+        isSolverNotFound(toNotFoundBudgetRead(query.state.data)),
         query.state.dataUpdateCount,
       );
-      return getDetailedStatusRefetchInterval(query.state.data, notFoundStreakRef.current.consecutiveNotFound);
+      return getSolverDetailedStatusRefetchInterval(query.state.data, notFoundStreakRef.current.consecutiveNotFound);
     },
     ...queryOptions,
   });

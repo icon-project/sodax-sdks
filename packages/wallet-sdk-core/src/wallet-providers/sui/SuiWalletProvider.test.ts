@@ -16,11 +16,13 @@ const signAndExecuteTransaction = vi.fn();
 const executeTransaction = vi.fn();
 const listCoins = vi.fn();
 
-vi.mock('@mysten/sui/grpc', () => ({
-  SuiGrpcClient: vi.fn().mockImplementation(() => ({
-    core: { simulateTransaction, signAndExecuteTransaction, executeTransaction, listCoins },
-  })),
-}));
+vi.mock('@mysten/sui/grpc', () => {
+  // vitest 4 builds the instance with Reflect.construct, so a `new`-ed mock needs a class impl.
+  class MockSuiGrpcClient {
+    core = { simulateTransaction, signAndExecuteTransaction, executeTransaction, listCoins };
+  }
+  return { SuiGrpcClient: vi.fn(MockSuiGrpcClient) };
+});
 
 vi.mock('@mysten/sui/keypairs/ed25519', () => ({
   Ed25519Keypair: {

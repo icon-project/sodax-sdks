@@ -5,11 +5,11 @@ High-level React hooks library for dApp developers. Wraps `@sodax/sdk` with Reac
 ## Features
 
 - **Swap/Intent** — `useQuote`, `useSwap`, `useSwapAllowance`, `useSwapApprove`, `useCancelSwap`, `useCreateLimitOrder`, `useCancelLimitOrder`, `useStatus`
-- **Bridge** — `useBridge`, `useBridgeAllowance`, `useBridgeApprove`, `useGetBridgeableAmount`, `useGetBridgeableTokens`
+- **Bridge** — `useBridge`, `useBridgeDetailedStatus`, `useBridgeAllowance`, `useBridgeApprove`, `useGetBridgeableAmount`, `useGetBridgeableTokens`
 - **Money Market** — `useSupply`, `useWithdraw`, `useBorrow`, `useRepay`, `useMMAllowance`, `useMMApprove`, plus reserves data hooks
 - **Staking** — `useStake`, `useUnstake`, `useInstantUnstake`, `useClaim`, `useCancelUnstake`, approval hooks, info/config/ratio queries
 - **DEX** — `useDexDeposit`, `useDexWithdraw`, `useSupplyLiquidity`, `useDecreaseLiquidity`, `useClaimRewards`, pool/position queries, param builders
-- **Leverage Yield** — `useLeverageYieldDeposit`, `useLeverageYieldWithdraw`, `useLeverageYieldVaultSwap`, `useLeverageYieldNotifySolver`, plus vault position/APR/TVL/share queries
+- **Leverage Yield** — `useLeverageYieldDeposit`, `useLeverageYieldWithdraw`, `useLeverageYieldVaultSwap`, `useLeverageYieldDetailedStatus`, `useLeverageYieldNotifySolver`, plus vault position/APR/TVL/share queries
 - **Migration** — `useMigrateIcxToSoda`, `useRevertMigrateSodaToIcx`, `useMigratebnUSD`, `useMigrateBaln`, `useMigrationApprove`, `useMigrationAllowance`
 - **Bitcoin (Bound Exchange)** — `useRadfiAuth`, `useEnsureRadfiAccessToken`, `useRadfiSession`, `useTradingWallet`, `useTradingWalletBalance`, `useBitcoinBalance`, `useBitcoinTradingSetup`, `useFundTradingWallet`, `useRadfiWithdraw`, `useExpiredUtxos`, `useRenewUtxos`
 - **Partner** — `useFetchAssetsBalances`, `useGetAutoSwapPreferences`, `useIsTokenApproved`, `useApproveToken`, `useSetSwapPreference`, `useFeeClaimSwap`, `useFeeClaimWithdraw`, `usePartnerCancelIntent`, `useGetUserIntent`, `useGetIntentDetails`
@@ -161,6 +161,7 @@ function SwapButton({ intentParams }: { intentParams: CreateIntentParams }) {
 ### Bridge Hooks
 
 - [`useBridge()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/bridge/useBridge.ts) — Execute a cross-chain bridge transfer
+- [`useBridgeDetailedStatus()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/bridge/useBridgeDetailedStatus.ts) — Track a bridge from its source tx, whichever completion path ran
 - [`useBridgeAllowance()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/bridge/useBridgeAllowance.ts) — Check token approval
 - [`useBridgeApprove()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/bridge/useBridgeApprove.ts) — Approve token spending
 - [`useGetBridgeableAmount()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/bridge/useGetBridgeableAmount.ts) — Max bridgeable amount between two tokens
@@ -240,7 +241,8 @@ expires unfilled, so those go through `useSubmitLeveragePositionIntent()`, which
 - [`useLeverageYieldShareBalances()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/leverageYield/useLeverageYieldShareBalances.ts) — User `lsoda*` share balances across every chain they may hold a position under
 - [`useLeverageYieldDeposit()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/leverageYield/useLeverageYieldDeposit.ts) — Build the deposit payload (any token → `lsoda*` shares) for `useLeverageYieldVaultSwap`
 - [`useLeverageYieldWithdraw()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/leverageYield/useLeverageYieldWithdraw.ts) — Build the withdraw payload (`lsoda*` shares → any token) for `useLeverageYieldVaultSwap`
-- [`useLeverageYieldVaultSwap()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/leverageYield/useLeverageYieldVaultSwap.ts) — Execute an end-to-end vault swap (deposit or withdraw): create intent → verify → relay → notify solver
+- [`useLeverageYieldVaultSwap()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/leverageYield/useLeverageYieldVaultSwap.ts) — Execute an end-to-end vault swap (deposit or withdraw); backend 2-step by default, with the client-side fallback
+- [`useLeverageYieldDetailedStatus()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/leverageYield/useLeverageYieldDetailedStatus.ts) — Track a vault swap from its source tx, whichever completion path ran
 - [`useLeverageYieldNotifySolver()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/leverageYield/useLeverageYieldNotifySolver.ts) — Notify the solver that a vault intent landed on the hub (standalone step for manual relay flows)
 
 ### Migration Hooks
@@ -335,6 +337,21 @@ Typed wrappers over the backend Swaps API — one `useSwapsApi*` hook per endpoi
 - [`useSwapsApiSubmitTxStatus()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/swapsApi/useSwapsApiSubmitTxStatus.ts) — Check submitted swap status
 
 See [`src/hooks/swapsApi/`](https://github.com/icon-project/sodax-sdks/tree/main/packages/dapp-kit/src/hooks/swapsApi) for the full set (tokens, deadline, allowance, approve, submit/cancel intent, status, hash, packet, extra-data, intent lookups, limit orders, gas, fees).
+
+### Bridge API Hooks (`sodax.api.bridge`)
+
+Typed wrappers over the backend Bridge API v2 — one `useBridgeApi*` hook per endpoint. Highlights:
+
+- [`useBridgeApiSubmitTx()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/bridgeApi/useBridgeApiSubmitTx.ts) — Hand a broadcast spoke-deposit tx to the backend relay pipeline
+- [`useBridgeApiSubmitTxStatus()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/bridgeApi/useBridgeApiSubmitTxStatus.ts) — Poll a submitted bridge tx by `(txHash, srcChainKey)`
+
+See [`src/hooks/bridgeApi/`](https://github.com/icon-project/sodax-sdks/tree/main/packages/dapp-kit/src/hooks/bridgeApi) for the full set (tokens, allowance, approve, create intent, fee, bridgeable amount, bridgeable pair).
+
+### API-key failures are terminal
+
+Every retrying `useSwapsApi*`, `useLeverageYieldApi*` and `useBridgeApi*` hook defaults `retry` to [`retryUnlessAuthFailure()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/shared/retryUnlessAuthFailure.ts): transport blips retry up to 3 times, a `401`/`403` never replays. `useSwapsApiStatus`, `useSwapsApiSubmitTxStatus`, `useLeverageYieldApiSubmitTxStatus` and `useBridgeApiSubmitTxStatus` stop their 1s poll on a rejected key too, since `retry` bounds attempts within a tick rather than the interval — so a bad key surfaces once, on `error`, instead of re-requesting forever. Override either through `queryOptions` / `mutationOptions`.
+
+`useDetailedStatus` and `useBridgeDetailedStatus` stop on a rejected key as well, but by a different route: the SDK hands them the `401`/`403` inside a `Result` rather than throwing, so React Query never sees an error and `retry` has nothing to withhold. Their poll interval checks `isAuthFailure(data.error)` instead. It has to — a rejected key leaves the backend unanswered, so a relay miss behind it is never tagged `DETAILED_STATUS_NOT_DELIVERED`, and the not-delivered budget that stops every other unresolved read would never advance.
 
 ### Utils
 

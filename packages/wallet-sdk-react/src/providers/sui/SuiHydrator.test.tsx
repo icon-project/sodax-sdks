@@ -24,15 +24,31 @@ vi.mock('@mysten/dapp-kit-react', () => ({
 
 const suiCtor = vi.fn();
 vi.mock('@sodax/wallet-sdk-core', () => ({
-  SuiWalletProvider: vi.fn().mockImplementation(opts => {
-    suiCtor(opts);
-    return { defaults: opts.defaults, _opts: opts };
-  }),
+  // vitest 4 builds the instance with Reflect.construct, so a `new`-ed mock needs a class impl.
+  SuiWalletProvider: vi.fn(
+    class {
+      defaults: unknown;
+      _opts: { defaults?: unknown };
+      constructor(opts: { defaults?: unknown }) {
+        suiCtor(opts);
+        this.defaults = opts.defaults;
+        this._opts = opts;
+      }
+    },
+  ),
 }));
 
 vi.mock('../../xchains/sui/index.js', () => ({
   SuiXService: { getInstance: () => ({ setXConnectors: vi.fn() }) },
-  SuiXConnector: vi.fn().mockImplementation(w => ({ id: 'sui-connector', _wrapped: w })),
+  SuiXConnector: vi.fn(
+    class {
+      id = 'sui-connector';
+      _wrapped: unknown;
+      constructor(w: unknown) {
+        this._wrapped = w;
+      }
+    },
+  ),
 }));
 
 const setters = {

@@ -84,6 +84,10 @@
         "pages": ["swap/index", "money-market/index", "bridge/index", "yield/index"]
       },
       {
+        "tab": "Widget",
+        "pages": ["widget/index"]
+      },
+      {
         "tab": "API",
         "pages": [
           "developers/http-api/index",
@@ -156,6 +160,7 @@
         "pages": [
           "developers/how-to/index",
           "developers/how-to/how_to_make_a_swap",
+          "developers/how-to/migrate_swap_to_submit_tx",
           "developers/how-to/api-keys",
           "developers/how-to/payout-wallet",
           "developers/how-to/configure_sdk",

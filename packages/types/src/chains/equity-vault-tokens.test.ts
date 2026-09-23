@@ -34,6 +34,17 @@ const EQUITY_SYMBOLS = [
   'SGOV',
   'USO',
   'SLV',
+  'GOOGL',
+  'AMZN',
+  'MSFT',
+  'META',
+  'CRCL',
+  'COIN',
+  'PLTR',
+  'TSM',
+  'AMD',
+  'INTC',
+  'BABA',
 ] as const;
 
 type EquitySymbol = (typeof EQUITY_SYMBOLS)[number];

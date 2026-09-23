@@ -27,9 +27,11 @@ export const productionSolverConfig = {
   protocolIntentsContract: '0xaFf2EDb3057ed6f9C1dA6c930b8ddDf2beE573A5' as const,
 } satisfies SolverConfig;
 
-/** Auto default for `swaps.useBackendSubmitTx`: backend submit posts to the production swaps
- *  API, which only the production solver serves — so Auto is on only when the EFFECTIVE solver
- *  endpoint (env config or settings override) is production's (gh-401). */
+/** Auto default for `swaps.useBackendSubmitTx` and `leverageYield.useBackendSubmitTx`: backend
+ *  submit posts to the production swaps API, which only the production solver serves — so Auto is
+ *  on only when the EFFECTIVE solver endpoint (env config or settings override) is production's
+ *  (gh-401). Leverage yield shares the rule because `/leverage-yield/submit-tx` delegates to that
+ *  same swaps pipeline; bridge does not, because a bridge never reaches the solver. */
 export function defaultUseBackendSubmitTx(solverApiEndpoint: string): boolean {
   return solverApiEndpoint === productionSolverConfig.solverApiEndpoint;
 }

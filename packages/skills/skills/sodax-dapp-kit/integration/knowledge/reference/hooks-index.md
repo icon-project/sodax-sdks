@@ -49,6 +49,7 @@ Comprehensive hook table across 12 feature domains. Use this when you know the f
 | Hook | Type | Purpose |
 |---|---|---|
 | `useBridge` | Mutation | Execute a cross-chain bridge transfer |
+| `useBridgeDetailedStatus` | Query | Track a bridge from its source tx (`{ srcChainKey, srcTxHash, apiConfig? }`; polls 3s; Result-wrapped; stops on the answering source's terminal state, on a rejected API key, and after 40 consecutive ambiguous reads — a relay with no packet for the tx; outages keep polling). Returns a tagged union — backend submit-tx record or delivered relay packet — narrow on `source`. Unlike `useBridgeApiSubmitTxStatus`, answers for both `bridge()` completion paths |
 | `useBridgeAllowance` | Query | Approval check |
 | `useBridgeApprove` | Mutation | Approve tokens for bridge |
 | `useGetBridgeableAmount` | Query | Max bridgeable amount between two `XToken`s |
@@ -104,7 +105,8 @@ Comprehensive hook table across 12 feature domains. Use this when you know the f
 |---|---|---|
 | `useLeverageYieldDeposit` | Mutation | Build a deposit payload (any token → `lsoda*` shares) — spread into `useLeverageYieldVaultSwap` |
 | `useLeverageYieldWithdraw` | Mutation | Build a withdraw payload (`lsoda*` → any token; `hubWalletSwap`) |
-| `useLeverageYieldVaultSwap` | Mutation | Execute a built payload end-to-end (create → verify → relay → notify solver) |
+| `useLeverageYieldVaultSwap` | Mutation | Execute a built payload end-to-end; backend submit-tx by default, falling back to the client-side create → verify → relay → notify path. `extras.apiKey` keys the backend leg per action |
+| `useLeverageYieldDetailedStatus` | Query | Track a vault swap from its source tx (`{ srcChainKey, srcTxHash, apiConfig? }`; polls 3s; Result-wrapped; stops on the answering source's terminal state, on a rejected API key, and after 40 consecutive ambiguous reads — solver NOT_FOUND, or a relay with no packet for the tx; outages keep polling). Returns a tagged union — backend submit-tx record or solver answer — narrow on `source`. Unlike `useLeverageYieldApiSubmitTxStatus`, answers for both `vaultSwap()` completion paths |
 | `useLeverageYieldNotifySolver` | Mutation | Manual-flow notify step (after a self-driven `createVaultIntent` + relay) |
 | `useLeverageYieldEffectiveApr` | Query | AAVE + LSD effective net APR (60s) |
 | `useLeverageYieldPosition` | Query | Live position: collateral, debt, LTV, health factor, idle (30s) |
@@ -225,7 +227,7 @@ Typed React Query wrappers over the backend Bridge API (`sodax.api.bridge.*`). D
 | `useBridgeApiFee` | Query; `{ fee }` partner fee for an amount (per-request `partnerFee` override or configured default) |
 | `useBridgeApiBridgeableAmount` | Query; `{ limit }` deposit capacity / withdrawal liquidity for a pair |
 | `useBridgeApiIsBridgeable` | Query; `{ bridgeable }` whether a (from, to) pair is bridgeable |
-| `useBridgeApiSubmitTxStatus` | Query (1s); requires `txHash` + `srcChainKey`; polls until `executed` / `failed` |
+| `useBridgeApiSubmitTxStatus` | Query (1s); requires `txHash` + `srcChainKey`; polls until `executed` / `failed` / `abandonedAt`, or the backend rejects the API key |
 | `useBridgeApiApprove` | Mutation; builds the unsigned approval txs — `{ tx, resetTx? }`, ordering is yours to handle |
 | `useBridgeApiApproveAndBroadcast` | Mutation; builds **and** signs/broadcasts/waits — preferred; `{ approveTxHash, resetTxHash? }`; optional `onProgress` per step |
 | `useBridgeApiCreateBridgeIntent` | Mutation; builds `{ tx, relayData }` (no intent) |

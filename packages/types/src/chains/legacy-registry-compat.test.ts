@@ -29,6 +29,17 @@ const EQUITY_SYMBOLS = [
   'SGOV',
   'USO',
   'SLV',
+  'GOOGL',
+  'AMZN',
+  'MSFT',
+  'META',
+  'CRCL',
+  'COIN',
+  'PLTR',
+  'TSM',
+  'AMD',
+  'INTC',
+  'BABA',
 ] as const;
 
 const LEGACY_HUB_VAULT_SYMBOLS: readonly string[] = [

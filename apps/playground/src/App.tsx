@@ -23,16 +23,23 @@ export default function App() {
       window.parent.postMessage({ type: 'sodax:preview-busy', busy: previewBusy }, window.location.origin);
     }
   }, [previewBusy]);
-  const standalone = new URL(window.location.href);
+  // Embed mode without a frame is the new tab the link below opens: the window is the host there, so
+  // the widget keeps its embed width rather than stretching across it, and the link has nowhere left to go.
+  const framed = window.parent !== window;
 
   // What a host page frames: the widget, nothing around it. The demo chrome below is ours.
   if (initialUrl.embed) {
     return (
-      <div className="app app-embed">
-        <SwapWidget flow={flow} />
-        <a className="link standalone-link" href={standalone.href} target="_blank" rel="noreferrer">
-          Open in a new tab ↗
-        </a>
+      <div className={framed ? 'app app-embed' : 'app app-embed app-standalone'}>
+        {/* The widget's own box: the ground around it fills the frame, this is what gets measured. */}
+        <div className="app-embed-content">
+          <SwapWidget flow={flow} />
+          {framed && (
+            <a className="link standalone-link" href={window.location.href} target="_blank" rel="noreferrer">
+              Open in a new tab ↗
+            </a>
+          )}
+        </div>
       </div>
     );
   }

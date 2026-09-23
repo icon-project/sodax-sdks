@@ -13,6 +13,7 @@ import {
   broadcast,
   isUserRejection,
   executionError,
+  sourceExtras,
   type ExecutionDependencies,
 } from './execution';
 import { readActivity, submissionFor, type Activity } from './activity';
@@ -74,15 +75,35 @@ function setup(allowed = true) {
     }),
     onPhase: vi.fn(),
     onBroadcast: vi.fn(() => calls.push('save')),
+    onRelayAccepted: vi.fn(() => calls.push('accepted')),
   };
   return { deps, calls };
 }
+
+// A Stacks address cannot yield its signer public key, so an intent built without one is refused.
+describe('sourceExtras', () => {
+  it('carries the signer public key for a Stacks source and for nothing else', () => {
+    expect(sourceExtras('STACKS', '02deadbeef')).toEqual({ srcPublicKey: '02deadbeef' });
+    expect(sourceExtras('EVM', '02deadbeef')).toEqual({});
+    expect(sourceExtras('SOLANA', '02deadbeef')).toEqual({});
+    expect(sourceExtras('STACKS', undefined)).toEqual({});
+  });
+
+  it('reaches the intent the swaps API builds', async () => {
+    const { deps } = setup();
+    const stacks = { ...body, ...sourceExtras('STACKS', '02deadbeef') };
+    await executeSwap(stacks, deps);
+    expect(deps.api.createIntent).toHaveBeenCalledWith(expect.objectContaining({ srcPublicKey: '02deadbeef' }));
+  });
+});
 
 describe('swap execution', () => {
   it('persists the broadcast before submitting and uses the reviewed minimum and partner fee', async () => {
     const { deps, calls } = setup();
     await executeSwap(body, deps);
-    expect(calls).toEqual(['sign', 'save', 'submit']);
+    // Acceptance is reported last and only on success, so a record is never marked submitted while
+    // the relay could still refuse it — that mark is what a reload reads instead of a lost error.
+    expect(calls).toEqual(['sign', 'save', 'submit', 'accepted']);
     expect(deps.api.getQuote).toHaveBeenCalledWith(
       expect.objectContaining({ amount: body.inputAmount, partnerFee: body.partnerFee }),
     );
@@ -94,7 +115,7 @@ describe('swap execution', () => {
   it('waits for approval and rechecks the price before signing', async () => {
     const { deps, calls } = setup(false);
     await executeSwap(body, deps);
-    expect(calls).toEqual(['approve', 'sign', 'save', 'submit']);
+    expect(calls).toEqual(['approve', 'sign', 'save', 'submit', 'accepted']);
     expect(deps.api.getQuote).toHaveBeenCalledTimes(2);
   });
   it('stops before approval when the reviewed minimum is no longer available', async () => {
@@ -118,6 +139,9 @@ describe('swap execution', () => {
     expect(calls).toEqual(['sign', 'save']);
     expect(deps.onBroadcast).toHaveBeenCalledWith(expect.objectContaining({ txHash: '0x1234' }), intent);
     expect(deps.sign).toHaveBeenCalledTimes(1);
+    // The deposit is out and the relay does not have it. Leaving the record unmarked is what keeps
+    // the resubmission reachable after a reload, when the error that raised it is gone.
+    expect(deps.onRelayAccepted).not.toHaveBeenCalled();
   });
   it('does not submit or persist when a wallet declines signing', async () => {
     const { deps } = setup();
@@ -297,6 +321,9 @@ describe('activity recovery', () => {
     txHash: '0x1234',
     srcChainKey: ChainKeys.BASE_MAINNET,
     dstChainKey: ChainKeys.SOLANA_MAINNET,
+    srcTokenAddress: address,
+    dstTokenAddress: 'mint',
+    inputAmount: '1000',
     walletAddress: address,
     recipient: 'recipient',
     summary: '1 ETH → USDC',
@@ -334,6 +361,14 @@ describe('activity recovery', () => {
     expect(readActivity(JSON.stringify({ ...activity, srcChainKey: 'toString' }))).toBeUndefined();
     expect(readActivity(JSON.stringify({ ...activity, intent: { ...intent, inputAmount: '1.5' } }))).toBeUndefined();
     expect(readActivity(JSON.stringify({ ...activity, txHash: '<script>' }))).toBeUndefined();
+  });
+  // A record without them cannot name its tokens on a spoke chain, so it can never open a dialog.
+  it('rejects a record carrying no spoke-side token identity', () => {
+    const { srcTokenAddress: _src, ...noSource } = activity;
+    const { dstTokenAddress: _dst, ...noDestination } = activity;
+    expect(readActivity(JSON.stringify(noSource))).toBeUndefined();
+    expect(readActivity(JSON.stringify(noDestination))).toBeUndefined();
+    expect(readActivity(JSON.stringify({ ...activity, dstTokenAddress: '' }))).toBeUndefined();
   });
 });
 

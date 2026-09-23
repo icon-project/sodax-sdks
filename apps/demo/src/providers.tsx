@@ -149,6 +149,12 @@ export default function Providers({ children }: { children: ReactNode }) {
       },
       swaps: { useBackendSubmitTx: s.swapUseBackendSubmitTx ?? defaultUseBackendSubmitTx(solverApiEndpoint) },
       bridge: { useBackendSubmitTx: s.bridgeUseBackendSubmitTx ?? true },
+      // Auto follows swap's rule, not bridge's: a vault swap is a solver intent, and
+      // `/leverage-yield/submit-tx` runs the same pipeline the production swaps API serves — so
+      // pointing the demo at the staging solver must keep the backend route off (gh-401).
+      leverageYield: {
+        useBackendSubmitTx: s.leverageYieldUseBackendSubmitTx ?? defaultUseBackendSubmitTx(solverApiEndpoint),
+      },
 
       // No `leverageYield.positionFactory` override: the deployed factory now ships in
       // `leverageYieldConfig`, and pinning the same address here would be a second source of truth

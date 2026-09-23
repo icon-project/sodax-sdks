@@ -11,6 +11,7 @@ import { defaultUseBackendSubmitTx, productionSolverConfig, stagingSolverConfig 
 import {
   DEFAULT_BRIDGE_API_BASE_URL,
   envBridgeApiBaseUrl,
+  envLeverageYieldApiBaseUrl,
   envSodaxApiKey,
   envSwapsApiBaseUrl,
   bpsToPercentText,
@@ -21,7 +22,7 @@ import {
   percentTextToBps,
   type SodaxSettings,
 } from '@/lib/sodaxSettings';
-import { Check, Copy, RotateCcw } from 'lucide-react';
+import { Check, Copy, Eye, EyeOff, RotateCcw } from 'lucide-react';
 
 type SubmitTxChoice = 'auto' | 'on' | 'off';
 
@@ -30,10 +31,13 @@ const URL_FIELDS = [
   'apiBaseUrl',
   'swapsApiBaseUrl',
   'bridgeApiBaseUrl',
+  'leverageYieldApiBaseUrl',
   'relayerApiEndpoint',
 ] as const;
 const ADDRESS_FIELDS = ['intentsContract', 'protocolIntentsContract', 'partnerFeeAddress'] as const;
-const TEXT_FIELDS = [...URL_FIELDS, ...ADDRESS_FIELDS, 'partnerFeePercent', 'apiKey'] as const;
+/** Fields whose unset default is the effective gateway — see `defaultsFor`. */
+const GATEWAY_INHERITED_FIELDS = ['swapsApiBaseUrl', 'leverageYieldApiBaseUrl'] as const;
+const TEXT_FIELDS = [...URL_FIELDS, ...ADDRESS_FIELDS, 'partnerFeePercent', 'apiKey', 'leverageYieldApiKey'] as const;
 
 type TextField = (typeof TEXT_FIELDS)[number];
 
@@ -42,6 +46,7 @@ type Draft = {
   env: SolverEnv;
   swapUseBackendSubmitTx: SubmitTxChoice;
   bridgeUseBackendSubmitTx: SubmitTxChoice;
+  leverageYieldUseBackendSubmitTx: SubmitTxChoice;
 } & Record<TextField, string>;
 
 /** The effective default text per field — what an unset override resolves to. `gatewayUrl` is
@@ -55,10 +60,16 @@ function defaultsFor(env: SolverEnv, gatewayUrl: string = DEFAULT_API_BASE_URL):
     apiBaseUrl: DEFAULT_API_BASE_URL,
     swapsApiBaseUrl: envSwapsApiBaseUrl ?? gatewayUrl,
     bridgeApiBaseUrl: envBridgeApiBaseUrl ?? DEFAULT_BRIDGE_API_BASE_URL,
+    // Unlike bridge's canary default, the leverage-yield API rides the gateway, same as swaps.
+    leverageYieldApiBaseUrl: envLeverageYieldApiBaseUrl ?? gatewayUrl,
+    // Unset means the action inherits the instance key below.
+    leverageYieldApiKey: '',
     // The demo ships no partner fee: unset means the SDK charges nothing.
     partnerFeeAddress: '',
     partnerFeePercent: '',
-    apiKey: envSodaxApiKey ?? '',
+    // Deliberately NOT `envSodaxApiKey`: prefilling would print the deployment's key into the
+    // modal, a tooltip and the clipboard. Empty means "inherit it", which the hint says out loud.
+    apiKey: '',
     relayerApiEndpoint: DEFAULT_RELAYER_API_ENDPOINT,
   };
 }
@@ -75,12 +86,16 @@ function seedDraft(env: SolverEnv, s: SodaxSettings): Draft {
     env,
     swapUseBackendSubmitTx: s.swapUseBackendSubmitTx === null ? 'auto' : s.swapUseBackendSubmitTx ? 'on' : 'off',
     bridgeUseBackendSubmitTx: s.bridgeUseBackendSubmitTx === null ? 'auto' : s.bridgeUseBackendSubmitTx ? 'on' : 'off',
+    leverageYieldUseBackendSubmitTx:
+      s.leverageYieldUseBackendSubmitTx === null ? 'auto' : s.leverageYieldUseBackendSubmitTx ? 'on' : 'off',
     solverApiEndpoint: s.solverApiEndpoint ?? defaults.solverApiEndpoint,
     intentsContract: s.intentsContract ?? defaults.intentsContract,
     protocolIntentsContract: s.protocolIntentsContract ?? defaults.protocolIntentsContract,
     apiBaseUrl: s.apiBaseUrl ?? defaults.apiBaseUrl,
     swapsApiBaseUrl: s.swapsApiBaseUrl ?? defaults.swapsApiBaseUrl,
     bridgeApiBaseUrl: s.bridgeApiBaseUrl ?? defaults.bridgeApiBaseUrl,
+    leverageYieldApiBaseUrl: s.leverageYieldApiBaseUrl ?? defaults.leverageYieldApiBaseUrl,
+    leverageYieldApiKey: s.leverageYieldApiKey ?? defaults.leverageYieldApiKey,
     partnerFeeAddress: s.partnerFeeAddress ?? defaults.partnerFeeAddress,
     partnerFeePercent: s.partnerFeeBps === null ? defaults.partnerFeePercent : bpsToPercentText(s.partnerFeeBps),
     apiKey: s.apiKey ?? defaults.apiKey,
@@ -137,12 +152,16 @@ function draftToSettings(draft: Draft): SodaxSettings {
     swapUseBackendSubmitTx: draft.swapUseBackendSubmitTx === 'auto' ? null : draft.swapUseBackendSubmitTx === 'on',
     bridgeUseBackendSubmitTx:
       draft.bridgeUseBackendSubmitTx === 'auto' ? null : draft.bridgeUseBackendSubmitTx === 'on',
+    leverageYieldUseBackendSubmitTx:
+      draft.leverageYieldUseBackendSubmitTx === 'auto' ? null : draft.leverageYieldUseBackendSubmitTx === 'on',
     solverApiEndpoint: url('solverApiEndpoint'),
     intentsContract: address('intentsContract'),
     protocolIntentsContract: address('protocolIntentsContract'),
     apiBaseUrl: url('apiBaseUrl'),
     swapsApiBaseUrl: url('swapsApiBaseUrl'),
     bridgeApiBaseUrl: url('bridgeApiBaseUrl'),
+    leverageYieldApiBaseUrl: url('leverageYieldApiBaseUrl'),
+    leverageYieldApiKey: norm('leverageYieldApiKey'),
     apiKey: norm('apiKey'),
     relayerApiEndpoint: url('relayerApiEndpoint'),
     partnerFeeAddress: address('partnerFeeAddress'),
@@ -170,12 +189,20 @@ function draftToDebugJson(draft: Draft): string {
       swapUseBackendSubmitTx: submitTxChoiceToBoolean(draft.swapUseBackendSubmitTx, swapBackendSubmitTx),
       bridgeSubmitTxMode: draft.bridgeUseBackendSubmitTx,
       bridgeUseBackendSubmitTx: submitTxChoiceToBoolean(draft.bridgeUseBackendSubmitTx, true),
+      leverageYieldSubmitTxMode: draft.leverageYieldUseBackendSubmitTx,
+      leverageYieldUseBackendSubmitTx: submitTxChoiceToBoolean(
+        draft.leverageYieldUseBackendSubmitTx,
+        // Same Auto rule as swap, so the same computed value.
+        swapBackendSubmitTx,
+      ),
       solverApiEndpoint: draft.solverApiEndpoint.trim(),
       intentsContract: draft.intentsContract.trim(),
       protocolIntentsContract: draft.protocolIntentsContract.trim(),
       apiBaseUrl: draft.apiBaseUrl.trim(),
       swapsApiBaseUrl: draft.swapsApiBaseUrl.trim(),
       bridgeApiBaseUrl: draft.bridgeApiBaseUrl.trim(),
+      leverageYieldApiBaseUrl: draft.leverageYieldApiBaseUrl.trim(),
+      leverageYieldApiKey: draft.leverageYieldApiKey.trim() ? '(set)' : '(unset)',
       partnerFeeAddress: draft.partnerFeeAddress.trim() || '(unset)',
       // The percent is the input unit; bps is what the SDK and both APIs actually receive.
       partnerFeeBps: percentTextToBps(draft.partnerFeePercent) ?? '(unset)',
@@ -213,13 +240,19 @@ function CopyButton({ text, label }: { text: string; label: string }) {
   );
 }
 
-/** Label · input · copy — with an amber ring and a ↺ reset button while overriding the default. */
+/**
+ * Label · input · copy — with an amber ring and a ↺ reset button while overriding the default.
+ * `secret` masks the value until the eye is clicked, and keeps it out of the reset tooltip: a key
+ * belongs in the request, not on a screen being shared.
+ */
 function TextRow({
   label,
   value,
   defaultValue,
   error,
   hint,
+  secret = false,
+  placeholder,
   onChange,
 }: {
   label: string;
@@ -227,8 +260,12 @@ function TextRow({
   defaultValue: string;
   error?: string;
   hint?: ReactNode;
+  secret?: boolean;
+  /** What an empty field means — a masked row is otherwise indistinguishable from an unset one. */
+  placeholder?: string;
   onChange: (value: string) => void;
 }) {
+  const [revealed, setRevealed] = useState(false);
   const modified = value.trim() !== defaultValue;
   return (
     <div className="grid sm:grid-cols-[10rem_1fr] items-center gap-x-3 gap-y-1">
@@ -239,9 +276,24 @@ function TextRow({
       <div className="flex items-center gap-1.5 min-w-0">
         <Input
           value={value}
+          type={secret && !revealed ? 'password' : 'text'}
+          placeholder={placeholder}
+          autoComplete={secret ? 'off' : undefined}
           onChange={e => onChange(e.target.value)}
           className={`h-9 text-sm font-mono flex-1 min-w-0 ${modified ? 'border-amber-400' : ''}`}
         />
+        {secret && value.trim() !== '' && (
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="h-9 w-9 shrink-0"
+            onClick={() => setRevealed(r => !r)}
+            title={revealed ? `Hide ${label}` : `Reveal ${label}`}
+          >
+            {revealed ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+          </Button>
+        )}
         {modified && (
           <Button
             type="button"
@@ -249,7 +301,7 @@ function TextRow({
             size="icon"
             className="h-9 w-9 shrink-0"
             onClick={() => onChange(defaultValue)}
-            title={`Reset to default${defaultValue ? `: ${defaultValue}` : ''}`}
+            title={secret || !defaultValue ? 'Reset to default' : `Reset to default: ${defaultValue}`}
           >
             <RotateCcw className="w-4 h-4" />
           </Button>
@@ -335,6 +387,12 @@ export function SodaxSettingsModal({ open, onOpenChange }: { open: boolean; onOp
   const swapAutoSubmitTx = defaultUseBackendSubmitTx(effectiveSolverEndpoint(draft));
   const bridgeAutoSubmitTx = true;
   const swapSubmitTxMismatch = draft.swapUseBackendSubmitTx === 'on' && !swapAutoSubmitTx;
+  // A vault swap is a solver intent posted through the swaps pipeline, so it inherits swap's Auto
+  // rule and swap's staging mismatch — not bridge's unconditional on.
+  const leverageYieldAutoSubmitTx = swapAutoSubmitTx;
+  const leverageYieldSubmitTxMismatch = draft.leverageYieldUseBackendSubmitTx === 'on' && !leverageYieldAutoSubmitTx;
+  // What the per-action row falls back to: the typed instance key, or the env one behind it.
+  const inheritedApiKey = draft.apiKey.trim() !== '' || Boolean(envSodaxApiKey);
 
   // Show the basis points the percent resolves to — that is the number the SDK and both APIs get.
   const feeBps = percentTextToBps(draft.partnerFeePercent);
@@ -361,14 +419,17 @@ export function SodaxSettingsModal({ open, onOpenChange }: { open: boolean; onOp
     });
   };
 
-  // A swaps URL still at its gateway-inherited default follows the new gateway instead of
-  // becoming an explicit override pinned to the old one.
+  // A gateway-inherited URL still at its default follows the new gateway instead of becoming an
+  // explicit override pinned to the old one.
   const handleGatewayChange = (apiBaseUrl: string) => {
     setDraft(prev => {
       const next = { ...prev, apiBaseUrl };
-      const prevDefault = defaultsFor(prev.env, effectiveGateway(prev.apiBaseUrl)).swapsApiBaseUrl;
-      if (prev.swapsApiBaseUrl.trim() === prevDefault) {
-        next.swapsApiBaseUrl = defaultsFor(prev.env, effectiveGateway(apiBaseUrl)).swapsApiBaseUrl;
+      const prevDefaults = defaultsFor(prev.env, effectiveGateway(prev.apiBaseUrl));
+      const nextDefaults = defaultsFor(prev.env, effectiveGateway(apiBaseUrl));
+      for (const field of GATEWAY_INHERITED_FIELDS) {
+        if (prev[field].trim() === prevDefaults[field]) {
+          next[field] = nextDefaults[field];
+        }
       }
       return next;
     });
@@ -385,6 +446,7 @@ export function SodaxSettingsModal({ open, onOpenChange }: { open: boolean; onOp
       ...prev,
       swapUseBackendSubmitTx: 'auto',
       bridgeUseBackendSubmitTx: 'auto',
+      leverageYieldUseBackendSubmitTx: 'auto',
       ...defaultsFor(prev.env),
     }));
   };
@@ -473,6 +535,48 @@ export function SodaxSettingsModal({ open, onOpenChange }: { open: boolean; onOp
             onChange={value => set('bridgeApiBaseUrl', value)}
           />
 
+          <SectionTitle>Leverage Yield SDK</SectionTitle>
+
+          <p className="text-xs text-muted-foreground">
+            Vault deposits and withdrawals on the Leverage Yield page. A vault swap is a solver intent, so it follows
+            the swap solver env above — leverage positions are a separate on-chain flow and ignore this row.
+          </p>
+
+          <SubmitTxRow
+            label="Submit-tx"
+            value={draft.leverageYieldUseBackendSubmitTx}
+            autoEnabled={leverageYieldAutoSubmitTx}
+            warning={
+              leverageYieldSubmitTxMismatch
+                ? 'Backend submit posts to the production leverage-yield API, which runs the production swaps pipeline — the selected solver never sees the intent and its /status stays NOT_FOUND.'
+                : undefined
+            }
+            hint="Used by the Leverage Yield page. On: leverage-yield API relays + post-executes. Off: client-side relay, then /execute on the solver above. Auto follows the swap rule (off on Staging)."
+            onText="On — backend submit via leverage-yield API"
+            offText="Off — client-side relay to the solver"
+            onChange={value => set('leverageYieldUseBackendSubmitTx', value)}
+          />
+
+          <TextRow
+            label="Leverage Yield action API key"
+            value={draft.leverageYieldApiKey}
+            defaultValue={defaults.leverageYieldApiKey}
+            error={errors.leverageYieldApiKey}
+            secret
+            placeholder={inheritedApiKey ? 'Inheriting the instance key — hidden' : 'Not set'}
+            hint="Per-action `extras.apiKey` for the Leverage Yield page's vault swap — keys the submit POST and its status polls over the instance key. Unset inherits that key. The client-side relay path sends none."
+            onChange={value => set('leverageYieldApiKey', value)}
+          />
+
+          <TextRow
+            label="Leverage Yield API base URL"
+            value={draft.leverageYieldApiBaseUrl}
+            defaultValue={defaults.leverageYieldApiBaseUrl}
+            error={errors.leverageYieldApiBaseUrl}
+            hint="Used by the Leverage Yield API page only — override it for a local leverage-yield API. The Leverage Yield SDK page follows the gateway below."
+            onChange={value => set('leverageYieldApiBaseUrl', value)}
+          />
+
           <SectionTitle>Partner fee</SectionTitle>
 
           <p className="text-xs text-muted-foreground">
@@ -528,9 +632,11 @@ export function SodaxSettingsModal({ open, onOpenChange }: { open: boolean; onOp
             label="API key"
             value={draft.apiKey}
             defaultValue={defaults.apiKey}
+            secret
+            placeholder={envSodaxApiKey ? 'Set by VITE_SODAX_API_KEY — hidden' : 'Not set'}
             hint={
               envSodaxApiKey
-                ? 'x-api-key on every backend call. At its default it follows VITE_SODAX_API_KEY.'
+                ? 'x-api-key on every backend call. Left empty it inherits VITE_SODAX_API_KEY, which is never shown here.'
                 : 'x-api-key on every backend call. Keys typed here live in this browser only.'
             }
             onChange={value => set('apiKey', value)}

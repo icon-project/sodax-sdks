@@ -2,12 +2,15 @@ import { DETAILED_STATUS_NOT_DELIVERED, SodaxError, SolverIntentStatusCode, type
 import { describe, expect, it } from 'vitest';
 import {
   advanceNotFoundStreak,
-  getDetailedStatusRefetchInterval,
   INITIAL_NOT_FOUND_STREAK,
   MAX_NOT_FOUND_POLLS,
   STATUS_POLL_MS,
+} from '../shared/notFoundStreak.js';
+import {
+  getSolverDetailedStatusRefetchInterval,
+  isSolverNotFound,
   toNotFoundBudgetRead,
-} from './getSwapStatusRefetchInterval.js';
+} from '../shared/solverStatusPolicy.js';
 
 /**
  * Guards the polling-stop invariant for `useDetailedStatus`. The two variants report terminality in
@@ -48,23 +51,33 @@ const outage = {
   error: new SodaxError('LOOKUP_FAILED', 'relay down', { feature: 'swap' }),
 };
 
+/** A key the backend rejected. Terminal, and reached before any budget — see the stop below. */
+const rejectedKey = {
+  ok: false as const,
+  error: new SodaxError('LOOKUP_FAILED', 'rejected', { feature: 'swap', context: { status: 401 } }),
+};
+
 const KEY_A = 'arb:0xaaa';
 const KEY_B = 'arb:0xbbb';
 
 /** Drives the streak the way the hook does, one query update per call. */
 const advance = (
   state: typeof INITIAL_NOT_FOUND_STREAK,
-  reads: (ReturnType<typeof ok> | typeof notDelivered | typeof outage)[],
+  reads: (ReturnType<typeof ok> | typeof notDelivered | typeof outage | typeof rejectedKey)[],
   key = KEY_A,
   from = 1,
-) => reads.reduce((acc, read, i) => advanceNotFoundStreak(acc, key, toNotFoundBudgetRead(read), from + i), state);
+) =>
+  reads.reduce(
+    (acc, read, i) => advanceNotFoundStreak(acc, key, isSolverNotFound(toNotFoundBudgetRead(read)), from + i),
+    state,
+  );
 
-describe('getDetailedStatusRefetchInterval', () => {
+describe('getSolverDetailedStatusRefetchInterval', () => {
   // Both terminal states of the `SubmitSwapTxStatusV2` wire contract. `'failed'` is unreachable via
   // `getDetailedStatus` today (the SDK routes abandoned records to the solver) — asserted here as
   // the hook's own contract, so a terminal record is never polled forever if that routing changes.
   it.each(['solved', 'failed'] as const)('stops on a backend record at the terminal status %s', status => {
-    expect(getDetailedStatusRefetchInterval(ok(backend(status)), 0)).toBe(false);
+    expect(getSolverDetailedStatusRefetchInterval(ok(backend(status)), 0)).toBe(false);
   });
 
   it.each([
@@ -74,44 +87,73 @@ describe('getDetailedStatusRefetchInterval', () => {
     'posting_execution',
     'posted_execution',
   ] as const)('keeps polling a backend record at %s', status => {
-    expect(getDetailedStatusRefetchInterval(ok(backend(status)), 0)).toBe(STATUS_POLL_MS);
+    expect(getSolverDetailedStatusRefetchInterval(ok(backend(status)), 0)).toBe(STATUS_POLL_MS);
   });
 
   // A backend record is never stopped by the solver's budget — different vocabulary.
   it('keeps polling an in-flight backend record even at the cutoff', () => {
-    expect(getDetailedStatusRefetchInterval(ok(backend('relaying')), MAX_NOT_FOUND_POLLS)).toBe(STATUS_POLL_MS);
+    expect(getSolverDetailedStatusRefetchInterval(ok(backend('relaying')), MAX_NOT_FOUND_POLLS)).toBe(STATUS_POLL_MS);
   });
 
   it.each([SolverIntentStatusCode.SOLVED, SolverIntentStatusCode.FAILED])('stops on solver code %s', status => {
-    expect(getDetailedStatusRefetchInterval(ok(solver(status)), 0)).toBe(false);
+    expect(getSolverDetailedStatusRefetchInterval(ok(solver(status)), 0)).toBe(false);
   });
 
   it.each([
     SolverIntentStatusCode.NOT_STARTED_YET,
     SolverIntentStatusCode.STARTED_NOT_FINISHED,
   ])('never stops in-flight solver code %s, even at a high count', status => {
-    expect(getDetailedStatusRefetchInterval(ok(solver(status)), 100)).toBe(STATUS_POLL_MS);
+    expect(getSolverDetailedStatusRefetchInterval(ok(solver(status)), 100)).toBe(STATUS_POLL_MS);
   });
 
   it('inherits the useStatus NOT_FOUND cutoff: polls below it, stops at it', () => {
     const notFound = ok(solver(SolverIntentStatusCode.NOT_FOUND));
-    expect(getDetailedStatusRefetchInterval(notFound, MAX_NOT_FOUND_POLLS - 1)).toBe(STATUS_POLL_MS);
-    expect(getDetailedStatusRefetchInterval(notFound, MAX_NOT_FOUND_POLLS)).toBe(false);
+    expect(getSolverDetailedStatusRefetchInterval(notFound, MAX_NOT_FOUND_POLLS - 1)).toBe(STATUS_POLL_MS);
+    expect(getSolverDetailedStatusRefetchInterval(notFound, MAX_NOT_FOUND_POLLS)).toBe(false);
   });
 
   it('spends the budget on an undelivered relay packet, rather than polling it forever', () => {
-    expect(getDetailedStatusRefetchInterval(notDelivered, MAX_NOT_FOUND_POLLS - 1)).toBe(STATUS_POLL_MS);
-    expect(getDetailedStatusRefetchInterval(notDelivered, MAX_NOT_FOUND_POLLS)).toBe(false);
+    expect(getSolverDetailedStatusRefetchInterval(notDelivered, MAX_NOT_FOUND_POLLS - 1)).toBe(STATUS_POLL_MS);
+    expect(getSolverDetailedStatusRefetchInterval(notDelivered, MAX_NOT_FOUND_POLLS)).toBe(false);
   });
 
   // An outage is recoverable and polling is how it recovers — budgeting it would strand the read.
   it('never stops on a dependency outage, however long it lasts', () => {
-    expect(getDetailedStatusRefetchInterval(outage, MAX_NOT_FOUND_POLLS)).toBe(STATUS_POLL_MS);
-    expect(getDetailedStatusRefetchInterval(outage, 10_000)).toBe(STATUS_POLL_MS);
+    expect(getSolverDetailedStatusRefetchInterval(outage, MAX_NOT_FOUND_POLLS)).toBe(STATUS_POLL_MS);
+    expect(getSolverDetailedStatusRefetchInterval(outage, 10_000)).toBe(STATUS_POLL_MS);
   });
 
   it('keeps polling before the first read lands', () => {
-    expect(getDetailedStatusRefetchInterval(undefined, 0)).toBe(STATUS_POLL_MS);
+    expect(getSolverDetailedStatusRefetchInterval(undefined, 0)).toBe(STATUS_POLL_MS);
+  });
+
+  // Only a corrected key changes the answer, so there is nothing to wait for and no budget to spend.
+  it.each([401, 403])('stops on a rejected API key at the first read (%i)', status => {
+    const rejected = {
+      ok: false as const,
+      error: new SodaxError('LOOKUP_FAILED', 'rejected', { feature: 'swap', context: { status } }),
+    };
+    expect(getSolverDetailedStatusRefetchInterval(rejected, 0)).toBe(false);
+  });
+
+  // The regression this guards: a rejected key leaves the backend unanswered, so a relay miss behind
+  // it is unprovable and never tagged `DETAILED_STATUS_NOT_DELIVERED`. Without its own stop the read
+  // would poll both endpoints forever, because the budget it would need to exhaust never advances.
+  it('stops a rejected key even though the not-delivered budget never advances', () => {
+    expect(advance(INITIAL_NOT_FOUND_STREAK, Array(MAX_NOT_FOUND_POLLS).fill(rejectedKey)).consecutiveNotFound).toBe(0);
+    expect(getSolverDetailedStatusRefetchInterval(rejectedKey, 0)).toBe(false);
+  });
+
+  // 503 is the transient key-verification failure, which is retried rather than surfaced.
+  it('keeps polling a 503 from the key-verification path', () => {
+    const unavailable = {
+      ok: false as const,
+      error: new SodaxError('LOOKUP_FAILED', 'verification unavailable', {
+        feature: 'swap',
+        context: { status: 503 },
+      }),
+    };
+    expect(getSolverDetailedStatusRefetchInterval(unavailable, MAX_NOT_FOUND_POLLS)).toBe(STATUS_POLL_MS);
   });
 });
 
@@ -138,7 +180,7 @@ describe('detailed-status budget', () => {
     const state = advance({ ...INITIAL_NOT_FOUND_STREAK }, Array(MAX_NOT_FOUND_POLLS).fill(notFound));
 
     expect(state.consecutiveNotFound).toBe(MAX_NOT_FOUND_POLLS);
-    expect(getDetailedStatusRefetchInterval(notFound, state.consecutiveNotFound)).toBe(false);
+    expect(getSolverDetailedStatusRefetchInterval(notFound, state.consecutiveNotFound)).toBe(false);
   });
 
   // The regression this guards: a swap whose relay packet never lands used to poll forever, because
@@ -147,7 +189,7 @@ describe('detailed-status budget', () => {
     const state = advance({ ...INITIAL_NOT_FOUND_STREAK }, Array(MAX_NOT_FOUND_POLLS).fill(notDelivered));
 
     expect(state.consecutiveNotFound).toBe(MAX_NOT_FOUND_POLLS);
-    expect(getDetailedStatusRefetchInterval(notDelivered, state.consecutiveNotFound)).toBe(false);
+    expect(getSolverDetailedStatusRefetchInterval(notDelivered, state.consecutiveNotFound)).toBe(false);
   });
 
   // The regression this guards: a 2-minute solver or relay outage used to exhaust the budget and
@@ -156,7 +198,7 @@ describe('detailed-status budget', () => {
     const state = advance({ ...INITIAL_NOT_FOUND_STREAK }, Array(MAX_NOT_FOUND_POLLS * 2).fill(outage));
 
     expect(state.consecutiveNotFound).toBe(0);
-    expect(getDetailedStatusRefetchInterval(outage, state.consecutiveNotFound)).toBe(STATUS_POLL_MS);
+    expect(getSolverDetailedStatusRefetchInterval(outage, state.consecutiveNotFound)).toBe(STATUS_POLL_MS);
   });
 
   it('lets a transient failure be forgiven once a real status arrives', () => {
@@ -179,7 +221,9 @@ describe('detailed-status budget', () => {
     );
 
     expect(state.consecutiveNotFound).toBe(0);
-    expect(getDetailedStatusRefetchInterval(ok(backend('relaying')), state.consecutiveNotFound)).toBe(STATUS_POLL_MS);
+    expect(getSolverDetailedStatusRefetchInterval(ok(backend('relaying')), state.consecutiveNotFound)).toBe(
+      STATUS_POLL_MS,
+    );
   });
 
   it('starts a fresh budget when the composite pollKey changes', () => {

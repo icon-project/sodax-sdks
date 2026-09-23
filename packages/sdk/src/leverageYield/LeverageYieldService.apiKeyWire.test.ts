@@ -5,7 +5,7 @@
  * runs against a stubbed global fetch.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChainKeys, type Hex } from '@sodax/types';
+import { ChainKeys, SolverIntentStatusCode, type Hex } from '@sodax/types';
 import { Sodax } from '../shared/entities/Sodax.js';
 
 const mockFetch = vi.fn();
@@ -50,6 +50,44 @@ describe('LeverageYieldService solver consumer paths — API key on the wire', (
     const headers = requestHeaders('/v1/intent/quote', 'POST');
     expect(headers.get('x-api-key')).toBe('instance-key');
     expect(headers.get('content-type')).toBe('application/json');
+  });
+
+  it('getDetailedStatus keys both legs: the backend status read and the solver /status', async () => {
+    mockFetch.mockImplementation(async (url: unknown, init?: { method?: string }) => {
+      const { pathname } = new URL(String(url));
+      if (pathname === '/v1/leverage-yield/submit-tx/status') {
+        // `success: false` is the wire contract's "no record" — so the router falls through and
+        // proceeds straight to the solver. A Sonic source means no relay leg in between.
+        return okResponse({
+          success: false,
+          data: {
+            txHash: INTENT_TX_HASH,
+            srcChainKey: ChainKeys.SONIC_MAINNET,
+            status: 'pending',
+            processingAttempts: 0,
+          },
+        });
+      }
+      if (pathname === '/v1/intent/status') {
+        return okResponse({ status: SolverIntentStatusCode.SOLVED, fill_tx_hash: '0xfill' });
+      }
+      throw new Error(`unexpected fetch: ${init?.method ?? 'GET'} ${String(url)}`);
+    });
+
+    const result = await sodax.leverageYield.getDetailedStatus({
+      srcChainKey: ChainKeys.SONIC_MAINNET,
+      srcTxHash: INTENT_TX_HASH,
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.source).toBe('solver');
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    // The leverage-yield status route is ungated server-side, but the configured key still rides it —
+    // a partner should not have to reason about which of the three features happens to require one.
+    expect(requestHeaders('/v1/leverage-yield/submit-tx/status', 'GET').get('x-api-key')).toBe('instance-key');
+    const solverHeaders = requestHeaders('/v1/intent/status', 'POST');
+    expect(solverHeaders.get('x-api-key')).toBe('instance-key');
+    expect(solverHeaders.get('content-type')).toBe('application/json');
   });
 
   it('notifySolver sends x-api-key with Content-Type intact on POST /execute', async () => {

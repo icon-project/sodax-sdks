@@ -24,7 +24,14 @@ function PrimaryAction({ flow }: { flow: SwapFlow }) {
       {text}
     </button>
   );
-  if (e.activity) return disabled(e.terminal ? 'See your latest swap below' : 'Swap in progress');
+  // A dismissed swap has nowhere else to be: this reopens the dialog holding it, which is always
+  // openable — without the live asset list it states the swap from the record instead of in legs.
+  if (e.activity)
+    return (
+      <button type="button" className="btn btn-primary" onClick={e.resumeReview}>
+        {e.terminal ? 'See your swap' : 'Track your swap'}
+      </button>
+    );
   if (!flow.srcToken || !flow.dstToken) return disabled('Choose assets');
   if (!flow.isAmountValid) return disabled('Enter an amount');
   if (!flow.isSlippageValid) return disabled('Check slippage');
@@ -114,13 +121,24 @@ export function SwapPanel({ flow }: { flow: SwapFlow }) {
   // Read out before the guard: inside the picker callbacks TS cannot keep a property narrowed.
   const { srcChain, dstChain } = flow;
 
-  if (flow.assetsError) return <LoadingForm message={flow.assetsError} retry={flow.retryAssets} />;
+  // The dialog rides along with both: a deposit is already broadcast when the asset service goes
+  // down, and it is the only surface holding that swap's status, resubmission and hashes.
+  if (flow.assetsError)
+    return (
+      <>
+        <LoadingForm message={flow.assetsError} retry={flow.retryAssets} />
+        <SwapReview flow={flow} />
+      </>
+    );
   if (!srcChain || !dstChain)
     return (
-      <LoadingForm
-        message={flow.isLoadingAssets ? 'Loading assets…' : 'No assets available for the configured networks.'}
-        retry={flow.retryAssets}
-      />
+      <>
+        <LoadingForm
+          message={flow.isLoadingAssets ? 'Loading assets…' : 'No assets available for the configured networks.'}
+          retry={flow.retryAssets}
+        />
+        <SwapReview flow={flow} />
+      </>
     );
 
   // One slot, so a fee error and a quote error cannot stack and resize the card between them.
@@ -132,23 +150,9 @@ export function SwapPanel({ flow }: { flow: SwapFlow }) {
       <WalletControls execution={flow.execution} />
       <section className="card swap-card">
         <fieldset className="swap-fields" disabled={!!flow.execution.phase || !!flow.execution.activity}>
-          <div className="row-between asset-caption">
-            <span>You pay</span>
+          <div className="wallet-chips">
             <WalletButton execution={flow.execution} />
-            {flow.execution.balanceText !== undefined && (
-              <span>
-                Balance: {formatTokenAmount(flow.execution.balanceText)}
-                {flow.execution.canMax && (
-                  <button
-                    className="btn max-button"
-                    type="button"
-                    onClick={() => flow.setAmount(flow.execution.balanceText ?? '')}
-                  >
-                    MAX
-                  </button>
-                )}
-              </span>
-            )}
+            <WalletButton execution={flow.execution} receiving />
           </div>
           <AssetPanel
             symbol={flow.srcToken?.symbol}
@@ -156,6 +160,22 @@ export function SwapPanel({ flow }: { flow: SwapFlow }) {
             emptyLabel="No assets"
             pickerLabel="Asset to send"
             locked={flow.widget.lockSource}
+            meta={
+              flow.execution.balanceText !== undefined && (
+                <>
+                  <span>Balance: {formatTokenAmount(flow.execution.balanceText)}</span>
+                  {flow.execution.canMax && (
+                    <button
+                      className="btn max-button"
+                      type="button"
+                      onClick={() => flow.setAmount(flow.execution.balanceText ?? '')}
+                    >
+                      MAX
+                    </button>
+                  )}
+                </>
+              )
+            }
             picker={state => (
               <AssetPicker
                 {...state}
@@ -172,10 +192,6 @@ export function SwapPanel({ flow }: { flow: SwapFlow }) {
           />
 
           <FlipButton onClick={flow.flipDirection} disabled={!flow.canFlip} />
-          <div className="row-between asset-caption">
-            <span>You receive</span>
-            <WalletButton execution={flow.execution} receiving />
-          </div>
 
           <AssetPanel
             symbol={flow.dstToken?.symbol}
@@ -245,9 +261,10 @@ export function SwapPanel({ flow }: { flow: SwapFlow }) {
           <div className="action-message" role="status" aria-live="polite">
             {message && <p className="alert">{message}</p>}
           </div>
+          {/* Our attribution, not our reassurance: the host page tells its own users about custody. */}
           <p className="muted small action-note">
             {flow.execution.signable
-              ? 'Powered by SODAX · Your keys stay in your wallet.'
+              ? 'Powered by SODAX'
               : 'Quote-only for this route. Continue on SODAX and select your trade there.'}
           </p>
         </div>

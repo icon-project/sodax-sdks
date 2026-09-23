@@ -25,11 +25,18 @@ import { feeAmountOf } from '../lib/fee';
 import { parseAmount } from '../lib/format';
 import { initialUrl } from '../lib/initialUrl';
 import { assetGroups } from '../lib/pickerOptions';
-import { toSearch } from '../lib/urlState';
+import { toBrowserSearch, toSearch } from '../lib/urlState';
 
 export type SwapFlow = ReturnType<typeof useSwapFlow>;
 
 const seed = initialUrl;
+
+/** What this hook seeds with when the URL is silent, and therefore what a rewrite may leave out. */
+const URL_DEFAULTS = {
+  ...DEFAULT_PAIR,
+  amount: DEFAULT_AMOUNT,
+  slippage: DEFAULT_SLIPPAGE_PERCENT,
+};
 
 /** Written back with the form, so a styled widget keeps its styling across the rewrite. */
 export type SwapFlowOptions = { brand: Brand };
@@ -113,7 +120,7 @@ export function useSwapFlow({ brand }: SwapFlowOptions) {
   useEffect(() => {
     if (!srcChain || !dstChain) return;
 
-    const search = toSearch({
+    const state = {
       srcChain,
       dstChain,
       srcToken,
@@ -123,10 +130,12 @@ export function useSwapFlow({ brand }: SwapFlowOptions) {
       embed: initialUrl.embed,
       brand,
       widget,
-    });
+    };
+    const search = initialUrl.embed ? toSearch(state) : toBrowserSearch(state, URL_DEFAULTS);
+    const url = search ? `${window.location.pathname}?${search}` : window.location.pathname;
     // A sandboxed embed has an opaque origin and throws here; the form must still work in one.
     try {
-      window.history.replaceState(null, '', `${window.location.pathname}?${search}`);
+      window.history.replaceState(null, '', url);
     } catch {}
   }, [srcChain, dstChain, srcToken, dstToken, amount, slippagePercent, brand, widget]);
 
@@ -269,6 +278,7 @@ export function useSwapFlow({ brand }: SwapFlowOptions) {
     minOutputAmount,
     partnerFee,
     pair,
+    choices: assets.choices,
     ready:
       !!srcChain &&
       sourceNetworks.includes(srcChain) &&

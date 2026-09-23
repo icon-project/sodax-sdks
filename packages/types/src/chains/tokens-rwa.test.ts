@@ -10,7 +10,32 @@ import {
 } from './tokens.js';
 
 describe('RWA metadata', () => {
-  const equities = ['SPCX', 'NVDA', 'GME', 'MSTR', 'AAPL', 'TSLA', 'MU', 'SNDK', 'SPY', 'QQQ', 'SGOV', 'USO', 'SLV'];
+  const equities = [
+    'SPCX',
+    'NVDA',
+    'GME',
+    'MSTR',
+    'AAPL',
+    'TSLA',
+    'MU',
+    'SNDK',
+    'SPY',
+    'QQQ',
+    'SGOV',
+    'USO',
+    'SLV',
+    'GOOGL',
+    'AMZN',
+    'MSFT',
+    'META',
+    'CRCL',
+    'COIN',
+    'PLTR',
+    'TSM',
+    'AMD',
+    'INTC',
+    'BABA',
+  ];
   const xstocks = ['CRCLx', 'TSLAx', 'SPYx', 'NVDAx', 'QQQx', 'MSTRx', 'COINx', 'GOOGLx'];
   const expectedByChain: Partial<Record<string, readonly string[]>> = {
     [ChainKeys.ROBINHOOD_MAINNET]: equities,

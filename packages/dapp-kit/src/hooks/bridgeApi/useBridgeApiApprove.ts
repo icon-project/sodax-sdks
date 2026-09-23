@@ -1,5 +1,6 @@
 import type { BridgeApproveResponseV2, CreateBridgeIntentParamsV2, RequestOverrideConfig } from '@sodax/sdk';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
+import { retryUnlessAuthFailure } from '../shared/retryUnlessAuthFailure.js';
 import { unwrapResult } from '../shared/unwrapResult.js';
 import type { MutationHookParams } from '../shared/types.js';
 import { useSafeMutation, type SafeUseMutationResult } from '../shared/useSafeMutation.js';
@@ -37,7 +38,7 @@ export const useBridgeApiApprove = ({
 
   return useSafeMutation<BridgeApproveResponseV2, Error, UseBridgeApiApproveVars>({
     mutationKey: ['bridgeApi', 'approve'],
-    retry: 3,
+    retry: retryUnlessAuthFailure,
     ...mutationOptions,
     mutationFn: async ({ body, apiConfig }): Promise<BridgeApproveResponseV2> =>
       unwrapResult(await sodax.api.bridge.approve(body, apiConfig)),
