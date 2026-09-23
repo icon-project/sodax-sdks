@@ -401,6 +401,20 @@ if (result.ok) {
 
 **Note:** `getQuote` automatically deducts the configured partner fee from `payload.amount` before forwarding to the solver, so the returned `quoted_amount` reflects the net output the user actually receives.
 
+### Amounts below the solver's floor
+
+The solver refuses a quote below its minimum size with `detail.code === -1` and the message `Input amount too low`. `-1` is not a `SolverIntentErrorCode` member, and it is the same code a routing refusal (`No path was found`) comes back with, so branch with `isAmountTooSmallRefusal` instead of comparing codes. It reads the raw `SolverErrorResponse` above as well as the wrapped error `sodax.api.swaps.getQuote` returns for the same refusal (the backend's 422), so one check serves both quote paths:
+
+```typescript
+import { isAmountTooSmallRefusal } from '@sodax/sdk';
+
+if (!result.ok) {
+  if (isAmountTooSmallRefusal(result.error)) {
+    // Terminal for this amount: ask the user for a larger one instead of retrying or polling.
+  }
+}
+```
+
 ---
 
 ## Intent Parameters
@@ -1277,3 +1291,5 @@ if (!quoteResult.ok) {
   console.error('Solver error message:', solverError.detail.message);
 }
 ```
+
+A quote refused for being too small is not distinguishable by code (see [Amounts below the solver's floor](#amounts-below-the-solvers-floor)); use `isAmountTooSmallRefusal(quoteResult.error)`.

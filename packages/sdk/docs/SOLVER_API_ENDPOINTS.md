@@ -42,6 +42,8 @@ type SolverErrorResponse = {
 
 `SolverIntentErrorCode` is an enum defined in `@sodax/sdk`. On unhandled exceptions the code is `SolverIntentErrorCode.UNKNOWN`.
 
+The live solver also answers `-1`, which is not an enum member, for both a routing refusal (`No path was found`) and an amount below its floor (`Input amount too low`). Only the message tells them apart; `isAmountTooSmallRefusal` from `@sodax/sdk` does that check.
+
 To branch on solver errors, inspect `result.error.detail.code`:
 
 ```ts
