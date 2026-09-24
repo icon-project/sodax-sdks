@@ -9,5 +9,6 @@ export async function loadPrivySource(): Promise<PrivySource | undefined> {
   const appId = effectivePrivyAppId(loadSodaxSettings());
   if (!appId) return undefined;
   const { privy } = await import('@sodax/wallet-sdk-react/privy');
-  return privy({ appId });
+  // Testers reconnect without a new code; `'logout'` (the default) suits shared devices.
+  return privy({ appId, disconnectBehavior: 'detach' });
 }
