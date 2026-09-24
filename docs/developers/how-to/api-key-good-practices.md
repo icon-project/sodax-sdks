@@ -92,7 +92,7 @@ async function forward(request: Request): Promise<Response> {
   const upstream = await fetch(`${UPSTREAM}${path}${search}`, {
     method: request.method,
     headers,
-    body: request.method === 'GET' || request.method === 'HEAD' ? undefined : await request.text(),
+    body: request.method === 'GET' ? undefined : await request.text(),
   });
 
   return new Response(upstream.body, {
@@ -153,7 +153,7 @@ Sources: the packaged defaults are in [`packages/types/src/common/constants.ts`]
 
 Two details that decide the proxy's shape:
 
-- **Mount the proxy at the gateway root, not the data API.** Your `api.baseURL` stands in for `https://api.sodax.com/v1`. A base URL ending in `/be` is treated as the legacy data-API mount: the SDK trims the suffix and logs a warning, so `/api/sodax/be` would silently become `/api/sodax`.
+- **Mount the proxy at the gateway root, not the data API.** Your `api.baseURL` stands in for `https://api.sodax.com/v1`. A base URL ending in `/be` is treated as the legacy data-API mount: the SDK trims the suffix and logs a warning, so `/api/sodax/be` would quietly be treated as `/api/sodax`: the app keeps working, but only a console warning tells you the base URL was rewritten.
 - **Only `Content-Type` and `Accept` need forwarding.** The SDK sends no other SODAX-specific request headers. It sends `Content-Type: application/json` on every method, including `GET`, so a proxy on a different origin gets a CORS preflight on every call. A same-origin proxy, like the route handler above, avoids that entirely.
 
 ## Your proxy is now your problem
