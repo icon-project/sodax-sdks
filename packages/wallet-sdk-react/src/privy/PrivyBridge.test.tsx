@@ -9,7 +9,14 @@ import { createPrivyRuntime } from './runtime.js';
 type LoginCallbacks = { onComplete?: () => void; onError?: (code: string) => void };
 
 const privy = vi.hoisted(() => ({
-  state: { ready: true, authenticated: false, user: null as unknown, error: null as Error | null, logout: vi.fn() },
+  state: {
+    ready: true,
+    authenticated: false,
+    user: null as unknown,
+    error: null as Error | null,
+    logout: vi.fn(),
+    isModalOpen: false,
+  },
   wallets: { wallets: [] as unknown[], ready: true },
   login: vi.fn(),
   createWallet: vi.fn(),
@@ -35,7 +42,7 @@ const embeddedWallet = (address: string, walletIndex: number) => ({
 });
 
 beforeEach(() => {
-  privy.state = { ready: true, authenticated: false, user: null, error: null, logout: vi.fn() };
+  privy.state = { ready: true, authenticated: false, user: null, error: null, logout: vi.fn(), isModalOpen: false };
   privy.wallets = { wallets: [], ready: true };
   privy.login.mockReset();
   privy.callbacks = [];
@@ -64,6 +71,31 @@ describe('PrivyBridge', () => {
       walletsReady: true,
     });
     expect(runtime.getSnapshot().embedded?.address).toBe('0x02');
+  });
+
+  it('treats the wallets as ready once the embedded wallet is listed, though useWallets().ready stays false', () => {
+    // Privy's own flag also waits on external-wallet connectors, which the SDK's config turns off.
+    privy.state.authenticated = true;
+    privy.state.user = { linkedAccounts: [{ type: 'wallet', walletClientType: 'privy', chainType: 'ethereum' }] };
+    privy.wallets = { wallets: [], ready: false };
+    const runtime = createPrivyRuntime();
+    const { rerender } = render(<PrivyBridge runtime={runtime} />);
+    expect(runtime.getSnapshot().walletsReady).toBe(false);
+
+    privy.wallets = { wallets: [embeddedWallet('0x02', 0)], ready: false };
+    rerender(<PrivyBridge runtime={runtime} />);
+
+    expect(runtime.getSnapshot()).toMatchObject({ walletsReady: true, hasEmbeddedAccount: true });
+    expect(runtime.getSnapshot().embedded?.address).toBe('0x02');
+  });
+
+  it('publishes whether Privy has a modal on screen', () => {
+    privy.state.isModalOpen = true;
+    const runtime = createPrivyRuntime();
+
+    render(<PrivyBridge runtime={runtime} />);
+
+    expect(runtime.getSnapshot().modalOpen).toBe(true);
   });
 
   it('opens the login modal and rejects only when the user closes it', async () => {

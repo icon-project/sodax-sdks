@@ -11,8 +11,8 @@ import type { EmbeddedWallet, PrivyRuntime } from './runtime.js';
 
 /** The only place Privy hooks run: mirrors Privy state into the runtime the connector reads. */
 export function PrivyBridge({ runtime }: { runtime: PrivyRuntime }) {
-  const { ready, authenticated, user, error, logout } = usePrivy();
-  const { wallets, ready: walletsReady } = useWallets();
+  const { ready, authenticated, user, error, logout, isModalOpen } = usePrivy();
+  const { wallets, ready: walletsHookReady } = useWallets();
   const { createWallet } = useCreateWallet();
   // Stable callbacks: Privy re-registers them when the object identity changes.
   const callbacks = useMemo(
@@ -43,10 +43,22 @@ export function PrivyBridge({ runtime }: { runtime: PrivyRuntime }) {
   const embedded = useMemo(() => (wallet ? toEmbeddedWallet(wallet) : undefined), [wallet]);
   const hasEmbeddedAccount = user?.linkedAccounts.some(isEmbeddedEthereumAccount) ?? false;
   const userLoaded = user !== null;
+  // `useWallets().ready` also waits on Privy's external-wallet connectors, which this config turns off, so it can
+  // stay false for good; the embedded wallet being listed (or not expected) is what the connector needs.
+  const walletsReady = walletsHookReady || (ready && userLoaded && (!hasEmbeddedAccount || wallet !== undefined));
 
   useEffect(() => {
-    runtime.publish({ ready, authenticated, error, userLoaded, hasEmbeddedAccount, walletsReady, embedded });
-  }, [runtime, ready, authenticated, error, userLoaded, hasEmbeddedAccount, walletsReady, embedded]);
+    runtime.publish({
+      ready,
+      authenticated,
+      error,
+      userLoaded,
+      hasEmbeddedAccount,
+      walletsReady,
+      embedded,
+      modalOpen: isModalOpen,
+    });
+  }, [runtime, ready, authenticated, error, userLoaded, hasEmbeddedAccount, walletsReady, embedded, isModalOpen]);
 
   return null;
 }

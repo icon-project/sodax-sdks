@@ -3,7 +3,7 @@ import { getAddress, numberToHex, SwitchChainError, UserRejectedRequestError } f
 import { base, mainnet, sonic } from 'viem/chains';
 import { type Config, type Connector, createConfig, createConnector, createStorage, http } from 'wagmi';
 import { connect, disconnect, getConnectorClient, reconnect, switchChain } from 'wagmi/actions';
-import { INTERNAL_CALL_MS, PRIVY_CONNECTOR_ID, RECONNECT_BUDGET_MS } from './constants.js';
+import { INTERNAL_CALL_MS, PRIVY_CONNECTOR_ID, RECONNECT_BUDGET_MS, WALLET_MS } from './constants.js';
 import { privyConnector } from './privyConnector.js';
 import { createPrivyRuntime, type EmbeddedWallet, type PrivySnapshot } from './runtime.js';
 
@@ -24,6 +24,7 @@ const loggedOut: SnapshotState = {
   hasEmbeddedAccount: false,
   walletsReady: true,
   embedded: undefined,
+  modalOpen: false,
 };
 
 const loggedIn = (embedded: EmbeddedWallet): SnapshotState => ({
@@ -34,6 +35,7 @@ const loggedIn = (embedded: EmbeddedWallet): SnapshotState => ({
   hasEmbeddedAccount: true,
   walletsReady: true,
   embedded,
+  modalOpen: false,
 });
 
 function gate() {
@@ -623,5 +625,22 @@ describe('privyConnector — cancellation and teardown', () => {
 
     expect(context.config.state.status).toBe('disconnected');
     expect(localStorage.getItem(FLAG_KEY)).toBeNull();
+  });
+});
+
+describe('privyConnector — calls into Privy that never settle', () => {
+  it('does not hang on a createWallet() that never settles, and connects once the wallet appears', async () => {
+    vi.useFakeTimers();
+    const { runtime, ops, config, privy } = setup();
+    const wallet = fakeWallet();
+    ops.createWallet.mockImplementation(() => new Promise<undefined>(() => undefined));
+    runtime.publish({ ...loggedIn(wallet), hasEmbeddedAccount: false, embedded: undefined });
+
+    const connecting = connect(config, { connector: privy });
+    await vi.advanceTimersByTimeAsync(WALLET_MS);
+    runtime.publish(loggedIn(wallet));
+
+    await expect(connecting).resolves.toEqual({ accounts: [getAddress(ADDRESS)], chainId: sonic.id });
+    expect(ops.createWallet).toHaveBeenCalledOnce();
   });
 });

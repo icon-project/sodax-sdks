@@ -172,7 +172,7 @@ export function privyConnector({ runtime, getState, defaultChainId, flag: flagOv
         const startCurrent = getState().current;
 
         try {
-          const ready = await runtime.waitFor(s => s.ready, READY_CONNECT_MS, signal);
+          const ready = await runtime.waitFor(s => s.ready, READY_CONNECT_MS, signal, 'Waiting for Privy to be ready');
           if (!ready.authenticated) {
             if (isReconnecting) {
               flag.clear();
@@ -180,19 +180,27 @@ export function privyConnector({ runtime, getState, defaultChainId, flag: flagOv
             }
             await runtime.login(signal);
           }
-          const user = await runtime.waitFor(s => s.authenticated && s.userLoaded, WALLET_MS, signal);
+          const user = await runtime.waitFor(
+            s => s.authenticated && s.userLoaded,
+            WALLET_MS,
+            signal,
+            'Waiting for the Privy user',
+          );
           if (!user.hasEmbeddedAccount) {
             if (isReconnecting) {
               flag.clear();
               throw new Error('[wallet-sdk-react/privy] The Privy user has no embedded wallet.');
             }
             // Only on positive evidence: createWallet() throws for a user who already has one.
-            await runtime.createWallet().catch(() => undefined);
+            await withTimeout(runtime.createWallet(), WALLET_MS, 'Creating the Privy wallet', signal).catch(
+              () => undefined,
+            );
           }
           const { embedded } = await runtime.waitFor(
             s => s.walletsReady && s.embedded !== undefined,
             WALLET_MS,
             signal,
+            'Waiting for the Privy embedded wallet',
           );
           if (!embedded) throw new Error('[wallet-sdk-react/privy] No embedded wallet.');
 

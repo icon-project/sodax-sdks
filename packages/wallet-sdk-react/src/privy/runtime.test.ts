@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { LOGIN_OPEN_MS } from './constants.js';
 import { PrivyTimeoutError, PrivyUnavailableError } from './errors.js';
 import { createPrivyRuntime, type PrivySnapshot } from './runtime.js';
 
@@ -10,6 +11,7 @@ const ready: Omit<PrivySnapshot, 'mounted'> = {
   hasEmbeddedAccount: false,
   walletsReady: true,
   embedded: undefined,
+  modalOpen: false,
 };
 
 const ops = () => ({
@@ -80,5 +82,52 @@ describe('createPrivyRuntime', () => {
 
     await assertion;
     vi.useRealTimers();
+  });
+
+  describe('login', () => {
+    afterEach(() => vi.useRealTimers());
+
+    it('fails when Privy never puts its login on screen (it only warns while it still holds a user)', async () => {
+      vi.useFakeTimers();
+      const runtime = createPrivyRuntime();
+      runtime.attach(ops());
+      runtime.publish(ready);
+
+      const loggingIn = runtime.login();
+      const outcome = expect(loggingIn).rejects.toThrow('Opening the Privy login');
+      await vi.advanceTimersByTimeAsync(LOGIN_OPEN_MS);
+
+      await outcome;
+    });
+
+    it('waits as long as the user needs once the login is on screen', async () => {
+      vi.useFakeTimers();
+      const runtime = createPrivyRuntime();
+      const privy = ops();
+      privy.login.mockImplementation(() => runtime.publish({ ...ready, modalOpen: true }));
+      runtime.attach(privy);
+      runtime.publish(ready);
+      let settled = false;
+
+      const loggingIn = runtime.login().finally(() => {
+        settled = true;
+      });
+      await vi.advanceTimersByTimeAsync(LOGIN_OPEN_MS * 20);
+      expect(settled).toBe(false);
+      runtime.loginCompleted();
+
+      await expect(loggingIn).resolves.toBeUndefined();
+    });
+
+    it('ends the wait once Privy reports the user authenticated, with or without onComplete', async () => {
+      const runtime = createPrivyRuntime();
+      runtime.attach(ops());
+      runtime.publish(ready);
+
+      const loggingIn = runtime.login();
+      runtime.publish({ ...ready, authenticated: true, userLoaded: true });
+
+      await expect(loggingIn).resolves.toBeUndefined();
+    });
   });
 });

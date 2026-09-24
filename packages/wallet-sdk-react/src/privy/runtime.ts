@@ -1,3 +1,4 @@
+import { LOGIN_OPEN_MS } from './constants.js';
 import type { Eip1193Like } from './deferredProvider.js';
 import { abortReason, PrivyTimeoutError, PrivyUnavailableError, userRejected } from './errors.js';
 
@@ -21,6 +22,8 @@ export type PrivySnapshot = {
   readonly walletsReady: boolean;
   /** The user's first embedded Ethereum wallet (`walletIndex` 0). */
   readonly embedded: EmbeddedWallet | undefined;
+  /** Privy's modal is on screen (`usePrivy().isModalOpen`). */
+  readonly modalOpen: boolean;
 };
 
 export type PrivyOps = {
@@ -37,8 +40,12 @@ export type PrivyRuntime = {
     predicate: (snapshot: PrivySnapshot) => boolean,
     timeoutMs: number,
     signal?: AbortSignal,
+    what?: string,
   ): Promise<PrivySnapshot>;
-  /** Opens Privy's login modal. Untimed: settles on completion, on the user closing it, or on abort. */
+  /**
+   * Opens Privy's login modal. Once it is on screen the wait is untimed; it settles when the user is
+   * authenticated (by any path), closes the modal, or aborts — and fails if no modal appears in time.
+   */
   login(signal?: AbortSignal): Promise<void>;
   logout(): Promise<void>;
   createWallet(): Promise<void>;
@@ -61,6 +68,7 @@ const UNMOUNTED: PrivySnapshot = {
   hasEmbeddedAccount: false,
   walletsReady: false,
   embedded: undefined,
+  modalOpen: false,
 };
 
 type Pending = { reject(error: Error): void };
@@ -100,7 +108,7 @@ export function createPrivyRuntime(): PrivyRuntime {
       };
     },
 
-    waitFor(predicate, timeoutMs, signal) {
+    waitFor(predicate, timeoutMs, signal, what = 'Waiting for Privy') {
       return new Promise<PrivySnapshot>((resolve, reject) => {
         let timer: ReturnType<typeof setTimeout> | undefined;
         let unsubscribe = () => {};
@@ -129,7 +137,7 @@ export function createPrivyRuntime(): PrivyRuntime {
         if (signal?.aborted) return onAbort();
         waiters.add(waiter);
         signal?.addEventListener('abort', onAbort);
-        timer = setTimeout(() => waiter.reject(new PrivyTimeoutError('Waiting for Privy', timeoutMs)), timeoutMs);
+        timer = setTimeout(() => waiter.reject(new PrivyTimeoutError(what, timeoutMs)), timeoutMs);
         listeners.add(check);
         unsubscribe = () => {
           listeners.delete(check);
@@ -147,19 +155,37 @@ export function createPrivyRuntime(): PrivyRuntime {
       }
       settleLogin({ error: userRejected('Superseded by a newer login attempt.') });
       return new Promise<void>((resolve, reject) => {
+        let opened = false;
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        // Being authenticated ends the wait whatever delivered it; Privy's `onComplete` is not the only signal.
+        const watch = () => {
+          if (snapshot.authenticated) settleLogin({});
+          else if (snapshot.modalOpen) opened = true;
+        };
         const onAbort = () => settleLogin({ error: signal ? abortReason(signal) : userRejected('Cancelled.') });
+        const cleanup = () => {
+          clearTimeout(timer);
+          listeners.delete(watch);
+          signal?.removeEventListener('abort', onAbort);
+        };
         pendingLogin = {
           resolve() {
-            signal?.removeEventListener('abort', onAbort);
+            cleanup();
             resolve();
           },
           reject(error) {
-            signal?.removeEventListener('abort', onAbort);
+            cleanup();
             reject(error);
           },
         };
         if (signal?.aborted) return onAbort();
         signal?.addEventListener('abort', onAbort);
+        listeners.add(watch);
+        timer = setTimeout(() => {
+          if (!opened && !snapshot.modalOpen) {
+            settleLogin({ error: new PrivyTimeoutError('Opening the Privy login', LOGIN_OPEN_MS) });
+          }
+        }, LOGIN_OPEN_MS);
         current.login();
       });
     },
