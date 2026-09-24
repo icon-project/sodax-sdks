@@ -51,6 +51,7 @@ three by hand — the ordering and the shared query client both matter.
 | Variable | Effect |
 | --- | --- |
 | `VITE_WALLETCONNECT_PROJECT_ID` | Enables the WalletConnect connector; omitted, the connector is simply absent |
+| `VITE_PRIVY_APP_ID` | Adds "Email (Privy)" to the EVM wallet list (see `example.env` for the Privy app setup); omitted, the build carries no Privy code |
 | `VITE_DD_INTAKE_URL` | Points the Datadog logger adapter at a real intake instead of the local mock |
 | `VITE_SENTRY_DSN`, `VITE_SENTRY_TUNNEL` | Send to a real Sentry project |
 | `VITE_ENABLE_ANALYTICS` | Analytics is **on by default**; set it to `false` to disable |
