@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
+import { logger } from './lib/logger';
 import { loadPrivySource } from './privy';
 import Providers from './providers';
 import { Buffer } from 'buffer';
@@ -19,7 +20,7 @@ const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement)
 // if loading it fails, the app still renders without it.
 void loadPrivySource()
   .catch(error => {
-    console.error('[demo] Privy failed to load; continuing without it.', error);
+    logger.error('Privy failed to load; continuing without it.', error);
     return undefined;
   })
   .then(privy =>
