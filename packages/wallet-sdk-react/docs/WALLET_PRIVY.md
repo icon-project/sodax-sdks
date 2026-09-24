@@ -16,15 +16,16 @@ and [`EvmProvider.tsx`](https://github.com/icon-project/sodax-sdks/blob/main/pac
 2. [Options](#options)
 3. [Why `privy()` has to be imported](#why-privy-has-to-be-imported)
 4. [Using the Privy user in your app](#using-the-privy-user-in-your-app)
-5. [Custom wallet modal](#custom-wallet-modal)
-6. [Sessions, reloads and disconnect](#sessions-reloads-and-disconnect)
-7. [Custody and recovery](#custody-and-recovery)
-8. [When Privy cannot start](#when-privy-cannot-start)
-9. [Availability](#availability)
-10. [Chains and RPC](#chains-and-rpc)
-11. [Leaving Privy](#leaving-privy)
-12. [Cost](#cost)
-13. [Next.js, bundlers and viem](#nextjs-bundlers-and-viem)
+5. [Apps that already use Privy](#apps-that-already-use-privy)
+6. [Custom wallet modal](#custom-wallet-modal)
+7. [Sessions, reloads and disconnect](#sessions-reloads-and-disconnect)
+8. [Custody and recovery](#custody-and-recovery)
+9. [When Privy cannot start](#when-privy-cannot-start)
+10. [Availability](#availability)
+11. [Chains and RPC](#chains-and-rpc)
+12. [Leaving Privy](#leaving-privy)
+13. [Cost](#cost)
+14. [Next.js, bundlers and viem](#nextjs-bundlers-and-viem)
 
 ---
 
@@ -128,11 +129,35 @@ function PrivyAccount() {
 }
 ```
 
-- Do not mount a second `PrivyProvider` of your own — use the one the SDK mounts.
+- Do not mount a second `PrivyProvider` of your own — use the one the SDK mounts. If your app already has
+  one, see [Apps that already use Privy](#apps-that-already-use-privy).
 - If you enable `EVM.privy` conditionally (for example from an env var), gate components that call
   Privy hooks on the same condition: outside a `PrivyProvider`, hooks such as `useLogin({ onComplete })`
   throw.
 - Calling Privy's `logout()` yourself disconnects the Privy wallet in the SDK too.
+
+---
+
+## Apps that already use Privy
+
+Privy allows one `PrivyProvider` per app, and `EVM.privy` makes the SDK mount it.
+
+**If your app uses Privy only for email login and the embedded wallet**, remove your `PrivyProvider` and
+pass the same `appId` and `clientId` to `privy()`, with your modal styling and legal links in its
+`appearance` and `legal` options. Your `@privy-io/react-auth` must be 3.40 or newer. The app id is
+unchanged, so a user who signs in with the same email keeps the same address. In exchange:
+
+- the SDK's configuration replaces the rest of yours: email login only, Privy's external wallets off, and
+  only this SDK's EVM chains — users who signed up with Google, SMS or a wallet cannot sign in that way here;
+- Privy hooks work only in components below `SodaxWalletProvider`;
+- disconnect signs the user out of Privy, ending any session of your app that relies on it.
+
+**If your app needs its own Privy configuration** — other login methods, Privy's external wallets, other
+chains, or a Privy session that must outlive a wallet disconnect — leave `EVM.privy` out: the SDK cannot
+use a `PrivyProvider` you mount. If both end up mounted, Privy refuses the inner one with
+`Multiple PrivyProvider instances found`. With yours above `SodaxWalletProvider`, the inner one is the
+SDK's: the SDK catches the error, your app keeps its Privy, and picking "Email (Privy)" fails with that
+message.
 
 ---
 
@@ -195,7 +220,8 @@ off.
 - the page is served over plain **http** from any host other than `localhost` / `127.0.0.1` — including a
   LAN address such as `http://192.168.1.20:3000` while testing on a phone;
 - the app id is not a Privy app id (for example a client id pasted by mistake);
-- another `PrivyProvider` is already mounted above `SodaxWalletProvider`.
+- another `PrivyProvider` is already mounted above `SodaxWalletProvider` (see
+  [Apps that already use Privy](#apps-that-already-use-privy)).
 
 The SDK catches this: your app keeps rendering without Privy, the console shows the cause, and picking
 "Email (Privy)" fails with that same message. Privy hooks in your components then behave as outside a
