@@ -176,7 +176,9 @@ if (modal.state.kind === 'connecting' && ['walletConnect', 'privy'].includes(mod
 
 `PRIVY_CONNECTOR_ID` from `@sodax/wallet-sdk-react/privy` is the same `'privy'` string. Closing
 Privy's dialog moves the modal to `error` with a user-rejection error; a wrong code, a captcha retry or
-a rate limit stays inside Privy's dialog.
+a rate limit stays inside Privy's dialog. If Privy does not show its dialog within 5 seconds (its `login()`
+only logs a warning while it still holds a signed-in user), the connect fails with
+`Opening the Privy login did not complete within 5000 ms` rather than waiting.
 
 ---
 
@@ -190,10 +192,11 @@ a rate limit stays inside Privy's dialog.
   "Email (Privy)" reconnects without a new code.
 - **Disconnect signs the user out of Privy** by default, so the next connect asks for a code again. It
   also ends any other EVM wallet connected in the same session, so nothing can be revived without its own
-  sign-in — this keeps a shared device safe. If the sign-out request cannot reach Privy within 10 seconds,
-  the SDK still disconnects locally. With `disconnectBehavior: 'detach'` the Privy session stays: the next
-  click on "Email (Privy)" reconnects without a code, and so would anyone else using that browser until
-  the session expires or your app signs the user out.
+  sign-in — this keeps a shared device safe (a third-party wallet whose own disconnect stalls past 10
+  seconds is the exception: wagmi keeps it until that disconnect finishes). If the sign-out request cannot
+  reach Privy within 10 seconds, the SDK still disconnects locally. With `disconnectBehavior: 'detach'`
+  the Privy session stays: the next click on "Email (Privy)" reconnects without a code, and so would
+  anyone else using that browser until the session expires or your app signs the user out.
 - **Account changes are not followed.** If the Privy session switches to a different wallet, the SDK
   disconnects instead of signing as the new address.
 
