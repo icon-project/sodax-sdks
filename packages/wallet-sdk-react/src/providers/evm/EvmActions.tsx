@@ -1,7 +1,17 @@
 import { useEffect, useRef } from 'react';
 import { useConfig, useConnect, useSignMessage } from 'wagmi';
 import { disconnect } from 'wagmi/actions';
+import { EVM_DISCONNECT_TIMEOUT_MS } from '@/constants.js';
 import { useXWalletStore } from '@/useXWalletStore.js';
+
+/** Rejects once `ms` pass without `promise` settling, so one stalled wallet cannot hold the whole disconnect. */
+function withDeadline<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${what} did not finish within ${ms} ms`)), ms);
+  });
+  return Promise.race([promise, deadline]).finally(() => clearTimeout(timer));
+}
 
 export const EvmActions = () => {
   const wagmiConfig = useConfig();
@@ -53,7 +63,13 @@ export const EvmActions = () => {
         // connected earlier cannot come back through a later connect without its own sign-in.
         const config = wagmiConfigRef.current;
         const results = await Promise.allSettled(
-          [...config.state.connections.values()].map(({ connector }) => disconnect(config, { connector })),
+          [...config.state.connections.values()].map(({ connector }) =>
+            withDeadline(
+              disconnect(config, { connector }),
+              EVM_DISCONNECT_TIMEOUT_MS,
+              `disconnect of "${connector.id}"`,
+            ),
+          ),
         );
         for (const result of results) {
           if (result.status === 'rejected') {

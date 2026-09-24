@@ -42,7 +42,7 @@ Non-provider chains register actions and create wallet providers through the cha
 - WalletConnect filtering belongs in `walletConnect.qrModalOptions`; do not add wallet-specific branching to modal primitives.
 - Async connector discovery belongs in `discoverConnectors` on the chain registry entry.
 - `EVM.privy` (Privy email login) lives in `src/privy/` behind the `./privy` sub-path. Only files under `src/privy/` may value-import `@privy-io/react-auth` (an optional peer); `scripts/check-privy-isolation.mjs` fails the build otherwise. Core reaches it only through the opaque `PrivySource` and `src/providers/evm/privySource.ts`. Privy hooks run only in `PrivyBridge`; the connector reads them through the framework-free runtime, so its tests need no Privy import. `PrivyStartupGuard` catches only start-up throws from `PrivyProvider` (plain-http origin, malformed app id, nested provider) and keeps the app rendering; later errors pass through. `privy()` never throws — bad input warns and yields a disabled source, like a missing WalletConnect `projectId`.
-- `EvmActions.disconnect` ends every wagmi connection, not only the current one — EVM is one logical connection, and a lingering one would come back through `ConnectorAlreadyConnectedError` without its own sign-in.
+- `EvmActions.disconnect` ends every wagmi connection, not only the current one — EVM is one logical connection, and a lingering one would come back through `ConnectorAlreadyConnectedError` without its own sign-in. Each is bounded by `EVM_DISCONNECT_TIMEOUT_MS`, so a stalled wallet cannot hold `useXDisconnect` or batch disconnect.
 
 ## Hooks And Store Rules
 
