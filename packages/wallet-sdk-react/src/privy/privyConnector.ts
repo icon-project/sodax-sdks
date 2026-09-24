@@ -100,7 +100,8 @@ export function privyConnector({
       const snapshot = runtime.getSnapshot();
       if (!current || !snapshot.mounted || switching) return;
       if (snapshot.ready && !snapshot.authenticated) return endSession();
-      if (!snapshot.userLoaded || !snapshot.walletsReady) return;
+      // Mid-reload: Privy is not ready, or the user's linked wallet is not listed yet.
+      if (!snapshot.ready || !snapshot.userLoaded || (snapshot.hasEmbeddedAccount && !snapshot.embedded)) return;
       const wallet = snapshot.embedded;
       // Fail closed: never follow a different address for an intent-signing session.
       if (!wallet || getAddress(wallet.address) !== current.address) return endSession();
@@ -205,7 +206,7 @@ export function privyConnector({
             );
           }
           const { embedded } = await runtime.waitFor(
-            s => s.walletsReady && s.embedded !== undefined,
+            s => s.embedded !== undefined,
             WALLET_MS,
             signal,
             'Waiting for the Privy embedded wallet',

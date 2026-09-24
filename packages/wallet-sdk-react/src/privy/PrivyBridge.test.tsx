@@ -68,24 +68,23 @@ describe('PrivyBridge', () => {
       authenticated: true,
       userLoaded: true,
       hasEmbeddedAccount: true,
-      walletsReady: true,
     });
     expect(runtime.getSnapshot().embedded?.address).toBe('0x02');
   });
 
-  it('treats the wallets as ready once the embedded wallet is listed, though useWallets().ready stays false', () => {
+  it('publishes the embedded wallet as soon as Privy lists it, though useWallets().ready stays false', () => {
     // Privy's own flag also waits on external-wallet connectors, which the SDK's config turns off.
     privy.state.authenticated = true;
     privy.state.user = { linkedAccounts: [{ type: 'wallet', walletClientType: 'privy', chainType: 'ethereum' }] };
     privy.wallets = { wallets: [], ready: false };
     const runtime = createPrivyRuntime();
     const { rerender } = render(<PrivyBridge runtime={runtime} />);
-    expect(runtime.getSnapshot().walletsReady).toBe(false);
+    expect(runtime.getSnapshot().embedded).toBeUndefined();
 
     privy.wallets = { wallets: [embeddedWallet('0x02', 0)], ready: false };
     rerender(<PrivyBridge runtime={runtime} />);
 
-    expect(runtime.getSnapshot()).toMatchObject({ walletsReady: true, hasEmbeddedAccount: true });
+    expect(runtime.getSnapshot()).toMatchObject({ hasEmbeddedAccount: true });
     expect(runtime.getSnapshot().embedded?.address).toBe('0x02');
   });
 

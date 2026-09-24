@@ -19,7 +19,6 @@ export type PrivySnapshot = {
   readonly userLoaded: boolean;
   /** The user's linked accounts already hold a Privy Ethereum wallet (ahead of `useWallets()`). */
   readonly hasEmbeddedAccount: boolean;
-  readonly walletsReady: boolean;
   /** The user's first embedded Ethereum wallet (`walletIndex` 0). */
   readonly embedded: EmbeddedWallet | undefined;
   /** Privy's modal is on screen (`usePrivy().isModalOpen`). */
@@ -66,7 +65,6 @@ const UNMOUNTED: PrivySnapshot = {
   error: null,
   userLoaded: false,
   hasEmbeddedAccount: false,
-  walletsReady: false,
   embedded: undefined,
   modalOpen: false,
 };

@@ -22,7 +22,6 @@ const loggedOut: SnapshotState = {
   error: null,
   userLoaded: false,
   hasEmbeddedAccount: false,
-  walletsReady: true,
   embedded: undefined,
   modalOpen: false,
 };
@@ -33,7 +32,6 @@ const loggedIn = (embedded: EmbeddedWallet): SnapshotState => ({
   error: null,
   userLoaded: true,
   hasEmbeddedAccount: true,
-  walletsReady: true,
   embedded,
   modalOpen: false,
 });
@@ -303,7 +301,7 @@ describe('privyConnector — reconnect', () => {
     vi.useFakeTimers();
     const { runtime, config } = setup();
     localStorage.setItem(FLAG_KEY, '1');
-    runtime.publish({ ...loggedIn(fakeWallet()), walletsReady: false, embedded: undefined });
+    runtime.publish({ ...loggedIn(fakeWallet()), embedded: undefined });
 
     const pending = reconnect(config);
     await vi.advanceTimersByTimeAsync(RECONNECT_BUDGET_MS);
@@ -340,7 +338,7 @@ describe('privyConnector — reconnect', () => {
     const { runtime, config, other } = setup();
     localStorage.setItem(FLAG_KEY, '1');
     const wallet = fakeWallet();
-    runtime.publish({ ...loggedIn(wallet), walletsReady: false, embedded: undefined });
+    runtime.publish({ ...loggedIn(wallet), embedded: undefined });
 
     const restoring = reconnect(config);
     await connect(config, { connector: other });
@@ -403,7 +401,7 @@ describe('privyConnector — interactive supersession', () => {
     const { runtime, ops, config, privy } = setup();
     localStorage.setItem(FLAG_KEY, '1');
     const wallet = fakeWallet();
-    runtime.publish({ ...loggedIn(wallet), walletsReady: false, embedded: undefined });
+    runtime.publish({ ...loggedIn(wallet), embedded: undefined });
 
     const restoring = reconnect(config, { connectors: [privy] });
     const connecting = connect(config, { connector: privy });
@@ -451,6 +449,8 @@ describe('privyConnector — while connected', () => {
     const { runtime, config, wallet } = await connected();
 
     runtime.publish({ ...loggedIn(wallet), userLoaded: false, embedded: undefined });
+    runtime.publish({ ...loggedIn(wallet), ready: false, hasEmbeddedAccount: false, embedded: undefined });
+    runtime.publish({ ...loggedIn(wallet), embedded: undefined }); // linked, not listed yet
 
     expect(config.state.status).toBe('connected');
   });

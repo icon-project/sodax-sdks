@@ -9,7 +9,6 @@ const ready: Omit<PrivySnapshot, 'mounted'> = {
   error: null,
   userLoaded: false,
   hasEmbeddedAccount: false,
-  walletsReady: true,
   embedded: undefined,
   modalOpen: false,
 };
