@@ -6,6 +6,8 @@ Add an **"Email (Privy)"** entry to the EVM wallet list: the user logs in with a
 
 Before adding it, tell the user the trade-offs (full text in the package guide `docs/WALLET_PRIVY.md`): Privy custodies access, so no signing is possible while Privy is unreachable; addresses belong to their Privy app; a user who loses their email loses the wallet; their Privy app is billed per signature.
 
+**App already on Privy?** If it mounts its own `PrivyProvider` only for email login and the embedded wallet, remove that provider, pass the same `appId` to `privy()` and skip step 1 (its `@privy-io/react-auth` must be 3.40 or newer). If it needs its own Privy configuration — other login methods, other chains, or a Privy session that must outlive a wallet disconnect — do not add `EVM.privy`: the SDK cannot use a provider the app mounts, and Privy allows only one.
+
 ---
 
 ## 1. Create a Privy app and install the peer
@@ -67,6 +69,6 @@ function Email() {
 - **Writing `privy: { appId }`.** The value must come from `privy()` — the import is what adds Privy's code to the bundle; a plain object is skipped with a warning.
 - **Importing `privy` from `@sodax/wallet-sdk-react`.** It lives only on the `/privy` sub-path.
 - **Calling `privy()` in a Server Component.** Its value belongs to the browser's copy of the SDK and React refuses to serialize it; build the config in a `'use client'` file.
-- **Mounting your own `PrivyProvider`.** Use the one the SDK mounts.
+- **Mounting a second `PrivyProvider`.** Privy allows one; for an app that already has one, see *App already on Privy?* above.
 - **Adding `@privy-io/wagmi`.** Not used — it replaces wagmi's connector list and would remove MetaMask and WalletConnect.
 - **Custom modal stacking.** While Privy's login dialog is open, `useWalletModal` is `connecting`; render nothing when `state.connector.id === 'privy'`, as for `'walletConnect'`.
