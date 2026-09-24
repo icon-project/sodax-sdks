@@ -374,6 +374,38 @@ describe('privyConnector — interactive supersession', () => {
     expect(config.state.current).toBe(other.uid);
     expect(localStorage.getItem(FLAG_KEY)).toBeNull();
   });
+
+  it('keeps an open login alive when wagmi runs a background reconnect', async () => {
+    const { runtime, ops, config, privy } = setup();
+    localStorage.setItem(FLAG_KEY, '1');
+    runtime.publish(loggedOut);
+    const loggingIn = connect(config, { connector: privy });
+    await vi.waitFor(() => expect(ops.login).toHaveBeenCalled());
+
+    await reconnect(config, { connectors: [privy] });
+    runtime.publish(loggedIn(fakeWallet()));
+    runtime.loginCompleted();
+
+    await expect(loggingIn).resolves.toEqual({ accounts: [getAddress(ADDRESS)], chainId: sonic.id });
+    expect(config.state.status).toBe('connected');
+    expect(localStorage.getItem(FLAG_KEY)).toBe('1');
+  });
+
+  it('lets a user connect take over a restore that is still waiting', async () => {
+    const { runtime, ops, config, privy } = setup();
+    localStorage.setItem(FLAG_KEY, '1');
+    const wallet = fakeWallet();
+    runtime.publish({ ...loggedIn(wallet), walletsReady: false, embedded: undefined });
+
+    const restoring = reconnect(config, { connectors: [privy] });
+    const connecting = connect(config, { connector: privy });
+    runtime.publish(loggedIn(wallet));
+
+    await expect(connecting).resolves.toEqual({ accounts: [getAddress(ADDRESS)], chainId: sonic.id });
+    await restoring;
+    expect(ops.login).not.toHaveBeenCalled();
+    expect(config.state.status).toBe('connected');
+  });
 });
 
 describe('privyConnector — while connected', () => {

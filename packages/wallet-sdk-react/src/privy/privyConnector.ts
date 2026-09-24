@@ -43,6 +43,7 @@ export function privyConnector({ runtime, getState, defaultChainId, flag: flagOv
     let session: Session | undefined;
     let chainId: number | undefined; // last chain verified on the attached provider
     let attempt: AbortController | undefined;
+    let attemptIsInteractive = false; // started by a user connect, not by wagmi's restore
     let generation = 0; // bumped on every detach, so late async work can tell it is stale
     let unwatch: (() => void) | undefined;
     let switching = false;
@@ -152,9 +153,14 @@ export function privyConnector({ runtime, getState, defaultChainId, flag: flagOv
           return { accounts: [session.address], chainId: chainId ?? defaultChainId };
         }
 
+        // A background restore stands down rather than cancel a connect the user started (its login may be open).
+        if (isReconnecting && attempt && attemptIsInteractive) {
+          throw new Error('[wallet-sdk-react/privy] A connection the user started is still in progress.');
+        }
         attempt?.abort(userRejected('Superseded by a newer connection attempt.'));
         const controller = new AbortController();
         attempt = controller;
+        attemptIsInteractive = !isReconnecting;
         const { signal } = controller;
         // wagmi restores wallets one after another: the whole restore gets one budget, not one per step.
         const budget = isReconnecting
