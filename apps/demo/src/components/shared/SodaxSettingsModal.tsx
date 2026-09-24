@@ -675,7 +675,7 @@ export function SodaxSettingsModal({ open, onOpenChange }: { open: boolean; onOp
             label="Privy app id"
             value={draft.privyAppId}
             defaultValue={defaults.privyAppId}
-            placeholder="Not set — no Email (Privy)"
+            placeholder={envPrivyAppId ? 'Empty uses VITE_PRIVY_APP_ID' : 'Not set — no Email (Privy)'}
             hint={`Adds "Email (Privy)" to the EVM wallet list. Allow ${window.location.origin} in the Privy dashboard. Saving a change reloads the page.`}
             onChange={value => set('privyAppId', value)}
           />
