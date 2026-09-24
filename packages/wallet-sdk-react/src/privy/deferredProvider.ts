@@ -1,6 +1,7 @@
 import { ProviderDisconnectedError } from 'viem';
+import { isRecord } from '@/shared/guards.js';
 
-export type RequestArguments = { readonly method: string; readonly params?: unknown };
+type RequestArguments = { readonly method: string; readonly params?: unknown };
 
 export type Eip1193Like = { request(args: RequestArguments): Promise<unknown> };
 
@@ -10,7 +11,7 @@ export type DeferredProvider = Eip1193Like & {
   removeListener(event: string, listener: (...args: unknown[]) => void): void;
 };
 
-export type DeferredProviderHandle = {
+type DeferredProviderHandle = {
   readonly provider: DeferredProvider;
   attach(target: Eip1193Like): void;
   detach(): void;
@@ -54,7 +55,7 @@ export function createDeferredProvider(switchChain: (chainId: number) => Promise
 
 function parseSwitchChainId(params: unknown): number {
   const first: unknown = Array.isArray(params) ? params[0] : undefined;
-  const chainId = typeof first === 'object' && first !== null && 'chainId' in first ? first.chainId : undefined;
+  const chainId = isRecord(first) ? first.chainId : undefined;
   const parsed = typeof chainId === 'string' || typeof chainId === 'number' ? Number(chainId) : Number.NaN;
   if (!Number.isInteger(parsed)) throw new Error('Invalid wallet_switchEthereumChain params.');
   return parsed;

@@ -1,6 +1,6 @@
 import { type Address, getAddress, numberToHex, SwitchChainError } from 'viem';
 import { ChainNotConfiguredError, type Config, createConnector } from 'wagmi';
-import { type ConnectedFlag, createConnectedFlag } from './connectedFlag.js';
+import { createConnectedFlag } from './connectedFlag.js';
 import {
   INTERNAL_CALL_MS,
   PRIVY_CONNECTOR_ID,
@@ -10,17 +10,11 @@ import {
   WALLET_MS,
 } from './constants.js';
 import { createDeferredProvider, type DeferredProvider, type Eip1193Like } from './deferredProvider.js';
-import {
-  PrivyConnectorSupersededError,
-  PrivyTimeoutError,
-  throwIfAborted,
-  userRejected,
-  withTimeout,
-} from './errors.js';
+import { PrivyConnectorSupersededError, PrivyTimeoutError, userRejected, withTimeout } from './errors.js';
 import { PRIVY_ICON } from './icon.js';
 import type { EmbeddedWallet, PrivyRuntime } from './runtime.js';
 
-export type PrivyConnectorOptions = {
+type PrivyConnectorOptions = {
   runtime: PrivyRuntime;
   /** wagmi's live state, for the supersession check (`CreateConnectorFn` does not receive it). */
   getState: () => Config['state'];
@@ -28,8 +22,6 @@ export type PrivyConnectorOptions = {
   defaultChainId: number;
   /** `'detach'` keeps the Privy session on disconnect; see `PrivyOptions.disconnectBehavior`. @default 'logout' */
   disconnectBehavior?: 'logout' | 'detach';
-  /** Test seam; defaults to a localStorage flag keyed by wagmi's storage key. */
-  flag?: ConnectedFlag;
 };
 
 type Session = { readonly address: Address; readonly wallet: EmbeddedWallet };
@@ -43,10 +35,9 @@ export function privyConnector({
   getState,
   defaultChainId,
   disconnectBehavior = 'logout',
-  flag: flagOverride,
 }: PrivyConnectorOptions) {
   return createConnector<DeferredProvider>(config => {
-    const flag = flagOverride ?? createConnectedFlag(`${config.storage?.key ?? 'sodax'}.privy.connected`);
+    const flag = createConnectedFlag(`${config.storage?.key ?? 'sodax'}.privy.connected`);
     const deferred = createDeferredProvider(chainId => switchChain(chainId));
     let session: Session | undefined;
     let chainId: number | undefined; // last chain verified on the attached provider
@@ -87,10 +78,14 @@ export function privyConnector({
       session = undefined;
     }
 
-    function endSession() {
+    function resetSession() {
       detachSession();
       chainId = undefined;
       flag.clear();
+    }
+
+    function endSession() {
+      resetSession();
       config.emitter.emit('disconnect');
     }
 
@@ -98,7 +93,7 @@ export function privyConnector({
     function onRuntimeChange() {
       const current = session;
       const snapshot = runtime.getSnapshot();
-      if (!current || !snapshot.mounted || switching) return;
+      if (!current || switching) return;
       if (snapshot.ready && !snapshot.authenticated) return endSession();
       // Mid-reload: Privy is not ready, or the user's linked wallet is not listed yet.
       if (!snapshot.ready || !snapshot.userLoaded || (snapshot.hasEmbeddedAccount && !snapshot.embedded)) return;
@@ -214,13 +209,13 @@ export function privyConnector({
           if (!embedded) throw new Error('[wallet-sdk-react/privy] No embedded wallet.');
 
           const prepared = await prepare(embedded, undefined, signal);
-          throwIfAborted(signal);
+          signal.throwIfAborted();
           deferred.attach(prepared.provider);
           session = { address: getAddress(embedded.address), wallet: embedded };
           chainId = prepared.chainId;
           if (requested !== undefined && requested !== chainId) {
             await switchChain(requested);
-            throwIfAborted(signal);
+            signal.throwIfAborted();
           }
 
           // No await from here to return. wagmi marks itself connecting before calling us, so `connected` here
@@ -245,9 +240,7 @@ export function privyConnector({
       async disconnect() {
         attempt?.abort(userRejected('Disconnected while connecting.'));
         attempt = undefined;
-        detachSession();
-        chainId = undefined;
-        flag.clear();
+        resetSession();
         if (disconnectBehavior === 'detach') return;
         // Bounded: wagmi drops the connection only once this resolves, and a stalled sign-out must not keep it.
         await withTimeout(runtime.logout(), INTERNAL_CALL_MS, 'logout').catch(() => undefined);

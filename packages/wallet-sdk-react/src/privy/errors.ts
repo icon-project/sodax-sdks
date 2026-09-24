@@ -26,12 +26,8 @@ export function userRejected(message: string): UserRejectedRequestError {
 }
 
 /** Why a signal was aborted: the `Error` passed to `abort()`, else a user rejection. */
-export function abortReason(signal: AbortSignal): Error {
-  return signal.reason instanceof Error ? signal.reason : userRejected('The Privy connection attempt was cancelled.');
-}
-
-export function throwIfAborted(signal: AbortSignal): void {
-  if (signal.aborted) throw abortReason(signal);
+export function abortReason(signal: AbortSignal | undefined): Error {
+  return signal?.reason instanceof Error ? signal.reason : userRejected('The Privy connection attempt was cancelled.');
 }
 
 /** Settles with `promise`, or rejects on the deadline or when `signal` aborts — whichever comes first. */
@@ -45,7 +41,7 @@ export function withTimeout<T>(promise: Promise<T>, ms: number, what: string, si
       signal?.removeEventListener('abort', onAbort);
       settle();
     };
-    const onAbort = () => finish(() => reject(signal ? abortReason(signal) : userRejected('Cancelled.')));
+    const onAbort = () => finish(() => reject(abortReason(signal)));
     const timer = setTimeout(() => finish(() => reject(new PrivyTimeoutError(what, ms))), ms);
     if (signal?.aborted) return onAbort();
     signal?.addEventListener('abort', onAbort);

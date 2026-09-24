@@ -3,7 +3,7 @@ import { LOGIN_OPEN_MS } from './constants.js';
 import { PrivyTimeoutError, PrivyUnavailableError } from './errors.js';
 import { createPrivyRuntime, type PrivySnapshot } from './runtime.js';
 
-const ready: Omit<PrivySnapshot, 'mounted'> = {
+const ready: PrivySnapshot = {
   ready: true,
   authenticated: false,
   error: null,
@@ -32,7 +32,7 @@ describe('createPrivyRuntime', () => {
     await settle();
     runtime.publish(ready);
 
-    await expect(waiting).resolves.toMatchObject({ ready: true, mounted: true });
+    await expect(waiting).resolves.toMatchObject({ ready: true });
   });
 
   it('ends pending waits and logins once the bridge stays unmounted', async () => {
@@ -46,7 +46,7 @@ describe('createPrivyRuntime', () => {
 
     await waiting;
     await loggingIn;
-    expect(runtime.getSnapshot().mounted).toBe(false);
+    expect(runtime.getSnapshot().ready).toBe(false);
   });
 
   it('rejects current and later waits with the start-up failure', async () => {

@@ -13,10 +13,9 @@ const ADDRESS = '0x00000000000000000000000000000000000000aa';
 const OTHER = '0x00000000000000000000000000000000000000bb';
 const FLAG_KEY = 'sodax.privy.connected';
 
-type SnapshotState = Omit<PrivySnapshot, 'mounted'>;
 type RequestArgs = { method: string; params?: unknown };
 
-const loggedOut: SnapshotState = {
+const loggedOut: PrivySnapshot = {
   ready: true,
   authenticated: false,
   error: null,
@@ -26,7 +25,7 @@ const loggedOut: SnapshotState = {
   modalOpen: false,
 };
 
-const loggedIn = (embedded: EmbeddedWallet): SnapshotState => ({
+const loggedIn = (embedded: EmbeddedWallet): PrivySnapshot => ({
   ready: true,
   authenticated: true,
   error: null,

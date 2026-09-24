@@ -9,28 +9,25 @@ export type ConnectedFlag = {
   clear(): void;
 };
 
-export function createConnectedFlag(
-  key: string,
-  getStorage: () => Storage | undefined = localStorageOrNone,
-): ConnectedFlag {
+export function createConnectedFlag(key: string): ConnectedFlag {
   return {
     read() {
       try {
-        return getStorage()?.getItem(key) === '1';
+        return storage()?.getItem(key) === '1';
       } catch {
         return false;
       }
     },
     write() {
       try {
-        getStorage()?.setItem(key, '1');
+        storage()?.setItem(key, '1');
       } catch {
         // Unwritable storage only costs the reload restore; the live connection is unaffected.
       }
     },
     clear() {
       try {
-        getStorage()?.removeItem(key);
+        storage()?.removeItem(key);
       } catch {
         // Nothing was stored if storage is unusable.
       }
@@ -38,6 +35,6 @@ export function createConnectedFlag(
   };
 }
 
-function localStorageOrNone(): Storage | undefined {
+function storage(): Storage | undefined {
   return typeof window === 'undefined' ? undefined : window.localStorage;
 }

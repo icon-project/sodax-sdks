@@ -63,7 +63,6 @@ describe('PrivyBridge', () => {
     render(<PrivyBridge runtime={runtime} />);
 
     expect(runtime.getSnapshot()).toMatchObject({
-      mounted: true,
       ready: true,
       authenticated: true,
       userLoaded: true,
@@ -138,7 +137,7 @@ describe('PrivyBridge', () => {
     await expect(restoring).resolves.toMatchObject({ ready: true });
   });
 
-  it('rejects a pending login and reports the runtime unmounted when the bridge unmounts', async () => {
+  it('rejects a pending login and resets the snapshot when the bridge unmounts', async () => {
     const runtime = createPrivyRuntime();
     const { unmount } = render(<PrivyBridge runtime={runtime} />);
     const loggingIn = expect(runtime.login()).rejects.toBeInstanceOf(PrivyUnavailableError);
@@ -146,6 +145,6 @@ describe('PrivyBridge', () => {
     unmount();
 
     await loggingIn;
-    expect(runtime.getSnapshot().mounted).toBe(false);
+    expect(runtime.getSnapshot().ready).toBe(false);
   });
 });

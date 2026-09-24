@@ -11,6 +11,7 @@ import {
   createConnector,
   createStorage,
   http,
+  noopStorage,
   WagmiProvider,
 } from 'wagmi';
 import { connect } from 'wagmi/actions';
@@ -43,9 +44,7 @@ async function connectAll(connectorFns: CreateConnectorFn[]): Promise<Config> {
     chains: [sonic],
     connectors: connectorFns,
     multiInjectedProviderDiscovery: false,
-    storage: createStorage({
-      storage: { getItem: () => null, setItem: () => undefined, removeItem: () => undefined },
-    }),
+    storage: createStorage({ storage: noopStorage }),
     transports: { [sonic.id]: http() },
   });
   render(

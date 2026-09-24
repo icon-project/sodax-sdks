@@ -1,6 +1,6 @@
 import { LOGIN_OPEN_MS } from './constants.js';
 import type { Eip1193Like } from './deferredProvider.js';
-import { abortReason, PrivyTimeoutError, PrivyUnavailableError, userRejected } from './errors.js';
+import { abortReason, PrivyTimeoutError, PrivyUnavailableError, userRejected, withTimeout } from './errors.js';
 
 /** The embedded wallet as the connector needs it; `PrivyBridge` adapts Privy's `ConnectedWallet`. */
 export type EmbeddedWallet = {
@@ -10,8 +10,6 @@ export type EmbeddedWallet = {
 };
 
 export type PrivySnapshot = {
-  /** `PrivyBridge` is mounted inside `PrivyProvider`. */
-  readonly mounted: boolean;
   readonly ready: boolean;
   readonly authenticated: boolean;
   /** Privy's initialisation error, or why `PrivyProvider` could not start; waiters reject with it. */
@@ -25,7 +23,7 @@ export type PrivySnapshot = {
   readonly modalOpen: boolean;
 };
 
-export type PrivyOps = {
+type PrivyOps = {
   readonly login: () => void;
   readonly logout: () => Promise<void>;
   readonly createWallet: () => Promise<unknown>;
@@ -49,7 +47,7 @@ export type PrivyRuntime = {
   logout(): Promise<void>;
   createWallet(): Promise<void>;
   // Bridge side.
-  publish(next: Omit<PrivySnapshot, 'mounted'>): void;
+  publish(next: PrivySnapshot): void;
   attach(ops: PrivyOps): void;
   loginCompleted(): void;
   loginFailed(code: string): void;
@@ -59,7 +57,6 @@ export type PrivyRuntime = {
 };
 
 const UNMOUNTED: PrivySnapshot = {
-  mounted: false,
   ready: false,
   authenticated: false,
   error: null,
@@ -107,50 +104,27 @@ export function createPrivyRuntime(): PrivyRuntime {
     },
 
     waitFor(predicate, timeoutMs, signal, what = 'Waiting for Privy') {
-      return new Promise<PrivySnapshot>((resolve, reject) => {
-        let timer: ReturnType<typeof setTimeout> | undefined;
-        let unsubscribe = () => {};
-        const waiter: Pending = {
-          reject(error) {
-            cleanup();
-            reject(error);
-          },
-        };
-        const onAbort = () => waiter.reject(signal ? abortReason(signal) : userRejected('Cancelled.'));
-        const cleanup = () => {
-          clearTimeout(timer);
-          unsubscribe();
-          waiters.delete(waiter);
-          signal?.removeEventListener('abort', onAbort);
-        };
+      let cleanup = () => {};
+      const settled = new Promise<PrivySnapshot>((resolve, reject) => {
+        const waiter: Pending = { reject };
         const check = () => {
-          if (predicate(snapshot)) {
-            cleanup();
-            resolve(snapshot);
-          } else if (snapshot.error) {
-            waiter.reject(snapshot.error);
-          }
+          if (predicate(snapshot)) resolve(snapshot);
+          else if (snapshot.error) reject(snapshot.error);
         };
-
-        if (signal?.aborted) return onAbort();
         waiters.add(waiter);
-        signal?.addEventListener('abort', onAbort);
-        timer = setTimeout(() => waiter.reject(new PrivyTimeoutError(what, timeoutMs)), timeoutMs);
         listeners.add(check);
-        unsubscribe = () => {
+        cleanup = () => {
+          waiters.delete(waiter);
           listeners.delete(check);
         };
         check();
       });
+      return withTimeout(settled, timeoutMs, what, signal).finally(cleanup);
     },
 
     login(signal) {
-      let current: PrivyOps;
-      try {
-        current = requireOps();
-      } catch (error) {
-        return Promise.reject(error);
-      }
+      const current = ops;
+      if (!current) return Promise.reject(new PrivyUnavailableError());
       settleLogin({ error: userRejected('Superseded by a newer login attempt.') });
       return new Promise<void>((resolve, reject) => {
         let opened = false;
@@ -160,7 +134,7 @@ export function createPrivyRuntime(): PrivyRuntime {
           if (snapshot.authenticated) settleLogin({});
           else if (snapshot.modalOpen) opened = true;
         };
-        const onAbort = () => settleLogin({ error: signal ? abortReason(signal) : userRejected('Cancelled.') });
+        const onAbort = () => settleLogin({ error: abortReason(signal) });
         const cleanup = () => {
           clearTimeout(timer);
           listeners.delete(watch);
@@ -197,7 +171,7 @@ export function createPrivyRuntime(): PrivyRuntime {
     },
 
     publish(next) {
-      snapshot = { ...next, mounted: true };
+      snapshot = next;
       notify();
     },
 

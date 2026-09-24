@@ -32,7 +32,7 @@ export function createPrivySetup(
       runtime,
       getState: ctx.getState,
       defaultChainId,
-      disconnectBehavior: options.disconnectBehavior ?? 'logout',
+      disconnectBehavior: options.disconnectBehavior,
     }),
     Host: PrivyHost,
   };
