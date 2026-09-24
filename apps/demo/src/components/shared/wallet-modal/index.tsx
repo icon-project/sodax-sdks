@@ -54,7 +54,13 @@ export const xChainTypes: WalletItemProps[] = [
 export const WalletModal = ({ isOpen, onDismiss }: WalletModalProps) => {
   return (
     <Sheet open={isOpen} onOpenChange={_ => onDismiss()} modal={false}>
-      <SheetContent side={'right'}>
+      <SheetContent
+        side={'right'}
+        // Privy's login dialog renders outside this sheet; typing into it must not close the sheet mid-connect.
+        onInteractOutside={event => {
+          if (event.target instanceof Element && event.target.closest('#privy-dialog')) event.preventDefault();
+        }}
+      >
         <VisuallyHidden.Root>
           <SheetTitle>Wallet Modal</SheetTitle>
           <SheetDescription>Wallet Modal</SheetDescription>
