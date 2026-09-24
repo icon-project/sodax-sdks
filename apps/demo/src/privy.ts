@@ -1,12 +1,13 @@
 import type { PrivySource } from '@sodax/wallet-sdk-react';
+import { effectivePrivyAppId, loadSodaxSettings } from './lib/sodaxSettings';
 
 /**
- * "Email (Privy)" is opt-in: set `VITE_PRIVY_APP_ID` (see `example.env`). Unset at build time, the import
- * below is dead code and the bundle carries no Privy code.
+ * "Email (Privy)" is opt-in: set the Privy app id in Sodax Settings or `VITE_PRIVY_APP_ID` (see `example.env`).
+ * Unset, the Privy chunk is never loaded.
  */
 export async function loadPrivySource(): Promise<PrivySource | undefined> {
-  const appId: unknown = import.meta.env.VITE_PRIVY_APP_ID;
-  if (typeof appId !== 'string' || appId === '') return undefined;
+  const appId = effectivePrivyAppId(loadSodaxSettings());
+  if (!appId) return undefined;
   const { privy } = await import('@sodax/wallet-sdk-react/privy');
   return privy({ appId });
 }
