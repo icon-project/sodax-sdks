@@ -114,7 +114,13 @@ function memoryStorage() {
   };
 }
 
-function setup({ storageKey = 'sodax' }: { storageKey?: string } = {}) {
+function setup({
+  storageKey = 'sodax',
+  disconnectBehavior,
+}: {
+  storageKey?: string;
+  disconnectBehavior?: 'logout' | 'detach';
+} = {}) {
   const runtime = createPrivyRuntime();
   const ops = { login: vi.fn(), logout: vi.fn(async () => undefined), createWallet: vi.fn(async () => undefined) };
   runtime.attach(ops);
@@ -125,7 +131,7 @@ function setup({ storageKey = 'sodax' }: { storageKey?: string } = {}) {
   };
   config = createConfig({
     chains: [sonic, base],
-    connectors: [privyConnector({ runtime, getState, defaultChainId: sonic.id }), otherWallet()],
+    connectors: [privyConnector({ runtime, getState, defaultChainId: sonic.id, disconnectBehavior }), otherWallet()],
     multiInjectedProviderDiscovery: false,
     storage: createStorage({ key: storageKey, storage: memoryStorage() }),
     transports: { [sonic.id]: http(), [base.id]: http() },
@@ -539,6 +545,22 @@ describe('privyConnector — while connected', () => {
 
     await expect(pending).rejects.toBeInstanceOf(UserRejectedRequestError);
     expect(context.ops.logout).toHaveBeenCalledOnce();
+  });
+
+  it("with disconnectBehavior 'detach', keeps the Privy session so the next connect needs no code", async () => {
+    const { runtime, ops, config, privy } = setup({ disconnectBehavior: 'detach' });
+    runtime.publish(loggedIn(fakeWallet()));
+    await connect(config, { connector: privy });
+
+    await disconnect(config, { connector: privy });
+
+    expect(ops.logout).not.toHaveBeenCalled();
+    expect(localStorage.getItem(FLAG_KEY)).toBeNull();
+    await expect(connect(config, { connector: privy })).resolves.toEqual({
+      accounts: [getAddress(ADDRESS)],
+      chainId: sonic.id,
+    });
+    expect(ops.login).not.toHaveBeenCalled();
   });
 });
 

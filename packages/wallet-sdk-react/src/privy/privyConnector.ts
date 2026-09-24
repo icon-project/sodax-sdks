@@ -26,6 +26,8 @@ export type PrivyConnectorOptions = {
   getState: () => Config['state'];
   /** Chain reported before the first connection. */
   defaultChainId: number;
+  /** `'detach'` keeps the Privy session on disconnect; see `PrivyOptions.disconnectBehavior`. @default 'logout' */
+  disconnectBehavior?: 'logout' | 'detach';
   /** Test seam; defaults to a localStorage flag keyed by wagmi's storage key. */
   flag?: ConnectedFlag;
 };
@@ -36,7 +38,13 @@ type Session = { readonly address: Address; readonly wallet: EmbeddedWallet };
  * wagmi connector for the Privy embedded wallet. It never imports Privy: `PrivyBridge` feeds it through
  * `runtime`, and wagmi holds a stable deferred provider the embedded wallet is attached behind.
  */
-export function privyConnector({ runtime, getState, defaultChainId, flag: flagOverride }: PrivyConnectorOptions) {
+export function privyConnector({
+  runtime,
+  getState,
+  defaultChainId,
+  disconnectBehavior = 'logout',
+  flag: flagOverride,
+}: PrivyConnectorOptions) {
   return createConnector<DeferredProvider>(config => {
     const flag = flagOverride ?? createConnectedFlag(`${config.storage?.key ?? 'sodax'}.privy.connected`);
     const deferred = createDeferredProvider(chainId => switchChain(chainId));
@@ -239,6 +247,7 @@ export function privyConnector({ runtime, getState, defaultChainId, flag: flagOv
         detachSession();
         chainId = undefined;
         flag.clear();
+        if (disconnectBehavior === 'detach') return;
         // Bounded: wagmi drops the connection only once this resolves, and a stalled sign-out must not keep it.
         await withTimeout(runtime.logout(), INTERNAL_CALL_MS, 'logout').catch(() => undefined);
       },

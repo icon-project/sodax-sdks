@@ -70,6 +70,7 @@ MetaMask, Hana and WalletConnect. **No UI changes required.** Calling `privy()` 
 | `clientId` | — | Privy app client id, for per-environment settings. |
 | `defaultChain` | `ChainKeys.SONIC_MAINNET` | Chain the embedded wallet starts on. Any EVM `ChainKey` of this SDK. |
 | `showWalletUIs` | your dashboard setting | Show Privy's own signing confirmation screens. |
+| `disconnectBehavior` | `'logout'` | `'logout'` signs the user out on disconnect, so the next connect asks for a new code. `'detach'` keeps the Privy session: reconnecting needs no code until it expires — offer a sign-out of your own (`usePrivy().logout()`) if you choose it. |
 | `appearance` | Privy defaults | Theme, logo, accent colour of Privy's login modal. Its wallet list is always empty: other wallets come from the SDK's own list. |
 | `legal` | — | Terms and privacy links shown in the login modal. |
 
@@ -150,7 +151,8 @@ unchanged, so a user who signs in with the same email keeps the same address. In
 - the SDK's configuration replaces the rest of yours: email login only, Privy's external wallets off, and
   only this SDK's EVM chains — users who signed up with Google, SMS or a wallet cannot sign in that way here;
 - Privy hooks work only in components below `SodaxWalletProvider`;
-- disconnect signs the user out of Privy, ending any session of your app that relies on it.
+- disconnect signs the user out of Privy, ending any session of your app that relies on it (`disconnectBehavior: 'detach'`
+  keeps it).
 
 **If your app needs its own Privy configuration** — other login methods, Privy's external wallets, other
 chains, or a Privy session that must outlive a wallet disconnect — leave `EVM.privy` out: the SDK cannot
@@ -186,10 +188,12 @@ a rate limit stays inside Privy's dialog.
 - **Slow start**: on page load the SDK gives the whole Privy restore at most 3 seconds, so other wallets
   are never held back longer. If Privy takes longer, the user shows as disconnected; one click on
   "Email (Privy)" reconnects without a new code.
-- **Disconnect signs the user out of Privy**, so the next connect asks for a code again. It also ends any
-  other EVM wallet connected in the same session, so nothing can be revived without its own sign-in —
-  this keeps a shared device safe. If the sign-out request cannot reach Privy within 10 seconds, the SDK
-  still disconnects locally.
+- **Disconnect signs the user out of Privy** by default, so the next connect asks for a code again. It
+  also ends any other EVM wallet connected in the same session, so nothing can be revived without its own
+  sign-in — this keeps a shared device safe. If the sign-out request cannot reach Privy within 10 seconds,
+  the SDK still disconnects locally. With `disconnectBehavior: 'detach'` the Privy session stays: the next
+  click on "Email (Privy)" reconnects without a code, and so would anyone else using that browser until
+  the session expires or your app signs the user out.
 - **Account changes are not followed.** If the Privy session switches to a different wallet, the SDK
   disconnects instead of signing as the new address.
 

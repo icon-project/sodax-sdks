@@ -11,6 +11,12 @@ export type PrivyOptions = {
   defaultChain?: EvmChainKey;
   /** Show Privy's signing confirmation UI. Omitted → your Privy dashboard setting applies. */
   showWalletUIs?: boolean;
+  /**
+   * What an SDK disconnect does to the Privy session. `'logout'` signs the user out, so the next connect asks for
+   * a new code — the safe choice on shared devices. `'detach'` only drops the wallet from the app: reconnecting
+   * needs no code while the Privy session lasts. @default 'logout'
+   */
+  disconnectBehavior?: 'logout' | 'detach';
   /** Privy modal theming. Its wallet list is always empty: other wallets come from the SDK's own list. */
   appearance?: Omit<NonNullable<PrivyClientConfig['appearance']>, 'walletList'>;
   /** Terms and privacy links shown in Privy's login modal. */

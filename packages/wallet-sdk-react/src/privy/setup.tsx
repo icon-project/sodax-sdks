@@ -28,7 +28,12 @@ export function createPrivySetup(
   }
 
   return {
-    connector: privyConnector({ runtime, getState: ctx.getState, defaultChainId }),
+    connector: privyConnector({
+      runtime,
+      getState: ctx.getState,
+      defaultChainId,
+      disconnectBehavior: options.disconnectBehavior ?? 'logout',
+    }),
     Host: PrivyHost,
   };
 }

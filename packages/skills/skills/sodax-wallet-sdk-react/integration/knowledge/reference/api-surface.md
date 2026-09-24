@@ -145,7 +145,7 @@ Opt-in; the only entry that loads the optional peer `@privy-io/react-auth` (3.40
 | Symbol | Kind | Notes |
 |---|---|---|
 | `privy` | function `(options: PrivyOptions) => PrivySource` | Value for `EVM.privy`. Never throws: bad input warns and leaves the entry out |
-| `PrivyOptions` | type | `appId` (required), `clientId?`, `defaultChain?` (EVM `ChainKey`, default Sonic), `showWalletUIs?`, `appearance?`, `legal?` |
+| `PrivyOptions` | type | `appId` (required), `clientId?`, `defaultChain?` (EVM `ChainKey`, default Sonic), `showWalletUIs?`, `disconnectBehavior?` (`'logout'` \| `'detach'`, default `'logout'`), `appearance?`, `legal?` |
 | `PRIVY_CONNECTOR_ID` | value `'privy'` | The connector id / `xConnectorId` of "Email (Privy)" |
 
 If unsure what a sub-path exports, check the published `dist/`:

@@ -38,7 +38,7 @@ const walletConfig: SodaxWalletConfig = {
 };
 ```
 
-`useXConnectors({ xChainType: 'EVM' })` now includes a connector with `id === 'privy'`. **No UI changes required.** Options: `appId` (required), `clientId`, `defaultChain` (an EVM `ChainKey`, default Sonic), `showWalletUIs`, `appearance`, `legal`. If Privy cannot start (plain-http origin other than localhost, malformed app id, a second `PrivyProvider`), the app keeps running and picking "Email (Privy)" fails with the cause.
+`useXConnectors({ xChainType: 'EVM' })` now includes a connector with `id === 'privy'`. **No UI changes required.** Options: `appId` (required), `clientId`, `defaultChain` (an EVM `ChainKey`, default Sonic), `showWalletUIs`, `disconnectBehavior` (`'logout'` by default — the next connect needs a new code; `'detach'` keeps the Privy session, so ask the user before choosing it for a shared-device audience), `appearance`, `legal`. If Privy cannot start (plain-http origin other than localhost, malformed app id, a second `PrivyProvider`), the app keeps running and picking "Email (Privy)" fails with the cause.
 
 ---
 
