@@ -104,6 +104,8 @@ pnpm checkTs
 
 The package builds ESM with declaration output and subpath entries for chain implementations. Preserve `instanceof` behavior across barrel/deep import paths.
 
+`./privy` declarations come from a second pass (`tsup.privy-dts.config.ts`); keep them out of the main pass — emitted together, the declaration worker outgrows 8 GB build machines (Vercel previews). Its JavaScript stays in the main pass: it shares the `EVM.privy` source registry chunk with the barrel.
+
 `checkTs` typechecks test files too (`.test.ts` and `.test.tsx`): `tsconfig.json` deliberately does
 not exclude them, and the shared `scripts/check-tests-typechecked.mjs` (repo root, the tail of
 `checkTs`) fails loudly if a future exclude hides them again. It also requires a one-line
