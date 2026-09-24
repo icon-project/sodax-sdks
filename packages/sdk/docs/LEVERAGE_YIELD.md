@@ -242,13 +242,15 @@ const sodax = new Sodax();
 // Opt out — fully client-side relay + notify-solver.
 const sodaxClientSide = new Sodax({ leverageYield: { useBackendSubmitTx: false } });
 
-// Key the backend leg for one vault swap, overriding the instance `apiKey`.
+// Key the backend leg for one vault swap, overriding the instance `apiKey`. Server-side only.
 const result = await sodax.leverageYield.vaultSwap({
   params,
   walletProvider,
   extras: { apiKey: 'partner-key' },
 });
 ```
+
+A key in a browser bundle is public — see [API key good practices](https://docs.sodax.com/developers/how-to/api-key-good-practices).
 
 When the backend attempt does not complete, its own error is logged and discarded — the fallback runs and
 its outcome is what you receive, so the code on the `Result` always describes the client-side attempt.

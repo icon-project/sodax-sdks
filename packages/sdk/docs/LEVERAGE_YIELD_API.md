@@ -207,7 +207,8 @@ resolves to `true` when omitted, like the swaps and bridge toggles. Opt out with
 backend non-success — including a rejected key — `vaultSwap` falls back to that relay on its own, so
 the default costs one wasted attempt at worst. `POST /leverage-yield/submit-tx` declares the
 `swaps:write` scope; whether a deployment checks the key at all is its own setting, so pass one
-(`new Sodax({ apiKey })`, or per action via `extras.apiKey`) rather than assume either. See
+(`new Sodax({ apiKey })`, or per action via `extras.apiKey`, both server-side — see [API key good practices](https://docs.sodax.com/developers/how-to/api-key-good-practices)) rather than
+assume either. See
 [`CONFIGURE_SDK.md`](CONFIGURE_SDK.md) and [`LEVERAGE_YIELD.md`](LEVERAGE_YIELD.md).
 
 ## Result\<T\> and Error Handling
