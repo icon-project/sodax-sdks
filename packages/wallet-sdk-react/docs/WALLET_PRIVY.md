@@ -33,7 +33,10 @@ and [`EvmProvider.tsx`](https://github.com/icon-project/sodax-sdks/blob/main/pac
 
 1. Create an app at [dashboard.privy.io](https://dashboard.privy.io): enable **Email** login and
    **Ethereum embedded wallets**, and add your site's origins to the allowed list. Users and their
-   wallets belong to this app.
+   wallets belong to this app. If your site sends a Content-Security-Policy, allow the origins in
+   [Privy's CSP guide](https://docs.privy.io/security/implementation-guide/content-security-policy),
+   at least `https://auth.privy.io` in `connect-src`, `frame-src` and `child-src`: it serves Privy's
+   API and the embedded-wallet iframe.
 2. Install Privy next to the SDK — it is an optional peer dependency, version **3.40 or newer**:
 
    ```bash
@@ -51,7 +54,7 @@ import { privy } from '@sodax/wallet-sdk-react/privy';
 const walletConfig: SodaxWalletConfig = {
   EVM: {
     walletConnect: { projectId: process.env.NEXT_PUBLIC_WC_PROJECT_ID! }, // still works alongside
-    privy: privy({ appId: process.env.NEXT_PUBLIC_PRIVY_APP_ID! }),
+    privy: privy({ appId: process.env.NEXT_PUBLIC_PRIVY_APP_ID ?? '' }),
   },
 };
 ```
