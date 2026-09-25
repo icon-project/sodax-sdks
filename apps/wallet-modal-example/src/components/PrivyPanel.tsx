@@ -1,11 +1,12 @@
 import { useExportWallet, usePrivy } from '@privy-io/react-auth';
 import { useXConnection, useXSignMessage } from '@sodax/wallet-sdk-react';
+import { PRIVY_CONNECTOR_ID } from '@sodax/wallet-sdk-react/privy';
 
 // Privy hooks render only while the EVM wallet is the Privy one: if Privy cannot start (e.g. plain http
 // on a LAN address), the SDK keeps the app running without PrivyProvider.
 export default function PrivyPanel() {
   const connection = useXConnection({ xChainType: 'EVM' });
-  if (connection?.xConnectorId !== 'privy') {
+  if (connection?.xConnectorId !== PRIVY_CONNECTOR_ID) {
     return <p className="text-sm text-gray-600">Open the modal, pick EVM, then "Email (Privy)".</p>;
   }
   return <PrivyAccount address={connection.xAccount.address} />;
