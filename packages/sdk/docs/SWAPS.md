@@ -704,6 +704,7 @@ swap partner fee for this action, and `extras.apiKey` replaces the configured ba
 (`x-api-key`) for this action's backend submit-tx leg. Both fall back to the `Sodax` config when
 omitted — see
 [CONFIGURE_SDK.md § API key](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/CONFIGURE_SDK.md#api-key).
+Pass `extras.apiKey` only from server-side code: a key in a browser bundle is public — see [API key good practices](https://docs.sodax.com/developers/how-to/api-key-good-practices).
 
 ---
 

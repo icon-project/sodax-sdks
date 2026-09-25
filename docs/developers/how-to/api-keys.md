@@ -73,7 +73,7 @@ Members see each key's name, its non-secret prefix, its permissions and when it 
 1. Open the **API keys** panel in the partner portal and choose your organisation.
 2. Enter a name, up to 64 characters — for example `production` or `staging-worker`.
 3. Click **Create key**.
-4. Copy the full key from the panel and store it (see [Where to put it](#where-to-put-it)).
+4. Copy the full key from the panel and store it (see [Where to put it](#where-to-put-it) and [API key good practices](/developers/how-to/api-key-good-practices)).
 5. Click **Done** to dismiss the reveal.
 
 The name is a local label so you can tell your keys apart in the portal. It is not part of the key, it is not sent on requests, and renaming has no effect on anything.
@@ -96,7 +96,7 @@ SODAX_API_KEY=sodax_8Kj2mNp4Qr7sTv9wXy1zAb3cDe5fGh6iJk0lMnOpQrS
 | Add `.env` to `.gitignore` | Commit it, or put it in a Dockerfile, CI log, or issue |
 | Give each environment its own key | Share one key between production and staging |
 
-Anything a browser downloads is readable by whoever downloaded it, so a key in front-end JavaScript is a published key. If your front end needs SODAX data, proxy the call through your own backend and attach the key there.
+Anything a browser downloads is readable by whoever downloaded it, so a key in front-end JavaScript is a published key — and so is one behind a `NEXT_PUBLIC_*`, `VITE_*` or `REACT_APP_*` variable. [API key good practices](/developers/how-to/api-key-good-practices) shows how to keep the call on your server, or proxy it through your own backend, when the SDK runs in a browser.
 
 ### The header
 
@@ -119,7 +119,7 @@ curl -X POST https://api.sodax.com/v1/swaps/quote \
 The SDKs set that header for you when you pass the key in configuration:
 
 ```typescript
-// @sodax/sdk — one instance-wide key
+// @sodax/sdk — one instance-wide key. Server-side only: Node, a Route Handler or a Server Action.
 import { Sodax } from '@sodax/sdk';
 
 const sodax = new Sodax({ apiKey: process.env.SODAX_API_KEY });
@@ -128,7 +128,7 @@ const sodax = new Sodax({ apiKey: process.env.SODAX_API_KEY });
 It rides every SODAX backend transport the instance uses: the data API, `sodax.api.swaps`, `sodax.api.bridge`, the solver API, and the backend submit-tx legs of `sodax.swaps.swap()` and `sodax.bridge.bridge()`. Sponsoring is the exception — see [below](#sponsoring-keys-are-separate).
 
 ```typescript
-// @sodax/swaps-api — the standalone HTTP client
+// @sodax/swaps-api — the standalone HTTP client. Server-side only.
 import { SwapsApi } from '@sodax/swaps-api';
 
 const api = new SwapsApi({
@@ -170,7 +170,7 @@ Revoking **deletes** the key. It is not a disable, there is no revoked state, an
 
 The portal asks you to confirm, and warns you when the key you are revoking is your organisation's only one.
 
-Revocation is not instant. Each API service holds a cached copy of the active key set and refreshes it every 15 seconds, so a revoked key usually stops working within about 15 seconds. It can take longer: a service that cannot refresh its copy keeps serving the last good one rather than failing closed, and there is no guaranteed ceiling. Treat revocation as prompt, not immediate — if a key has leaked, revoke it and then confirm the leak is contained by other means.
+Revocation is not instant. Each API service holds a cached copy of the active key set and refreshes it every 15 seconds, so a revoked key usually stops working within about 15 seconds. It can take longer: a service that cannot refresh its copy keeps serving the last good one rather than failing closed, and there is no guaranteed ceiling. Treat revocation as prompt, not immediate — if a key has leaked, revoke it and then confirm the leak is contained by other means. See [If a key has already shipped](/developers/how-to/api-key-good-practices#if-a-key-has-already-shipped).
 
 ## When something goes wrong
 

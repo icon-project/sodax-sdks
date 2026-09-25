@@ -106,3 +106,13 @@ agreement with the existing comparator. Keep the one-off in the design notes, no
 **Rule:** `<type>/<few-hyphen-separated-words>`. The type is a claim about impact, not a formality:
 new public API is `feat/`, even when most of the diff is tooling and docs. Commit subjects follow
 conventional commits; the husky `commit-msg` hook enforces the format.
+
+## L12 — When docs disagree on a backend fact, ask which side is right and fix the other
+
+**Correction:** docs split on whether a partner portal key works for sponsoring; the answer was that
+sponsoring requires its own key.
+
+**Rule:** SDK code shows what the client *sends* (the instance key is forwarded to a gateway-rooted
+sponsoring call), not what the backend *accepts*. When two docs contradict each other on an
+acceptance rule, ask for the source of truth, then correct the losing side in the same change instead
+of writing prose that hedges between both.

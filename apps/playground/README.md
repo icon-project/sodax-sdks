@@ -96,7 +96,7 @@ registry, custom recipients, exact-output quotes, and a full transaction-history
 | Variable | Purpose |
 | --- | --- |
 | `VITE_EMBED_ORIGIN` | Stable origin for the hosted widget. Set this before distributing copied embeds. |
-| `VITE_SWAPS_API_KEY` | Optional public browser API key, sent through the SDK. Never use a privileged key. |
+| `VITE_SWAPS_API_KEY` | Optional API key, sent through the SDK. It is public once bundled and every portal key carries the same scopes, so use a key dedicated to this app — see [API key good practices](https://docs.sodax.com/developers/how-to/api-key-good-practices). |
 | `VITE_WALLETCONNECT_PROJECT_ID` | Enables the EVM WalletConnect connector; configure allowed origins in its dashboard. |
 | `VITE_SOLANA_RPC_URL` | Overrides the built-in Solana mainnet endpoint used for both SDK balance reads and wallet signing/broadcast. Optional. Configure allowed origins and public-key restrictions with your RPC provider. |
 | `VITE_PARTNER_FEE_RECIPIENT` | Partner's Sonic fee address. Configure with the basis-point rate below. |

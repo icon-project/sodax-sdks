@@ -23,6 +23,7 @@ While you wait for a key, [`apps/stellar-sponsor-example`](https://github.com/ic
 ## Configure access
 
 ```ts
+// Server-side: Node, a Route Handler or a Server Action
 import { Sodax } from '@sodax/sdk';
 
 const apiKey = process.env.SODAX_SPONSORING_API_KEY;
@@ -41,7 +42,7 @@ Every path below (dapp-kit, the SDK, or raw HTTP) reads this same key. Three thi
 
 - **Sponsoring resolves its own base URL and headers independently** of the SDK's shared `baseApiConfig` — pointing the top-level `baseURL` at a different host does **not** redirect sponsoring traffic along with it. Set `sponsoringApiConfig.baseURL` explicitly if you need to retarget it (e.g. to a local `sponsoring-api` at `http://localhost:3011`).
 - **Never hardcode the sponsor account.** Call `sodax.sponsoring.getStellarSponsorConfig()` (or `GET /sponsorships/stellar/config`) if you need to display it — the sponsor can rotate, and the value is only correct read live.
-- **A key shipped in a browser bundle is public by nature** — anyone can read it out of your JS. The service's per-key quotas and origin gating are the real control, not secrecy. If that's not acceptable for your deployment, point `sponsoringApiConfig.baseURL` at your own backend and inject the `x-api-key` header there instead of in the client.
+- **A key shipped in a browser bundle is public by nature** — anyone can read it out of your JS. The service's per-key quotas and origin gating are the real control, not secrecy. If that's not acceptable for your deployment, point `sponsoringApiConfig.baseURL` at your own backend and inject the `x-api-key` header there instead of in the client — [API key good practices](/developers/how-to/api-key-good-practices) has a worked proxy.
 
 ## Pick an integration path
 

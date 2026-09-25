@@ -137,7 +137,8 @@ including a plaintext local target — so point one only at a trusted SODAX-rela
 Sponsoring is the exception — its slice key wins there, and the instance-wide
 key reaches it only when the call targets a SODAX gateway root. See
 [CONFIGURE_SDK.md § API key](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/CONFIGURE_SDK.md#api-key)
-for the full precedence order.
+for the full precedence order. The key belongs server-side; when this client runs in a browser, point
+`baseURL` at your own proxy instead — see [API key good practices](https://docs.sodax.com/developers/how-to/api-key-good-practices).
 
 ### `RequestOverrideConfig` Type
 

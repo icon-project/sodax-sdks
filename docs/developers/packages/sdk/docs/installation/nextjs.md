@@ -108,6 +108,10 @@ export default function RootLayout({
 }
 ```
 
+`SodaxProvider.tsx` is a `'use client'` module, so everything in it ships to the browser. Do not pass
+it an `apiKey` — renaming `SODAX_API_KEY` to `NEXT_PUBLIC_SODAX_API_KEY` publishes the key in your bundle.
+Keep keyed calls in a Server Action or Route Handler, or proxy them — see [API key good practices](https://docs.sodax.com/developers/how-to/api-key-good-practices).
+
 ## Step 4: Start Your Build Process
 
 Start the development server:

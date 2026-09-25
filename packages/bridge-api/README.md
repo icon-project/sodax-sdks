@@ -67,12 +67,14 @@ minted through the partner portal). Pass the key once at construction and the cl
 sends it on every request:
 
 ```ts
-const api = new BridgeApi({ baseUrl: 'https://<bridge-api-host>', apiKey: 'partner-api-key' });
+// Server-side only — a key in a browser bundle is public
+const api = new BridgeApi({ baseUrl: 'https://<bridge-api-host>', apiKey: process.env.SODAX_API_KEY });
 ```
 
 An explicit `headers: { 'x-api-key': ... }` wins over the `apiKey` convenience option.
 For a different key per call, construct another client — instances are cheap and
-stateless. Keys bundled into a browser app are public by nature.
+stateless. Keys bundled into a browser app are public by nature: from a browser, point
+`baseUrl` at your own backend proxy and attach the key there — see [API key good practices](https://docs.sodax.com/developers/how-to/api-key-good-practices).
 
 Auth failures surface as `HTTP_ERROR` with the backend's status and message on
 `context`: `401` (missing or invalid key) and `403` (suspended organisation or missing
