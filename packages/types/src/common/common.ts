@@ -152,9 +152,17 @@ export enum SolverIntentStatusCode {
   FAILED = 4,
 }
 
+/**
+ * Numeric `detail.code` returned by the solver. Values mirror `error_codes` in sodax-solver-v2
+ * (`rust-modules/quote-caching/src/error.rs`), which is the source of truth: never renumber an
+ * existing code and never reuse a retired one.
+ */
 export enum SolverIntentErrorCode {
+  UNCLASSIFIED = -1, // Solver catch-all: malformed payload, or a handler error with no specific code
   NO_PATH_FOUND = -4, // No path to swap Token X to Token Y
   NO_PRIVATE_LIQUIDITY = -5, // Path found, but we have no private liquidity on the dest chain
+  // -8 is shared with QUOTE_NOT_FOUND below. Known collision, kept for compatibility: the two are
+  // indistinguishable by code, so classify -8 as unknown rather than guessing.
   NOT_ENOUGH_PRIVATE_LIQUIDITY = -8, // Path found, but not enough private liquidity on the dst chain
   NO_EXECUTION_MODULE_FOUND = -7, // Path found, private liquidity, but execution modules unavailable
   QUOTE_NOT_FOUND = -8, // When executing, given quote_uuid does not exist
@@ -169,6 +177,14 @@ export enum SolverIntentErrorCode {
   NO_ORACLE_MODULE_FOUND = -17,
   NEGATIVE_INPUT_AMOUNT = -18,
   INTENT_ALREADY_IN_ORDERBOOK = -19,
+  // Quote-service errors. INVALID_QUOTE_TYPE and ALGORITHM_NOT_IMPLEMENTED are reserved: the solver
+  // wires them but raises neither today (a rejected quote_type answers NO_PATH_FOUND).
+  INVALID_QUOTE_TYPE = -20,
+  INVALID_TOKENS = -21, // One of the tokens is not compatible with the quote service
+  INVALID_AMOUNT = -22,
+  INPUT_AMOUNT_TOO_LOW = -23,
+  ALGORITHM_NOT_IMPLEMENTED = -24,
+  UNKNOWN_DEX_ID = -25, // Unrecognised entry in exclude_dex_ids
   CREATE_INTENT_ORDER_FAILED = -998,
   UNKNOWN = -999,
 }
