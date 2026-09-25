@@ -124,6 +124,7 @@ Comprehensive hook table across 12 feature domains. Use this when you know the f
 | `useMigrateBaln` | Mutation | BALN (ICON) → SODA with optional lock period |
 | `useMigrationApprove` | Mutation | Approve before migration (action-discriminated) |
 | `useMigrationAllowance` | Query | Approval check (action-discriminated) |
+| `useIcxReverseMigrationEnabled` | Query | Whether SODA → wICX reverse migration is enabled on the contract |
 
 ## Bitcoin / Bound Exchange
 
