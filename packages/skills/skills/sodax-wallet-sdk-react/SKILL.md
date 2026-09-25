@@ -30,6 +30,7 @@ Pick this mode when the consumer is a React dapp that needs SODAX wallet connect
 - "Multi-chain modal UI" — `useWalletModal`, `useChainGroups`, `useConnectedChains`.
 - "Pass the connected wallet to a `@sodax/sdk` swap" — `useWalletProvider({ xChainId })`.
 - "Add WalletConnect for enterprise custody (Fireblocks, mobile)" — `walletConnect` field on `SodaxWalletConfig.EVM`.
+- "Let users log in with email" / "Privy" — `privy` field on `SodaxWalletConfig.EVM`, built with `privy()` from `@sodax/wallet-sdk-react/privy`.
 - "SSR with Next.js" — `ssr: true` flag on the EVM slot.
 
 ### Workflow
@@ -37,7 +38,7 @@ Pick this mode when the consumer is a React dapp that needs SODAX wallet connect
 1. Read [`integration/knowledge/ai-rules.md`](./integration/knowledge/ai-rules.md) — DO / DON'T + workflow.
 2. **Always start with setup** → [`integration/knowledge/recipes/setup.md`](./integration/knowledge/recipes/setup.md). Mount `SodaxWalletProvider`, declare chain-type slots, wire `@tanstack/react-query`.
 3. Read [`integration/knowledge/architecture.md`](./integration/knowledge/architecture.md) — provider mount tree, frozen config, EVM single-connection model, `xChainType` vs `xChainId`.
-4. Task-specific recipes → [`integration/knowledge/recipes/`](./integration/knowledge/recipes/) — `connect-button.md`, `multi-chain-modal.md`, `walletconnect-setup.md`, `bridge-to-sdk.md`, `sign-message.md`, `switch-chain.md`, `batch-operations.md`, `chain-detection.md`, `sub-path-imports.md`.
+4. Task-specific recipes → [`integration/knowledge/recipes/`](./integration/knowledge/recipes/) — `connect-button.md`, `multi-chain-modal.md`, `walletconnect-setup.md`, `privy-email-login.md`, `bridge-to-sdk.md`, `sign-message.md`, `switch-chain.md`, `batch-operations.md`, `chain-detection.md`, `sub-path-imports.md`.
 5. Working examples → [`integration/knowledge/examples/`](./integration/knowledge/examples/) — 4 working `.tsx` app shells (`01-minimal-evm`, `02-multi-chain-modal`, `03-nextjs-app-router`, `04-walletconnect-setup`).
 6. Lookups → [`integration/knowledge/reference/`](./integration/knowledge/reference/) — hooks, connectors, chain-support, wallet-brands, api-surface.
 
