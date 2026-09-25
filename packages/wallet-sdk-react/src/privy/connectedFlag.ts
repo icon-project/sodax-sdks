@@ -3,38 +3,19 @@
  * SDK backs that with `cookieStorage`, whose cookies carry no expiry and die when the browser quits.
  * Every operation is total — storage can be missing (SSR) or throw (Safari private mode).
  */
-export type ConnectedFlag = {
-  read(): boolean;
-  write(): void;
-  clear(): void;
-};
-
-export function createConnectedFlag(key: string): ConnectedFlag {
+export function createConnectedFlag(key: string) {
   return {
-    read() {
-      try {
-        return storage()?.getItem(key) === '1';
-      } catch {
-        return false;
-      }
-    },
-    write() {
-      try {
-        storage()?.setItem(key, '1');
-      } catch {
-        // Unwritable storage only costs the reload restore; the live connection is unaffected.
-      }
-    },
-    clear() {
-      try {
-        storage()?.removeItem(key);
-      } catch {
-        // Nothing was stored if storage is unusable.
-      }
-    },
+    read: () => withStorage(storage => storage.getItem(key) === '1', false),
+    write: () => withStorage(storage => storage.setItem(key, '1'), undefined),
+    clear: () => withStorage(storage => storage.removeItem(key), undefined),
   };
 }
 
-function storage(): Storage | undefined {
-  return typeof window === 'undefined' ? undefined : window.localStorage;
+// Unusable storage only costs the reload restore; the live connection is unaffected.
+function withStorage<T>(run: (storage: Storage) => T, fallback: T): T {
+  try {
+    return typeof window === 'undefined' ? fallback : run(window.localStorage);
+  } catch {
+    return fallback;
+  }
 }

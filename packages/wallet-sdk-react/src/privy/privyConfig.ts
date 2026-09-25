@@ -1,6 +1,7 @@
 import type { PrivyClientConfig } from '@privy-io/react-auth';
 import type { EvmChainKey } from '@sodax/types';
 import type { PrivySourceContext } from '@/providers/evm/privySource.js';
+import { SODAX_EVM_CHAINS } from '@/xchains/evm/EvmXService.js';
 
 export type PrivyOptions = {
   /** Your Privy app id (dashboard.privy.io). Users and their wallets belong to this app. */
@@ -34,7 +35,7 @@ export function buildPrivyConfig(
   defaultChainId: number,
   ctx: PrivySourceContext,
 ): PrivyClientConfig {
-  const supportedChains = ctx.chains.map(chain => {
+  const supportedChains = SODAX_EVM_CHAINS.map(chain => {
     const url = ctx.rpcUrls[chain.id];
     return {
       ...chain,

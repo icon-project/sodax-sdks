@@ -3,7 +3,7 @@ import { cleanup, render } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { ChainKeys } from '@sodax/types';
 import { setupPrivySource } from '@/providers/evm/privySource.js';
-import { resolveEvmRpcUrls, SODAX_EVM_CHAINS } from '@/xchains/evm/EvmXService.js';
+import { resolveEvmRpcUrls } from '@/xchains/evm/EvmXService.js';
 import { privy, type PrivyOptions } from './index.js';
 
 const privyModule = vi.hoisted(() => ({ version: '3.40.0', appIds: [] as string[] }));
@@ -22,7 +22,7 @@ vi.mock('@privy-io/react-auth', () => ({
   useLogin: () => ({ login: vi.fn() }),
 }));
 
-const ctx = { chains: SODAX_EVM_CHAINS, rpcUrls: resolveEvmRpcUrls(undefined), getState: vi.fn() };
+const ctx = { rpcUrls: resolveEvmRpcUrls(undefined), getState: vi.fn() };
 
 beforeEach(() => {
   privyModule.version = '3.40.0';

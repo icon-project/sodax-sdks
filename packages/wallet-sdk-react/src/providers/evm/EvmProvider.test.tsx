@@ -83,7 +83,6 @@ describe('EvmProvider', () => {
     );
 
     expect(spy).toHaveBeenCalledWith(chains, expect.objectContaining({ connectors: [connector] }));
-    expect(ctx?.chains).toBe(EvmXService.SODAX_EVM_CHAINS);
     expect(ctx?.rpcUrls).toEqual(EvmXService.resolveEvmRpcUrls(chains));
     expect(ctx?.rpcUrls[8453]).toBe('https://base.example');
     expect(ctx?.getState()).toBe(spy.mock.results[0]?.value.state);

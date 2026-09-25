@@ -1,5 +1,6 @@
 import { type Address, getAddress, numberToHex, SwitchChainError } from 'viem';
 import { ChainNotConfiguredError, type Config, createConnector } from 'wagmi';
+import { EVM_DEFAULT_PERSIST_KEY } from '@/constants.js';
 import { createConnectedFlag } from './connectedFlag.js';
 import {
   INTERNAL_CALL_MS,
@@ -10,7 +11,7 @@ import {
   WALLET_MS,
 } from './constants.js';
 import { createDeferredProvider, type DeferredProvider, type Eip1193Like } from './deferredProvider.js';
-import { PrivyConnectorSupersededError, PrivyTimeoutError, userRejected, withTimeout } from './errors.js';
+import { PrivyTimeoutError, userRejected, withTimeout } from './errors.js';
 import { PRIVY_ICON } from './icon.js';
 import type { EmbeddedWallet, PrivyRuntime } from './runtime.js';
 
@@ -37,13 +38,12 @@ export function privyConnector({
   disconnectBehavior = 'logout',
 }: PrivyConnectorOptions) {
   return createConnector<DeferredProvider>(config => {
-    const flag = createConnectedFlag(`${config.storage?.key ?? 'sodax'}.privy.connected`);
+    const flag = createConnectedFlag(`${config.storage?.key ?? EVM_DEFAULT_PERSIST_KEY}.privy.connected`);
     const deferred = createDeferredProvider(chainId => switchChain(chainId));
     let session: Session | undefined;
     let chainId: number | undefined; // last chain verified on the attached provider
     let attempt: AbortController | undefined;
     let attemptIsInteractive = false; // started by a user connect, not by wagmi's restore
-    let generation = 0; // bumped on every detach, so late async work can tell it is stale
     let unwatch: (() => void) | undefined;
     let switching = false;
 
@@ -71,7 +71,6 @@ export function privyConnector({
     }
 
     function detachSession() {
-      generation += 1;
       unwatch?.();
       unwatch = undefined;
       deferred.detach();
@@ -101,11 +100,12 @@ export function privyConnector({
       // Fail closed: never follow a different address for an intent-signing session.
       if (!wallet || getAddress(wallet.address) !== current.address) return endSession();
       if (wallet === current.wallet) return;
-      const at = generation;
-      session = { ...current, wallet };
+      const next = { ...current, wallet };
+      session = next;
       prepare(wallet, chainId).then(
         ({ provider }) => {
-          if (at === generation) deferred.attach(provider);
+          // Not after a detach, and not over a newer replacement.
+          if (session === next) deferred.attach(provider);
         },
         () => {
           // Keep the previous attachment; it still signs for the same address.
@@ -223,7 +223,7 @@ export function privyConnector({
           const { status, current, connections } = getState();
           const otherIsCurrent = current !== null && connections.get(current)?.connector.id !== PRIVY_CONNECTOR_ID;
           if (status === 'connected' && otherIsCurrent && (isReconnecting || current !== startCurrent)) {
-            throw new PrivyConnectorSupersededError();
+            throw userRejected('Another wallet connected while Privy was connecting.');
           }
           flag.write();
           watch();

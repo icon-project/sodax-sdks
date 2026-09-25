@@ -5,7 +5,6 @@ import { resolveEvmRpcUrls, SODAX_EVM_CHAINS } from '@/xchains/evm/EvmXService.j
 import { buildPrivyConfig, type PrivyOptions } from './privyConfig.js';
 
 const ctx: PrivySourceContext = {
-  chains: SODAX_EVM_CHAINS,
   rpcUrls: resolveEvmRpcUrls({ [ChainKeys.BASE_MAINNET]: { rpcUrl: 'https://base.example' } }),
   getState: vi.fn(),
 };

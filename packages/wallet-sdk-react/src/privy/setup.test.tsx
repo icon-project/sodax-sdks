@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render } from '@testing-library/react';
 import { sonic } from 'viem/chains';
-import { type Config, createConfig, createStorage, http } from 'wagmi';
+import { type Config, createConfig, createStorage, http, noopStorage } from 'wagmi';
 import { connect } from 'wagmi/actions';
-import { resolveEvmRpcUrls, SODAX_EVM_CHAINS } from '@/xchains/evm/EvmXService.js';
+import { resolveEvmRpcUrls } from '@/xchains/evm/EvmXService.js';
 import { createPrivySetup } from './setup.js';
 
 // PrivyProvider throwing during render is how Privy 3.40 rejects a plain-http origin or a malformed app id.
@@ -28,7 +28,6 @@ describe('createPrivySetup', () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     let config: Config | undefined;
     const setup = createPrivySetup({ appId: 'app' }, sonic.id, {
-      chains: SODAX_EVM_CHAINS,
       rpcUrls: resolveEvmRpcUrls(undefined),
       getState: () => {
         if (!config) throw new Error('config not created');
@@ -39,9 +38,7 @@ describe('createPrivySetup', () => {
       chains: [sonic],
       connectors: [setup.connector],
       multiInjectedProviderDiscovery: false,
-      storage: createStorage({
-        storage: { getItem: () => null, setItem: () => undefined, removeItem: () => undefined },
-      }),
+      storage: createStorage({ storage: noopStorage }),
       transports: { [sonic.id]: http() },
     });
     const { Host } = setup;

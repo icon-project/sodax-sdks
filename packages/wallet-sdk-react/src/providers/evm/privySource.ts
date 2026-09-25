@@ -1,11 +1,9 @@
 import type { ComponentType, ReactNode } from 'react';
-import type { Chain } from 'viem';
 import type { Config, CreateConnectorFn } from 'wagmi';
 import type { PrivySource } from '@/types/config.js';
 
 /** What `EvmProvider` hands the Privy source. Internal — the public side is the opaque `PrivySource`. */
 export type PrivySourceContext = {
-  readonly chains: readonly [Chain, ...Chain[]];
   /** The URL each chain's wagmi transport uses (`resolveEvmRpcUrls`). */
   readonly rpcUrls: Readonly<Record<number, string>>;
   readonly getState: () => Config['state'];
@@ -36,8 +34,8 @@ export function createPrivySource(factory: PrivySourceFactory): PrivySource {
 }
 
 /** Runs the source's setup, or warns and returns `undefined` for a value `privy()` did not create. */
-export function setupPrivySource(source: unknown, ctx: PrivySourceContext): PrivySourceSetup | undefined {
-  const factory = typeof source === 'object' && source !== null ? factories.get(source) : undefined;
+export function setupPrivySource(source: PrivySource, ctx: PrivySourceContext): PrivySourceSetup | undefined {
+  const factory = factories.get(source);
   if (!factory) {
     console.warn(
       "[wallet-sdk-react] EVM.privy must be created by privy() from '@sodax/wallet-sdk-react/privy' — skipped.",

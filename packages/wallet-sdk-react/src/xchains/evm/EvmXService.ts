@@ -1,4 +1,5 @@
 import { XService } from '@/core/XService.js';
+import { EVM_DEFAULT_PERSIST_KEY } from '@/constants.js';
 import { ChainKeys, getEvmChainKeyByChainId, type XToken } from '@sodax/types';
 import type { EvmTypeConfig } from '@/types/config.js';
 import { getRpcUrl, getWagmiChainId, isNativeToken } from '@/utils/index.js';
@@ -155,7 +156,7 @@ export const createWagmiConfig = (
     },
     storage: createStorage({
       storage: cookieStorage,
-      key: options?.persistKey ?? 'sodax',
+      key: options?.persistKey ?? EVM_DEFAULT_PERSIST_KEY,
     }),
   });
 };

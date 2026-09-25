@@ -2,7 +2,7 @@ import { type ReactNode, useMemo, useRef } from 'react';
 import { type Config, type CreateConnectorFn, type State, WagmiProvider } from 'wagmi';
 import { walletConnect } from 'wagmi/connectors';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { createWagmiConfig, resolveEvmRpcUrls, SODAX_EVM_CHAINS } from '@/xchains/evm/EvmXService.js';
+import { createWagmiConfig, resolveEvmRpcUrls } from '@/xchains/evm/EvmXService.js';
 import type { EvmTypeConfig } from '@/types/config.js';
 import { EvmHydrator } from './EvmHydrator.js';
 import { EvmActions } from './EvmActions.js';
@@ -47,7 +47,6 @@ export const EvmProvider = ({ children, config }: EvmProviderProps) => {
       privySource === undefined
         ? undefined
         : setupPrivySource(privySource, {
-            chains: SODAX_EVM_CHAINS,
             rpcUrls: resolveEvmRpcUrls(config.chains),
             getState: () => {
               if (!built) throw new Error('[wallet-sdk-react] wagmi config read before it was created');

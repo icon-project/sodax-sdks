@@ -85,11 +85,11 @@ export function createPrivyRuntime(): PrivyRuntime {
     return ops;
   };
 
-  const settleLogin = (outcome: { error?: Error }) => {
+  const settleLogin = (error?: Error) => {
     const pending = pendingLogin;
     pendingLogin = undefined;
     if (!pending) return;
-    if (outcome.error) pending.reject(outcome.error);
+    if (error) pending.reject(error);
     else pending.resolve();
   };
 
@@ -125,16 +125,15 @@ export function createPrivyRuntime(): PrivyRuntime {
     login(signal) {
       const current = ops;
       if (!current) return Promise.reject(new PrivyUnavailableError());
-      settleLogin({ error: userRejected('Superseded by a newer login attempt.') });
+      settleLogin(userRejected('Superseded by a newer login attempt.'));
       return new Promise<void>((resolve, reject) => {
-        let opened = false;
         let timer: ReturnType<typeof setTimeout> | undefined;
         // Being authenticated ends the wait whatever delivered it; Privy's `onComplete` is not the only signal.
         const watch = () => {
-          if (snapshot.authenticated) settleLogin({});
-          else if (snapshot.modalOpen) opened = true;
+          if (snapshot.authenticated) settleLogin();
+          else if (snapshot.modalOpen) clearTimeout(timer);
         };
-        const onAbort = () => settleLogin({ error: abortReason(signal) });
+        const onAbort = () => settleLogin(abortReason(signal));
         const cleanup = () => {
           clearTimeout(timer);
           listeners.delete(watch);
@@ -154,9 +153,7 @@ export function createPrivyRuntime(): PrivyRuntime {
         signal?.addEventListener('abort', onAbort);
         listeners.add(watch);
         timer = setTimeout(() => {
-          if (!opened && !snapshot.modalOpen) {
-            settleLogin({ error: new PrivyTimeoutError('Opening the Privy login', LOGIN_OPEN_MS) });
-          }
+          if (!snapshot.modalOpen) settleLogin(new PrivyTimeoutError('Opening the Privy login', LOGIN_OPEN_MS));
         }, LOGIN_OPEN_MS);
         current.login();
       });
@@ -180,12 +177,12 @@ export function createPrivyRuntime(): PrivyRuntime {
     },
 
     loginCompleted() {
-      settleLogin({});
+      settleLogin();
     },
 
     loginFailed(code) {
       // Wrong codes, captcha and rate limits are recoverable inside the modal; only closing it ends the attempt.
-      if (code === 'exited_auth_flow') settleLogin({ error: userRejected('The user closed the Privy login.') });
+      if (code === 'exited_auth_flow') settleLogin(userRejected('The user closed the Privy login.'));
     },
 
     unmount() {
@@ -196,7 +193,7 @@ export function createPrivyRuntime(): PrivyRuntime {
       queueMicrotask(() => {
         if (ops) return;
         const unloaded = new PrivyUnavailableError();
-        settleLogin({ error: unloaded });
+        settleLogin(unloaded);
         for (const waiter of [...waiters]) waiter.reject(unloaded);
       });
     },
@@ -204,7 +201,7 @@ export function createPrivyRuntime(): PrivyRuntime {
     fail(error) {
       ops = undefined;
       snapshot = { ...UNMOUNTED, error };
-      settleLogin({ error });
+      settleLogin(error);
       notify();
     },
   };

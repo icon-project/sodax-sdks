@@ -14,13 +14,6 @@ export class PrivyUnavailableError extends Error {
   }
 }
 
-/** A newer connection took over while this attempt was pending; wagmi treats it as a rejection. */
-export class PrivyConnectorSupersededError extends UserRejectedRequestError {
-  constructor() {
-    super(new Error('[wallet-sdk-react/privy] Another wallet connected while Privy was connecting.'));
-  }
-}
-
 export function userRejected(message: string): UserRejectedRequestError {
   return new UserRejectedRequestError(new Error(`[wallet-sdk-react/privy] ${message}`));
 }
@@ -33,10 +26,7 @@ export function abortReason(signal: AbortSignal | undefined): Error {
 /** Settles with `promise`, or rejects on the deadline or when `signal` aborts — whichever comes first. */
 export function withTimeout<T>(promise: Promise<T>, ms: number, what: string, signal?: AbortSignal): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    let settled = false;
     const finish = (settle: () => void) => {
-      if (settled) return;
-      settled = true;
       clearTimeout(timer);
       signal?.removeEventListener('abort', onAbort);
       settle();

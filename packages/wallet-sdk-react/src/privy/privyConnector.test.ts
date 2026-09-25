@@ -26,22 +26,12 @@ const loggedOut: PrivySnapshot = {
 };
 
 const loggedIn = (embedded: EmbeddedWallet): PrivySnapshot => ({
-  ready: true,
+  ...loggedOut,
   authenticated: true,
-  error: null,
   userLoaded: true,
   hasEmbeddedAccount: true,
   embedded,
-  modalOpen: false,
 });
-
-function gate() {
-  let open: () => void = () => undefined;
-  const promise = new Promise<void>(resolve => {
-    open = resolve;
-  });
-  return { promise, open };
-}
 
 type WalletOptions = {
   chainId?: number;
@@ -493,7 +483,7 @@ describe('privyConnector — while connected', () => {
 
   it('ends the session once a switch settles when the logout arrived mid-switch', async () => {
     const context = setup();
-    const switchGate = gate();
+    const switchGate = Promise.withResolvers<void>();
     const wallet = fakeWallet(ADDRESS, { switchGate: switchGate.promise });
     context.runtime.publish(loggedIn(wallet));
     await connect(context.config, { connector: context.privy });
@@ -502,7 +492,7 @@ describe('privyConnector — while connected', () => {
     await vi.waitFor(() => expect(wallet.switchChain).toHaveBeenCalled());
     context.runtime.publish(loggedOut);
     expect(context.config.state.status).toBe('connected');
-    switchGate.open();
+    switchGate.resolve();
     await switching;
 
     expect(context.config.state.status).toBe('disconnected');
@@ -566,14 +556,14 @@ describe('privyConnector — while connected', () => {
 describe('privyConnector — cancellation and teardown', () => {
   it('does not commit an attempt that was disconnected while the wallet provider was loading', async () => {
     const context = setup();
-    const providerGate = gate();
+    const providerGate = Promise.withResolvers<void>();
     const wallet = fakeWallet(ADDRESS, { providerGate: providerGate.promise });
     context.runtime.publish(loggedIn(wallet));
     const connecting = connect(context.config, { connector: context.privy });
     await vi.waitFor(() => expect(wallet.getEthereumProvider).toHaveBeenCalled());
 
     await context.privy.disconnect();
-    providerGate.open();
+    providerGate.resolve();
 
     await expect(connecting).rejects.toBeInstanceOf(UserRejectedRequestError);
     expect(localStorage.getItem(FLAG_KEY)).toBeNull();
@@ -582,14 +572,14 @@ describe('privyConnector — cancellation and teardown', () => {
 
   it('does not commit an attempt that was disconnected while switching to the requested chain', async () => {
     const context = setup();
-    const switchGate = gate();
+    const switchGate = Promise.withResolvers<void>();
     const wallet = fakeWallet(ADDRESS, { switchGate: switchGate.promise });
     context.runtime.publish(loggedIn(wallet));
     const connecting = connect(context.config, { connector: context.privy, chainId: base.id });
     await vi.waitFor(() => expect(wallet.switchChain).toHaveBeenCalled());
 
     await context.privy.disconnect();
-    switchGate.open();
+    switchGate.resolve();
 
     await expect(connecting).rejects.toBeInstanceOf(UserRejectedRequestError);
     expect(localStorage.getItem(FLAG_KEY)).toBeNull();
@@ -598,7 +588,7 @@ describe('privyConnector — cancellation and teardown', () => {
 
   it('leaves no watcher behind from a superseded attempt', async () => {
     const context = setup();
-    const providerGate = gate();
+    const providerGate = Promise.withResolvers<void>();
     const first = fakeWallet(ADDRESS, { providerGate: providerGate.promise });
     context.runtime.publish(loggedIn(first));
     const firstAttempt = context.privy.connect();
@@ -608,7 +598,7 @@ describe('privyConnector — cancellation and teardown', () => {
     const secondAttempt = context.privy.connect();
     await expect(firstAttempt).rejects.toBeInstanceOf(UserRejectedRequestError);
     await secondAttempt;
-    providerGate.open();
+    providerGate.resolve();
     await settle();
 
     const disconnects = vi.fn();
@@ -621,13 +611,13 @@ describe('privyConnector — cancellation and teardown', () => {
 
   it('never re-attaches a provider that arrives after disconnect', async () => {
     const { runtime, privy } = await connected();
-    const providerGate = gate();
+    const providerGate = Promise.withResolvers<void>();
     const replacement = fakeWallet(ADDRESS, { providerGate: providerGate.promise });
     runtime.publish(loggedIn(replacement));
     await vi.waitFor(() => expect(replacement.getEthereumProvider).toHaveBeenCalled());
 
     await privy.disconnect();
-    providerGate.open();
+    providerGate.resolve();
     await settle();
 
     await expect(request(privy, { method: 'eth_chainId' })).rejects.toThrow(/not connected/);
