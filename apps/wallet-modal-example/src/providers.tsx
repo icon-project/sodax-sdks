@@ -7,7 +7,7 @@ const queryClient = new QueryClient();
 
 const createWalletConfig = (privy: PrivySource | undefined): SodaxWalletConfig => ({
   EVM: {
-    ...(privy ? { privy } : {}),
+    privy,
     ssr: false,
     reconnectOnMount: true,
     chains: {
