@@ -100,7 +100,9 @@ See the `sodax-sdk` skill (integration mode), `swaps-api.md` § `partnerFee`.
 
 The backend guards `POST /swaps/*` with an API-key check. There is ONE instance-wide key: configure it
 once on the provider config — `<SodaxProvider config={{ apiKey }}>` — and every `sodax.api.*` call these
-hooks make carries it. Override per request via the hooks' existing `apiConfig` param
+hooks make carries it. `SodaxProvider` runs in the browser, so a key passed there (or read from
+`NEXT_PUBLIC_*` / `VITE_*`) is public. To keep it private, leave `apiKey` out, point `api.baseURL` and
+`solver.solverApiEndpoint` at the app's own backend proxy, and attach the key there: https://docs.sodax.com/developers/how-to/api-key-good-practices. Override per request via the hooks' existing `apiConfig` param
 (`RequestOverrideConfig`), which also accepts `apiKey`:
 
 ```ts
@@ -429,10 +431,10 @@ rather than on the HTTP status.
 When the server rate-limits a key it also supplies `error.context.retryAfterSeconds`; render "try again
 in Ns" instead of a generic "try later". The SDK never auto-retries a rate limit.
 
-On the packaged gateway no sponsoring-specific credential is needed: the instance-wide key from
-`<SodaxProvider config={{ apiKey }}>` (`new Sodax({ apiKey })`) is inherited by sponsoring.
-`api.sponsoringApiConfig.apiKey` is the credential for an independently hosted sponsoring service, and
-wins wherever the slice points. An api key
+Sponsoring needs its own sponsoring-specific key, issued by the SODAX team — a partner portal key is
+rejected there. Set it on `api.sponsoringApiConfig.apiKey`; it wins wherever the slice points. Without it,
+the instance-wide key from `<SodaxProvider config={{ apiKey }}>` is sent to sponsoring whenever the call
+targets a SODAX gateway root, and a portal key sent there fails. An api key
 in a browser bundle is public by nature; the service's per-key quotas, fleet cap, per-IP throttle,
 and origin gating are the real controls. Proxy through your own backend if that is not acceptable.
 

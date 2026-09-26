@@ -21,6 +21,9 @@ Task guides for common integration work. For product pickers, start from a [solu
   <Card title="API keys" icon="key" href="/developers/how-to/api-keys">
     Create, deploy and rotate a partner portal key.
   </Card>
+  <Card title="API key good practices" icon="lock" href="/developers/how-to/api-key-good-practices">
+    Keep the key off the client, with a worked backend proxy for browser dApps.
+  </Card>
   <Card title="Payout wallet" icon="wallet" href="/developers/how-to/payout-wallet">
     Set the address your partner fees are paid to, and claim them.
   </Card>

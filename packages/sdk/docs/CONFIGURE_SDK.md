@@ -120,14 +120,16 @@ const partnerFeeAmount: PartnerFee = {
 The backend guards its API-keyed routes (starting with the Swaps API, `POST /swaps/*`) with an `x-api-key` header check; keys are minted through the partner portal. There is **one** key for every backend request — set it once at construction and the SDK sends it as `x-api-key` on the data API, the swaps API, the bridge API, the solver API, and the backend submit-tx legs of `sodax.swaps.swap()` / `sodax.bridge.bridge()`:
 
 ```typescript
+// Server-side only — a key in a browser bundle is public
 import { Sodax } from '@sodax/sdk';
 
-const sodax = new Sodax({ apiKey: 'partner-api-key' });
+const sodax = new Sodax({ apiKey: process.env.SODAX_API_KEY });
 ```
 
 Per request, pass `apiKey` in the trailing `RequestOverrideConfig` of any `sodax.api.*` method, or in `extras` on the high-level swap / bridge actions:
 
 ```typescript
+// Server-side only, like the instance-wide key
 await sodax.api.getIntentByTxHash(txHash, { apiKey: 'per-request-key' });
 
 await sodax.api.swaps.getQuote(quoteBody, undefined, { apiKey: 'per-request-key' });
@@ -156,7 +158,7 @@ Rotating a key at runtime with `backendApi.setHeaders({ 'x-api-key': next })` re
 
 **Security note.** The configured key follows the roots you configure — the data / swaps / bridge `baseURL` and `solver.solverApiEndpoint` — and it equally follows a per-call `RequestOverrideConfig.baseURL` on data / swaps / bridge, plaintext local targets such as `http://localhost:3008` included: those three bake the key into their headers, so retargeting a single call carries it to that host. Sponsoring is the one gated exception described above. Point all of them — configured root and per-call override alike — only at trusted SODAX-related deployments.
 
-Like the global `fee`, the global `apiKey` is a `SodaxOptions` client-side option, never part of the backend-fetched data contract. Keys bundled into a browser app are public by nature. Auth failures come back as `EXTERNAL_API_ERROR` results with `context.status` `401` (missing/invalid key) or `403` (suspended organisation / missing scope) — terminal until the key is fixed — while the transient verification `503` is retried automatically by the wire client.
+Like the global `fee`, the global `apiKey` is a `SodaxOptions` client-side option, never part of the backend-fetched data contract. Keys bundled into a browser app are public by nature — to keep one server-side while the SDK runs in a browser, point `api.baseURL` and `solver.solverApiEndpoint` at your own proxy, as shown in [API key good practices](https://docs.sodax.com/developers/how-to/api-key-good-practices). Auth failures come back as `EXTERNAL_API_ERROR` results with `context.status` `401` (missing/invalid key) or `403` (suspended organisation / missing scope) — terminal until the key is fixed — while the transient verification `503` is retried automatically by the wire client.
 ## Analytics
 
 The SDK can emit **structured, opt-in user-action events** to a tracker you supply. This is separate from `logger`: `logger` is developer-facing free-form diagnostics that is **on by default** (`console`), whereas `analytics` is a product-facing event stream that is **off by default** — the SDK emits nothing (and never even builds an event payload) unless you enable it.

@@ -77,6 +77,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
 }
 ```
 
+`SodaxProvider` builds its `Sodax` instance in the browser, so `sodaxConfig` ships in your bundle. Leave
+`apiKey` out of it: to send a SODAX API key, point `api.baseURL` and `solver.solverApiEndpoint` at your own
+backend proxy and attach the key there — see [API key good practices](https://docs.sodax.com/developers/how-to/api-key-good-practices).
+
 ### 2. Get a wallet provider
 
 ```tsx
