@@ -1,0 +1,522 @@
+[
+  {
+    "profile": "Full (all features, all chains)",
+    "l1": {
+      "min": 4854300,
+      "gz": 1286311,
+      "br": 856493
+    },
+    "l2": {
+      "min": 4625526,
+      "gz": 1213897,
+      "br": 852645
+    },
+    "l2TopBuckets": {
+      "@stellar/stellar-sdk": 1037596,
+      "icon-sdk-js": 460871,
+      "@injectivelabs/core-proto-ts-v2": 289715,
+      "@mysten/sui": 198362,
+      "viem": 195947,
+      "@solana/web3.js": 194621,
+      "@noble/curves": 171976,
+      "@sodax/types": 153849,
+      "@sodax/libs": 119315,
+      "sdk:shared/abis": 97489,
+      "bitcoinjs-lib": 96797,
+      "bn.js": 90005,
+      "@pancakeswap/v3-sdk": 84983,
+      "@coral-xyz/anchor": 83384,
+      "@injectivelabs/exceptions": 76002,
+      "@injectivelabs/sdk-ts": 75545,
+      "@noble/hashes": 74427,
+      "@pancakeswap/infinity-sdk": 55028,
+      "axios": 49022,
+      "near-api-js": 48608,
+      "pako": 48006,
+      "cosmjs-types": 45879,
+      "sdk:moneyMarket": 42581,
+      "abitype": 39878,
+      "sdk:leverageYield": 37120
+    }
+  },
+  {
+    "profile": "Core only (hub + EVM, no features)",
+    "l1": {
+      "min": 2814432,
+      "gz": 794099,
+      "br": 512486
+    },
+    "l2": {
+      "min": 519974,
+      "gz": 146839,
+      "br": 114191
+    },
+    "l2TopBuckets": {
+      "viem": 160057,
+      "@sodax/types": 151162,
+      "@noble/curves": 33237,
+      "abitype": 27955,
+      "sdk:shared/abis": 24200,
+      "ox": 20694,
+      "sdk:spoke/SpokeService": 16112,
+      "@noble/hashes": 15525,
+      "replaced:@pancakeswap/infinity-sdk": 15429,
+      "sdk:backendApi": 11068,
+      "sdk:shared/config": 6522,
+      "valibot": 6015,
+      "sdk:swap": 5744,
+      "sdk:spoke/SonicSpokeService": 5496,
+      "sdk:spoke/EvmSpokeService": 3596,
+      "rlp": 3328,
+      "sdk:shared/utils": 3194,
+      "sdk:shared": 2939,
+      "sdk:shared/entities": 2589,
+      "sdk:shared/services": 1777,
+      "sdk:errors": 1530,
+      "sdk:spoke/balance-utils": 537,
+      "replaced:@mysten/sui/bcs": 36,
+      "replaced:@solana/web3.js": 36,
+      "replaced:@stellar/stellar-sdk": 36
+    }
+  },
+  {
+    "profile": "Swaps, EVM only",
+    "l1": {
+      "min": 2846348,
+      "gz": 803150,
+      "br": 519846
+    },
+    "l2": {
+      "min": 567509,
+      "gz": 159875,
+      "br": 124855
+    },
+    "l2TopBuckets": {
+      "viem": 160121,
+      "@sodax/types": 151348,
+      "@noble/curves": 33257,
+      "abitype": 27955,
+      "sdk:swap": 24760,
+      "sdk:shared/abis": 24200,
+      "ox": 20694,
+      "sdk:backendApi": 17231,
+      "sdk:spoke/SpokeService": 16110,
+      "@noble/hashes": 15525,
+      "replaced:@pancakeswap/infinity-sdk": 15429,
+      "@sodax/swaps-api": 9981,
+      "valibot": 9125,
+      "sdk:shared/config": 6522,
+      "sdk:spoke/SonicSpokeService": 5492,
+      "sdk:shared/services": 5393,
+      "sdk:shared/utils": 5114,
+      "sdk:errors": 4800,
+      "sdk:spoke/EvmSpokeService": 3596,
+      "rlp": 3328,
+      "sdk:shared": 3139,
+      "sdk:shared/entities": 2584,
+      "sdk:spoke/balance-utils": 537,
+      "replaced:@mysten/sui/bcs": 36,
+      "replaced:@solana/web3.js": 36
+    }
+  },
+  {
+    "profile": "Swaps, EVM + Solana",
+    "l1": {
+      "min": 3021280,
+      "gz": 852284,
+      "br": 555062
+    },
+    "l2": {
+      "min": 1091626,
+      "gz": 313476,
+      "br": 241325
+    },
+    "l2TopBuckets": {
+      "viem": 160580,
+      "@sodax/types": 151348,
+      "@solana/web3.js": 131302,
+      "@noble/curves": 96503,
+      "@coral-xyz/anchor": 82742,
+      "pako": 47384,
+      "bn.js": 45148,
+      "@noble/hashes": 38688,
+      "abitype": 27955,
+      "sdk:swap": 24791,
+      "sdk:shared/abis": 24200,
+      "ox": 20790,
+      "bignumber.js": 18915,
+      "@solana/buffer-layout": 18303,
+      "buffer-layout": 17758,
+      "sdk:backendApi": 17342,
+      "sdk:spoke/SpokeService": 16108,
+      "replaced:@pancakeswap/infinity-sdk": 15429,
+      "superstruct": 11005,
+      "@sodax/swaps-api": 10091,
+      "valibot": 9131,
+      "uuid": 8594,
+      "borsh": 7405,
+      "sdk:shared/config": 6523,
+      "sdk:spoke/SolanaSpokeService": 5760
+    }
+  },
+  {
+    "profile": "Swaps, EVM + Solana + Sui",
+    "l1": {
+      "min": 3273786,
+      "gz": 917110,
+      "br": 606683
+    },
+    "l2": {
+      "min": 1375013,
+      "gz": 387870,
+      "br": 300926
+    },
+    "l2TopBuckets": {
+      "@mysten/sui": 197258,
+      "viem": 161065,
+      "@sodax/types": 151715,
+      "@solana/web3.js": 131302,
+      "@noble/curves": 96548,
+      "@coral-xyz/anchor": 82817,
+      "pako": 47666,
+      "@noble/hashes": 46454,
+      "bn.js": 45206,
+      "@protobuf-ts/runtime": 32593,
+      "abitype": 27973,
+      "sdk:swap": 24807,
+      "sdk:shared/abis": 24200,
+      "ox": 20800,
+      "bignumber.js": 18953,
+      "@solana/buffer-layout": 18303,
+      "buffer-layout": 17760,
+      "sdk:backendApi": 17299,
+      "sdk:spoke/SpokeService": 16103,
+      "replaced:@pancakeswap/infinity-sdk": 15429,
+      "@mysten/bcs": 11760,
+      "superstruct": 11011,
+      "valibot": 10986,
+      "@sodax/swaps-api": 10076,
+      "uuid": 8609
+    }
+  },
+  {
+    "profile": "Swaps, all chains",
+    "l1": {
+      "min": 4553409,
+      "gz": 1235746,
+      "br": 821635
+    },
+    "l2": {
+      "min": 3933391,
+      "gz": 1060729,
+      "br": 774118
+    },
+    "l2TopBuckets": {
+      "@stellar/stellar-sdk": 1037596,
+      "icon-sdk-js": 460866,
+      "@injectivelabs/core-proto-ts-v2": 289199,
+      "@mysten/sui": 198274,
+      "viem": 166831,
+      "@sodax/types": 153067,
+      "@solana/web3.js": 132616,
+      "@noble/curves": 131383,
+      "@sodax/libs": 119309,
+      "bitcoinjs-lib": 96797,
+      "@coral-xyz/anchor": 83278,
+      "@injectivelabs/exceptions": 75994,
+      "@injectivelabs/sdk-ts": 75503,
+      "@noble/hashes": 63195,
+      "axios": 48927,
+      "near-api-js": 48590,
+      "pako": 47886,
+      "cosmjs-types": 45879,
+      "bn.js": 45041,
+      "bip174": 35239,
+      "@protobuf-ts/runtime": 32638,
+      "abitype": 28170,
+      "sdk:swap": 24853,
+      "sdk:shared/abis": 24204,
+      "@injectivelabs/indexer-proto-ts-v2": 21309
+    }
+  },
+  {
+    "profile": "Money market, EVM only",
+    "l1": {
+      "min": 2908099,
+      "gz": 809469,
+      "br": 524266
+    },
+    "l2": {
+      "min": 632261,
+      "gz": 170355,
+      "br": 133539
+    },
+    "l2TopBuckets": {
+      "viem": 160155,
+      "@sodax/types": 151186,
+      "sdk:shared/abis": 64572,
+      "sdk:moneyMarket": 42448,
+      "@noble/curves": 33211,
+      "abitype": 27955,
+      "ox": 20694,
+      "bignumber.js": 18894,
+      "sdk:spoke/SpokeService": 16112,
+      "@noble/hashes": 15525,
+      "replaced:@pancakeswap/infinity-sdk": 15429,
+      "sdk:backendApi": 11068,
+      "sdk:shared/services": 7854,
+      "sdk:shared/config": 6522,
+      "valibot": 6015,
+      "sdk:swap": 5745,
+      "sdk:spoke/SonicSpokeService": 5496,
+      "sdk:errors": 4988,
+      "sdk:shared/utils": 3940,
+      "sdk:spoke/EvmSpokeService": 3596,
+      "rlp": 3328,
+      "sdk:shared": 3139,
+      "sdk:shared/entities": 2584,
+      "sdk:spoke/balance-utils": 537,
+      "replaced:@mysten/sui/bcs": 36
+    }
+  },
+  {
+    "profile": "Money market, all chains",
+    "l1": {
+      "min": 4615373,
+      "gz": 1242224,
+      "br": 826496
+    },
+    "l2": {
+      "min": 3980582,
+      "gz": 1063208,
+      "br": 775506
+    },
+    "l2TopBuckets": {
+      "@stellar/stellar-sdk": 1037596,
+      "icon-sdk-js": 460866,
+      "@injectivelabs/core-proto-ts-v2": 289175,
+      "@mysten/sui": 198274,
+      "viem": 166826,
+      "@sodax/types": 153069,
+      "@solana/web3.js": 132616,
+      "@noble/curves": 131387,
+      "@sodax/libs": 118505,
+      "bitcoinjs-lib": 96797,
+      "@coral-xyz/anchor": 83278,
+      "@injectivelabs/exceptions": 75994,
+      "@injectivelabs/sdk-ts": 75503,
+      "sdk:shared/abis": 64576,
+      "@noble/hashes": 63195,
+      "axios": 48927,
+      "near-api-js": 48590,
+      "pako": 47886,
+      "cosmjs-types": 45879,
+      "bn.js": 45041,
+      "sdk:moneyMarket": 42589,
+      "bip174": 35239,
+      "@protobuf-ts/runtime": 32638,
+      "abitype": 28170,
+      "@injectivelabs/indexer-proto-ts-v2": 21309
+    }
+  },
+  {
+    "profile": "Bridge, EVM only",
+    "l1": {
+      "min": 2859766,
+      "gz": 802937,
+      "br": 519632
+    },
+    "l2": {
+      "min": 595920,
+      "gz": 167364,
+      "br": 131308
+    },
+    "l2TopBuckets": {
+      "viem": 160155,
+      "@sodax/types": 151344,
+      "sdk:shared/abis": 40784,
+      "@noble/curves": 33211,
+      "abitype": 27955,
+      "ox": 20694,
+      "bignumber.js": 18894,
+      "sdk:spoke/SpokeService": 16112,
+      "sdk:backendApi": 15975,
+      "@noble/hashes": 15525,
+      "replaced:@pancakeswap/infinity-sdk": 15429,
+      "sdk:bridge": 14680,
+      "valibot": 9127,
+      "sdk:shared/services": 8093,
+      "sdk:shared/config": 6522,
+      "@sodax/bridge-api": 6503,
+      "sdk:swap": 5745,
+      "sdk:spoke/SonicSpokeService": 5496,
+      "sdk:errors": 5158,
+      "sdk:shared/utils": 4066,
+      "sdk:spoke/EvmSpokeService": 3596,
+      "rlp": 3328,
+      "sdk:shared": 3139,
+      "sdk:shared/entities": 2584,
+      "sdk:spoke/balance-utils": 537
+    }
+  },
+  {
+    "profile": "Staking, EVM only",
+    "l1": {
+      "min": 2867947,
+      "gz": 801919,
+      "br": 518475
+    },
+    "l2": {
+      "min": 573307,
+      "gz": 154281,
+      "br": 120442
+    },
+    "l2TopBuckets": {
+      "viem": 160057,
+      "@sodax/types": 151218,
+      "sdk:shared/abis": 47112,
+      "@noble/curves": 33237,
+      "abitype": 27955,
+      "ox": 20694,
+      "sdk:staking": 20305,
+      "sdk:spoke/SpokeService": 16112,
+      "@noble/hashes": 15525,
+      "replaced:@pancakeswap/infinity-sdk": 15429,
+      "sdk:backendApi": 11068,
+      "sdk:shared/services": 7854,
+      "sdk:shared/config": 6522,
+      "valibot": 6015,
+      "sdk:swap": 5744,
+      "sdk:spoke/SonicSpokeService": 5496,
+      "sdk:errors": 4970,
+      "sdk:spoke/EvmSpokeService": 3596,
+      "sdk:shared/utils": 3588,
+      "rlp": 3328,
+      "sdk:shared": 3093,
+      "sdk:shared/entities": 2584,
+      "sdk:spoke/balance-utils": 537,
+      "replaced:@mysten/sui/bcs": 36,
+      "replaced:@solana/web3.js": 36
+    }
+  },
+  {
+    "profile": "DEX, EVM only",
+    "l1": {
+      "min": 2911521,
+      "gz": 810303,
+      "br": 523514
+    },
+    "l2": {
+      "min": 1100734,
+      "gz": 298428,
+      "br": 215593
+    },
+    "l2TopBuckets": {
+      "viem": 189033,
+      "@sodax/types": 151218,
+      "bn.js": 89975,
+      "@pancakeswap/v3-sdk": 84783,
+      "@noble/curves": 73420,
+      "@solana/web3.js": 54823,
+      "@pancakeswap/infinity-sdk": 54817,
+      "sdk:shared/abis": 49744,
+      "abitype": 39564,
+      "@noble/hashes": 26684,
+      "sdk:dex": 25055,
+      "ox": 20790,
+      "@solana/errors": 19895,
+      "bignumber.js": 18839,
+      "@solana/buffer-layout": 18303,
+      "sdk:spoke/SpokeService": 16113,
+      "replaced:@pancakeswap/infinity-sdk": 15429,
+      "sdk:shared/services": 13353,
+      "decimal.js-light": 13147,
+      "sdk:backendApi": 11132,
+      "uuid": 8594,
+      "@pancakeswap/swap-sdk-core": 8442,
+      "borsh": 7405,
+      "@pancakeswap/chains": 7153,
+      "sdk:shared/config": 6523
+    }
+  },
+  {
+    "profile": "Swaps + MM + Bridge, EVM only",
+    "l1": {
+      "min": 2947355,
+      "gz": 819133,
+      "br": 531036
+    },
+    "l2": {
+      "min": 695993,
+      "gz": 185570,
+      "br": 144116
+    },
+    "l2TopBuckets": {
+      "viem": 160186,
+      "@sodax/types": 151348,
+      "sdk:shared/abis": 64572,
+      "sdk:moneyMarket": 42492,
+      "@noble/curves": 33213,
+      "abitype": 27955,
+      "sdk:swap": 24760,
+      "ox": 20694,
+      "sdk:backendApi": 19460,
+      "bignumber.js": 18938,
+      "sdk:spoke/SpokeService": 16110,
+      "@noble/hashes": 15525,
+      "replaced:@pancakeswap/infinity-sdk": 15429,
+      "sdk:bridge": 14681,
+      "@sodax/swaps-api": 9981,
+      "valibot": 9125,
+      "sdk:shared/services": 8086,
+      "sdk:shared/config": 6523,
+      "@sodax/bridge-api": 6495,
+      "sdk:spoke/SonicSpokeService": 5492,
+      "sdk:errors": 5367,
+      "sdk:shared/utils": 5115,
+      "sdk:spoke/EvmSpokeService": 3596,
+      "rlp": 3328,
+      "sdk:shared": 3141
+    }
+  },
+  {
+    "profile": "All features, EVM only",
+    "l1": {
+      "min": 3096202,
+      "gz": 845047,
+      "br": 547875
+    },
+    "l2": {
+      "min": 1316007,
+      "gz": 339349,
+      "br": 245062
+    },
+    "l2TopBuckets": {
+      "viem": 189050,
+      "@sodax/types": 151380,
+      "bn.js": 90029,
+      "@pancakeswap/v3-sdk": 84783,
+      "sdk:shared/abis": 82354,
+      "@noble/curves": 73452,
+      "@solana/web3.js": 54823,
+      "@pancakeswap/infinity-sdk": 54817,
+      "sdk:moneyMarket": 42500,
+      "abitype": 39564,
+      "sdk:leverageYield": 37071,
+      "@noble/hashes": 26708,
+      "sdk:backendApi": 25740,
+      "sdk:dex": 25055,
+      "sdk:swap": 24791,
+      "ox": 20790,
+      "sdk:staking": 20317,
+      "@solana/errors": 19895,
+      "bignumber.js": 18849,
+      "@solana/buffer-layout": 18303,
+      "sdk:spoke/SpokeService": 16113,
+      "replaced:@pancakeswap/infinity-sdk": 15429,
+      "sdk:bridge": 14682,
+      "sdk:shared/services": 13592,
+      "decimal.js-light": 13184
+    }
+  }
+]

@@ -1,0 +1,155 @@
+{
+  "rows": [
+    {
+      "profile": "Full (all features, all chains)",
+      "l3": {
+        "min": 2305130,
+        "gz": 602802,
+        "br": 459862
+      }
+    },
+    {
+      "profile": "Core only (hub + EVM, no features)",
+      "l3": {
+        "min": 516682,
+        "gz": 145642,
+        "br": 113439
+      }
+    },
+    {
+      "profile": "Swaps, EVM only",
+      "l3": {
+        "min": 564217,
+        "gz": 158647,
+        "br": 124148
+      }
+    },
+    {
+      "profile": "Swaps, EVM + Solana",
+      "l3": {
+        "min": 702097,
+        "gz": 199305,
+        "br": 157699
+      }
+    },
+    {
+      "profile": "Swaps, EVM + Solana + Sui",
+      "l3": {
+        "min": 983908,
+        "gz": 273520,
+        "br": 217671
+      }
+    },
+    {
+      "profile": "Swaps, all chains",
+      "l3": {
+        "min": 1951907,
+        "gz": 539931,
+        "br": 421933
+      }
+    },
+    {
+      "profile": "Money market, EVM only",
+      "l3": {
+        "min": 610262,
+        "gz": 160501,
+        "br": 125064
+      }
+    },
+    {
+      "profile": "Money market, all chains",
+      "l3": {
+        "min": 1999362,
+        "gz": 542712,
+        "br": 423130
+      }
+    },
+    {
+      "profile": "Bridge, EVM only",
+      "l3": {
+        "min": 573737,
+        "gz": 157348,
+        "br": 123078
+      }
+    },
+    {
+      "profile": "Staking, EVM only",
+      "l3": {
+        "min": 570015,
+        "gz": 153102,
+        "br": 119622
+      }
+    },
+    {
+      "profile": "DEX, EVM only",
+      "l3": {
+        "min": 647221,
+        "gz": 169161,
+        "br": 125329
+      }
+    },
+    {
+      "profile": "Swaps + MM + Bridge, EVM only",
+      "l3": {
+        "min": 674004,
+        "gz": 175613,
+        "br": 135996
+      }
+    },
+    {
+      "profile": "All features, EVM only",
+      "l3": {
+        "min": 862464,
+        "gz": 209763,
+        "br": 154643
+      }
+    }
+  ],
+  "chains": {
+    "solana": {
+      "min": 137880,
+      "gz": 40658,
+      "br": 33551
+    },
+    "stellar": {
+      "min": 575753,
+      "gz": 151990,
+      "br": 120380
+    },
+    "sui": {
+      "min": 281451,
+      "gz": 74336,
+      "br": 60206
+    },
+    "icon": {
+      "min": 5788,
+      "gz": 1677,
+      "br": 1231
+    },
+    "injective": {
+      "min": 87909,
+      "gz": 15083,
+      "br": 12638
+    },
+    "near": {
+      "min": 5864,
+      "gz": 1568,
+      "br": 1162
+    },
+    "stacks": {
+      "min": 122584,
+      "gz": 41934,
+      "br": 29538
+    },
+    "bitcoin": {
+      "min": 165758,
+      "gz": 54493,
+      "br": 43110
+    }
+  },
+  "dex": {
+    "min": 130539,
+    "gz": 23519,
+    "br": 11890
+  }
+}

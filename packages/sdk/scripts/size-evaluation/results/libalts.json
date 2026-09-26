@@ -1,0 +1,194 @@
+[
+  {
+    "chain": "solana",
+    "label": "current: web3.js + spl-token + anchor (used symbols)",
+    "min": 516808,
+    "gz": 151688,
+    "br": 123440,
+    "top": "@solana/web3.js=128.2 @coral-xyz/anchor=80.8 @noble/curves=61.7 pako=46.3 bn.js=43.9"
+  },
+  {
+    "chain": "solana",
+    "label": "alt: @solana/kit + @solana-program/* + static ix encoders",
+    "min": 83785,
+    "gz": 26726,
+    "br": 23089,
+    "top": "@solana/errors=37.3 @solana/transaction-messages=11.5 @solana/rpc-transformers=5.2 @solana/codecs-data-structures=4.7 @solana/addresses=2.4"
+  },
+  {
+    "chain": "stellar",
+    "label": "current: @stellar/stellar-sdk root (used symbols)",
+    "min": 1034150,
+    "gz": 279823,
+    "br": 212813,
+    "top": "@stellar/stellar-sdk=1008.1 @sodax/sdk=0.0"
+  },
+  {
+    "chain": "stellar",
+    "label": "alt: @stellar/stellar-sdk/minimal",
+    "min": 877788,
+    "gz": 227894,
+    "br": 173305,
+    "top": "@stellar/stellar-sdk=855.4 @sodax/sdk=0.0"
+  },
+  {
+    "chain": "stellar",
+    "label": "alt: minimal/rpc + stellar-base, no Horizon",
+    "min": 562031,
+    "gz": 148993,
+    "br": 120541,
+    "top": "@stellar/stellar-base=444.5 @stellar/stellar-sdk=54.3 urijs=42.1 feaxios=5.2 @sodax/sdk=0.0"
+  },
+  {
+    "chain": "sui",
+    "label": "current: gRPC client + transactions + bcs",
+    "min": 279429,
+    "gz": 74223,
+    "br": 61996,
+    "top": "@mysten/sui=191.2 @protobuf-ts/runtime=31.6 @mysten/bcs=11.5 valibot=8.8 @protobuf-ts/grpcweb-transport=8.2"
+  },
+  {
+    "chain": "sui",
+    "label": "alt: JSON-RPC client + transactions + bcs",
+    "min": 155460,
+    "gz": 44369,
+    "br": 38640,
+    "top": "@mysten/sui=116.3 @mysten/bcs=11.5 valibot=8.7 @noble/hashes=7.5 @mysten/utils=4.7"
+  },
+  {
+    "chain": "sui",
+    "label": "alt: GraphQL client + transactions + bcs",
+    "min": 253390,
+    "gz": 68565,
+    "br": 58012,
+    "top": "@mysten/sui=167.8 @protobuf-ts/runtime=31.3 graphql=12.8 @mysten/bcs=11.5 valibot=8.8"
+  },
+  {
+    "chain": "sui",
+    "label": "floor: transactions + bcs only (no client)",
+    "min": 99519,
+    "gz": 30381,
+    "br": 26790,
+    "top": "@mysten/sui=65.7 @mysten/bcs=11.5 valibot=8.7 @noble/hashes=7.5 @scure/base=3.0"
+  },
+  {
+    "chain": "icon",
+    "label": "current: icon-sdk-js",
+    "min": 459915,
+    "gz": 149518,
+    "br": 123285,
+    "top": "icon-sdk-js=448.2 @sodax/sdk=0.1"
+  },
+  {
+    "chain": "icon",
+    "label": "alt: fetch JSON-RPC + tx builder",
+    "min": 1073,
+    "gz": 600,
+    "br": 514,
+    "top": "@sodax/sdk=1.0"
+  },
+  {
+    "chain": "injective",
+    "label": "current: sdk-ts root + networks + cosmjs-types",
+    "min": 689314,
+    "gz": 136846,
+    "br": 112713,
+    "top": "@injectivelabs/core-proto-ts-v2=280.5 @injectivelabs/exceptions=73.5 @injectivelabs/sdk-ts=73.5 axios=47.2 cosmjs-types=44.5"
+  },
+  {
+    "chain": "injective",
+    "label": "alt: sdk-ts granular subpaths",
+    "min": 689314,
+    "gz": 136575,
+    "br": 112709,
+    "top": "@injectivelabs/core-proto-ts-v2=280.5 @injectivelabs/exceptions=73.5 @injectivelabs/sdk-ts=73.5 axios=47.2 cosmjs-types=44.5"
+  },
+  {
+    "chain": "injective",
+    "label": "alt: REST (LCD) + cosmjs-types encoders",
+    "min": 82179,
+    "gz": 13887,
+    "br": 12093,
+    "top": "cosmjs-types=77.8 @sodax/sdk=1.8"
+  },
+  {
+    "chain": "near",
+    "label": "current: near-api-js JsonRpcProvider",
+    "min": 108896,
+    "gz": 33621,
+    "br": 29390,
+    "top": "near-api-js=47.2 @noble/curves=31.9 @noble/hashes=11.7 borsh=10.5 @scure/base=4.4"
+  },
+  {
+    "chain": "near",
+    "label": "alt: @near-js/providers",
+    "min": 62305,
+    "gz": 17202,
+    "br": 15330,
+    "top": "@near-js/utils=22.1 borsh=10.1 exponential-backoff=7.7 @near-js/providers=7.5 mustache=6.2"
+  },
+  {
+    "chain": "near",
+    "label": "alt: fetch JSON-RPC call_function",
+    "min": 574,
+    "gz": 377,
+    "br": 307,
+    "top": "@sodax/sdk=0.5"
+  },
+  {
+    "chain": "stacks",
+    "label": "current: @sodax/libs/stacks/core (used symbols)",
+    "min": 117641,
+    "gz": 40722,
+    "br": 32451,
+    "top": "@sodax/libs=114.6 @sodax/sdk=0.0"
+  },
+  {
+    "chain": "stacks",
+    "label": "ref: @sodax/libs/stacks/core (everything)",
+    "min": 125477,
+    "gz": 42620,
+    "br": 34103,
+    "top": "@sodax/libs=121.9 @sodax/sdk=0.0"
+  },
+  {
+    "chain": "bitcoin",
+    "label": "current: bitcoinjs-lib + @bitcoinerlab/secp256k1",
+    "min": 221022,
+    "gz": 67110,
+    "br": 57566,
+    "top": "bitcoinjs-lib=93.7 @noble/curves=45.4 bip174=34.0 @noble/hashes=23.0 typeforce=5.9"
+  },
+  {
+    "chain": "bitcoin",
+    "label": "alt: @scure/btc-signer",
+    "min": 146567,
+    "gz": 48713,
+    "br": 43132,
+    "top": "@scure/btc-signer=62.7 @noble/curves=34.2 micro-packed=24.8 @scure/base=10.3 @noble/hashes=10.0"
+  },
+  {
+    "chain": "dex",
+    "label": "current: PancakeSwap SDK surface",
+    "min": 520799,
+    "gz": 143919,
+    "br": 111579,
+    "top": "bn.js=87.7 @pancakeswap/v3-sdk=82.8 @pancakeswap/infinity-sdk=53.5 @solana/web3.js=53.3 @noble/curves=39.2"
+  },
+  {
+    "chain": "dex",
+    "label": "same, minus Solana leak in swap-sdk-core",
+    "min": 291574,
+    "gz": 72529,
+    "br": 61189,
+    "top": "@pancakeswap/v3-sdk=82.7 @pancakeswap/infinity-sdk=53.5 bn.js=43.8 viem=28.0 bignumber.js=18.3"
+  },
+  {
+    "chain": "dex",
+    "label": "alt: vendored CL math + ABIs over viem",
+    "min": 64632,
+    "gz": 15137,
+    "br": 13463,
+    "top": "alternative-snippet=32.4 viem=23.9 @noble/hashes=5.0 abitype=1.1 @sodax/sdk=0.0"
+  }
+]

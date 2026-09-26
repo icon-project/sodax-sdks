@@ -1,0 +1,68 @@
+[
+  {
+    "label": "published tokens.js: one chain map (solanaSupportedTokens)",
+    "min": 93640,
+    "gz": 27227,
+    "br": 23079
+  },
+  {
+    "label": "published tokens.js: supportedTokensByChain",
+    "min": 93641,
+    "gz": 27229,
+    "br": 23088
+  },
+  {
+    "label": "literal: hub SodaTokens + EVM chain maps",
+    "min": 83563,
+    "gz": 18608,
+    "br": 14651
+  },
+  {
+    "label": "literal: solana map alone",
+    "min": 7248,
+    "gz": 2923,
+    "br": 2738
+  },
+  {
+    "label": "literal: injective map alone",
+    "min": 1211,
+    "gz": 639,
+    "br": 588
+  },
+  {
+    "label": "literal: bitcoin map alone",
+    "min": 426,
+    "gz": 302,
+    "br": 271
+  },
+  {
+    "label": "literal: stellar map alone",
+    "min": 11087,
+    "gz": 5241,
+    "br": 4749
+  },
+  {
+    "label": "literal: sui map alone",
+    "min": 4207,
+    "gz": 1859,
+    "br": 1680
+  },
+  {
+    "label": "literal: icon map alone",
+    "min": 1072,
+    "gz": 425,
+    "br": 390
+  },
+  {
+    "label": "literal: near map alone",
+    "min": 1419,
+    "gz": 691,
+    "br": 650
+  },
+  {
+    "label": "literal: stacks map alone",
+    "min": 1175,
+    "gz": 637,
+    "br": 590
+  }
+]

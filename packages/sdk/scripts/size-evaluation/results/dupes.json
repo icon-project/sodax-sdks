@@ -1,0 +1,99 @@
+{
+  "rows": [
+    {
+      "name": "abitype",
+      "versions": {
+        "1.0.8": 14484,
+        "1.2.4": 13686,
+        "1.1.0": 11708
+      },
+      "extraCopiesBytes": 25394
+    },
+    {
+      "name": "viem",
+      "versions": {
+        "2.29.2": 161540,
+        "2.37.13": 29086,
+        "2.50.4": 5321
+      },
+      "extraCopiesBytes": 34407
+    },
+    {
+      "name": "@noble/hashes",
+      "versions": {
+        "1.8.0": 43600,
+        "2.0.1": 12098,
+        "1.7.2": 10970,
+        "2.2.0": 7779
+      },
+      "extraCopiesBytes": 30847
+    },
+    {
+      "name": "@noble/curves",
+      "versions": {
+        "1.9.7": 105642,
+        "1.8.2": 33367,
+        "2.0.1": 32978
+      },
+      "extraCopiesBytes": 66345
+    },
+    {
+      "name": "base-x",
+      "versions": {
+        "4.0.1": 1635,
+        "3.0.11": 1577
+      },
+      "extraCopiesBytes": 1577
+    },
+    {
+      "name": "bs58",
+      "versions": {
+        "5.0.0": 125,
+        "4.0.1": 124
+      },
+      "extraCopiesBytes": 124
+    },
+    {
+      "name": "bn.js",
+      "versions": {
+        "5.2.3": 45041,
+        "5.2.1": 44964
+      },
+      "extraCopiesBytes": 44964
+    },
+    {
+      "name": "borsh",
+      "versions": {
+        "2.0.0": 10830,
+        "0.7.0": 7441
+      },
+      "extraCopiesBytes": 7441
+    },
+    {
+      "name": "eventemitter3",
+      "versions": {
+        "5.0.4": 2861,
+        "4.0.7": 2846
+      },
+      "extraCopiesBytes": 2846
+    },
+    {
+      "name": "@solana/web3.js",
+      "versions": {
+        "1.98.0": 132613,
+        "1.98.4": 62008
+      },
+      "extraCopiesBytes": 62008
+    },
+    {
+      "name": "@scure/base",
+      "versions": {
+        "1.2.6": 5668,
+        "2.0.0": 4585,
+        "2.3.0": 3050
+      },
+      "extraCopiesBytes": 7635
+    }
+  ],
+  "totalExtraBytes": 283588
+}

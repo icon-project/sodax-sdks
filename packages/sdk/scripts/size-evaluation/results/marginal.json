@@ -1,0 +1,185 @@
+{
+  "chains": {
+    "solana": {
+      "standalone": {
+        "min": 524117,
+        "gz": 153601,
+        "br": 116470
+      },
+      "removeFromFull": {
+        "min": 348532,
+        "gz": 92936,
+        "br": 59191
+      },
+      "top": "@solana/web3.js=128.2 @coral-xyz/anchor=80.8 @noble/curves=61.8 pako=46.3 bn.js=44.1 @noble/hashes=22.6 bignumber.js=18.5 @solana/buffer-layout=17.9"
+    },
+    "stellar": {
+      "standalone": {
+        "min": 1049678,
+        "gz": 283278,
+        "br": 212613
+      },
+      "removeFromFull": {
+        "min": 1053241,
+        "gz": 283206,
+        "br": 189857
+      },
+      "top": "@stellar/stellar-sdk=1010.4 sdk:spoke/StellarSpokeService=10.8"
+    },
+    "sui": {
+      "standalone": {
+        "min": 281450,
+        "gz": 74273,
+        "br": 60234
+      },
+      "removeFromFull": {
+        "min": 236513,
+        "gz": 60491,
+        "br": 47200
+      },
+      "top": "@mysten/sui=191.5 @protobuf-ts/runtime=31.7 @mysten/bcs=11.5 @protobuf-ts/grpcweb-transport=8.2 @noble/hashes=7.5 @protobuf-ts/runtime-rpc=6.3 sdk:spoke/SuiSpokeService=5.1 @mysten/utils=4.7"
+    },
+    "icon": {
+      "standalone": {
+        "min": 465853,
+        "gz": 148992,
+        "br": 123251
+      },
+      "removeFromFull": {
+        "min": 466413,
+        "gz": 151062,
+        "br": 99993
+      },
+      "top": "icon-sdk-js=449.6 sdk:spoke/IconSpokeService=3.9"
+    },
+    "injective": {
+      "standalone": {
+        "min": 689911,
+        "gz": 135964,
+        "br": 109346
+      },
+      "removeFromFull": {
+        "min": 625355,
+        "gz": 113234,
+        "br": 82676
+      },
+      "top": "@injectivelabs/core-proto-ts-v2=280.6 @injectivelabs/sdk-ts=73.6 @injectivelabs/exceptions=73.6 axios=47.3 cosmjs-types=44.5 @protobuf-ts/runtime=31.7 @injectivelabs/indexer-proto-ts-v2=20.6 bignumber.js=18.6"
+    },
+    "near": {
+      "standalone": {
+        "min": 114217,
+        "gz": 35416,
+        "br": 25546
+      },
+      "removeFromFull": {
+        "min": 114982,
+        "gz": 34699,
+        "br": 17647
+      },
+      "top": "near-api-js=47.3 @noble/curves=32.0 @noble/hashes=11.8 borsh=10.5 sdk:spoke/NearSpokeService=4.8 @scure/base=4.4"
+    },
+    "stacks": {
+      "standalone": {
+        "min": 122583,
+        "gz": 41813,
+        "br": 29470
+      },
+      "removeFromFull": {
+        "min": 124594,
+        "gz": 41994,
+        "br": 27253
+      },
+      "top": "@sodax/libs=115.0 sdk:spoke/StacksSpokeService=4.6"
+    },
+    "bitcoin": {
+      "standalone": {
+        "min": 239127,
+        "gz": 71700,
+        "br": 54461
+      },
+      "removeFromFull": {
+        "min": 175144,
+        "gz": 50782,
+        "br": 38680
+      },
+      "top": "bitcoinjs-lib=93.9 @noble/curves=45.4 bip174=34.0 @noble/hashes=23.2 sdk:entities/btc=9.1 sdk:spoke/BitcoinSpokeService=8.7 typeforce=5.9 @bitcoinerlab/secp256k1=5.8"
+    }
+  },
+  "features": {
+    "swaps": {
+      "needs": [],
+      "min": 47535,
+      "gz": 13036,
+      "br": 10664,
+      "top": "sdk:swap=18.6 @sodax/swaps-api=9.7 sdk:backendApi=6.0 sdk:shared/services=3.5 sdk:errors=3.2 valibot=3.0"
+    },
+    "moneyMarket": {
+      "needs": [],
+      "min": 112287,
+      "gz": 23516,
+      "br": 19348,
+      "top": "sdk:moneyMarket=41.5 sdk:shared/abis=39.4 bignumber.js=18.5 sdk:shared/services=5.9 sdk:errors=3.4"
+    },
+    "dex": {
+      "needs": [],
+      "min": 580760,
+      "gz": 151589,
+      "br": 101402,
+      "top": "bn.js=87.9 @pancakeswap/v3-sdk=82.8 @solana/web3.js=53.5 @pancakeswap/infinity-sdk=53.5 @noble/curves=39.2 viem=28.3 sdk:shared/abis=24.9 sdk:dex=24.5"
+    },
+    "migration": {
+      "needs": [
+        "icon",
+        "stellar"
+      ],
+      "min": 65325,
+      "gz": 9145,
+      "br": 6911,
+      "top": "sdk:shared/abis=31.0 sdk:migration=22.4 sdk:shared/services=5.9 sdk:errors=3.4"
+    },
+    "bridge": {
+      "needs": [],
+      "min": 75946,
+      "gz": 20525,
+      "br": 17117,
+      "top": "bignumber.js=18.5 sdk:shared/abis=16.2 sdk:bridge=14.3 @sodax/bridge-api=6.4 sdk:shared/services=6.2 sdk:backendApi=4.8 sdk:errors=3.5 valibot=3.0"
+    },
+    "staking": {
+      "needs": [],
+      "min": 53333,
+      "gz": 7442,
+      "br": 6251,
+      "top": "sdk:shared/abis=22.4 sdk:staking=19.8 sdk:shared/services=5.9 sdk:errors=3.4"
+    },
+    "partners": {
+      "needs": [],
+      "min": 15709,
+      "gz": 3352,
+      "br": 2710,
+      "top": "sdk:partner=8.5 sdk:swap=2.6 sdk:shared/abis=2.4"
+    },
+    "recovery": {
+      "needs": [],
+      "min": 22040,
+      "gz": 2181,
+      "br": 1894,
+      "top": "sdk:shared/abis=16.2 sdk:shared/services=2.6 sdk:recovery=2.1"
+    },
+    "leverageYield": {
+      "needs": [],
+      "min": 91764,
+      "gz": 17279,
+      "br": 14358,
+      "top": "sdk:leverageYield=36.2 sdk:shared/abis=23.8 sdk:backendApi=8.7 sdk:shared/services=8.3 sdk:errors=3.5 valibot=2.8 @sodax/swaps-api=2.6 sdk:swap=2.6"
+    },
+    "sponsoring": {
+      "needs": [
+        "stellar"
+      ],
+      "min": 16749,
+      "gz": 5177,
+      "br": 4296,
+      "top": "sdk:sponsoring=11.7"
+    }
+  }
+}
