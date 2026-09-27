@@ -11,6 +11,8 @@ import {
   type ChainKey,
   baseChainInfo,
   RadfiApiError,
+  isAmountTooSmallRefusal,
+  type SolverErrorResponse,
 } from '@sodax/dapp-kit';
 
 export function cn(...inputs: ClassValue[]) {
@@ -269,6 +271,21 @@ export function formatMutationFailureMessage(error: unknown, fallback: string): 
     return `${error.message}${causeText}`;
   }
   return fallback;
+}
+
+/** The solver's floor, measured 2026-09-18 against api.sodax.com: $1.00 of USDC is refused, $1.01 is quoted. */
+export const MIN_SWAP_USD = 1;
+
+/** Copy for a quote the solver refused as too small; its own text ("Input amount too low") names no floor. */
+export const AMOUNT_TOO_SMALL_MESSAGE = `Swap value must be at least $${MIN_SWAP_USD}. Increase to continue.`;
+
+/**
+ * Text for a failed `sodax.swaps.getQuote`. Its error is a `SolverErrorResponse`, not an `Error`, so
+ * the mutation formatters do not apply: the solver's message is shown as-is, except for the too-small
+ * refusal.
+ */
+export function formatSolverQuoteError(error: SolverErrorResponse): string {
+  return isAmountTooSmallRefusal(error) ? AMOUNT_TOO_SMALL_MESSAGE : error.detail.message;
 }
 
 export function createDexTokenIdsStorageKey(chainId: SpokeChainKey, userAddress: string): string {

@@ -2,6 +2,7 @@ export * from './EvmSolverService.js';
 export * from './HookService.js';
 export * from './IntentDataService.js';
 export * from './SolverApiService.js';
+export * from './quoteRefusal.js';
 export * from './speed-tier.js';
 export * from './SwapService.js';
 // The `getDetailedStatus` contract. `DetailedSwapStatus` is discriminated on `source`, so it needs

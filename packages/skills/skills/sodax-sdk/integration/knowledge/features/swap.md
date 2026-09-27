@@ -189,6 +189,8 @@ const quote = await sodax.swaps.getQuote({
 if (!quote.ok) {
   // quote.error: SolverErrorResponse — different shape from SodaxError;
   // see `error.detail.code` and `error.detail.message`.
+  // An amount below the solver's floor comes back as code -1 (not an enum member, shared with
+  // "No path was found") — branch with `isAmountTooSmallRefusal(quote.error)`, not on the code.
   return;
 }
 
