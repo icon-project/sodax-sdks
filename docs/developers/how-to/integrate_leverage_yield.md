@@ -53,7 +53,7 @@ The derivation and a worked example are on [Effective APR](/developers/packages/
 | Use when | TypeScript product UI, React dApp, Node service | A backend or bot in any language, or you want to own every step |
 | Package | `@sodax/sdk` (+ `@sodax/dapp-kit` for React) | None — `https://api.sodax.com/v1/leverage-yield` (or the `useLeverageYieldApi*` hooks) |
 | Relay and settlement | Handled by `vaultSwap()`, with a client-side fallback | You sign, broadcast, hand off with `/submit-tx`, and poll |
-| Partner fee on withdraw | Yes | Not yet — see [API path](#api-path) |
+| Your own `partnerFee` on a withdraw | Yes | Not yet — see [API path](#api-path) |
 
 ## SDK path (default) {#sdk-path}
 
@@ -93,6 +93,7 @@ const applySlippage = (amount: bigint) => (amount * (10_000n - SLIPPAGE_BPS)) / 
 const vault = sodax.leverageYield.getVault('lsodaWEETH');
 if (!vault) throw new Error('Unknown vault');
 
+// evmWalletProvider: an IEvmWalletProvider for srcChainKey (see Wallet providers above).
 const srcChainKey = ChainKeys.ARBITRUM_MAINNET;
 const srcAddress = await evmWalletProvider.getWalletAddress();
 const inputToken: Address = '0x…'; // the token the user pays with, on srcChainKey
@@ -152,10 +153,10 @@ const dstChainKey = ChainKeys.ARBITRUM_MAINNET; // where the output token is del
 const outputToken: Address = '0x…'; // the token the user receives, on dstChainKey
 
 // Same srcChainKey and srcAddress as the deposit: the shares sit in that address's hub wallet.
-// Size a full exit from the user's spoke address. Already trimmed by a small dust buffer.
-const max = await sodax.leverageYield.getMaxWithdrawForUser(vault.vault, srcChainKey, srcAddress);
-if (!max.ok) throw max.error;
-const shares = max.value;
+// A full exit spends the whole share balance (lsoda*, 18 decimals).
+const balance = await sodax.leverageYield.getShareBalanceForUser(vault.vault, srcChainKey, srcAddress);
+if (!balance.ok) throw balance.error;
+const shares = balance.value;
 
 const quote = await sodax.leverageYield.getQuote({
   token_src: vault.vault,
@@ -237,7 +238,12 @@ function DepositButton({ vault, srcChainKey, srcAddress, inputToken, inputAmount
     await vaultSwap({ ...built.value, walletProvider });
   };
 
-  return <button onClick={onClick}>Deposit</button>;
+  return (
+    <>
+      <button onClick={onClick}>Deposit</button>
+      {status?.ok && status.value.source === 'backend' && <p>{status.value.data.status}</p>}
+    </>
+  );
 }
 ```
 
@@ -275,7 +281,7 @@ Amounts are decimal strings in the token's smallest unit. Network identifiers ar
 
 For display, `useLeverageYieldApiVaults` and `useLeverageYieldApiEffectiveApr` read the registry and headline APR. The `tx` in step 4 is an unsigned transaction shaped for the source network's family (EVM, Solana, Sui, Stellar and so on).
 
-Two details in React. The `intent` in the step 4 response is all decimal strings, and `useLeverageYieldApiSubmitTx` expects the bigint `IntentRequestV2`, so convert it before step 6. Share balance and max-withdraw reads take the user's **hub wallet** as `owner`, which `useGetUserHubWalletAddress` resolves from their spoke address. The demo app's [leverage-yield API card](https://github.com/icon-project/sodax-sdks/blob/main/apps/demo/src/components/leverage-yield-api/LeverageCard.tsx) wires all seven steps, including a [sign-and-broadcast helper](https://github.com/icon-project/sodax-sdks/blob/main/apps/demo/src/components/swaps-api/lib/signAndBroadcast.ts) and the [intent converter](https://github.com/icon-project/sodax-sdks/blob/main/apps/demo/src/components/swaps-api/lib/mappers.ts).
+Two details in React. The `intent` in the step 4 response is all decimal strings, and `useLeverageYieldApiSubmitTx` expects the bigint `IntentRequestV2`, so convert it before step 6. Vault reads such as `useLeverageYieldApiShareBalance` take the user's **hub wallet** as `owner`, which `useGetUserHubWalletAddress` resolves from their spoke address. The demo app's [leverage-yield API card](https://github.com/icon-project/sodax-sdks/blob/main/apps/demo/src/components/leverage-yield-api/LeverageCard.tsx) wires all seven steps, including a [sign-and-broadcast helper](https://github.com/icon-project/sodax-sdks/blob/main/apps/demo/src/components/swaps-api/lib/signAndBroadcast.ts) and the [intent converter](https://github.com/icon-project/sodax-sdks/blob/main/apps/demo/src/components/swaps-api/lib/mappers.ts).
 
 ### Deposit with curl
 
@@ -337,7 +343,7 @@ A withdraw skips the allowance and approve steps. The backend builds it as a hub
 ```bash
 DST=0xa4b1.arbitrum         # where the output token is delivered
 OUTPUT_TOKEN=0x…            # the token the user receives, on $DST
-SHARES=…                    # lsoda* to redeem (18 decimals): GET $BASE/max-withdraw?vault=…&owner=<hub wallet>
+SHARES=…                    # lsoda* to redeem (18 decimals): GET $BASE/share-balance?vault=…&owner=<hub wallet>
 
 # 1. Quote: shares in → output token out. No partnerFee field on this route.
 jq -n --arg vault "$VAULT" --arg src "$SRC" --arg token "$OUTPUT_TOKEN" --arg dst "$DST" --arg amount "$SHARES" \
@@ -358,23 +364,24 @@ Then sign and broadcast, `POST /submit-tx` with `"operation": "withdraw"`, and p
 
 1. **`deposit()` and `withdraw()` don't broadcast.** They only build a payload. Run it through `vaultSwap({ ...payload, walletProvider })`, or the HTTP `submit-tx` flow.
 2. **Quote with the leverage-yield quote.** Use `sodax.leverageYield.getQuote`, `useLeverageYieldQuote`, or `POST /quote/deposit|withdraw`, never `sodax.swaps.getQuote` or `useQuote`. The swap quote deducts the swap fee, so its `minOutputAmount` can be more than the vault intent can deliver, and the intent never fills.
-3. **Use the same `partnerFee` on the quote and the intent, or omit it on both.** The fee comes out of the input before the swap, so a mismatch sizes `minOutputAmount` against a different net input.
+3. **Use the same `partnerFee` on the quote and the intent, or omit it on both, and quote the gross amount.** The fee comes out of the input before the swap, and the leverage-yield quote deducts it for you. A fee mismatch, or an amount you already netted yourself, sizes `minOutputAmount` against the wrong net input.
 4. **`swaps.partnerFee` never applies to vaults.** Configure `leverageYield.partnerFee` (or the global `fee`). A withdraw fee is taken in `lsoda*` shares, not in the output token.
 5. **Only deposits need an approval, and it's the swap-domain one.** Approve the input token with `sodax.swaps.isAllowanceValid` / `approve` (or `useSwapAllowance` / `useSwapApprove`, or `/allowance/check` + `/approve`). Withdraws need no approval. `sodax.leverageYield.approve` / `isAllowanceValid` are for calling the vault directly on Sonic, and neither flow uses them.
 6. **Mine `resetTx` before `tx`.** For some tokens (the 2017 TetherToken lineage), `/approve` returns a `resetTx` that zeroes the old allowance. Broadcast it and wait for it to be mined before `tx`. `useLeverageYieldApiApproveAndBroadcast` handles the ordering for you.
-7. **Shares live in the hub wallet of the address that deposited.** That wallet is derived from the network and address the user deposited from, so withdraw with the same `srcChainKey` and `srcAddress`. Read balances with `getShareBalanceForUser` / `getMaxWithdrawForUser`, which take the spoke address. `getShareBalance` / `getMaxWithdraw` and the HTTP `/share-balance` / `/max-withdraw` want the hub wallet address. Size a full exit with `getMaxWithdrawForUser`: it trims a small dust buffer, so the withdraw doesn't round up to one share more than the user holds.
-8. **Headline APR is `getEffectiveApr`, not `getApr`.** `getApr` counts lending rates only and is often negative for an LST vault. The LST's staking yield is where the return comes from. On HTTP, use `GET /apr/effective`.
-9. **Mind the units.** `lsoda*` shares are always 18 decimals. APR values are RAY (`1e27` = 100%). The vault address is also the share-token address. The share side of a quote is always on Sonic.
-10. **Terminal success is `solved`, not `executed`.** `executed` is the bridge API's terminal state. A set `abandonedAt` is terminal as well.
-11. **The `submit-tx` body has traps.** `relayData` is `relayData.payload` (a string), and `operation` (`deposit` or `withdraw`) is required. In TypeScript, convert the create response's string `intent` to bigints before calling `submitTx`. `GET /submit-tx/status` needs both `txHash` and `srcChainKey`. Wait for the source-network receipt before you submit.
-12. **Track by the source transaction.** Use `getDetailedStatus` / `useLeverageYieldDetailedStatus` with `(srcChainKey, srcTxHash)`. The backend record can be stale when the client-side fallback finished the swap.
-13. **Branch on `result.ok`.** SDK and API client methods return a `Result` and never throw, so a `try/catch` misses every failure. Discriminate on `error.code`, never on `error.message`.
-14. **Keep API keys on the server.** A key in a browser bundle, or behind `NEXT_PUBLIC_*` / `VITE_*`, is public.
-15. **A vault isn't a leverage position.** Leverage positions (`openLeveragePosition`, `useLeveragePosition*`) are a separate product with their own sizing rules. `useLeverageYieldPosition` is the vault's snapshot.
+7. **Shares live in the hub wallet of the address that deposited.** That wallet is derived from the network and address the user deposited from, so withdraw with the same `srcChainKey` and `srcAddress`. `getShareBalanceForUser` takes the spoke address. `getShareBalance` and the HTTP `/share-balance` want the hub wallet address.
+8. **A withdraw is sized in shares, not assets.** `inputAmount` is `lsoda*` shares, so size a full exit from the share balance (`getShareBalanceForUser`, `useLeverageYieldShareBalances`, `/share-balance`). `getMaxWithdraw*` and `/max-withdraw` return ERC-4626 `maxWithdraw`, which is in the underlying asset's units.
+9. **Headline APR is `getEffectiveApr`, not `getApr`.** `getApr` counts lending rates only and is often negative for an LST vault. The LST's staking yield is where the return comes from. On HTTP, use `GET /apr/effective`.
+10. **Mind the units.** `lsoda*` shares are always 18 decimals. APR values are RAY (`1e27` = 100%). The vault address is also the share-token address. The share side of a quote is always on Sonic.
+11. **Terminal success is `solved`, not `executed`.** `executed` is the bridge API's terminal state. A set `abandonedAt` is terminal as well.
+12. **The `submit-tx` body has traps.** `relayData` is `relayData.payload` (a string), and `operation` (`deposit` or `withdraw`) is required. In TypeScript, convert the create response's string `intent` to bigints before calling `submitTx`. `GET /submit-tx/status` needs both `txHash` and `srcChainKey`. Wait for the source-network receipt before you submit.
+13. **Track by the source transaction.** Use `getDetailedStatus` / `useLeverageYieldDetailedStatus` with `(srcChainKey, srcTxHash)`. The backend record can be stale when the client-side fallback finished the swap.
+14. **Branch on `result.ok`.** SDK and API client methods return a `Result` and never throw, so a `try/catch` misses every failure. Discriminate on `error.code`, never on `error.message`.
+15. **Keep API keys on the server.** A key in a browser bundle, or behind `NEXT_PUBLIC_*` / `VITE_*`, is public.
+16. **A vault isn't a leverage position.** Leverage positions (`openLeveragePosition`, `useLeveragePosition*`) are a separate product with their own sizing rules. `useLeverageYieldPosition` is the vault's snapshot.
 
 ## Build it with an AI agent {#ai-agents}
 
-Install the [`@sodax/skills`](/ai-integration-guide) bundle and your agent loads the leverage-yield skills on its own: `sodax-sdk` (leverage-yield and leverage-yield-api) and `sodax-dapp-kit` (leverage-yield). Those skills carry the same rules as the gotchas above. Add the [Builders MCP](/builders-mcp) for live vault data and quotes. A prompt as short as *"Add a deposit into the lsodaWEETH vault from Arbitrum with `@sodax/dapp-kit`"* is enough.
+Install the [`@sodax/skills`](/ai-integration-guide) bundle and your agent loads the leverage-yield skills on its own: `sodax-sdk` (leverage-yield and leverage-yield-api) and `sodax-dapp-kit` (leverage-yield). Add the [Builders MCP](/builders-mcp) for live vault data and quotes. Then describe the task plainly, for example *"Add a deposit into the lsodaWEETH vault from Arbitrum with `@sodax/dapp-kit`"*. Point your agent at this page as well, and check its output against the [Gotchas](#gotchas): they are the rules generated code most often breaks.
 
 ## Related
 
