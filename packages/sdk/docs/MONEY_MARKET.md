@@ -756,6 +756,8 @@ The Money Market SDK provides comprehensive data retrieval and formatting capabi
 - `getReserveData(asset)` - Get specific reserve data for an asset
 - `getReserveNormalizedIncome(asset)` - Get normalized income for a specific asset (RAY precision)
 
+`getReservesData()` and `getReservesHumanized()` still return every reserve when the bnUSD facilitator bucket read fails, but the merged bnUSD reserve is then reported with `availableLiquidity` of `0` and a warning goes to the configured [logger](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/LOGGING.md). If the reserves read itself fails, both methods still throw.
+
 #### User Data
 - `getUserReservesData(spokeChainKey, userAddress)` - Get raw user reserve data
 - `getUserReservesHumanized(spokeChainKey, userAddress)` - Get humanized user reserve data

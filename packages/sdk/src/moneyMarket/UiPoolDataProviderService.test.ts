@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { Address } from '@sodax/types';
+import type { Address, SodaxLogger } from '@sodax/types';
 import { UiPoolDataProviderService } from './UiPoolDataProviderService.js';
 import type { AggregatedReserveData, BaseCurrencyInfo } from './MoneyMarketTypes.js';
 
@@ -85,20 +85,36 @@ const VAULT_RESERVE: AggregatedReserveData = {
   lastUpdateTimestamp: 1_000, // ~stale relative to the debt reserve
 };
 
-function makeService(): UiPoolDataProviderService {
+type MakeServiceOptions = {
+  reserves?: readonly AggregatedReserveData[];
+  bucketError?: Error;
+  logger?: SodaxLogger;
+};
+
+function makeLogger(): SodaxLogger {
+  return { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+}
+
+function makeService({
+  reserves = [VAULT_RESERVE, DEBT_RESERVE],
+  bucketError,
+  logger = makeLogger(),
+}: MakeServiceOptions = {}): UiPoolDataProviderService {
   const readContract = vi.fn(async ({ functionName }: { functionName: string }) => {
     if (functionName === 'getReservesData') {
-      return [[VAULT_RESERVE, DEBT_RESERVE], baseCurrencyInfo] as const;
+      return [reserves, baseCurrencyInfo] as const;
     }
     if (functionName === 'getFacilitatorBucket') {
+      if (bucketError) throw bucketError;
       return [1_000_000n, 250_000n] as const; // [cap, currentBorrowed]
     }
     throw new Error(`unexpected functionName ${functionName}`);
   });
 
-  const hubProvider = { publicClient: { readContract } } as unknown as ConstructorParameters<
-    typeof UiPoolDataProviderService
-  >[0]['hubProvider'];
+  const hubProvider = {
+    publicClient: { readContract },
+    chainConfig: { chain: { key: 'sonic' } },
+  } as unknown as ConstructorParameters<typeof UiPoolDataProviderService>[0]['hubProvider'];
 
   const config = {
     moneyMarket: {
@@ -108,6 +124,7 @@ function makeService(): UiPoolDataProviderService {
       bnUSDVault: BNUSD_VAULT,
       bnUSDAToken: BNUSD_ATOKEN,
     },
+    logger,
   } as unknown as ConstructorParameters<typeof UiPoolDataProviderService>[0]['config'];
 
   return new UiPoolDataProviderService({ hubProvider, config });
@@ -138,5 +155,75 @@ describe('UiPoolDataProviderService.getReservesData — bnUSD merge', () => {
         r.underlyingAsset.toLowerCase() === BNUSD_VAULT.toLowerCase(),
     );
     expect(bnUSDEntries).toHaveLength(1);
+  });
+});
+
+const OTHER_RESERVE: AggregatedReserveData = {
+  ...BASE_RESERVE,
+  underlyingAsset: '0x0000000000000000000000000000000000000b0b' as Address,
+  symbol: 'OTHER',
+  availableLiquidity: 42n,
+};
+
+describe('UiPoolDataProviderService.getReservesData — facilitator bucket resilience', () => {
+  it('applies the facilitator bucket to the merged reserve when the read succeeds', async () => {
+    const [reserves] = await makeService().getReservesData();
+    const merged = reserves.find(r => r.underlyingAsset.toLowerCase() === BNUSD_VAULT.toLowerCase());
+
+    expect(merged?.borrowCap).toBe(1_000_000n);
+    expect(merged?.availableLiquidity).toBe(750_000n);
+  });
+
+  it('still returns every reserve and fails closed on bnUSD liquidity when the bucket read fails', async () => {
+    const logger = makeLogger();
+    const service = makeService({
+      reserves: [VAULT_RESERVE, DEBT_RESERVE, OTHER_RESERVE],
+      bucketError: new Error('rpc rate limited'),
+      logger,
+    });
+
+    const [reserves] = await service.getReservesData();
+    const merged = reserves.find(r => r.underlyingAsset.toLowerCase() === BNUSD_VAULT.toLowerCase());
+
+    expect(reserves).toHaveLength(2);
+    expect(reserves.find(r => r.symbol === 'OTHER')?.availableLiquidity).toBe(42n);
+    expect(merged?.availableLiquidity).toBe(0n);
+    expect(merged?.borrowCap).toBe(DEBT_RESERVE.borrowCap);
+    expect(merged?.variableBorrowIndex).toBe(DEBT_RESERVE.variableBorrowIndex);
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('facilitator bucket read failed'), {
+      error: 'rpc rate limited',
+    });
+  });
+
+  it('getReservesHumanized resolves when the bucket read fails', async () => {
+    const service = makeService({ bucketError: new Error('boom') });
+
+    const { reservesData } = await service.getReservesHumanized();
+
+    expect(reservesData).toHaveLength(1);
+    expect(reservesData[0]?.availableLiquidity).toBe('0');
+  });
+
+  it('warns when a bnUSD reserve is missing and returns the reserves unmerged', async () => {
+    const logger = makeLogger();
+    const service = makeService({ reserves: [VAULT_RESERVE, OTHER_RESERVE], logger });
+
+    const [reserves] = await service.getReservesData();
+
+    expect(reserves).toEqual([VAULT_RESERVE, OTHER_RESERVE]);
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('reserve missing'), {
+      hasBnUSDReserve: false,
+      hasBnUSDVaultReserve: true,
+    });
+  });
+
+  it('propagates a failure of the primary reserves read', async () => {
+    const service = makeService();
+    const readContract = vi.fn(async () => {
+      throw new Error('oracle reverted');
+    });
+    Object.assign(service, { hubProvider: { publicClient: { readContract } } });
+
+    await expect(service.getReservesData()).rejects.toThrow('oracle reverted');
   });
 });

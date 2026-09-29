@@ -170,6 +170,10 @@ export class UiPoolDataProviderService implements UiPoolDataProviderInterface {
    * rate and borrow index from the bnUSD debt token so displayed debt amounts are correct.
    * The `borrowCap` and `availableLiquidity` are overridden from the bnUSD facilitator bucket.
    *
+   * The facilitator bucket read is best-effort: if it fails, the reserves are still returned and
+   * a warning is logged, with the merged bnUSD reserve failing closed (`availableLiquidity` of 0 and
+   * the debt reserve's own `borrowCap`) so it can't advertise borrowable liquidity it can't verify.
+   *
    * All numeric fields are `bigint` in contract-native precision.
    *
    * @returns A tuple of `[reserveDataArray, baseCurrencyInfo]`.
@@ -182,10 +186,14 @@ export class UiPoolDataProviderService implements UiPoolDataProviderInterface {
         functionName: 'getReservesData',
         args: [this.poolAddressesProvider],
       }),
-      this.getBnusdFacilitatorBucket(),
+      this.getBnusdFacilitatorBucket().catch((error: unknown) => {
+        this.config.logger.warn('bnUSD facilitator bucket read failed; bnUSD borrow liquidity reported as 0', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return undefined;
+      }),
     ]);
 
-    const [cap, currentBorrowed] = bnUSDFacilitatorBucket;
     const reserves = reserveData[0];
     const baseCurrencyInfo = reserveData[1];
     const bnUSD = this.config.moneyMarket.bnUSD.toLowerCase();
@@ -196,13 +204,21 @@ export class UiPoolDataProviderService implements UiPoolDataProviderInterface {
     const bnUSDVaultReserve = reserves.find(r => bnUSDVault === r.underlyingAsset.toLowerCase());
 
     if (!bnUSDReserve || !bnUSDVaultReserve) {
+      this.config.logger.warn('bnUSD debt or vault reserve missing; returning unmerged reserves', {
+        hasBnUSDReserve: Boolean(bnUSDReserve),
+        hasBnUSDVaultReserve: Boolean(bnUSDVaultReserve),
+      });
       return reserveData;
     }
 
+    const [borrowCap, availableLiquidity] = bnUSDFacilitatorBucket
+      ? [bnUSDFacilitatorBucket[0], bnUSDFacilitatorBucket[0] - bnUSDFacilitatorBucket[1]]
+      : [bnUSDReserve.borrowCap, 0n];
+
     const mergedBNUSDReserve = {
       ...bnUSDVaultReserve,
-      borrowCap: cap,
-      availableLiquidity: cap - currentBorrowed,
+      borrowCap,
+      availableLiquidity,
       totalScaledVariableDebt: bnUSDReserve.totalScaledVariableDebt + bnUSDVaultReserve.totalScaledVariableDebt,
       virtualUnderlyingBalance: bnUSDReserve.virtualUnderlyingBalance + bnUSDVaultReserve.virtualUnderlyingBalance,
       accruedToTreasury: bnUSDReserve.accruedToTreasury + bnUSDVaultReserve.accruedToTreasury,
