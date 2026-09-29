@@ -62,6 +62,8 @@ The complete deposit and withdraw examples, including the approval call's type p
 
 `vaultSwap()` hands the broadcast transaction to the backend first and finishes the relay client-side if that doesn't complete. [Completion paths and `timeout`](/developers/packages/foundation/sdk/functional-modules/leverage_yield#completion-paths-and-timeout) documents both paths and the timeout budget. `getDetailedStatus` is a one-off read, so poll it yourself or use the React hook. Its routing and error branches are documented under [getDetailedStatus](/developers/packages/foundation/sdk/functional-modules/leverage_yield#getdetailedstatus).
 
+For plain `@sodax/sdk` without React, the Node [leverage-yield script](https://github.com/icon-project/sodax-sdks/blob/main/apps/node/src/leverage-yield.ts) runs each step as a CLI subcommand, and the [SDK leverage-yield knowledge file](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/skills/sodax-sdk/integration/knowledge/features/leverage-yield.md) documents every `sodax.leverageYield` call shape.
+
 ### dapp-kit hooks {#dapp-kit-hooks}
 
 Each SDK step has a matching `@sodax/dapp-kit` hook. Mutations expose `mutateAsyncSafe`, which returns a `Result` instead of throwing.
@@ -93,7 +95,7 @@ Every route lives under `https://api.sodax.com/v1/leverage-yield`. Amounts are d
 
 Steps 6 and 7 are the same submit-tx machine as swaps, so follow the [Swaps bot flow](/developers/http-api/swaps#bot-flow-create-submit-tx-poll) for the status lifecycle and failure handling. Send your API key from your server on every `POST`, as described in [API keys](/developers/how-to/api-keys).
 
-In TypeScript, `sodax.api.leverageYield` and the `useLeverageYieldApi*` hooks wrap these routes. The [leverage-yield API knowledge file](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/skills/sodax-sdk/integration/knowledge/features/leverage-yield-api.md) documents their call shapes. The demo app's [API card](https://github.com/icon-project/sodax-sdks/blob/main/apps/demo/src/components/leverage-yield-api/LeverageCard.tsx) runs steps 1–6 end to end, and its [order status panel](https://github.com/icon-project/sodax-sdks/blob/main/apps/demo/src/components/leverage-yield-api/OrderStatus.tsx) runs step 7.
+In TypeScript, `sodax.api.leverageYield` and the `useLeverageYieldApi*` hooks wrap these routes. The [leverage-yield API knowledge file](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/skills/sodax-sdk/integration/knowledge/features/leverage-yield-api.md) documents their call shapes. The demo app's [leverage-yield API page](https://github.com/icon-project/sodax-sdks/blob/main/apps/demo/src/pages/leverage-yield-api/page.tsx) wires the API flow: its [API card](https://github.com/icon-project/sodax-sdks/blob/main/apps/demo/src/components/leverage-yield-api/LeverageCard.tsx) runs steps 1–6 end to end, and its [order status panel](https://github.com/icon-project/sodax-sdks/blob/main/apps/demo/src/components/leverage-yield-api/OrderStatus.tsx) runs step 7.
 
 ## Gotchas {#gotchas}
 
@@ -114,6 +116,14 @@ In TypeScript, `sodax.api.leverageYield` and the `useLeverageYieldApi*` hooks wr
 ## Build it with an AI agent {#ai-agents}
 
 Install the [`@sodax/skills`](/ai-integration-guide) bundle, and your agent loads the leverage-yield skills on its own. Add the [Builders MCP](/builders-mcp) for live vault data and quotes. Then describe the task plainly, for example *"Add a deposit into a leverage-yield vault from Arbitrum with `@sodax/dapp-kit`"*. Check what the agent produces against the [Gotchas](#gotchas).
+
+To point an agent at a skill directly, or to read one yourself:
+
+| Skill | Use it for |
+| --- | --- |
+| [`sodax-sdk-leverage-yield`](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/skills/sodax-sdk/leverage-yield/SKILL.md) | The [SDK path](#sdk-path) in TypeScript or Node |
+| [`sodax-dapp-kit-leverage-yield`](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/skills/sodax-dapp-kit/leverage-yield/SKILL.md) | The [dapp-kit hooks](#dapp-kit-hooks) in React |
+| [`sodax-sdk-leverage-yield-api`](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/skills/sodax-sdk/leverage-yield-api/SKILL.md) | The [API path](#api-path) through `sodax.api.leverageYield` |
 
 ## Related
 
