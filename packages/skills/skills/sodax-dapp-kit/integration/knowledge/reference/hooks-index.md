@@ -251,7 +251,7 @@ Typed React Query wrappers over the backend Leverage Yield API (`sodax.api.lever
 | `useLeverageYieldApiPreviewWithdraw` | Query; ERC-4626 `previewWithdraw` — shares burned for `assets` |
 | `useLeverageYieldApiPreviewRedeem` | Query; ERC-4626 `previewRedeem` — assets for `shares` |
 | `useLeverageYieldApiShareBalance` | Query; an owner's lsoda* balance (the HUB wallet, not the EOA) |
-| `useLeverageYieldApiMaxWithdraw` | Query; RAW ERC-4626 `maxWithdraw` — NOT dust-trimmed, apply a margin for a MAX withdraw |
+| `useLeverageYieldApiMaxWithdraw` | Query; RAW ERC-4626 `maxWithdraw` in ASSET units, NOT dust-trimmed — never a withdraw's `inputAmount`, which is shares; size a MAX withdraw from `useLeverageYieldApiShareBalance` |
 | `useLeverageYieldApiDepositQuote` | Query; any token → lsoda* (set `query.includeTxData` for `txData`) |
 | `useLeverageYieldApiWithdrawQuote` | Query; lsoda* → any token |
 | `useLeverageYieldApiDeadline` | Query; computed vault-swap deadline |

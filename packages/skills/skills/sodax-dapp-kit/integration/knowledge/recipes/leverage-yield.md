@@ -121,7 +121,7 @@ function DepositForm({ vault, srcAddress, inputToken }: { vault: Address; srcAdd
       vault, srcChainKey: chainKey, srcAddress, inputToken,
       inputAmount: parseUnits(amount, 18),
       minOutputAmount: 0n,             // size via useLeverageYieldQuote (token_dst = vault), then subtract slippage
-      partnerFee: DEPOSIT_PARTNER_FEE, // per-intent fee — must match the quote's post-fee amount
+      partnerFee: DEPOSIT_PARTNER_FEE, // per-intent fee — pass the same one to useLeverageYieldQuote
     });
     if (!built.ok) return;
 

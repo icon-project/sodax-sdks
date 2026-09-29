@@ -40,7 +40,7 @@ sodax.leverageYield.getDetailedStatus(key: { srcChainKey, srcTxHash }, config?: 
   Promise<Result<DetailedLeverageYieldStatus, SodaxError>>;
 sodax.leverageYield.getIntentStatus(request: { intent_tx_hash: string }): Promise<Result<SolverIntentStatusResponse, SodaxError>>;
 
-// Sonic-direct allowance for the vault's underlying asset (the swap-style deposit handles its own approvals)
+// Sonic-direct allowance for the vault's underlying asset — NOT the deposit approval (that is sodax.swaps.isAllowanceValid / approve)
 sodax.leverageYield.approve<R>(params: LeverageYieldApproveParams<R>): Promise<Result<TxReturnType<HubChainKey, R>, SodaxError>>;
 sodax.leverageYield.isAllowanceValid(params: LeverageYieldAllowanceParams): Promise<Result<boolean, SodaxError>>;
 
@@ -127,6 +127,15 @@ const built = await sodax.leverageYield.deposit({
   partnerFee: { address: '0x…', percentage: 100 }, // optional 1% per-intent fee
 });
 if (!built.ok) return;
+
+// deposit()/vaultSwap() never approve: the spoke asset manager pulls inputToken, so approve it swap-style first.
+const allowance = await sodax.swaps.isAllowanceValid({ params: built.value.params, walletProvider });
+if (!allowance.ok) return;
+if (!allowance.value) {
+  const approval = await sodax.swaps.approve({ params: built.value.params, walletProvider });
+  if (!approval.ok) return;
+  await walletProvider.waitForTransactionReceipt(approval.value);
+}
 
 const result = await sodax.leverageYield.vaultSwap({ ...built.value, walletProvider });
 if (!result.ok) return;
