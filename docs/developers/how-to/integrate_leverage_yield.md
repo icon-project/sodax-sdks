@@ -32,7 +32,7 @@ Three facts shape the integration:
 - **Deposit and withdraw are intent-based swaps.** A deposit swaps any supported token on any supported network into `lsoda*` shares, and a withdraw swaps shares back into any token. A solver fills both, so there is no vault-specific deposit call on the user's network.
 - **Shares land in the user's hub wallet**, not on the network they paid from. A later withdraw spends them from there.
 
-The live vault list comes from `sodax.leverageYield.listVaults()` or `GET https://api.sodax.com/v1/leverage-yield/vaults`. Do not hard-code it.
+`sodax.leverageYield.listVaults()` returns the vault registry that ships with your SDK version. The live list is `GET https://api.sodax.com/v1/leverage-yield/vaults`. Do not hard-code either.
 
 ### Risks {#risks}
 
@@ -128,7 +128,11 @@ if (!built.ok) throw built.error;
 const allowance = await sodax.swaps.isAllowanceValid({ params: built.value.params, walletProvider: evmWalletProvider });
 if (!allowance.ok) throw allowance.error;
 if (!allowance.value) {
-  const approval = await sodax.swaps.approve({ params: built.value.params, walletProvider: evmWalletProvider });
+  // Pin the network so the result narrows to an EVM tx hash.
+  const approval = await sodax.swaps.approve<typeof srcChainKey, false>({
+    params: { ...built.value.params, srcChainKey },
+    walletProvider: evmWalletProvider,
+  });
   if (!approval.ok) throw approval.error;
   await evmWalletProvider.waitForTransactionReceipt(approval.value);
 }
@@ -146,7 +150,7 @@ const status = await sodax.leverageYield.getDetailedStatus({
 
 ### Withdraw: `lsoda*` → any token
 
-A withdraw is the mirror image, with the vault as the **source** token. It needs no approval: the payload carries `hubWalletSwap: true`, so the user authorises the share spend with a message they sign on `srcChainKey`.
+A withdraw is the mirror image, with the vault as the **source** token. It needs no approval: the payload carries `hubWalletSwap: true`, so the user authorises the share spend with a cross-chain message transaction (`Connection.sendMessage`) they send on `srcChainKey`. That transaction pays gas on `srcChainKey`.
 
 ```typescript
 const dstChainKey = ChainKeys.ARBITRUM_MAINNET; // where the output token is delivered
@@ -186,19 +190,26 @@ if (!swap.ok) throw swap.error;
 
 ### Track completion
 
-`vaultSwap()` hands the broadcast transaction to the backend by default, and falls back to a client-side relay on any failure, so the swap completes either way. `getDetailedStatus()` reads the result from whichever source can answer, keyed on the source-network transaction hash:
+After broadcasting, `vaultSwap()` hands the transaction to the backend by default. If that step doesn't complete, it finishes the relay client-side. A failure before broadcast (for example, the user rejects the signature), or in the client-side relay itself, still returns `ok: false`. `getDetailedStatus()` reads the result from whichever source can answer, keyed on the source-network transaction hash:
 
 ```typescript
+import { DETAILED_STATUS_NOT_DELIVERED, isAuthFailure } from '@sodax/sdk';
+
 if (status.ok) {
   if (status.value.source === 'backend') {
-    console.log(status.value.data.status, status.value.data.userMessage); // pending … solved | failed
+    console.log(status.value.data.status); // pending … posted_execution | solved
   } else {
-    console.log(status.value.data.status, status.value.dstTxHash); // the solver's own status
+    // A failed or abandoned backend record lands here. data.status is a SolverIntentStatusCode.
+    console.log(status.value.data.status, status.value.dstTxHash);
   }
+} else if (isAuthFailure(status.error)) {
+  // A rejected API key: fix the key, don't retry.
+} else if (status.error.context?.reason === DETAILED_STATUS_NOT_DELIVERED) {
+  // No relay packet yet: retry, within a budget.
 }
 ```
 
-It is a one-off read. Poll it yourself, or use `useLeverageYieldDetailedStatus` in React. If `error.context.reason` is `DETAILED_STATUS_NOT_DELIVERED`, the relay has no packet for the transaction yet. That is the only failure worth capping with a retry budget. Keep retrying other `LOOKUP_FAILED` errors until the dependency recovers.
+It is a one-off read. Poll it yourself, or use `useLeverageYieldDetailedStatus` in React. The backend branch never carries a failure: a `failed` or abandoned record goes to the solver branch, so a solver `FAILED` code is how failure shows up. `DETAILED_STATUS_NOT_DELIVERED` means the relay has no packet for the transaction yet. It is the only failure worth capping with a retry budget. Compare against the imported constant, not its name as a string. Keep retrying other `LOOKUP_FAILED` errors until the dependency recovers.
 
 ### dapp-kit hooks {#dapp-kit-hooks}
 
@@ -209,9 +220,9 @@ Every SDK step has a matching `@sodax/dapp-kit` hook. Mutations expose `mutateAs
 | Quote | `useLeverageYieldQuote({ params: { payload } })` — `data` is the SDK `Result`; refreshes every 3 s | Query |
 | Build a deposit | `useLeverageYieldDeposit()` | Mutation |
 | Build a withdraw | `useLeverageYieldWithdraw()` | Mutation |
-| Approve (deposit only) | `useSwapAllowance({ params: { payload, srcChainKey, walletProvider } })` · `useSwapApprove()` | Query · Mutation |
-| Execute | `useLeverageYieldVaultSwap()` — call with `{ ...payload, walletProvider }` | Mutation |
-| Track | `useLeverageYieldDetailedStatus({ params: { srcChainKey, srcTxHash } })` — polls every 3 s, stops when terminal | Query |
+| Approve (deposit only) | `useSwapAllowance({ params: { payload: built.params, srcChainKey, walletProvider } })` · `useSwapApprove()`, called with `{ params: built.params, walletProvider }` | Query · Mutation |
+| Execute | `useLeverageYieldVaultSwap()` — call with `{ ...built, walletProvider }` | Mutation |
+| Track | `useLeverageYieldDetailedStatus({ params: { srcChainKey, srcTxHash } })` — polls every 3 s. Stops when the status is terminal, on a rejected API key, or after 40 reads in a row that can't tell in-flight from lost | Query |
 | Display | `useLeverageYieldEffectiveApr`, `useLeverageYieldPosition`, `useLeverageYieldTotalAssets`, `useLeverageYieldPreviewRedeem`, `useLeverageYieldShareBalances` (returns an array, one row per holder) | Query |
 
 ```tsx
@@ -247,7 +258,7 @@ function DepositButton({ vault, srcChainKey, srcAddress, inputToken, inputAmount
 }
 ```
 
-`minOutputAmount` comes from `useLeverageYieldQuote` with slippage applied. `DepositProps` is your own type. A full worked component, including the allowance gate and vault stats, is in the [dapp-kit leverage yield recipe](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/skills/sodax-dapp-kit/integration/knowledge/recipes/leverage-yield.md).
+`built` is the value a successful `useLeverageYieldDeposit` / `useLeverageYieldWithdraw` call returns. `minOutputAmount` comes from `useLeverageYieldQuote` with slippage applied. `DepositProps` is your own type. The [dapp-kit leverage yield recipe](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/skills/sodax-dapp-kit/integration/knowledge/recipes/leverage-yield.md) has separate snippets for a deposit with its approve call, vault stats, and share balances.
 
 ## API path (option) {#api-path}
 
@@ -279,9 +290,9 @@ Amounts are decimal strings in the token's smallest unit. Network identifiers ar
 | 6 | Hand off to the backend | `POST /submit-tx` with `operation` | `useLeverageYieldApiSubmitTx` — takes `{ request }` |
 | 7 | Poll to a terminal state | `GET /submit-tx/status` | `useLeverageYieldApiSubmitTxStatus` — stops on `solved`, `failed`, `abandonedAt` or a rejected key |
 
-For display, `useLeverageYieldApiVaults` and `useLeverageYieldApiEffectiveApr` read the registry and headline APR. The `tx` in step 4 is an unsigned transaction shaped for the source network's family (EVM, Solana, Sui, Stellar and so on).
+For display, `useLeverageYieldApiVaults` and `useLeverageYieldApiEffectiveApr` read the registry and headline APR (`GET /vaults`, `GET /apr/effective?vault=<vault>`). The `tx` in step 4 is an unsigned transaction shaped for the source network's family (EVM, Solana, Sui, Stellar and so on).
 
-Two details in React. The `intent` in the step 4 response is all decimal strings, and `useLeverageYieldApiSubmitTx` expects the bigint `IntentRequestV2`, so convert it before step 6. Vault reads such as `useLeverageYieldApiShareBalance` take the user's **hub wallet** as `owner`, which `useGetUserHubWalletAddress` resolves from their spoke address. The demo app's [leverage-yield API card](https://github.com/icon-project/sodax-sdks/blob/main/apps/demo/src/components/leverage-yield-api/LeverageCard.tsx) wires all seven steps, including a [sign-and-broadcast helper](https://github.com/icon-project/sodax-sdks/blob/main/apps/demo/src/components/swaps-api/lib/signAndBroadcast.ts) and the [intent converter](https://github.com/icon-project/sodax-sdks/blob/main/apps/demo/src/components/swaps-api/lib/mappers.ts).
+Two details in React. The `intent` in the step 4 response is all decimal strings, and `useLeverageYieldApiSubmitTx` expects the bigint `IntentRequestV2`, so convert it before step 6. Vault reads such as `useLeverageYieldApiShareBalance` take the user's **hub wallet** as `owner`, which `useGetUserHubWalletAddress` resolves from their spoke address. The demo app's [leverage-yield API card](https://github.com/icon-project/sodax-sdks/blob/main/apps/demo/src/components/leverage-yield-api/LeverageCard.tsx) wires steps 1–6, and its [order status panel](https://github.com/icon-project/sodax-sdks/blob/main/apps/demo/src/components/leverage-yield-api/OrderStatus.tsx) polls step 7. The card also uses a [sign-and-broadcast helper](https://github.com/icon-project/sodax-sdks/blob/main/apps/demo/src/components/swaps-api/lib/signAndBroadcast.ts) and the [intent converter](https://github.com/icon-project/sodax-sdks/blob/main/apps/demo/src/components/swaps-api/lib/mappers.ts).
 
 ### Deposit with curl
 
@@ -293,12 +304,15 @@ SRC=0xa4b1.arbitrum         # the network the user pays from
 VAULT=0x…                   # from GET $BASE/vaults
 INPUT_TOKEN=0x…             # the token the user pays with, on $SRC
 USER_ADDRESS=0x…            # the user's address on $SRC
-AMOUNT=1000000              # smallest unit of INPUT_TOKEN
+AMOUNT=10000000             # smallest unit of INPUT_TOKEN, e.g. 10 USDC (6 decimals)
+SODAX_API_KEY=…             # server-side only
+H=(-H 'content-type: application/json' -H "x-api-key: $SODAX_API_KEY")
 
-# 1. Quote → .quotedAmount (lsoda* shares, 18 decimals)
+# 1. Quote → .quotedAmount (lsoda* shares, 18 decimals).
+#    Too small an amount returns 422 "Input amount too low" (code -23).
 jq -n --arg vault "$VAULT" --arg token "$INPUT_TOKEN" --arg src "$SRC" --arg amount "$AMOUNT" \
   '{vault: $vault, tokenSrc: $token, tokenSrcChainKey: $src, amount: $amount, quoteType: "exact_input"}' \
-  | curl -s -X POST "$BASE/quote/deposit" -H 'content-type: application/json' -d @- > quote.json
+  | curl -s -X POST "$BASE/quote/deposit" "${H[@]}" -d @- > quote.json
 
 # 2. Apply 0.5% slippage (bc handles the 18-decimal integers)
 MIN_SHARES=$(echo "$(jq -r .quotedAmount quote.json) * 9950 / 10000" | bc)
@@ -309,13 +323,13 @@ BODY=$(jq -n --arg vault "$VAULT" --arg src "$SRC" --arg user "$USER_ADDRESS" \
   '{vault: $vault, srcChainKey: $src, srcAddress: $user, inputToken: $token, inputAmount: $amount, minOutputAmount: $min}')
 
 # 3. Allowance → { "valid": true | false }
-curl -s -X POST "$BASE/allowance/check" -H 'content-type: application/json' -d "$BODY"
+curl -s -X POST "$BASE/allowance/check" "${H[@]}" -d "$BODY"
 
 # 4. If valid is false → { tx, resetTx? }. Sign and mine resetTx first when it is present, then tx.
-curl -s -X POST "$BASE/approve" -H 'content-type: application/json' -d "$BODY"
+curl -s -X POST "$BASE/approve" "${H[@]}" -d "$BODY"
 
 # 5. Build → { tx, intent, relayData: { address, payload } }
-curl -s -X POST "$BASE/intents/deposit" -H 'content-type: application/json' -d "$BODY" > created.json
+curl -s -X POST "$BASE/intents/deposit" "${H[@]}" -d "$BODY" > created.json
 ```
 
 Next the user signs `created.json`'s `tx` with their wallet on `$SRC`, and you broadcast it. That step happens outside the API. **Wait for the source-network receipt**, then hand off and poll:
@@ -327,8 +341,8 @@ TX_HASH=0x…   # hash of the broadcast tx
 jq --arg tx "$TX_HASH" --arg src "$SRC" --arg user "$USER_ADDRESS" \
   '{txHash: $tx, srcChainKey: $src, walletAddress: $user, intent: .intent, relayData: .relayData.payload, operation: "deposit"}' \
   created.json \
-  | curl -s -X POST "$BASE/submit-tx" -H 'content-type: application/json' -H "x-api-key: $SODAX_API_KEY" -d @-
-# → { "data": { "status": "inserted" | "duplicate" } }. Resubmitting the same txHash is safe.
+  | curl -s -X POST "$BASE/submit-tx" "${H[@]}" -d @-
+# → { "success": true, "data": { "status": "inserted" | "duplicate", "message": "…" } }. Resubmitting the same txHash is safe.
 
 # 7. Poll every few seconds until solved or failed (or abandonedAt is set)
 curl -s "$BASE/submit-tx/status?txHash=$TX_HASH&srcChainKey=$SRC"
@@ -340,6 +354,8 @@ curl -s "$BASE/submit-tx/status?txHash=$TX_HASH&srcChainKey=$SRC"
 
 A withdraw skips the allowance and approve steps. The backend builds it as a hub-wallet swap, so there is nothing to approve.
 
+`/share-balance` takes the user's **hub wallet** as `owner`, and the leverage-yield API has no route that resolves it. Resolve it once with the SDK, `sodax.hubProvider.getUserHubWalletAddress(srcAddress, srcChainKey)`, and store it with the user.
+
 ```bash
 DST=0xa4b1.arbitrum         # where the output token is delivered
 OUTPUT_TOKEN=0x…            # the token the user receives, on $DST
@@ -348,36 +364,36 @@ SHARES=…                    # lsoda* to redeem (18 decimals): GET $BASE/share-
 # 1. Quote: shares in → output token out. No partnerFee field on this route.
 jq -n --arg vault "$VAULT" --arg src "$SRC" --arg token "$OUTPUT_TOKEN" --arg dst "$DST" --arg amount "$SHARES" \
   '{vault: $vault, srcChainKey: $src, tokenDst: $token, tokenDstChainKey: $dst, amount: $amount, quoteType: "exact_input"}' \
-  | curl -s -X POST "$BASE/quote/withdraw" -H 'content-type: application/json' -d @- > quote.json
+  | curl -s -X POST "$BASE/quote/withdraw" "${H[@]}" -d @- > quote.json
 MIN_OUT=$(echo "$(jq -r .quotedAmount quote.json) * 9950 / 10000" | bc)
 
 # 2. Build. No partnerFee field on this route either.
 jq -n --arg vault "$VAULT" --arg src "$SRC" --arg user "$USER_ADDRESS" --arg dst "$DST" \
   --arg token "$OUTPUT_TOKEN" --arg amount "$SHARES" --arg min "$MIN_OUT" \
   '{vault: $vault, srcChainKey: $src, srcAddress: $user, dstChainKey: $dst, outputToken: $token, inputAmount: $amount, minOutputAmount: $min}' \
-  | curl -s -X POST "$BASE/intents/withdraw" -H 'content-type: application/json' -d @- > created.json
+  | curl -s -X POST "$BASE/intents/withdraw" "${H[@]}" -d @- > created.json
 ```
 
 Then sign and broadcast, `POST /submit-tx` with `"operation": "withdraw"`, and poll the same way as a deposit. The full route catalog is on [Leverage yield API](/developers/http-api/leverage).
 
 ## Gotchas {#gotchas}
 
-1. **`deposit()` and `withdraw()` don't broadcast.** They only build a payload. Run it through `vaultSwap({ ...payload, walletProvider })`, or the HTTP `submit-tx` flow.
+1. **`deposit()` and `withdraw()` don't broadcast.** They only build a payload. Run it through `vaultSwap({ ...built, walletProvider })`, or the HTTP `submit-tx` flow.
 2. **Quote with the leverage-yield quote.** Use `sodax.leverageYield.getQuote`, `useLeverageYieldQuote`, or `POST /quote/deposit|withdraw`, never `sodax.swaps.getQuote` or `useQuote`. The swap quote deducts the swap fee, so its `minOutputAmount` can be more than the vault intent can deliver, and the intent never fills.
 3. **Use the same `partnerFee` on the quote and the intent, or omit it on both, and quote the gross amount.** The fee comes out of the input before the swap, and the leverage-yield quote deducts it for you. A fee mismatch, or an amount you already netted yourself, sizes `minOutputAmount` against the wrong net input.
 4. **`swaps.partnerFee` never applies to vaults.** Configure `leverageYield.partnerFee` (or the global `fee`). A withdraw fee is taken in `lsoda*` shares, not in the output token.
 5. **Only deposits need an approval, and it's the swap-domain one.** Approve the input token with `sodax.swaps.isAllowanceValid` / `approve` (or `useSwapAllowance` / `useSwapApprove`, or `/allowance/check` + `/approve`). Withdraws need no approval. `sodax.leverageYield.approve` / `isAllowanceValid` are for calling the vault directly on Sonic, and neither flow uses them.
 6. **Mine `resetTx` before `tx`.** For some tokens (the 2017 TetherToken lineage), `/approve` returns a `resetTx` that zeroes the old allowance. Broadcast it and wait for it to be mined before `tx`. `useLeverageYieldApiApproveAndBroadcast` handles the ordering for you.
 7. **Shares live in the hub wallet of the address that deposited.** That wallet is derived from the network and address the user deposited from, so withdraw with the same `srcChainKey` and `srcAddress`. `getShareBalanceForUser` takes the spoke address. `getShareBalance` and the HTTP `/share-balance` want the hub wallet address.
-8. **A withdraw is sized in shares, not assets.** `inputAmount` is `lsoda*` shares, so size a full exit from the share balance (`getShareBalanceForUser`, `useLeverageYieldShareBalances`, `/share-balance`). `getMaxWithdraw*` and `/max-withdraw` return ERC-4626 `maxWithdraw`, which is in the underlying asset's units.
-9. **Headline APR is `getEffectiveApr`, not `getApr`.** `getApr` counts lending rates only and is often negative for an LST vault. The LST's staking yield is where the return comes from. On HTTP, use `GET /apr/effective`.
+8. **A withdraw is sized in shares, not assets.** `inputAmount` is `lsoda*` shares, so size a full exit from the share balance (`getShareBalanceForUser`, `useLeverageYieldShareBalances`, `/share-balance`). `getMaxWithdraw*` and `/max-withdraw` return ERC-4626 `maxWithdraw`, which is in the underlying asset's units. `getMaxWithdrawForUser` also subtracts a small dust buffer.
+9. **Headline APR is `getEffectiveApr`, not `getApr`.** `getApr` counts lending rates only and is often negative for an LST vault. The LST's staking yield is where the return comes from. On HTTP, use `GET /apr/effective?vault=<vault>`. The `vault` parameter is required.
 10. **Mind the units.** `lsoda*` shares are always 18 decimals. APR values are RAY (`1e27` = 100%). The vault address is also the share-token address. The share side of a quote is always on Sonic.
 11. **Terminal success is `solved`, not `executed`.** `executed` is the bridge API's terminal state. A set `abandonedAt` is terminal as well.
 12. **The `submit-tx` body has traps.** `relayData` is `relayData.payload` (a string), and `operation` (`deposit` or `withdraw`) is required. In TypeScript, convert the create response's string `intent` to bigints before calling `submitTx`. `GET /submit-tx/status` needs both `txHash` and `srcChainKey`. Wait for the source-network receipt before you submit.
 13. **Track by the source transaction.** Use `getDetailedStatus` / `useLeverageYieldDetailedStatus` with `(srcChainKey, srcTxHash)`. The backend record can be stale when the client-side fallback finished the swap.
-14. **Branch on `result.ok`.** SDK and API client methods return a `Result` and never throw, so a `try/catch` misses every failure. Discriminate on `error.code`, never on `error.message`.
+14. **Branch on `result.ok`.** SDK and API client methods that return a `Result` never throw, so a `try/catch` misses every failure. The registry lookups (`listVaults`, `getVault`, `getVaultByAddress`) are synchronous and return plain values. Discriminate on `error.code`, never on `error.message`. A `getQuote` error can also be the solver's own response: check `isSodaxError(error)` first, and read `error.detail.code` on the solver's.
 15. **Keep API keys on the server.** A key in a browser bundle, or behind `NEXT_PUBLIC_*` / `VITE_*`, is public.
-16. **A vault isn't a leverage position.** Leverage positions (`openLeveragePosition`, `useLeveragePosition*`) are a separate product with their own sizing rules. `useLeverageYieldPosition` is the vault's snapshot.
+16. **A vault isn't a leverage position.** Leverage positions (`sodax.leverageYield.openLeveragePosition`, `useOpenLeveragePosition`, `useLeveragePosition*`) share the service but are a separate product with their own sizing rules. `useLeverageYieldPosition` is the vault's snapshot.
 
 ## Build it with an AI agent {#ai-agents}
 

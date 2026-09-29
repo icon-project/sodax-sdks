@@ -152,10 +152,11 @@ Whichever quote method you use, keep the fee consistent across both calls: pass 
 import { ChainKeys } from '@sodax/sdk';
 
 const vault = sodax.leverageYield.getVault('lsodaWEETH');
+const srcChainKey = ChainKeys.ARBITRUM_MAINNET;
 
 const intentResult = await sodax.leverageYield.deposit({
   vault: vault.vault,
-  srcChainKey: ChainKeys.ARBITRUM_MAINNET,
+  srcChainKey,
   srcAddress: '0xYourArbitrumEOA...',
   inputToken: '0x...weETHonArbitrum',
   inputAmount: 1_000_000_000_000_000_000n, // input-token decimals
@@ -166,7 +167,11 @@ if (intentResult.ok) {
   // The spoke asset manager pulls `inputToken`, so approve it first — the swap-domain helpers take the payload's params.
   const allowance = await sodax.swaps.isAllowanceValid({ params: intentResult.value.params, walletProvider: evmWalletProvider });
   if (allowance.ok && !allowance.value) {
-    const approval = await sodax.swaps.approve({ params: intentResult.value.params, walletProvider: evmWalletProvider });
+    // Pin the chain so the result narrows to an EVM tx hash.
+    const approval = await sodax.swaps.approve<typeof srcChainKey, false>({
+      params: { ...intentResult.value.params, srcChainKey },
+      walletProvider: evmWalletProvider,
+    });
     if (approval.ok) await evmWalletProvider.waitForTransactionReceipt(approval.value);
   }
 
@@ -323,9 +328,10 @@ const result = await sodax.leverageYield.getDetailedStatus({
 if (result.ok) {
   if (result.value.source === 'backend') {
     // `data` is the SubmitTxStatusDataV2 from sodax.api.leverageYield.getSubmitTxStatus
-    console.log(result.value.data.status, result.value.data.userMessage);
+    console.log(result.value.data.status); // pending … posted_execution | solved
   } else {
-    // `data` is the SolverIntentStatusResponse — the vault intent IS a solver intent
+    // `data` is the SolverIntentStatusResponse — the vault intent IS a solver intent.
+    // A failed or abandoned backend record routes here, so failure is the solver's FAILED code.
     console.log(result.value.data.status, result.value.dstTxHash);
   }
 }

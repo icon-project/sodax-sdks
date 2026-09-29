@@ -117,9 +117,10 @@ type DetailedLeverageYieldStatus =
 ### Deposit (any token → `lsoda*`)
 
 ```ts
+const srcChainKey = ChainKeys.ARBITRUM_MAINNET;
 const built = await sodax.leverageYield.deposit({
   vault: vault.vault,
-  srcChainKey: ChainKeys.ARBITRUM_MAINNET,
+  srcChainKey,
   srcAddress: '0x…',
   inputToken: '0x…weETHonArbitrum',
   inputAmount: parseUnits('1', 18),
@@ -132,7 +133,11 @@ if (!built.ok) return;
 const allowance = await sodax.swaps.isAllowanceValid({ params: built.value.params, walletProvider });
 if (!allowance.ok) return;
 if (!allowance.value) {
-  const approval = await sodax.swaps.approve({ params: built.value.params, walletProvider });
+  // Pin the chain so the result narrows to an EVM tx hash.
+  const approval = await sodax.swaps.approve<typeof srcChainKey, false>({
+    params: { ...built.value.params, srcChainKey },
+    walletProvider,
+  });
   if (!approval.ok) return;
   await walletProvider.waitForTransactionReceipt(approval.value);
 }
