@@ -152,6 +152,7 @@ Whichever quote method you use, keep the fee consistent across both calls: pass 
 import { ChainKeys } from '@sodax/sdk';
 
 const vault = sodax.leverageYield.getVault('lsodaWEETH');
+if (!vault) throw new Error('Unknown vault');
 const srcChainKey = ChainKeys.ARBITRUM_MAINNET;
 
 const intentResult = await sodax.leverageYield.deposit({
@@ -163,24 +164,28 @@ const intentResult = await sodax.leverageYield.deposit({
   minOutputAmount: 900_000_000_000_000_000n, // lsoda* (18 dp), slippage already applied
 });
 
-if (intentResult.ok) {
-  // The spoke asset manager pulls `inputToken`, so approve it first — the swap-domain helpers take the payload's params.
-  const allowance = await sodax.swaps.isAllowanceValid({ params: intentResult.value.params, walletProvider: evmWalletProvider });
-  if (allowance.ok && !allowance.value) {
-    // Pin the chain so the result narrows to an EVM tx hash.
-    const approval = await sodax.swaps.approve<typeof srcChainKey, false>({
-      params: { ...intentResult.value.params, srcChainKey },
-      walletProvider: evmWalletProvider,
-    });
-    if (approval.ok) await evmWalletProvider.waitForTransactionReceipt(approval.value);
-  }
+if (!intentResult.ok) throw intentResult.error;
 
-  // Spread the payload straight into the vault-swap executor.
-  const swapResult = await sodax.leverageYield.vaultSwap({
-    ...intentResult.value,
+// The spoke asset manager pulls `inputToken`, so approve it first — the swap-domain helpers take the payload's params.
+const allowance = await sodax.swaps.isAllowanceValid({ params: intentResult.value.params, walletProvider: evmWalletProvider });
+if (!allowance.ok) throw allowance.error;
+if (!allowance.value) {
+  // Pin the chain so the result narrows to an EVM tx hash.
+  const approval = await sodax.swaps.approve<typeof srcChainKey, false>({
+    params: { ...intentResult.value.params, srcChainKey },
     walletProvider: evmWalletProvider,
   });
+  if (!approval.ok) throw approval.error;
+  const receipt = await evmWalletProvider.waitForTransactionReceipt(approval.value);
+  // Providers report a revert as viem's 'reverted' or the JSON-RPC '0x0'.
+  if (receipt.status === 'reverted' || receipt.status === '0x0') throw new Error('Approval reverted');
 }
+
+// Spread the payload straight into the vault-swap executor.
+const swapResult = await sodax.leverageYield.vaultSwap({
+  ...intentResult.value,
+  walletProvider: evmWalletProvider,
+});
 ```
 
 `deposit()` and `vaultSwap()` do not approve anything themselves. On an EVM spoke the asset manager pulls an ERC-20 input from the user's wallet, so the deposit reverts without the allowance. On Sonic the spender is the intents contract, and on Stellar the helper sets up a trustline. On other networks nothing needs approving, and the check returns `true`. The swap-domain helpers resolve all of this for each network, the same as for a swap.

@@ -139,7 +139,9 @@ if (!allowance.value) {
     walletProvider,
   });
   if (!approval.ok) return;
-  await walletProvider.waitForTransactionReceipt(approval.value);
+  const receipt = await walletProvider.waitForTransactionReceipt(approval.value);
+  // Providers report a revert as viem's 'reverted' or the JSON-RPC '0x0'.
+  if (receipt.status === 'reverted' || receipt.status === '0x0') return;
 }
 
 const result = await sodax.leverageYield.vaultSwap({ ...built.value, walletProvider });
