@@ -193,6 +193,8 @@ For product UI that needs the levered yield figure, prefer:
 
 Do not invent multipliers client-side unless you reimplement the same formula.
 
+Every numeric field is a decimal string. APR fields ending in `Ray` are RAY (`1e27` = 100%). `targetLtvBps` and the `/position` `ltv` are basis points (`10000` = 100%). `healthFactor` and `leverageMultiplierWad` are WAD (`1e18`). `leverageMultiplierWad` is the **borrowed** multiple, `targetLTV / (1 − targetLTV)`, so the exposure a depositor holds is `1 +` that value.
+
 ---
 
 ## Relation to Swaps API

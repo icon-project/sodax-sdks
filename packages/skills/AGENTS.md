@@ -162,7 +162,7 @@ To add another meta skill later: drop `skills/<name>/SKILL.md` + a flat `knowled
 pnpm --filter @sodax/skills check:ai
 ```
 
-Chains six sub-scripts. Each catches a distinct bug class — green guards together prove syntactic + structural correctness, but **NOT** prose-level accuracy.
+Chains seven sub-scripts. Each catches a distinct bug class — green guards together prove syntactic + structural correctness, but **NOT** prose-level accuracy.
 
 | Sub-script | What it enforces | Source of truth | Opt-out |
 |---|---|---|---|
@@ -172,6 +172,7 @@ Chains six sub-scripts. Each catches a distinct bug class — green guards toget
 | `check:ai-tsx-examples` | Every standalone `.tsx` file under `skills/sodax-<pkg>/integration/knowledge/examples/` typechecks as a complete module against the live `src/`. Catches export drift, hook-shape drift, and renamed-param drift in runnable user-facing examples. | each SDK package's `src/index.ts` (and `xchains/*` sub-paths for wallet-sdk-react) via fixture tsconfig `paths` | none — illustrative blocks live in `.md` via `@ai-snippets-skip`; `integration/knowledge/examples/` is for runnable code only |
 | `check:ai-keys` | Every `queryKey: [...]` / `mutationKey: [...]` literal in `skills/sodax-dapp-kit/{integration,migration-v1-to-v2}/knowledge/**/*.md` has a matching prefix in `packages/dapp-kit/src/hooks/**/*.ts`. Catches `'stakingInfo'` vs `'info'`-style drift. | `packages/dapp-kit/src/hooks/**/*.ts` | `<!-- ai-keys-allow -->` or `// ai-keys-allow` within 3 preceding lines |
 | `check:ai-consistency` | Every polling-interval claim ("polls 3s") near a `useFoo` mention matches the source `refetchInterval` for that hook. | same as keys | `<!-- ai-consistency-allow -->` within 6 preceding lines |
+| `check:ai-safety` | No fenced code block under `skills/` (nor any standalone `.tsx` example) sends a zero minimum output (`minOutputAmount: 0n` and friends) or `skipSimulation: true`. Agents copy examples verbatim, so an unsafe example ships straight into user code; prose may still name the patterns. | this package's filesystem | `ai-safety-allow` in a comment on the same line |
 
 Run individually for faster feedback: `pnpm run check:ai-imports`, `pnpm run check:ai-keys`, etc.
 

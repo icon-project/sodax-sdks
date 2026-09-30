@@ -41,7 +41,23 @@ Leveraged-yield ERC-4626 vaults on Sonic. Deposit any token → `lsoda*` shares,
 
 > A deposit is a swap-style intent, so it approves the **spoke asset manager** via the swap-domain hooks — there is no leverage-yield-specific approve hook. A withdraw carries `hubWalletSwap: true` and needs no spoke approval.
 
+## List the vaults
+
+dapp-kit has no hook for the vault registry: it is static SDK config, so read it synchronously. Each entry is `{ name, vault, asset, borrowToken, lsdSource? }`; pass `vault` (the `lsoda*` proxy address, also the share token) as every hook's `vault` param. `useLeverageYieldApiVaults` is the backend REST equivalent.
+
+```tsx
+import { useMemo } from 'react';
+import { useSodaxContext } from '@sodax/dapp-kit';
+
+function useVaults() {
+  const { sodax } = useSodaxContext();
+  return useMemo(() => sodax.leverageYield.listVaults(), [sodax]);
+}
+```
+
 ## Vault stats + position
+
+`leverageMultiplierWad` (on the APR result) is the **borrowed** multiple, `targetLTV / (1 − targetLTV)`; total exposure is `1 + multiplier`, so a "Leverage" label shows the sum. `targetLtvBps` and `position.ltv` are basis points (`8_200` = 82%); `healthFactor` and the multiplier are WAD.
 
 ```tsx
 import { useLeverageYieldEffectiveApr, useLeverageYieldTotalAssets, useLeverageYieldPreviewRedeem, useLeverageYieldPosition } from '@sodax/dapp-kit';
@@ -72,6 +88,8 @@ function VaultStats({ vault }: { vault: Address }) {
 }
 ```
 
+Keep these default intervals, especially on a grid of vault cards. There is no multicall: one `useLeverageYieldEffectiveApr` refresh is six Sonic `eth_call`s plus a DefiLlama fetch per vault, and the TVL, share-price and position reads add one call each. Shortening them multiplies RPC load for every open tab. For many vaults, the `useLeverageYieldApi*` reads cost one HTTPS request each and no browser RPC.
+
 ## Share balances across chains
 
 `useLeverageYieldShareBalances` returns an **array** — one query per holder. Build `holders` from the chains the user has connected, then aggregate.
@@ -90,39 +108,44 @@ function ShareTotal({ vault, holders }: { vault: Address; holders: { chainKey: S
 
 ## Deposit (any token → `lsoda*`)
 
-Build → approve-if-needed → execute. The built payload is spread straight into `vaultSwap`.
+Quote → derive the minimum → build → approve-if-needed → execute. The built payload is spread straight into `vaultSwap`. Never send `minOutputAmount: 0n`: it accepts any fill, however bad.
 
 ```tsx
-// @ai-snippets-skip — illustrative end-to-end flow wiring the builder, the swap-domain
-// allowance/approve hooks, and the executor across a broad walletProvider union. Real
-// call shapes per hook are in features/leverage-yield.md.
 import { useState } from 'react';
 import {
-  useLeverageYieldDeposit, useLeverageYieldVaultSwap, useSwapAllowance, useSwapApprove,
+  useLeverageYieldDeposit, useLeverageYieldQuote, useLeverageYieldVaultSwap, useSwapApprove,
 } from '@sodax/dapp-kit';
 import { useWalletProvider } from '@sodax/wallet-sdk-react';
-import { ChainKeys, type Address, type PartnerFee } from '@sodax/sdk';
+import { ChainKeys, type Address } from '@sodax/sdk';
 import { parseUnits } from 'viem';
 
-const DEPOSIT_PARTNER_FEE: PartnerFee = { address: '0xYourFeeReceiver…', percentage: 100 }; // 1%
+const SLIPPAGE_BPS = 100n; // 1%; let the user choose, but cap it
 
-function DepositForm({ vault, srcAddress, inputToken }: { vault: Address; srcAddress: string; inputToken: string }) {
+function DepositForm({ vault, srcAddress, inputToken, decimals }: { vault: Address; srcAddress: string; inputToken: string; decimals: number }) {
   const [amount, setAmount] = useState('');
   const chainKey = ChainKeys.ARBITRUM_MAINNET;
   const walletProvider = useWalletProvider({ xChainId: chainKey });
+  const inputAmount = amount ? parseUnits(amount, decimals) : 0n;
+
+  // Vault as token_dst quotes a deposit. Omit partnerFee here and on the builder unless you add your own.
+  const { data: quote } = useLeverageYieldQuote({
+    params: {
+      payload: inputAmount > 0n ? {
+        token_src: inputToken, token_src_blockchain_id: chainKey,
+        token_dst: vault, token_dst_blockchain_id: ChainKeys.SONIC_MAINNET,
+        amount: inputAmount, quote_type: 'exact_input',
+      } : undefined,
+    },
+  });
+  const minOutputAmount = quote?.ok ? (quote.value.quoted_amount * (10_000n - SLIPPAGE_BPS)) / 10_000n : undefined;
 
   const { mutateAsyncSafe: buildDeposit } = useLeverageYieldDeposit();
   const { mutateAsyncSafe: approve } = useSwapApprove();
   const { mutateAsync: vaultSwap, isPending } = useLeverageYieldVaultSwap();
 
   const handleDeposit = async () => {
-    if (!walletProvider) return;
-    const built = await buildDeposit({
-      vault, srcChainKey: chainKey, srcAddress, inputToken,
-      inputAmount: parseUnits(amount, 18),
-      minOutputAmount: 0n,             // size via useLeverageYieldQuote (token_dst = vault), then subtract slippage
-      partnerFee: DEPOSIT_PARTNER_FEE, // per-intent fee — pass the same one to useLeverageYieldQuote
-    });
+    if (!walletProvider || minOutputAmount === undefined) return; // no quote, no deposit
+    const built = await buildDeposit({ vault, srcChainKey: chainKey, srcAddress, inputToken, inputAmount, minOutputAmount });
     if (!built.ok) return;
 
     // Deposit approves the spoke asset manager (swap-style). Gate on useSwapAllowance in render.
@@ -133,7 +156,8 @@ function DepositForm({ vault, srcAddress, inputToken }: { vault: Address; srcAdd
   return (
     <div>
       <input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="amount" />
-      <button onClick={handleDeposit} disabled={isPending || !walletProvider}>Deposit</button>
+      {quote?.ok && <p>You receive ≈ {quote.value.quoted_amount.toString()} shares (min {minOutputAmount?.toString()})</p>}
+      <button onClick={handleDeposit} disabled={isPending || !walletProvider || minOutputAmount === undefined}>Deposit</button>
     </div>
   );
 }
@@ -141,34 +165,44 @@ function DepositForm({ vault, srcAddress, inputToken }: { vault: Address; srcAdd
 
 ## Withdraw (`lsoda*` → any token)
 
-No approval step — `hubWalletSwap: true` authorises the share spend via a `sendMessage`.
+No approval step — `hubWalletSwap: true` authorises the share spend via a `sendMessage`. Quote with the vault as `token_src` on the hub.
 
 ```tsx
-// @ai-snippets-skip — illustrative end-to-end flow (builder + executor) across a broad
-// walletProvider union; see features/leverage-yield.md for exact per-hook shapes.
-import { useLeverageYieldWithdraw, useLeverageYieldVaultSwap } from '@sodax/dapp-kit';
+import { useLeverageYieldQuote, useLeverageYieldWithdraw, useLeverageYieldVaultSwap } from '@sodax/dapp-kit';
 import { useWalletProvider } from '@sodax/wallet-sdk-react';
 import { ChainKeys, type Address } from '@sodax/sdk';
+
+const SLIPPAGE_BPS = 100n;
 
 function WithdrawButton({ vault, srcAddress, outputToken, shares }: { vault: Address; srcAddress: string; outputToken: string; shares: bigint }) {
   const chainKey = ChainKeys.ARBITRUM_MAINNET;
   const walletProvider = useWalletProvider({ xChainId: chainKey });
+  const { data: quote } = useLeverageYieldQuote({
+    params: {
+      payload: shares > 0n ? {
+        token_src: vault, token_src_blockchain_id: ChainKeys.SONIC_MAINNET,
+        token_dst: outputToken, token_dst_blockchain_id: chainKey,
+        amount: shares, quote_type: 'exact_input',
+      } : undefined,
+    },
+  });
+  const minOutputAmount = quote?.ok ? (quote.value.quoted_amount * (10_000n - SLIPPAGE_BPS)) / 10_000n : undefined;
   const { mutateAsyncSafe: buildWithdraw } = useLeverageYieldWithdraw();
   const { mutateAsync: vaultSwap, isPending } = useLeverageYieldVaultSwap();
 
   const handleWithdraw = async () => {
-    if (!walletProvider) return;
+    if (!walletProvider || minOutputAmount === undefined) return;
     const built = await buildWithdraw({
       vault, srcChainKey: chainKey, srcAddress,
       dstChainKey: chainKey, outputToken,
-      inputAmount: shares,         // lsoda* shares to burn
-      minOutputAmount: 0n,         // size via useLeverageYieldQuote (token_src = vault), then subtract slippage
+      inputAmount: shares, // lsoda* shares to burn
+      minOutputAmount,
     });
     if (!built.ok) return;
     await vaultSwap({ ...built.value, walletProvider }); // built.value.hubWalletSwap === true
   };
 
-  return <button onClick={handleWithdraw} disabled={isPending || !walletProvider}>Withdraw</button>;
+  return <button onClick={handleWithdraw} disabled={isPending || !walletProvider || minOutputAmount === undefined}>Withdraw</button>;
 }
 ```
 
@@ -176,7 +210,7 @@ function WithdrawButton({ vault, srcAddress, outputToken, shares }: { vault: Add
 
 - **Two roles:** `deposit` / `withdraw` *build* a `LeverageYieldSwapPayload`; `useLeverageYieldVaultSwap` *executes* it. Always spread the built payload into the executor with a `walletProvider`.
 - **Quotes:** size `minOutputAmount` with `useLeverageYieldQuote` — vault address as `token_dst` (deposit) or `token_src` (withdraw). Not `useQuote`: that one deducts the effective *swap* fee, while the vault intent charges the effective *leverage-yield* fee, so the quote and the intent disagree whenever the two feature fees differ. It returns the SDK `Result` as `data` (branch on `data?.ok`), unlike the other leverage-yield read hooks. Subtract your slippage tolerance.
-- **Fees apply BOTH ways.** Deposits *and* withdrawals are charged the effective leverage-yield fee (`leverageYield.partnerFee ?? fee`); both builders accept an optional `partnerFee` to override it per intent. The fee comes out of `inputAmount` before the swap, so pass the same `partnerFee` to `useLeverageYieldQuote` or the quote is sized on the wrong net input and the intent won't fill. On a withdraw the input token is the vault, so the fee is taken in **`lsoda*` shares** — the receiver accrues vault shares, not the output token.
+- **Fees apply BOTH ways.** Deposits *and* withdrawals are charged the effective leverage-yield fee (`leverageYield.partnerFee ?? fee`); both builders accept an optional `partnerFee` to override it per intent. It is opt-in: leave it out unless the integrator supplied their own receiver address, and never reuse an address from a SODAX demo. The fee comes out of `inputAmount` before the swap, so pass the same `partnerFee` to `useLeverageYieldQuote` or the quote is sized on the wrong net input and the intent won't fill. On a withdraw the input token is the vault, so the fee is taken in **`lsoda*` shares** — the receiver accrues vault shares, not the output token.
 - **Configured fee:** vault flows are monetized via `leverageYield.partnerFee` (else the global `fee`). `swaps.partnerFee` does not apply to them.
 - **Withdraw:** no spoke approval — the hub wallet authorises the share spend via `Connection.sendMessage`. Output lands at `recipient` (defaults to `srcAddress`) on `dstChainKey`.
 - **Reads** (`useLeverageYieldEffectiveApr`, `Position`, `TotalAssets`, `PreviewRedeem`) are already unwrapped — read `data` directly. `useLeverageYieldShareBalances` returns an array; aggregate the `shares` yourself.

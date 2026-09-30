@@ -36,6 +36,8 @@ At a target LTV `L`, the steady-state amounts (as a multiple of your principal) 
 | Total borrowed | `L / (1 − L)` | `5.67×` principal |
 | **Leverage multiplier** (`leverageMultiplierWad`) | `L / (1 − L)` | `5.67×` |
 
+The multiplier is the **borrowed** multiple, not the exposure. The exposure a depositor holds is total collateral, `1 / (1 − L)` = `1 + leverageMultiplier` (`6.67×` here). A UI label that reads "Leverage" should show that sum.
+
 Your net yield is the base supply rate on your principal **plus** the leverage multiplier applied to the *spread* between the supply and borrow rates:
 
 ```
@@ -136,7 +138,13 @@ const quote = await sodax.leverageYield.getQuote({
   quote_type: 'exact_input',
   // partnerFee — pass the same value you pass to deposit()/withdraw()/vaultSwap(), or omit on both
 });
+if (!quote.ok) return;
+
+const slippageBps = 100n; // 1%
+const minOutputAmount = (quote.value.quoted_amount * (10_000n - slippageBps)) / 10_000n;
 ```
+
+Never pass `minOutputAmount: 0n`. The SDK accepts it, and the intent then accepts any fill.
 
 Do **not** use `sodax.swaps.getQuote()` for vault flows: it deducts the effective *swap* fee, so once the two feature fees differ the quote and the intent disagree — and when the leverage-yield fee is the larger one, the `minOutputAmount` derived from that quote exceeds what the intent can deliver and it never fills.
 
@@ -460,7 +468,7 @@ type LeverageYieldApr = {
   supplyAprRay: bigint;          // AAVE supply rate of asset, in RAY (1e27)
   borrowAprRay: bigint;          // AAVE variable borrow rate of borrowToken, in RAY
   targetLtvBps: bigint;          // vault targetLTV(), in basis points
-  leverageMultiplierWad: bigint; // targetLTV / (1 - targetLTV), in WAD (1e18)
+  leverageMultiplierWad: bigint; // targetLTV / (1 - targetLTV), in WAD (1e18): borrowed multiple; exposure = 1 + this
   netAprRay: bigint;             // net APR at targetLTV, in RAY — can be negative
 };
 ```

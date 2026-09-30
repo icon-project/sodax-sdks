@@ -44,6 +44,10 @@ Takes about 15 minutes. Do it before the session if you can, because the install
 
 The repo gives your AI no SODAX-specific help. The prompts send it to the [AI integration guide](/ai-integration-guide), and the guide tells it the rest. Paste them as-is into any AI.
 
+<Info>
+  **No MCP server needed.** The SDK already in the starter reads vault data, APR and quotes itself, so skip the [Builders MCP](/builders-mcp) for this workshop, even if your AI offers to add it.
+</Info>
+
 ### All at once (recommended)
 
 With a capable model (Claude Opus 5.5, Codex Sol 6 or similar), one prompt builds the whole app:
@@ -148,6 +152,7 @@ If your build breaks after you deposit, your shares are safe. They belong to you
 | "Where are my shares?" | In your SODAX hub wallet on Sonic, per source network, never in MetaMask. The [hosted solution](https://sodax-leverage-yield-starter-git-solution-icon-foundation.vercel.app) lists every vault and network. |
 | AI built "leverage positions" | Wrong product. Revert, and tell it: "Vaults only, not leverage positions. Read AGENTS.md." |
 | AI doesn't know the SODAX SDK | Send it to the [AI integration guide](/ai-integration-guide). |
+| AI wants to add the Builders MCP | Not needed here. Tell it: "Skip the MCP. The SDK reads vault data itself." |
 
 The full table is in the repo's [WORKSHOP.md](https://github.com/gosodax/sodax-leverage-yield-starter/blob/main/docs/WORKSHOP.md#5-troubleshooting).
 
