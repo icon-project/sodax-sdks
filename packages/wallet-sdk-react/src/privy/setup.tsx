@@ -4,7 +4,7 @@ import type { PrivySourceContext, PrivySourceSetup } from '@/providers/evm/privy
 import { buildPrivyConfig, type PrivyOptions } from './privyConfig.js';
 import { PrivyBridge } from './PrivyBridge.js';
 import { privyConnector } from './privyConnector.js';
-import { PrivyStartupGuard } from './PrivyStartupGuard.js';
+import { AppErrorPassThrough, PrivyStartupGuard } from './PrivyStartupGuard.js';
 import { createPrivyRuntime } from './runtime.js';
 
 /** Runs once per `SodaxWalletProvider` mount: the connector and the host share this mount's runtime. */
@@ -17,11 +17,12 @@ export function createPrivySetup(
   const config = buildPrivyConfig(options, defaultChainId, ctx);
 
   function PrivyHost({ children }: { children?: ReactNode }) {
+    const app = <AppErrorPassThrough>{children}</AppErrorPassThrough>;
     return (
-      <PrivyStartupGuard runtime={runtime} fallback={children}>
+      <PrivyStartupGuard runtime={runtime} fallback={app}>
         <PrivyProvider appId={options.appId} clientId={options.clientId} config={config}>
           <PrivyBridge runtime={runtime} />
-          {children}
+          {app}
         </PrivyProvider>
       </PrivyStartupGuard>
     );

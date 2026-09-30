@@ -236,8 +236,8 @@ off.
 The SDK catches this: your app keeps rendering without Privy, the console shows the cause, and picking
 "Email (Privy)" fails with that same message. Privy hooks in your components then behave as outside a
 provider (`usePrivy()` returns `ready: false`; callback forms such as `useLogin({ onComplete })` throw), so
-render them only while the EVM connection is Privy, as the `Account` example above does. Errors thrown after Privy has
-started are not intercepted — they reach your own error boundaries as usual.
+render them only while the EVM connection is Privy, as the `Account` example above does. Errors thrown by your own
+components, or after Privy has started, are not intercepted — they reach your own error boundaries as usual.
 
 ---
 

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, render } from '@testing-library/react';
-import { Component, type ReactNode, useState } from 'react';
-import { PrivyStartupGuard } from './PrivyStartupGuard.js';
+import { Component, createContext, type ReactNode, useContext, useState } from 'react';
+import { AppErrorPassThrough, PrivyStartupGuard } from './PrivyStartupGuard.js';
 import { createPrivyRuntime } from './runtime.js';
 
 class AppBoundary extends Component<{ children?: ReactNode }, { error: Error | null }> {
@@ -16,6 +16,14 @@ class AppBoundary extends Component<{ children?: ReactNode }, { error: Error | n
 
 function FailsToStart(): ReactNode {
   throw new Error('Embedded wallet is only available over HTTPS');
+}
+
+// Stands in for `PrivyProvider`: an app error that needs it would vanish if the app re-rendered without Privy.
+const InsidePrivy = createContext(false);
+
+function FailsInsidePrivy(): ReactNode {
+  if (useContext(InsidePrivy)) throw new Error('partner bug');
+  return <span>running without Privy</span>;
 }
 
 afterEach(() => {
@@ -63,6 +71,28 @@ describe('PrivyStartupGuard', () => {
     );
     expect(getByText('running')).toBeTruthy();
     act(() => breakChild());
+
+    expect(getByText('app boundary: partner bug')).toBeTruthy();
+    expect(fail).not.toHaveBeenCalled();
+  });
+
+  it("hands an error the app throws on its first render to the app's own boundaries, not to the fallback", () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const runtime = createPrivyRuntime();
+    const fail = vi.spyOn(runtime, 'fail');
+    const app = (
+      <AppErrorPassThrough>
+        <FailsInsidePrivy />
+      </AppErrorPassThrough>
+    );
+
+    const { getByText } = render(
+      <AppBoundary>
+        <PrivyStartupGuard runtime={runtime} fallback={app}>
+          <InsidePrivy.Provider value={true}>{app}</InsidePrivy.Provider>
+        </PrivyStartupGuard>
+      </AppBoundary>,
+    );
 
     expect(getByText('app boundary: partner bug')).toBeTruthy();
     expect(fail).not.toHaveBeenCalled();
