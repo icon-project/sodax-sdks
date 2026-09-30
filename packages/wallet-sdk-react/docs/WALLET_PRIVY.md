@@ -18,14 +18,15 @@ and [`EvmProvider.tsx`](https://github.com/icon-project/sodax-sdks/blob/main/pac
 4. [Using the Privy user in your app](#using-the-privy-user-in-your-app)
 5. [Apps that already use Privy](#apps-that-already-use-privy)
 6. [Custom wallet modal](#custom-wallet-modal)
-7. [Sessions, reloads and disconnect](#sessions-reloads-and-disconnect)
-8. [Custody and recovery](#custody-and-recovery)
-9. [When Privy cannot start](#when-privy-cannot-start)
-10. [Availability](#availability)
-11. [Chains and RPC](#chains-and-rpc)
-12. [Leaving Privy](#leaving-privy)
-13. [Cost](#cost)
-14. [Next.js, bundlers and viem](#nextjs-bundlers-and-viem)
+7. [Your own dialogs](#your-own-dialogs)
+8. [Sessions, reloads and disconnect](#sessions-reloads-and-disconnect)
+9. [Custody and recovery](#custody-and-recovery)
+10. [When Privy cannot start](#when-privy-cannot-start)
+11. [Availability](#availability)
+12. [Chains and RPC](#chains-and-rpc)
+13. [Leaving Privy](#leaving-privy)
+14. [Cost](#cost)
+15. [Next.js, bundlers and viem](#nextjs-bundlers-and-viem)
 
 ---
 
@@ -72,7 +73,7 @@ MetaMask, Hana and WalletConnect. **No UI changes required.** Calling `privy()` 
 | `appId` | — (required) | Your Privy app id. |
 | `clientId` | — | Privy app client id, for per-environment settings. |
 | `defaultChain` | `ChainKeys.SONIC_MAINNET` | Chain the embedded wallet starts on. Any EVM `ChainKey` of this SDK. |
-| `showWalletUIs` | your dashboard setting | Show Privy's own signing confirmation screens. |
+| `showWalletUIs` | your dashboard setting | Show Privy's own signing confirmation screens. With them on, a transaction returns only after the user closes Privy's success screen — see below. |
 | `disconnectBehavior` | `'logout'` | `'logout'` signs the user out on disconnect, so the next connect asks for a new code. `'detach'` keeps the Privy session: reconnecting needs no code until it expires — offer a sign-out of your own (`usePrivy().logout()`) if you choose it. |
 | `appearance` | Privy defaults | Theme, logo, accent colour of Privy's login modal. Its wallet list is always empty: other wallets come from the SDK's own list. |
 | `legal` | — | Terms and privacy links shown in the login modal. |
@@ -86,6 +87,14 @@ The SDK fixes the rest of Privy's configuration: email login only, embedded wall
 login, Privy's own external-wallet connectors off (so it does not start a second WalletConnect or
 Coinbase stack next to the SDK's), and **no** MFA or recovery overrides — your dashboard settings for
 those apply.
+
+**`showWalletUIs` also decides when a transaction returns.** With Privy's screens on, Privy asks the
+user to approve, broadcasts, waits for the receipt, shows a success screen, and resolves the request only
+when the user closes that screen ("All done"). So every SDK action that sends a transaction — a swap, a
+bridge, an approval — gets its hash only after that click, and your status tracking starts late. With
+`showWalletUIs: false` Privy signs without any screen and the hash comes back right after broadcast; your
+app's own review step is then the only confirmation the user sees, for transactions and signatures alike.
+As of Privy 3.40 there is no option that keeps the approval screen but skips the success screen.
 
 ---
 
@@ -185,11 +194,33 @@ only logs a warning while it still holds a signed-in user), the connect fails wi
 
 ---
 
+## Your own dialogs
+
+Privy renders its screens — login, transaction and signature confirmations, MFA prompts — in its own
+element (`#privy-dialog`), outside your components. A modal dialog of yours that is open when one of them
+appears (a confirm-swap dialog, a wallet sheet) sees a click inside Privy's screen as a click outside
+itself, and most dialog libraries close on that — mid-login or mid-transaction. Ignore those clicks:
+
+```tsx
+// Radix / shadcn: the same guard works on a Sheet's content.
+<DialogContent
+  onInteractOutside={event => {
+    if (event.target instanceof Element && event.target.closest('#privy-dialog')) event.preventDefault();
+  }}
+>
+```
+
+Or close your dialog before the action starts, if it does not need to show the result.
+
+---
+
 ## Sessions, reloads and disconnect
 
 - **Returning users** are reconnected on reload — and after the browser is closed and reopened — without
   a new code, as long as their Privy session is valid. The same email gets the same address **for the
-  same `appId`**, unless the user is deleted from your Privy dashboard.
+  same `appId`**, unless the user is deleted from your Privy dashboard. Another app with its own `appId`
+  gives that email a different address: to share one, both apps use the same `appId` (with both origins
+  allowed in the dashboard). Privy's cross-app Global Wallets are not supported by this SDK.
 - **Slow start**: on page load the SDK gives the whole Privy restore at most 3 seconds, so other wallets
   are never held back longer. If Privy takes longer, the user shows as disconnected; one click on
   "Email (Privy)" reconnects without a new code.

@@ -38,7 +38,7 @@ const walletConfig: SodaxWalletConfig = {
 };
 ```
 
-`useXConnectors({ xChainType: 'EVM' })` now includes a connector with `id === 'privy'`. **No UI changes required.** Options: `appId` (required), `clientId`, `defaultChain` (an EVM `ChainKey`, default Sonic), `showWalletUIs`, `disconnectBehavior` (`'logout'` by default — the next connect needs a new code; `'detach'` keeps the Privy session, so ask the user before choosing it for a shared-device audience), `appearance`, `legal`. If Privy cannot start (plain-http origin other than localhost, malformed app id, a second `PrivyProvider`), the app keeps running and picking "Email (Privy)" fails with the cause.
+`useXConnectors({ xChainType: 'EVM' })` now includes a connector with `id === 'privy'`. **No UI changes required.** Options: `appId` (required), `clientId`, `defaultChain` (an EVM `ChainKey`, default Sonic), `showWalletUIs` (with Privy's screens on, a transaction's hash arrives only after the user closes Privy's success screen, which waits for the receipt; `false` returns it right after broadcast and leaves the app's own review as the only confirmation — ask the user which they want), `disconnectBehavior` (`'logout'` by default — the next connect needs a new code; `'detach'` keeps the Privy session, so ask the user before choosing it for a shared-device audience), `appearance`, `legal`. If Privy cannot start (plain-http origin other than localhost, malformed app id, a second `PrivyProvider`), the app keeps running and picking "Email (Privy)" fails with the cause.
 
 ---
 
@@ -72,3 +72,5 @@ function Email() {
 - **Mounting a second `PrivyProvider`.** Privy allows one; for an app that already has one, see *App already on Privy?* above.
 - **Adding `@privy-io/wagmi`.** Not used — it replaces wagmi's connector list and would remove MetaMask and WalletConnect.
 - **Custom modal stacking.** While Privy's login dialog is open, `useWalletModal` is `connecting`; render nothing when `state.connector.id === 'privy'`, as for `'walletConnect'`.
+- **Letting a modal dialog close on Privy's screens.** Privy renders login, confirmation and MFA screens in `#privy-dialog`, outside the app's components; an open modal dialog (confirm-swap, wallet sheet) treats a click there as an outside click and closes mid-transaction. Ignore outside interactions whose target is inside `#privy-dialog` (Radix: `onInteractOutside` → `event.preventDefault()`).
+- **Promising the same address across apps.** An address belongs to the Privy app: another `appId` gives the same email a different wallet. Sharing needs the same `appId` with both origins allowed; Privy's Global Wallets are not supported.
