@@ -38,12 +38,12 @@ const navEntries: NavEntry[] = [
       { to: ROUTES.LEVERAGE_POSITIONS, label: 'Leverage Positions' },
     ],
   },
-  { to: ROUTES.ORACLE, label: 'Oracle' },
   {
     label: 'More',
     items: [
       { to: ROUTES.STAKING, label: 'Staking' },
       { to: ROUTES.DEX, label: 'Dex' },
+      { to: ROUTES.ORACLE, label: 'Oracle' },
       { to: ROUTES.PARTNER_FEE_CLAIM, label: 'Partner Fee Claim' },
       { to: ROUTES.RECOVERY, label: 'Recovery' },
     ],
