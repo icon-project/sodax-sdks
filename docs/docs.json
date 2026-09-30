@@ -243,7 +243,13 @@
       {
         "tab": "Community",
         "align": "end",
-        "pages": ["resources/index", "resources/product-updates", "resources/videos", "resources/blog"]
+        "pages": [
+          "resources/index",
+          "resources/product-updates",
+          "resources/videos",
+          "resources/blog",
+          { "group": "Workshops", "pages": ["resources/workshops/leverage-yield"] }
+        ]
       },
       {
         "tab": "Help",
