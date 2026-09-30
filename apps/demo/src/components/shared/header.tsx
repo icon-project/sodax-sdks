@@ -30,8 +30,6 @@ const navEntries: NavEntry[] = [
       { to: ROUTES.BRIDGE_API, label: 'Bridge (API)' },
     ],
   },
-  { to: ROUTES.STAKING, label: 'Staking' },
-  { to: ROUTES.DEX, label: 'Dex' },
   {
     label: 'Leverage Yield',
     items: [
@@ -44,6 +42,8 @@ const navEntries: NavEntry[] = [
   {
     label: 'More',
     items: [
+      { to: ROUTES.STAKING, label: 'Staking' },
+      { to: ROUTES.DEX, label: 'Dex' },
       { to: ROUTES.PARTNER_FEE_CLAIM, label: 'Partner Fee Claim' },
       { to: ROUTES.RECOVERY, label: 'Recovery' },
     ],
@@ -125,7 +125,7 @@ function MobileNavLink({ to, label }: NavItem) {
   );
 }
 
-// The one-line nav needs ~1240px, so below xl it moves into a sheet.
+// The one-line nav does not fit below xl, so it moves into a sheet there.
 function MobileNav() {
   return (
     <Sheet>
