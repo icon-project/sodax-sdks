@@ -1,6 +1,6 @@
 ---
 name: sodax-dapp-kit
-description: 'Integrate SODAX into a React dapp with @sodax/dapp-kit — React Query hooks for swaps, money market lending/borrowing, staking, bridging, DEX liquidity, leverage-yield vaults (deposit/withdraw lsoda* shares, vault APR / TVL / health) and leverage positions, token migration, Bitcoin trading (Radfi), partner fees, recovery, and backend API reads. INTEGRATION (write NEW code) — use whenever a React dapp needs SODAX feature hooks; backend code uses `@sodax/sdk`. Triggers on "use @sodax/dapp-kit", "useSwap", "useMoneyMarket", "useStake", "useBridge", "useDex", "useMigrate", "useLeverageYield", "leverage yield vault in React", "vault UI", any dapp-kit `use<Feature>` hook, "Sodax React hooks". v2 hook shape: mutation hooks return `SafeUseMutationResult` with `mutateAsyncSafe(vars): Promise<Result<TData>>`; mutationFn throws on SDK `!ok` so React Query''s error model engages; hooks own their invalidations. MIGRATION (port v1 → v2) — single-object hook params, mandatory `mutateAsyncSafe`, hook-owned invalidations, canonical queryKey/mutationKey conventions, on top of the reshaped SDK (chain-key-driven routing, `Result<T>` everywhere, `WalletProviderSlot<K, Raw>`). Triggers on "migrate @sodax/dapp-kit", "useSpokeProvider gone", "dapp-kit v1 → v2", "invalidateMmQueries broken", "dapp-kit hook signatures changed", v1 fingerprints (positional args, hook-init `spokeProvider`, `useSpokeProvider`, `invalidateMmQueries`, legacy `useMigrate`, `*_MAINNET_CHAIN_ID`). Load this skill if EITHER applies; the body gates by mode.'
+description: 'Integrate SODAX into a React dapp with @sodax/dapp-kit — React Query hooks for swaps, money market lending/borrowing, staking, bridging, DEX liquidity, leverage-yield vaults (deposit/withdraw, APR / TVL / health) and leverage positions, token migration, Bitcoin trading (Radfi / Bound Exchange), partner fees, recovery, and backend API reads. INTEGRATION (write NEW code) — use whenever a React dapp needs SODAX feature hooks; backend code uses `@sodax/sdk`. Triggers on "use @sodax/dapp-kit", "useSwap", "useMoneyMarket", "useStake", "useBridge", "useDex", "useMigrate", "useLeverageYield", "leverage yield vault in React", "vault UI", any dapp-kit `use<Feature>` hook, "Sodax React hooks". v2 hook shape: mutation hooks return `SafeUseMutationResult` with `mutateAsyncSafe(vars): Promise<Result<TData>>`; mutationFn throws on SDK `!ok`; hooks own their invalidations. MIGRATION (port v1 → v2) — single-object hook params, mandatory `mutateAsyncSafe`, hook-owned invalidations, canonical queryKey/mutationKey conventions, on top of the reshaped SDK (chain-key-driven routing, `Result<T>` everywhere, `WalletProviderSlot<K, Raw>`). Triggers on "migrate @sodax/dapp-kit", "useSpokeProvider gone", "dapp-kit v1 → v2", "invalidateMmQueries broken", "dapp-kit hook signatures changed", v1 fingerprints (positional args, hook-init `spokeProvider`, `useSpokeProvider`, `invalidateMmQueries`, legacy `useMigrate`, `*_MAINNET_CHAIN_ID`). Load this skill if EITHER applies; the body gates by mode.'
 license: MIT
 metadata:
   version: '0.0.1'
@@ -22,7 +22,7 @@ Every dapp-kit consumer also needs wallet connectivity — also load `sodax-wall
 
 ## Prefer a granular skill if the feature is known
 
-If the user has already picked one feature, load the matching granular skill instead of this broad one. It is a few KB of focused workflow and links straight into the right knowledge files, for both integration and migration.
+If the user has already picked one feature, load the matching granular skill instead of this broad one. It is a few KB of focused workflow and links straight into the right knowledge files, for integration and, where a v1 surface existed, migration.
 
 | Feature | Granular skill | Trigger phrases |
 |---|---|---|
@@ -31,10 +31,10 @@ If the user has already picked one feature, load the matching granular skill ins
 | SODA ↔ xSODA staking | [`./staking/SKILL.md`](./staking/SKILL.md) | "useStake", "instant unstake", "staking UI" |
 | Direct token bridge via vault | [`./bridge/SKILL.md`](./bridge/SKILL.md) | "useBridge", "bridge tokens in React" |
 | Concentrated-liquidity LP | [`./dex/SKILL.md`](./dex/SKILL.md) | "useSupplyLiquidity", "LP position UI", "usePools" |
-| Leverage-yield vaults and leverage positions | [`./leverage-yield/SKILL.md`](./leverage-yield/SKILL.md) (user-facing vault screen → its product anatomy) | "leverage yield vault", "vault UI / screen / dashboard", "deposit into a vault", "lsoda shares", "vault APR / TVL", "useLeverageYield*", "open a leverage position" |
+| Leverage-yield vaults and leverage positions (on-chain hooks; a user-facing vault screen starts from the [product anatomy](./integration/knowledge/recipes/leverage-yield-product-anatomy.md)) | [`./leverage-yield/SKILL.md`](./leverage-yield/SKILL.md) | "leverage yield vault", "vault UI / screen / dashboard", "deposit into a vault", "lsoda shares", "vault APR / TVL", "useLeverageYieldDeposit", "useLeverageYieldVaultSwap", "open a leverage position" |
 | ICX / bnUSD / BALN token migration | [`./migration/SKILL.md`](./migration/SKILL.md) | "useMigrateIcxToSoda", "migrate bnUSD" (NOT v1→v2 porting) |
 | Bitcoin trading via Radfi | [`./bitcoin/SKILL.md`](./bitcoin/SKILL.md) | "useRadfiAuth", "trading wallet", "Bound Exchange" |
-| Partner fees, recovery, backend reads | [`./auxiliary-services/SKILL.md`](./auxiliary-services/SKILL.md) | "useFeeClaimSwap", "useWithdrawHubAsset", "useBackendIntentByTxHash" |
+| Partner fees, recovery, backend reads, the Swaps / Bridge / Leverage Yield API hooks, Stellar account activation, shared utilities (balances, gas, trustlines) | [`./auxiliary-services/SKILL.md`](./auxiliary-services/SKILL.md) | "useFeeClaimSwap", "useWithdrawHubAsset", "useBackendIntentByTxHash", "useSwapsApiQuote", "useLeverageYieldApi*", "useStellarGate", "useXBalances" |
 
 Load this broad skill (keep reading below) when the feature is undecided, the task spans several features, or the consumer is porting a full v1 codebase.
 
@@ -55,7 +55,7 @@ Pick this mode when the consumer is a React dapp using `@sodax/dapp-kit` hooks. 
 2. Read [`integration/knowledge/quickstart.md`](./integration/knowledge/quickstart.md) — install + wire providers + first feature.
 3. Read [`integration/knowledge/architecture.md`](./integration/knowledge/architecture.md) — hook shapes, queryKey conventions, `useSafeMutation`, `unwrapResult`, `Result<T>`.
 4. For each feature you use, read [`integration/knowledge/features/`](./integration/knowledge/features/) — `swap.md`, `money-market.md`, `staking.md`, `bridge.md`, `dex.md`, `leverage-yield.md` (vaults + leverage positions), `migration.md`, `bitcoin.md` (Bound Exchange, dapp-kit-unique), `auxiliary-services.md` (partner + recovery + backend + shared).
-5. Recipes → [`integration/knowledge/recipes/`](./integration/knowledge/recipes/) — `setup.md`, `wallet-connectivity.md`, per-feature, `mutation-error-handling.md`, `observability.md`, `invalidations.md`.
+5. Recipes → [`integration/knowledge/recipes/`](./integration/knowledge/recipes/) — `setup.md`, `wallet-connectivity.md`, per-feature, `mutation-error-handling.md`, `observability.md`, `invalidations.md`. Building a user-facing leverage-yield vault screen → [`leverage-yield-product-anatomy.md`](./integration/knowledge/recipes/leverage-yield-product-anatomy.md).
 6. Lookups → [`integration/knowledge/reference/`](./integration/knowledge/reference/) — `hooks-index.md`, `querykey-conventions.md`, `public-api.md`, `glossary.md`.
 
 ### v2 in one minute

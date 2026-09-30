@@ -23,7 +23,7 @@ Call shapes for every hook here are in [`leverage-yield.md`](leverage-yield.md).
 - **Shares are not in the wallet extension.** They live in the user's SODAX hub wallet on Sonic, and there is one hub wallet per source network **and** address. Depositing from Base and from Arbitrum makes two separate share balances. A withdraw spends the shares of the hub wallet it is signed for, so it must be signed on the network, from the address, that deposited. Show balances per network (`useLeverageYieldShareBalances` takes one holder per network).
 - **The APR is a variable estimate.** `effectiveNetAprRay` is steady-state: it assumes today's rates hold and the vault stays at its target LTV. It can go negative when borrowing costs more than the supply side earns. `lsdApr.stale === true` means the staking part is a fallback figure, so label it as an estimate.
 - **Leverage multiplies risk too.** Show exposure as `1 + leverageMultiplierWad` (see [Units](#units)); the multiplier alone is the borrowed part. The health factor is the vault's, not the user's.
-- **A deposit is an intent, not a transfer.** The user signs on their network, SODAX delivers it to Sonic, and a solver fills it. There are no partial fills: an intent whose minimum can no longer be met is not filled, and it expires at its deadline (by default five minutes after the hub block time when it was built). The backend status record then carries `failureReason` / `userMessage`, and `relayedForRefundAt` once an expired intent was relayed for refund. Don't promise where or when a refund lands; show the status and, if assets are left in the hub wallet, offer the recovery hooks (`useHubAssetBalances`, `useWithdrawHubAsset`, in [`../features/auxiliary-services.md`](../features/auxiliary-services.md)).
+- **A deposit is an intent, not a transfer.** The user signs on their network, SODAX delivers it to Sonic, and a solver fills it. There are no partial fills: an intent whose minimum can no longer be met is not filled, and it expires at its deadline (by default five minutes after the hub block time when it was built). `useLeverageYieldDetailedStatus` then reports solver status `4`, or stops polling after 40 consecutive not-found reads if the solver never saw it. For the backend's own record (`userMessage`, `failureReason`, and `relayedForRefundAt` once an expired intent was relayed for refund), read `useLeverageYieldApiSubmitTxStatus` with the source tx: the detailed status routes a failed or abandoned backend record to the solver instead of returning it. Don't promise where or when a refund lands; show the status and, if assets are left in the hub wallet, offer the recovery hooks (`useHubAssetBalances`, `useWithdrawHubAsset`, in [`../features/auxiliary-services.md`](../features/auxiliary-services.md)).
 
 ## States
 
@@ -32,18 +32,19 @@ Handle every row; how each one looks is up to the builder.
 | State | Detect it with | What the user needs |
 |---|---|---|
 | No quote yet / amount empty | `useLeverageYieldQuote` `data === undefined` | The action disabled, with the reason |
-| Amount too low **or** no route | quote `data.ok === false`, `!isSodaxError(data.error)` and `isNoRouteRefusal(data.error)` | "Try a larger amount, or try again shortly". The solver answers both the same way; the only way to tell them apart is to quote a larger amount |
+| Amount too low, too high, **or** no route | quote `data.ok === false`, `!isSodaxError(data.error)` and `isNoRouteRefusal(data.error)` | The solver answers all three the same way. Re-quote a mid-size amount to tell them apart: suggest a larger amount only when the refused one was below it, a smaller one only when it was above; otherwise "no route right now, try again shortly" |
 | Other solver refusal | quote `!ok`, not a `SodaxError`: `data.error.detail.code` (`SolverIntentErrorCode`) | The solver's message and a retry |
 | Invalid input | quote `!ok`, `isSodaxError(data.error)` with `code === 'VALIDATION_FAILED'` | Which input to fix |
 | Quote moved | The quote refreshes every 3s | The minimum recomputed on every refresh, and the amounts shown again right before signing |
 | Needs approval | `useSwapAllowance` → `false` (deposits only) | An approve step before the deposit step |
 | Approval takes two prompts | Some tokens (Ethereum USDT today) need `approve(0)` first; the hook still returns one hash | A note that the wallet may ask twice |
 | Wrong network | `useEvmSwitchChain` → `isWrongChain` (load the `sodax-wallet-sdk-react` skill) | A switch-network action instead of the deposit button |
-| Not enough balance or gas | No dedicated error code: compare against `useXBalances` before signing. A revert in simulation arrives as `INTENT_CREATION_FAILED` whose `cause` message is `SIMULATION_FAILED` | The shortfall, before they sign |
+| Not enough balance or gas | No dedicated error code: compare against `useXBalances` before signing | The shortfall, before they sign |
+| Would revert on the hub | `vaultSwap` simulates the hub-side execution (not for a Sonic source) and fails with `INTENT_CREATION_FAILED`, the RPC revert as `cause` | That the deposit would fail, before they sign |
 | User rejected in the wallet | `isUserRejectedError(result.error)` | Back to the form silently; not an error toast |
 | In flight | `useLeverageYieldDetailedStatus` → `data.ok` with a non-terminal status; `!ok` with `error.context.reason === DETAILED_STATUS_NOT_DELIVERED` means not delivered yet | The current step, and that it is safe to wait |
 | Filled | backend `data.value.data.status === 'solved'`, or solver `data.value.data.status === 3` | Shares shown (they arrive in the hub wallet) |
-| Failed or expired | backend `status === 'failed'` (read `userMessage`, `failureReason`), or solver `status === 4` | What happened and where the funds are, per [Concepts](#concepts-users-get-wrong) |
+| Failed or expired | solver `data.value.data.status === 4` (a failed or abandoned backend record is routed to the solver), or the hook stopped on its not-found budget. For `userMessage` / `failureReason`, read `useLeverageYieldApiSubmitTxStatus` | What happened and where the funds are, per [Concepts](#concepts-users-get-wrong) |
 | Withdraw more than held | Cap `inputAmount` at the share balance. `getMaxWithdraw*` is in **asset** units, not shares | A max button sized from shares |
 
 ## Planned steps and explorer links
@@ -115,8 +116,8 @@ export const shareValue = (shares: bigint, pricePerShare: bigint): bigint => (sh
 export const exposureWad = (leverageMultiplierWad: bigint): bigint => WAD + leverageMultiplierWad;
 
 /** Simple-interest projection over `days` at today's APR (asset units). Can be negative. */
-export const projectedInterest = (assets: bigint, aprRay: bigint, days: number): bigint =>
-  (assets * aprRay * BigInt(days)) / (365n * RAY);
+export const projectedInterest = (assets: bigint, aprRay: bigint, days: bigint): bigint =>
+  (assets * aprRay * days) / (365n * RAY);
 
 export const toUsd = (amount: bigint, decimals: number, priceUsd: number): number =>
   Number(formatUnits(amount, decimals)) * priceUsd;
@@ -131,7 +132,7 @@ Label projections as estimates at today's variable APR, and keep the sign: a neg
 | `*AprRay` (`effectiveNetAprRay`, `netAprRay`, …) | RAY, `1e27` = 100% | `Number(v * 10_000n / RAY) / 100` → percent |
 | `targetLtvBps`, position `ltv` | basis points, `10_000` = 100% | `/ 100` → percent |
 | `leverageMultiplierWad` | WAD, borrowed multiple | `1 +` it, as `×` |
-| `healthFactor` | WAD; below `1e18` is liquidatable | `formatUnits(v, 18)` |
+| `healthFactor` | WAD; below `1e18` is liquidatable; `maxUint256` means no debt | `v === maxUint256 ? 'no debt' : formatUnits(v, 18)` |
 | Shares (`lsoda*`) | 18 decimals | `formatUnits(v, 18)` |
 | `getTotalAssets`, `previewRedeem`, position `collateral` / `debt` / `idleAsset` | the vault asset's units (18 decimals today) | `formatUnits(v, assetDecimals)`, then USD |
 | `priceInUSD` | decimal string, USD per whole token | `Number(v)` |

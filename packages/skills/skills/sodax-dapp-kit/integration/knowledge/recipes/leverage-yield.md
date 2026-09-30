@@ -64,7 +64,7 @@ function useVaults() {
 ```tsx
 import { useLeverageYieldEffectiveApr, useLeverageYieldTotalAssets, useLeverageYieldPreviewRedeem, useLeverageYieldPosition } from '@sodax/dapp-kit';
 import type { Address } from '@sodax/sdk';
-import { formatUnits } from 'viem';
+import { formatUnits, maxUint256 } from 'viem';
 
 const RAY = 10n ** 27n;
 
@@ -84,7 +84,7 @@ function VaultStats({ vault }: { vault: Address }) {
       {netAprPct !== undefined && <p>Net APR: {netAprPct.toFixed(2)}%</p>}
       {tvl !== undefined && <p>TVL: {formatUnits(tvl, 18)}</p>}
       {sharePrice !== undefined && <p>1 share = {formatUnits(sharePrice, 18)} assets</p>}
-      {position && <p>Health factor: {formatUnits(position.healthFactor, 18)}</p>}
+      {position && <p>Health factor: {position.healthFactor === maxUint256 ? 'no debt' : formatUnits(position.healthFactor, 18)}</p>}
     </div>
   );
 }
@@ -110,24 +110,38 @@ function ShareTotal({ vault, holders }: { vault: Address; holders: { chainKey: S
 
 ## Deposit (any token → `lsoda*`)
 
-Quote → derive the minimum → build → approve-if-needed → execute. The built payload is spread straight into `vaultSwap`. Never send `minOutputAmount: 0n`: it accepts any fill, however bad.
+Quote → derive the minimum → build → approve if needed → execute. The built payload is spread straight into `vaultSwap`. Never send `minOutputAmount: 0n`: it accepts any fill, however bad.
 
 ```tsx
 import { useState } from 'react';
 import {
-  useLeverageYieldDeposit, useLeverageYieldQuote, useLeverageYieldVaultSwap, useSwapApprove,
+  isUserRejectedError, useLeverageYieldDeposit, useLeverageYieldQuote, useLeverageYieldVaultSwap,
+  useSodaxContext, useSwapApprove,
 } from '@sodax/dapp-kit';
 import { useWalletProvider } from '@sodax/wallet-sdk-react';
 import { ChainKeys, type Address } from '@sodax/sdk';
-import { parseUnits } from 'viem';
+import { formatUnits, isHex, parseUnits } from 'viem';
 
 const SLIPPAGE_BPS = 100n; // 1%; let the user choose, but cap it
 
+const errorMessage = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+/** Partial or invalid input (e.g. "1.2.3", "abc") parses to 0n instead of throwing during render. */
+function toAmount(input: string, decimals: number): bigint {
+  try {
+    return parseUnits(input.trim(), decimals);
+  } catch {
+    return 0n;
+  }
+}
+
 function DepositForm({ vault, srcAddress, inputToken, decimals }: { vault: Address; srcAddress: string; inputToken: string; decimals: number }) {
   const [amount, setAmount] = useState('');
+  const [error, setError] = useState<string>();
+  const { sodax } = useSodaxContext();
   const chainKey = ChainKeys.ARBITRUM_MAINNET;
   const walletProvider = useWalletProvider({ xChainId: chainKey });
-  const inputAmount = amount ? parseUnits(amount, decimals) : 0n;
+  const inputAmount = toAmount(amount, decimals);
 
   // Vault as token_dst quotes a deposit. Omit partnerFee here and on the builder unless you add your own.
   const { data: quote } = useLeverageYieldQuote({
@@ -143,41 +157,55 @@ function DepositForm({ vault, srcAddress, inputToken, decimals }: { vault: Addre
 
   const { mutateAsyncSafe: buildDeposit } = useLeverageYieldDeposit();
   const { mutateAsyncSafe: approve } = useSwapApprove();
-  const { mutateAsync: vaultSwap, isPending } = useLeverageYieldVaultSwap();
+  const { mutateAsyncSafe: vaultSwap, isPending } = useLeverageYieldVaultSwap();
 
   const handleDeposit = async () => {
     if (!walletProvider || minOutputAmount === undefined) return; // no quote, no deposit
+    setError(undefined);
     const built = await buildDeposit({ vault, srcChainKey: chainKey, srcAddress, inputToken, inputAmount, minOutputAmount });
-    if (!built.ok) return;
+    if (!built.ok) return setError(errorMessage(built.error));
 
-    // Deposit approves the spoke asset manager (swap-style). Gate on useSwapAllowance in render.
-    await approve({ params: built.value.params, walletProvider });
-    await vaultSwap({ ...built.value, walletProvider }); // spread the payload; lsoda* lands in the hub wallet
+    // Deposit approves the spoke asset manager (swap-style), only when the allowance is short.
+    const allowance = await sodax.swaps.isAllowanceValid({ params: built.value.params, walletProvider });
+    if (!allowance.ok) return setError(errorMessage(allowance.error));
+    if (!allowance.value) {
+      const approval = await approve({ params: built.value.params, walletProvider });
+      if (!approval.ok) return isUserRejectedError(approval.error) ? undefined : setError(errorMessage(approval.error));
+      if (isHex(approval.value)) await walletProvider.waitForTransactionReceipt(approval.value); // the deposit spends it next
+    }
+
+    const result = await vaultSwap({ ...built.value, walletProvider }); // lsoda* lands in the hub wallet
+    if (!result.ok && !isUserRejectedError(result.error)) setError(errorMessage(result.error));
   };
 
   return (
     <div>
       <input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="amount" />
-      {quote?.ok && <p>You receive ≈ {quote.value.quoted_amount.toString()} shares (min {minOutputAmount?.toString()})</p>}
+      {quote?.ok && minOutputAmount !== undefined && (
+        <p>You receive ≈ {formatUnits(quote.value.quoted_amount, 18)} shares (at least {formatUnits(minOutputAmount, 18)})</p>
+      )}
+      {error && <p role="alert">{error}</p>}
       <button onClick={handleDeposit} disabled={isPending || !walletProvider || minOutputAmount === undefined}>Deposit</button>
     </div>
   );
 }
 ```
 
+Track the result with `useLeverageYieldDetailedStatus` until a terminal status: on its client-side fallback path, `vaultSwap` resolves before the solver fills.
+
 ## Withdraw (`lsoda*` → any token)
 
 No approval step — `hubWalletSwap: true` authorises the share spend via a `sendMessage`. Quote with the vault as `token_src` on the hub.
 
 ```tsx
-import { useLeverageYieldQuote, useLeverageYieldWithdraw, useLeverageYieldVaultSwap } from '@sodax/dapp-kit';
+import { isUserRejectedError, useLeverageYieldQuote, useLeverageYieldWithdraw, useLeverageYieldVaultSwap } from '@sodax/dapp-kit';
 import { useWalletProvider } from '@sodax/wallet-sdk-react';
 import { ChainKeys, type Address } from '@sodax/sdk';
 
 const SLIPPAGE_BPS = 100n;
 
 function WithdrawButton({ vault, srcAddress, outputToken, shares }: { vault: Address; srcAddress: string; outputToken: string; shares: bigint }) {
-  const chainKey = ChainKeys.ARBITRUM_MAINNET;
+  const chainKey = ChainKeys.ARBITRUM_MAINNET; // the network that deposited: its hub wallet holds the shares
   const walletProvider = useWalletProvider({ xChainId: chainKey });
   const { data: quote } = useLeverageYieldQuote({
     params: {
@@ -190,7 +218,7 @@ function WithdrawButton({ vault, srcAddress, outputToken, shares }: { vault: Add
   });
   const minOutputAmount = quote?.ok ? (quote.value.quoted_amount * (10_000n - SLIPPAGE_BPS)) / 10_000n : undefined;
   const { mutateAsyncSafe: buildWithdraw } = useLeverageYieldWithdraw();
-  const { mutateAsync: vaultSwap, isPending } = useLeverageYieldVaultSwap();
+  const { mutateAsyncSafe: vaultSwap, isPending } = useLeverageYieldVaultSwap();
 
   const handleWithdraw = async () => {
     if (!walletProvider || minOutputAmount === undefined) return;
@@ -201,7 +229,8 @@ function WithdrawButton({ vault, srcAddress, outputToken, shares }: { vault: Add
       minOutputAmount,
     });
     if (!built.ok) return;
-    await vaultSwap({ ...built.value, walletProvider }); // built.value.hubWalletSwap === true
+    const result = await vaultSwap({ ...built.value, walletProvider }); // built.value.hubWalletSwap === true
+    if (!result.ok && !isUserRejectedError(result.error)) console.error(result.error);
   };
 
   return <button onClick={handleWithdraw} disabled={isPending || !walletProvider || minOutputAmount === undefined}>Withdraw</button>;

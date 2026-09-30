@@ -377,24 +377,32 @@ for broad in "${EXPECTED_BROAD_SKILLS[@]}"; do
       err "Granular skill not linked from its parent (add a routing-table row): $broad/SKILL.md -> ./$feature/SKILL.md"
     fi
   done
+  # Scoped to the "## Integration mode" section, so a same-named migration doc can't stand in for it.
+  integration_section=$(awk '/^## Integration mode/{f=1} /^## Migration mode/{f=0} f' "$broad/SKILL.md")
   for feature_doc in "$broad"/integration/knowledge/features/*.md; do
     [[ -f "$feature_doc" ]] || continue
     doc="$(basename "$feature_doc")"
     [[ "$doc" == "README.md" ]] && continue
-    if ! grep -qF "$doc" "$broad/SKILL.md"; then
-      err "Feature doc not named in its parent SKILL.md: $broad/SKILL.md -> $doc"
+    if ! grep -qE "(^|features/|[^a-z0-9/-])${doc//./\\.}" <<<"$integration_section"; then
+      err "Feature doc not named in its parent's Integration mode section: $broad/SKILL.md -> $doc"
     fi
   done
 done
 
 for dir in "${REGISTERED[@]}"; do
   [[ -f "$dir/SKILL.md" ]] || continue
+  # Invalid YAML is already reported by rule 3; count 0 here rather than abort the report.
+  # `.length` counts UTF-16 code units, the stricter reading of the cap.
   len=$(node -e '
     const fs = require("fs"); const { parse } = require("yaml");
-    const m = fs.readFileSync(process.argv[1], "utf8").match(/^---\n([\s\S]*?)\n---/);
-    const doc = m ? parse(m[1]) : null;
-    process.stdout.write(String(doc && typeof doc.description === "string" ? [...doc.description].length : 0));
-  ' "$dir/SKILL.md")
+    let n = 0;
+    try {
+      const m = fs.readFileSync(process.argv[1], "utf8").match(/^---\n([\s\S]*?)\n---/);
+      const doc = m ? parse(m[1]) : null;
+      if (doc && typeof doc.description === "string") n = doc.description.length;
+    } catch {}
+    process.stdout.write(String(n));
+  ' "$dir/SKILL.md" || echo 0)
   if (( len > 1536 )); then
     err "SKILL.md description is $len chars; Claude Code truncates past 1536: $dir/SKILL.md"
   fi

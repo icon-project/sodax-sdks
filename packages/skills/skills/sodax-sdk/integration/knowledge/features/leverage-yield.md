@@ -168,8 +168,9 @@ const { solverExecutionResponse, intent, intentDeliveryInfo } = result.value;
 
 ```ts
 const outputToken = '0x…weETHonArbitrum';
+const SLIPPAGE_BPS = 100n;
 // Withdraw quote: vault as token_src, on the hub (the shares live in the hub wallet).
-const quote = await sodax.leverageYield.getQuote({
+const withdrawQuote = await sodax.leverageYield.getQuote({
   token_src: vault.vault,
   token_src_blockchain_id: ChainKeys.SONIC_MAINNET,
   token_dst: outputToken,
@@ -177,7 +178,7 @@ const quote = await sodax.leverageYield.getQuote({
   amount: shareBalance,
   quote_type: 'exact_input',
 });
-if (!quote.ok) return;
+if (!withdrawQuote.ok) return;
 
 const built = await sodax.leverageYield.withdraw({
   vault: vault.vault,
@@ -186,14 +187,14 @@ const built = await sodax.leverageYield.withdraw({
   dstChainKey: ChainKeys.ARBITRUM_MAINNET, // token delivered here
   outputToken,
   inputAmount: shareBalance,               // lsoda* to burn
-  minOutputAmount: (quote.value.quoted_amount * (10_000n - SLIPPAGE_BPS)) / 10_000n,
+  minOutputAmount: (withdrawQuote.value.quoted_amount * (10_000n - SLIPPAGE_BPS)) / 10_000n,
 });
 if (!built.ok) return;
 // built.value.hubWalletSwap === true — no spoke approval; the hub wallet authorises the spend
 await sodax.leverageYield.vaultSwap({ ...built.value, walletProvider });
 ```
 
-**Partner fee is opt-in.** Omit `partnerFee` unless the integrator supplied their own receiver address. To override the fee per intent, pass the same `partnerFee` to `getQuote` and to `deposit()` / `withdraw()` so the quote is sized on the same net input.
+**Partner fee is opt-in.** Omit `partnerFee` unless the integrator supplied their own receiver address. To override the fee per intent, pass the same `partnerFee` to `getQuote` and to `deposit()` / `withdraw()`, and quote the gross `inputAmount`: `getQuote` deducts the fee itself, so both sides end up on the same net input.
 
 ### Manual create → relay → notify
 

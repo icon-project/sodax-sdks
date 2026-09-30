@@ -16,27 +16,37 @@ import re
 import sys
 from pathlib import Path
 
-# Only the zero literal is flagged: `minOutputAmount: minFromQuote` or `0n` inside math is fine.
+# Slippage floors across features: min*Amount / min*Out(put) / min*Received / minReceive, and the
+# DEX amount0Min / amount1Min. Object keys (quoted or not) and assignments (`const x = 0n`, which a
+# later `{ x }` shorthand would send) both count. Only a zero literal is flagged.
+FLOOR = r"(?:min[A-Za-z]*(?:Amount|Out|Output|Received|Receive)[A-Za-z]*|amount\d*Min)"
+ZERO = r"(?:0n|0|'0'|\"0\"|BigInt\(\s*(?:0|'0'|\"0\")\s*\))"
+END = r"(?:\s*(?:[,;)}\]]|//|/\*|$))"
 RULES = [
-    (re.compile(r"\bmin[A-Za-z]*(?:Amount|Out|Output|Received)[A-Za-z]*\s*:\s*(?:0n|0|'0'|\"0\")\s*(?:[,}\n]|//|$)"),
+    (re.compile(rf"\b{FLOOR}[\"']?\s*[:=]\s*{ZERO}{END}"),
      "zero minimum output — derive it from a live quote minus slippage"),
-    (re.compile(r"\bskipSimulation\s*:\s*true\b"),
-     "skipSimulation: true — simulation catches a reverting tx before the user pays gas"),
+    (re.compile(r"\bskipSimulation[\"']?\s*[:=]\s*true\b"),
+     "skipSimulation: true — the simulation catches an intent that would revert before the user signs"),
 ]
 ALLOW = "ai-safety-allow"
-FENCE = re.compile(r"^\s*(```|~~~)")
+FENCE = re.compile(r"^\s*(`{3,}|~{3,})")
 
 def code_lines(path: Path):
+    lines = path.read_text(encoding="utf-8").splitlines()
     if path.suffix == ".tsx":
-        yield from enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+        yield from enumerate(lines, 1)
         return
-    in_code = False
-    for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-        if FENCE.match(line):
-            in_code = not in_code
+    opener = None  # the fence that opened the current block: a longer or different fence inside it is content
+    for n, line in enumerate(lines, 1):
+        m = FENCE.match(line)
+        if opener is None:
+            if m:
+                opener = m.group(1)
             continue
-        if in_code:
-            yield n, line
+        if m and m.group(1)[0] == opener[0] and len(m.group(1)) >= len(opener) and not line.strip()[len(m.group(1)):]:
+            opener = None
+            continue
+        yield n, line
 
 problems = []
 files = sorted(Path("skills").rglob("*.md")) + sorted(Path("skills").rglob("*.tsx"))

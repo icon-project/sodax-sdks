@@ -55,8 +55,8 @@ Set up `Sodax` and a wallet provider as in [Configure the SDK](/developers/how-t
 2. **Apply your slippage** to the quoted amount to get `minOutputAmount`: `quoted × (10_000 − slippageBps) / 10_000`. Never send `0n`, which accepts any fill, and keep the action disabled until a quote arrives.
 3. **Build** the payload with `deposit()` or `withdraw()`. These only build it and never broadcast.
 4. **Approve**, on a deposit only. Use the swap-domain `sodax.swaps.isAllowanceValid` and `sodax.swaps.approve` on the payload's `params`. A withdraw needs no approval.
-5. **Execute** with `vaultSwap({ ...built, walletProvider })`. It signs, broadcasts and drives the intent to completion.
-6. **Track** it with `getDetailedStatus({ srcChainKey, srcTxHash })`, using the source transaction hash from the `vaultSwap` result.
+5. **Execute** with `vaultSwap({ ...built, walletProvider })`. It signs, broadcasts and hands the intent to the backend, falling back to a client-side relay; on that fallback it resolves once the solver is notified, before the fill.
+6. **Track** it with `getDetailedStatus({ srcChainKey, srcTxHash })`, using the source transaction hash from the `vaultSwap` result, until a terminal status.
 
 The complete deposit and withdraw examples, including the approval call's type parameters, are in [Flows](/developers/packages/foundation/sdk/functional-modules/leverage_yield#flows). Copy from there. [Quoting](/developers/packages/foundation/sdk/functional-modules/leverage_yield#quoting) and [Partner fee](/developers/packages/foundation/sdk/functional-modules/leverage_yield#partner-fee) cover fee precedence and how to keep the quote and the intent consistent.
 
