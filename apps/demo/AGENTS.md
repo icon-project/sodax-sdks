@@ -55,7 +55,7 @@ Not production-grade UX. Intentionally exposes raw SDK knobs (solver env, recove
 
 ```bash
 pnpm dev          # vite dev server on :3000
-pnpm build        # NODE_OPTIONS=--max-old-space-size=6144 vite build
+pnpm build        # cross-env NODE_OPTIONS=--max-old-space-size=6144 vite build
 pnpm preview      # serve built bundle
 pnpm checkTs      # tsc --noEmit
 pnpm lint         # biome lint --write
