@@ -30,7 +30,7 @@ import {
   getTokenOnChain,
 } from '@/lib/utils';
 import { logger } from '@/lib/logger';
-import { ErrorAlert } from '../ErrorAlert';
+import { ErrorAlert } from '@/components/shared/ErrorAlert';
 import { extractTxHash } from '@/lib/extractTxHash';
 import { getChainName } from '@/constants';
 import { ActionSuccessContent, type ActionSuccessData } from './ActionSuccessContent';

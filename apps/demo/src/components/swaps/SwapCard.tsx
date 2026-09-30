@@ -13,7 +13,9 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { ErrorAlert } from '@/components/shared/ErrorAlert';
 import { calculateExchangeRate, formatMutationFailureMessage, formatTokenAmount } from '@/lib/utils';
+import { getSolverErrorText, getSwapErrorText } from '@/lib/solverErrors';
 import { parseUnits, formatUnits } from 'viem';
 import BigNumber from 'bignumber.js';
 import { ArrowDownUp, ArrowLeftRight, Loader2 } from 'lucide-react';
@@ -346,7 +348,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
       );
     } catch (error) {
       console.error('Error creating and submitting intent:', error);
-      setSwapError(formatMutationFailureMessage(error, 'Swap failed'));
+      setSwapError(getSwapErrorText(error, 'Swap failed'));
     }
   };
 
@@ -565,7 +567,12 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
         </div>
 
         <div className="">
-          {quoteQuery.data?.ok === false && <div className="text-red-500">{quoteQuery.data.error.detail.message}</div>}
+          {quoteQuery.data?.ok === false && (
+            <ErrorAlert
+              variant="compact"
+              text={getSolverErrorText(quoteQuery.data.error.detail.code, quoteQuery.data.error.detail.message)}
+            />
+          )}
         </div>
 
         {availableHookKind && (
@@ -648,10 +655,10 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
                     Recipient is not storage-registered for this token on NEAR (register storage to proceed)
                   </div>
                 )}
-                {approveError ? <div className="text-red-500 text-sm">{approveError}</div> : null}
-                {swapError ? <div className="text-red-500 text-sm">{swapError}</div> : null}
-                {nearStorageError ? <div className="text-red-500 text-sm">{nearStorageError}</div> : null}
-                {stellarError ? <div className="text-red-500 text-sm">{stellarError}</div> : null}
+                {approveError ? <ErrorAlert variant="compact" text={approveError} /> : null}
+                {swapError ? <ErrorAlert variant="compact" text={swapError} /> : null}
+                {nearStorageError ? <ErrorAlert variant="compact" text={nearStorageError} /> : null}
+                {stellarError ? <ErrorAlert variant="compact" text={stellarError} /> : null}
               </div>
             </div>
             <DialogFooter>

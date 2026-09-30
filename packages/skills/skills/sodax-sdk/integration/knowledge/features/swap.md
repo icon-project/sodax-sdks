@@ -386,7 +386,7 @@ approval can take two transactions" in [`architecture.md`](../architecture.md).
 Solver-specific context on `EXTERNAL_API_ERROR`:
 
 - `error.context.api === 'solver'`
-- `error.context.solverCode` — the solver's own error code as a **numeric** `SolverIntentErrorCode` enum value (e.g. `-5` = `NO_PRIVATE_LIQUIDITY`, `-999` = `UNKNOWN`), not a string
+- `error.context.solverCode` — the solver's own error code as a **numeric** `SolverIntentErrorCode` enum value (e.g. `-5` = `NO_PRIVATE_LIQUIDITY`, `-999` = `UNKNOWN`), not a string. Pass it to `getSolverErrorRetryability(solverCode)` instead of hand-rolling a retry list — see [`../reference/error-codes.md`](../reference/error-codes.md) § `SolverIntentErrorCode`
 - `error.context.solverDetail` — the solver's full detail object `{ code, message }`
 
 ## Cross-references

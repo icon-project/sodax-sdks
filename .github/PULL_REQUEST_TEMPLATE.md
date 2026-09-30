@@ -2,6 +2,22 @@
 
 Describe what you have done and which # issue this PR closes.
 
+## Breaking changes
+
+<!-- Published packages only: @sodax/types, @sodax/sdk, @sodax/dapp-kit, @sodax/swaps-api, @sodax/bridge-api.
+     "Additive" at the value level is not the same as non-breaking at the type level, and CI will not
+     catch it — no package here uses an exhaustive map over a shared enum, so a real consumer break
+     stays green. See AGENTS.md "Flag breaking changes to published packages". -->
+
+- [ ] No breaking change (I checked the cases below, I did not just assume)
+- [ ] Breaking — described below, with the consumer code that breaks and the migration
+
+Cases to check: removed/renamed export · changed signature or return type · changed runtime behaviour of an
+exported helper · **a widened enum or union** (adding a member breaks `Record<Enum, T>`, `satisfies`, or a
+`switch` with a `never` default in consumer code).
+
+**If breaking, what breaks and how do consumers migrate?**
+
 ## Documentation
 
 <!-- Docs Drift: mapped file / mapped root docs/ guide listing your package / package README / packages/<pkg>/docs/. JSDoc and packages/skills do not pass. See CONTRIBUTING.md#documentation. -->

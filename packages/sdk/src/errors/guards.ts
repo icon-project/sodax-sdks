@@ -5,9 +5,12 @@
  * - {@link isCodeMember} — builds a per-method narrow guard from a `Set` of codes. Per-feature
  *   `errors.ts` modules use this to expose `isSupplyError`, `isCreateSwapIntentError`, etc.
  * - {@link isAuthStatus} / {@link isAuthFailure} — terminal API-key rejection, by status or by error.
+ * - {@link getSolverErrorRetryability} — whether a solver `detail.code` is worth retrying.
  *
  * The base {@link isSodaxError} guard lives in `./SodaxError` so it ships next to the class.
  */
+
+import { SolverIntentErrorCode } from '@sodax/types';
 
 import type { SodaxError } from './SodaxError.js';
 import { isSodaxError } from './SodaxError.js';
@@ -60,6 +63,45 @@ export function isAuthStatus(status: number | undefined): boolean {
  */
 export function isAuthFailure(error: unknown): boolean {
   return isSodaxError(error) && isAuthStatus(error.context?.status);
+}
+
+/** Whether retrying a solver failure unchanged could succeed. See {@link getSolverErrorRetryability}. */
+export type SolverErrorRetryability = 'retryable' | 'not-retryable' | 'unknown';
+
+const RETRYABLE_SOLVER_CODES: ReadonlySet<number> = new Set([
+  SolverIntentErrorCode.STOPPED, // solver is not serving; retry with backoff
+]);
+
+const NOT_RETRYABLE_SOLVER_CODES: ReadonlySet<number> = new Set([
+  SolverIntentErrorCode.INVALID_QUOTE_TYPE,
+  SolverIntentErrorCode.INVALID_TOKENS,
+  SolverIntentErrorCode.INVALID_AMOUNT,
+  SolverIntentErrorCode.INPUT_AMOUNT_TOO_LOW,
+  SolverIntentErrorCode.ALGORITHM_NOT_IMPLEMENTED,
+  SolverIntentErrorCode.UNKNOWN_DEX_ID,
+]);
+
+/**
+ * Classifies a solver `detail.code` (or the `solverCode` lifted onto a `SodaxError` context) by whether
+ * repeating the same request could succeed.
+ *
+ * Three-state because only some codes carry a sourced verdict. `'unknown'` means the solver contract does
+ * not say — treat it as the caller's judgement call, not as a licence to retry. Two codes are ambiguous by
+ * construction rather than merely undocumented, and both classify as `'unknown'`:
+ * `NOT_ENOUGH_PRIVATE_LIQUIDITY` (transient) and `QUOTE_NOT_FOUND` (terminal) share `-8`; and
+ * `NO_PATH_FOUND` answers both a dead pair (liquidity-dependent, so retrying may route) and a leg that is
+ * merely too small, where retrying the same amount can never succeed — see `isNoRouteRefusal`.
+ *
+ * @example
+ *   if (getSolverErrorRetryability(result.error.detail.code) === 'not-retryable') {
+ *     // surface to the user; the request itself has to change
+ *   }
+ */
+export function getSolverErrorRetryability(code: number | undefined): SolverErrorRetryability {
+  if (code === undefined) return 'unknown';
+  if (RETRYABLE_SOLVER_CODES.has(code)) return 'retryable';
+  if (NOT_RETRYABLE_SOLVER_CODES.has(code)) return 'not-retryable';
+  return 'unknown';
 }
 
 export { isSodaxError } from './SodaxError.js';

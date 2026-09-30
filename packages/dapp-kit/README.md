@@ -121,6 +121,10 @@ function SwapButton({ intentParams }: { intentParams: CreateIntentParams }) {
 }
 ```
 
+A solver refusal reaches you as a `SodaxError` with `code === 'EXTERNAL_API_ERROR'`; the numeric
+`SolverIntentErrorCode` is on `error.context.solverCode` and the full `detail` on `error.context.solverDetail`.
+Pass the code to `getSolverErrorRetryability()` to ask whether repeating the request could succeed.
+
 ## Requirements
 
 - Node.js >= 22.12.0

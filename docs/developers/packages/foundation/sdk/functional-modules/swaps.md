@@ -284,7 +284,7 @@ function isSodaxError(e: unknown): e is SodaxError;
 #### Discrimination example
 
 ```typescript
-import { isSodaxError, SolverIntentErrorCode, type SwapError } from '@sodax/sdk';
+import { getSolverErrorRetryability, isSodaxError, SolverIntentErrorCode, type SwapError } from '@sodax/sdk';
 
 const result = await sodax.swaps.swap({ params, walletProvider });
 
@@ -332,6 +332,11 @@ if (!result.ok) {
       const solverCode = err.context?.solverCode as SolverIntentErrorCode | undefined;
       if (solverCode === SolverIntentErrorCode.NO_PATH_FOUND) {
         // …
+      }
+      // Or ask whether repeating the request could help, instead of maintaining a code list.
+      // 'unknown' means the solver contract gives no verdict — decide for yourself, don't assume retry.
+      if (getSolverErrorRetryability(solverCode) === 'not-retryable') {
+        console.error('Request must change before retrying:', err.context?.solverDetail);
       }
       break;
     }
