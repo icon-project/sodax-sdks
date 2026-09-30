@@ -8,7 +8,7 @@ description: "Fork the SODAX Leverage Yield starter, build a vault deposit app w
 In about an hour you use AI (Claude Code, Codex, Cursor or similar) to add pooled vault deposits to a React app, make a real deposit into a SODAX vault, then open a pull request to show what you built. Start from the [starter repo](https://github.com/gosodax/sodax-leverage-yield-starter), and compare with the [finished app](https://sodax-leverage-yield-starter-git-solution-icon-foundation.vercel.app) (branch `solution`) at any time.
 
 <Warning>
-  **Real funds.** There is no testnet vault. Use a fresh wallet you funded yourself and small amounts (about $5 per deposit).
+  **Real funds.** There is no testnet vault. Use a fresh wallet you funded yourself and small amounts (about \$5 per deposit).
 </Warning>
 
 ## 1. Set up
@@ -20,7 +20,7 @@ Takes about 15 minutes. Do it before the session if you can, because the install
     - **Node.js 22.12 or newer** (`node -v`), with pnpm enabled: `corepack enable`.
     - **An AI coding assistant**, installed and signed in.
     - **A fresh EVM wallet** in one browser extension (MetaMask, Rabby or Hana). Not a Safe or other smart-contract wallet.
-    - **At least $10 of USDC plus about $2 of ETH for gas on Base** (Arbitrum works too). The fastest option is USDC plus a little S on **Sonic**, which skips the cross-network delivery step.
+    - **At least \$10 of USDC plus about \$2 of ETH for gas on Base** (Arbitrum works too). The fastest option is USDC plus a little S on **Sonic**, which skips the cross-network delivery step.
   </Step>
   <Step title="Fork the starter">
     Fork [gosodax/sodax-leverage-yield-starter](https://github.com/gosodax/sodax-leverage-yield-starter/fork) and **untick "Copy the `main` branch only"**, so the checkpoint branches come with your fork.
@@ -48,13 +48,13 @@ The repo gives your AI no SODAX-specific help. Each prompt sends it to the [AI i
 
 With a capable model, one prompt builds the whole app:
 
-```text
+```text wrap
 Build the SODAX Leverage Yield vault feature with a nice, polished UI: browse the vaults, deposit from any supported
 network and token, see my shares and withdraw. Use https://docs.sodax.com/ai-integration-guide (its SODAX skills and
 MCP) as your guide. Run pnpm check when you're done.
 ```
 
-Then check: a live deposit quote, a real ~$5 deposit that shows your shares, every vault with live APR / TVL, and a withdraw quote.
+Then check: a live deposit quote, a real ~\$5 deposit that shows your shares, every vault with live APR / TVL, and a withdraw quote.
 
 ### Milestone by milestone
 
@@ -63,13 +63,13 @@ Use this path with a lighter model, or to watch each step come together. Start a
 | Milestone | What you build | Check | Checkpoint |
 | --- | --- | --- | --- |
 | **M1** | Deposit form + live quote | 5 USDC → ≈ 4.5 lsodaSUSDS quote | [`checkpoint/m1`](https://sodax-leverage-yield-starter-git-checkpoint-m1-icon-foundation.vercel.app) |
-| **M2** | Execute a real ~$5 deposit | Your new shares show | [`checkpoint/m2`](https://sodax-leverage-yield-starter-git-checkpoint-m2-icon-foundation.vercel.app) |
+| **M2** | Execute a real ~\$5 deposit | Your new shares show | [`checkpoint/m2`](https://sodax-leverage-yield-starter-git-checkpoint-m2-icon-foundation.vercel.app) |
 | **M3** | Vault browser | A card per vault with live APR / TVL | [`checkpoint/m3`](https://sodax-leverage-yield-starter-git-checkpoint-m3-icon-foundation.vercel.app) |
 | **M4** | Withdraw | A withdraw quote (optionally, withdraw for real) | [`checkpoint/m4`](https://sodax-leverage-yield-starter-git-checkpoint-m4-icon-foundation.vercel.app) |
 
 <AccordionGroup>
   <Accordion title="M1 — Deposit form + live quote">
-    ```text
+    ```text wrap
     Using https://docs.sodax.com/ai-integration-guide (set up its SODAX skills and MCP first), add a deposit form for the
     SODAX Leverage Yield vaults: pick a vault, a source network and token, enter an amount, and show a live quote of the
     vault shares I'd get and the minimum I'd accept. Don't send anything yet. Run pnpm check, then tell me how to verify
@@ -77,25 +77,25 @@ Use this path with a lighter model, or to watch each step come together. Start a
     ```
   </Accordion>
   <Accordion title="M2 — Execute deposit + shares">
-    ```text
+    ```text wrap
     Make the deposit work: when I confirm, ask my wallet for approval if needed, submit the deposit, show each step's
     progress with explorer links, and show my vault shares once it fills. Run pnpm check.
     ```
   </Accordion>
   <Accordion title="M3 — Vault browser">
-    ```text
+    ```text wrap
     Add a vault browser: a card per vault with live APR, TVL, share price, leverage and health, plus my shares in it.
     Its Deposit button selects that vault in the deposit form. Run pnpm check.
     ```
   </Accordion>
   <Accordion title="M4 — Withdraw">
-    ```text
+    ```text wrap
     Add withdraw: from the shares I hold, quote and withdraw back to a token on a network I choose, with the same
     progress steps. Run pnpm check.
     ```
   </Accordion>
   <Accordion title="Bonus — Rebrand">
-    ```text
+    ```text wrap
     Rebrand this app for <Company> using <brand site or colours>. Only change src/brand/theme.css,
     src/brand/brand.config.ts and the files in public/brand/. Keep contrast accessible. Run pnpm check.
     ```
@@ -108,8 +108,13 @@ Use this path with a lighter model, or to watch each step come together. Start a
 ```bash
 git stash -u
 git switch checkpoint/m2   # or m1 / m3 / m4 / solution
-# If your fork lacks the branches:
-# git fetch https://github.com/gosodax/sodax-leverage-yield-starter.git checkpoint/m2 && git switch -c m2 FETCH_HEAD
+```
+
+If your fork has no checkpoint branches, fetch one from the starter instead:
+
+```bash
+git fetch https://github.com/gosodax/sodax-leverage-yield-starter.git checkpoint/m2
+git switch -c m2 FETCH_HEAD
 ```
 
 ## 3. Show your solution
