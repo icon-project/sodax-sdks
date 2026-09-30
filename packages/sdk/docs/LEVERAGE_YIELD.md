@@ -89,7 +89,7 @@ The service does **not** expose bespoke "deposit into vault" / "redeem from vaul
 - **Enter** a position = swap *any token → `lsoda*` shares*.
 - **Exit** a position = swap *`lsoda*` shares → any token*.
 
-`LeverageYieldService`'s job is to build the correct swap payload (the `CreateIntentParams` plus any execution flags) via `deposit()` / `withdraw()`, then execute it via `vaultSwap()` (or `createVaultIntent()` for manual relay control); the solver (plus the vault's ERC-4626 mechanics) does the rest. This is why deposits and withdrawals are cross-chain by default and require no vault-specific approvals on the spoke side.
+`LeverageYieldService`'s job is to build the correct swap payload (the `CreateIntentParams` plus any execution flags) via `deposit()` / `withdraw()`, then execute it via `vaultSwap()` (or `createVaultIntent()` for manual relay control); the solver (plus the vault's ERC-4626 mechanics) does the rest. This is why deposits and withdrawals are cross-chain by default and need no vault-specific approval: a deposit approves its input token the same way a swap does, with `sodax.swaps.isAllowanceValid` / `sodax.swaps.approve`, and a withdraw needs no approval at all.
 
 `createVaultIntent` / `vaultSwap` are leverage-yield copies of the swap domain's `createIntent` / `swap()` — duplicated **deliberately** so the vault-specific execution modifiers (`hubWalletSwap`, per-intent `partnerFee`) live on the leverage-yield action wrapper (`VaultSwapActionParams`) and never leak into the generic swap surface.
 
@@ -152,24 +152,43 @@ Whichever quote method you use, keep the fee consistent across both calls: pass 
 import { ChainKeys } from '@sodax/sdk';
 
 const vault = sodax.leverageYield.getVault('lsodaWEETH');
+if (!vault) throw new Error('Unknown vault');
+const srcChainKey = ChainKeys.ARBITRUM_MAINNET;
 
 const intentResult = await sodax.leverageYield.deposit({
   vault: vault.vault,
-  srcChainKey: ChainKeys.ARBITRUM_MAINNET,
+  srcChainKey,
   srcAddress: '0xYourArbitrumEOA...',
   inputToken: '0x...weETHonArbitrum',
   inputAmount: 1_000_000_000_000_000_000n, // input-token decimals
   minOutputAmount: 900_000_000_000_000_000n, // lsoda* (18 dp), slippage already applied
 });
 
-if (intentResult.ok) {
-  // Spread the payload straight into the vault-swap executor.
-  const swapResult = await sodax.leverageYield.vaultSwap({
-    ...intentResult.value,
+if (!intentResult.ok) throw intentResult.error;
+
+// The spoke asset manager pulls `inputToken`, so approve it first — the swap-domain helpers take the payload's params.
+const allowance = await sodax.swaps.isAllowanceValid({ params: intentResult.value.params, walletProvider: evmWalletProvider });
+if (!allowance.ok) throw allowance.error;
+if (!allowance.value) {
+  // Pin the chain so the result narrows to an EVM tx hash.
+  const approval = await sodax.swaps.approve<typeof srcChainKey, false>({
+    params: { ...intentResult.value.params, srcChainKey },
     walletProvider: evmWalletProvider,
   });
+  if (!approval.ok) throw approval.error;
+  const receipt = await evmWalletProvider.waitForTransactionReceipt(approval.value);
+  // Providers report a revert as viem's 'reverted' or the JSON-RPC '0x0'.
+  if (receipt.status === 'reverted' || receipt.status === '0x0') throw new Error('Approval reverted');
 }
+
+// Spread the payload straight into the vault-swap executor.
+const swapResult = await sodax.leverageYield.vaultSwap({
+  ...intentResult.value,
+  walletProvider: evmWalletProvider,
+});
 ```
+
+`deposit()` and `vaultSwap()` do not approve anything themselves. On an EVM spoke the asset manager pulls an ERC-20 input from the user's wallet, so the deposit reverts without the allowance. On Sonic the spender is the intents contract, and on Stellar the helper sets up a trustline. On other networks nothing needs approving, and the check returns `true`. The swap-domain helpers resolve all of this for each network, the same as for a swap.
 
 ### Withdraw (`lsoda*` → any token)
 
@@ -195,7 +214,7 @@ if (intentResult.ok) {
 }
 ```
 
-To size a full exit, read the withdrawable balance with `getMaxWithdrawForUser(vault, srcChainKey, srcAddress)` (already dust-buffered) or the raw share balance with `getShareBalanceForUser(...)`.
+To size a full exit, read the share balance with `getShareBalanceForUser(vault, srcChainKey, srcAddress)`. `inputAmount` is denominated in `lsoda*` **shares**. `getMaxWithdrawForUser` returns the ERC-4626 `maxWithdraw`, which is denominated in the underlying **asset**, so it is the wrong unit for `inputAmount`.
 
 ### Completion paths and `timeout`
 
@@ -242,13 +261,15 @@ const sodax = new Sodax();
 // Opt out — fully client-side relay + notify-solver.
 const sodaxClientSide = new Sodax({ leverageYield: { useBackendSubmitTx: false } });
 
-// Key the backend leg for one vault swap, overriding the instance `apiKey`.
+// Key the backend leg for one vault swap, overriding the instance `apiKey`. Server-side only.
 const result = await sodax.leverageYield.vaultSwap({
   params,
   walletProvider,
   extras: { apiKey: 'partner-key' },
 });
 ```
+
+A key in a browser bundle is public — see [API key good practices](https://docs.sodax.com/developers/how-to/api-key-good-practices).
 
 When the backend attempt does not complete, its own error is logged and discarded — the fallback runs and
 its outcome is what you receive, so the code on the `Result` always describes the client-side attempt.
@@ -257,7 +278,7 @@ see [LEVERAGE_YIELD_API.md](https://github.com/icon-project/sodax-sdks/blob/main
 
 ### Direct allowance management (hub-side)
 
-`approve()` and `isAllowanceValid()` manage the allowance of the vault's underlying `asset` to the vault on Sonic. These are for callers interacting with the vault **directly on the hub** — the swap-style `deposit()` flow handles its own approvals, so most integrations never need them.
+`approve()` and `isAllowanceValid()` manage the allowance of the vault's underlying `asset` to the vault on Sonic. These are for callers interacting with the vault **directly on the hub**. The swap-style `deposit()` flow does not use them: it approves its input token with the swap-domain `sodax.swaps.isAllowanceValid` / `approve` (see [Flows](#flows)), and a withdraw needs no approval.
 
 ```typescript
 const ok = await sodax.leverageYield.isAllowanceValid({
@@ -283,7 +304,7 @@ Solver quote for a vault deposit (`token_dst` = the vault) or withdraw (`token_s
 
 ### deposit
 
-Builds the `LeverageYieldSwapPayload` for a deposit (any token → `lsoda*`, delivered to the hub wallet). An optional `partnerFee` is forwarded on the payload as the per-intent override of the effective leverage-yield fee. **Returns:** `Promise<Result<LeverageYieldSwapPayload, LeverageYieldCreateIntentError>>`. `context.action` is `'deposit'`.
+Builds the `LeverageYieldSwapPayload` for a deposit (any token → `lsoda*`, delivered to the hub wallet). An optional `partnerFee` is forwarded on the payload as the per-intent override of the effective leverage-yield fee. **Returns:** `Promise<Result<LeverageYieldSwapPayload, LeverageYieldCreateIntentError | LeverageYieldLookupError>>`. `context.action` is `'deposit'`.
 
 ### withdraw
 
@@ -305,16 +326,17 @@ sources can answer, and returns that source's payload unmodified.
 
 ```typescript
 const result = await sodax.leverageYield.getDetailedStatus({
-  srcChainKey: 'arb',
+  srcChainKey: ChainKeys.ARBITRUM_MAINNET,
   srcTxHash: vaultSwapResponse.intentDeliveryInfo.srcTxHash,
 });
 
 if (result.ok) {
   if (result.value.source === 'backend') {
     // `data` is the SubmitTxStatusDataV2 from sodax.api.leverageYield.getSubmitTxStatus
-    console.log(result.value.data.status, result.value.data.userMessage);
+    console.log(result.value.data.status); // pending … posted_execution | solved
   } else {
-    // `data` is the SolverIntentStatusResponse — the vault intent IS a solver intent
+    // `data` is the SolverIntentStatusResponse — the vault intent IS a solver intent.
+    // A failed or abandoned backend record routes here, so failure is the solver's FAILED code.
     console.log(result.value.data.status, result.value.dstTxHash);
   }
 }

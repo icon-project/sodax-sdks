@@ -124,6 +124,10 @@ The full guide lives in [`docs/`](https://github.com/icon-project/sodax-sdks/tre
 
 `useWalletProvider` and `useXConnectors` warn once per chain type when you ask for a chain that is not in `SodaxWalletProvider` `config.chains`, then return `undefined` / `[]`. The warning is a misconfiguration signal, so it is suppressed until `SodaxWalletProvider` has initialized its chain services — on the very first render `enabledChains` is still empty for every app, correctly configured or not. If you relied on seeing that warning during mount, it now arrives only once services are up, and only when the chain is genuinely absent from your config.
 
+### Solana balance batching
+
+Multi-token Solana balance reads batch the legacy SPL Token and Token-2022 associated-account candidates in requests of at most 100 accounts. Native SOL remains a separate balance request. If any of these RPC requests fails, `getBalances` rejects instead of reporting zero balances, so callers such as `useXBalances` surface an error and keep their last good data.
+
 ## AI agent docs
 
 AI-readable docs for `@sodax/wallet-sdk-react` (and the other `@sodax/*` packages) are shipped via [`@sodax/skills`](https://github.com/icon-project/sodax-sdks/tree/main/packages/skills) — a separate npm package bundling Claude-Code SKILL.md files and a long-form knowledge tree.

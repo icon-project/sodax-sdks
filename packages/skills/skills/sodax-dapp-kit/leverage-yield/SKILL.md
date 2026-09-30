@@ -40,7 +40,7 @@ Granular skill for the leverage-yield hooks of `@sodax/dapp-kit` v2. queryKey/mu
 - **Treating `useLeverageYieldShareBalances` as a single query.** It returns an **array** (one `useQueries` row per holder). Aggregate with `reduce`; the key segment is singular `shareBalance`.
 - **Gating withdraw on an allowance check.** Withdraw carries `hubWalletSwap: true` — the hub wallet authorises the share spend via `sendMessage`. Only `deposit` uses `useSwapAllowance` / `useSwapApprove`.
 - **Reaching for a `useLeverageYieldApprove` hook.** It doesn't exist — the deposit approves the spoke asset manager, so use the swap-domain hooks.
-- **Quoting on the pre-fee amount.** A deposit's per-intent `partnerFee` is deducted from `inputAmount` before the swap — quote on the post-fee amount or `minOutputAmount` is unfillable.
+- **Quoting a vault flow with `useQuote`, or with a different fee.** Size `minOutputAmount` with `useLeverageYieldQuote` on the **gross** `inputAmount` — it deducts the effective leverage-yield fee itself, so netting the amount first deducts it twice. Pass it the same `partnerFee` as `useLeverageYieldDeposit` / `useLeverageYieldWithdraw`, or omit it on both. `useQuote` deducts the *swap* fee instead, and whenever the two fees differ the derived `minOutputAmount` can be unfillable.
 
 ### Leverage-position anti-patterns (dapp-kit)
 
@@ -59,13 +59,13 @@ Granular skill for the leverage-yield hooks of `@sodax/dapp-kit` v2. queryKey/mu
 2. Deposit/withdraw build a payload, then `useLeverageYieldVaultSwap` executes it (`{ ...payload, walletProvider }`).
 3. `useLeverageYieldShareBalances` consumers treat `data` as an array and aggregate.
 4. Withdraw flows do not gate on `useSwapAllowance`.
-5. Mutation flows use `mutateAsyncSafe` and branch on `result.ok`; reads read `data` directly (no `.ok`/`.value`).
+5. Mutation flows use `mutateAsyncSafe` and branch on `result.ok`; reads read `data` directly (no `.ok`/`.value`), except `useLeverageYieldQuote` and `useLeverageYieldDetailedStatus`, whose `data` is the SDK `Result` (branch on `data?.ok`).
 6. Positions: leverage changes use `useSubmitLeveragePositionIntent` (never `useRunLeveragePositionOperation`), `notified` is checked on every open and leverage change, and exits are sized from `useLeveragePositionCollateral` with the fee from `useLeveragePositionInfo`.
 7. Positions: funding is gated on `useLeveragePositionFundingAllowance` + `useApproveLeveragePositionFunding`, and `borrowAmount` / `minCollateralOut` trace back to `sizeLeverageBorrow` + `projectLeverageLeg`.
 
 ## Related granular skills (same family)
 
-- [`../swap/SKILL.md`](../swap/SKILL.md) — `useSwapApprove` / `useSwapAllowance` (spoke-side deposit approval) and `useQuote` (size `minOutputAmount`) live here.
+- [`../swap/SKILL.md`](../swap/SKILL.md) — `useSwapApprove` / `useSwapAllowance` (spoke-side deposit approval) live here. Size `minOutputAmount` with `useLeverageYieldQuote`, not the swap skill's `useQuote`.
 - [`../auxiliary-services/SKILL.md`](../auxiliary-services/SKILL.md) — `useXBalances` / gas-estimation utilities used alongside leverage-yield UI.
 
 For multi-feature tasks, load the broad [`sodax-dapp-kit` skill](../SKILL.md).

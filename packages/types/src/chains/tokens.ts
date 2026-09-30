@@ -1090,6 +1090,96 @@ export const solanaSupportedTokens = {
     hubAsset: '0x024230dd63b27df90d988d6f37a69d4de627ce89',
     vault: '0x024230dd63b27df90d988d6f37a69d4de627ce89',
   },
+  PUMP: {
+    symbol: 'PUMP',
+    name: 'Pump',
+    decimals: 6,
+    address: 'pumpCmXqMfrsAkQ5r49WcJnRayYRqmXz6ae8H7H9Dfn',
+    chainKey: ChainKeys.SOLANA_MAINNET,
+    hubAsset: '0x02722baa016f5369c91b6533330315ec884458a4',
+    vault: '0x02722baa016f5369c91b6533330315ec884458a4',
+  },
+  ETH: {
+    symbol: 'ETH',
+    name: 'Ether (Wormhole)',
+    decimals: 8,
+    address: '7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs',
+    chainKey: ChainKeys.SOLANA_MAINNET,
+    hubAsset: '0x6ebaff90878a252ac3358ae8b74d174f09d329d3',
+    vault: '0x6ebaff90878a252ac3358ae8b74d174f09d329d3',
+  },
+  USD1: {
+    symbol: 'USD1',
+    name: 'World Liberty Financial USD',
+    decimals: 6,
+    address: 'USD1ttGY1N17NEEHLmELoaybftRBUSErhqYiQzvEmuB',
+    chainKey: ChainKeys.SOLANA_MAINNET,
+    hubAsset: '0xe02735b9bc0dc82564c1bebdcaeffef6071efea1',
+    vault: '0xe02735b9bc0dc82564c1bebdcaeffef6071efea1',
+  },
+  cbBTC: {
+    symbol: 'cbBTC',
+    name: 'Coinbase Wrapped BTC',
+    decimals: 8,
+    address: 'cbbtcf3aa214zXHbiAZQwf4122FBYbraNdFqgw4iMij',
+    chainKey: ChainKeys.SOLANA_MAINNET,
+    hubAsset: '0xca4ba45e5bf0691cb0b5fbe197a3317b7aa81602',
+    vault: '0xca4ba45e5bf0691cb0b5fbe197a3317b7aa81602',
+  },
+  PYUSD: {
+    symbol: 'PYUSD',
+    name: 'PayPal USD',
+    decimals: 6,
+    address: '2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo',
+    chainKey: ChainKeys.SOLANA_MAINNET,
+    hubAsset: '0x3fe0cdad6c8f0a600afdb4e04ed1a0b3811b274f',
+    vault: '0x3fe0cdad6c8f0a600afdb4e04ed1a0b3811b274f',
+  },
+  JLP: {
+    symbol: 'JLP',
+    name: 'Jupiter Perps LP',
+    decimals: 6,
+    address: '27G8MtK7VtTcCHkpASjSDdkWWYfoqT6ggEuKidVJidD4',
+    chainKey: ChainKeys.SOLANA_MAINNET,
+    hubAsset: '0x78dff771e80d7152720bdfd399bfdd327cc25b25',
+    vault: '0x78dff771e80d7152720bdfd399bfdd327cc25b25',
+  },
+  USDG: {
+    symbol: 'USDG',
+    name: 'Global Dollar',
+    decimals: 6,
+    address: '2u1tszSeqZ3qBWF3uNGPFc8TzMk2tdiwknnRMWGWjGWH',
+    chainKey: ChainKeys.SOLANA_MAINNET,
+    hubAsset: '0x67047acfd986561f2f377fd52dc26c11286ff655',
+    vault: '0x67047acfd986561f2f377fd52dc26c11286ff655',
+  },
+  JupUSD: {
+    symbol: 'JupUSD',
+    name: 'Jupiter USD',
+    decimals: 6,
+    address: 'JuprjznTrTSp2UFa3ZBUFgwdAmtZCq4MQCwysN55USD',
+    chainKey: ChainKeys.SOLANA_MAINNET,
+    hubAsset: '0xb37d694de613abf079c4ccc6ce7683843370d219',
+    vault: '0xb37d694de613abf079c4ccc6ce7683843370d219',
+  },
+  USDe: {
+    symbol: 'USDe',
+    name: 'Ethena USDe',
+    decimals: 9,
+    address: 'DEkqHyPN7GMRJ5cArtQFAWefqbZb33Hyf6s5iCwjEonT',
+    chainKey: ChainKeys.SOLANA_MAINNET,
+    hubAsset: '0x920bb2b09873073eeb1b71db9e3ecb908d221086',
+    vault: '0x920bb2b09873073eeb1b71db9e3ecb908d221086',
+  },
+  USELESS: {
+    symbol: 'USELESS',
+    name: 'USELESS COIN',
+    decimals: 6,
+    address: 'Dz9mQ9NzkBcCsuGPFJ3r1bS4wgqKMHBPiVuniW8Mbonk',
+    chainKey: ChainKeys.SOLANA_MAINNET,
+    hubAsset: '0x0a3a93b7303a582b2ab84cfb3493fdb9d160a3ef',
+    vault: '0x0a3a93b7303a582b2ab84cfb3493fdb9d160a3ef',
+  },
 } as const satisfies Record<string, XToken>;
 
 export const avalancheSupportedTokens = {
@@ -1146,6 +1236,15 @@ export const avalancheSupportedTokens = {
     chainKey: ChainKeys.AVALANCHE_MAINNET,
     hubAsset: '0x3492987e8c83e1628ce8ff48f5ae127105df304a',
     vault: '0x3492987e8c83e1628ce8ff48f5ae127105df304a',
+  },
+  BTCb: {
+    symbol: 'BTC.b',
+    name: 'Lombard BTC.b',
+    decimals: 8,
+    address: '0x152b9d0FdC40C096757F570A51E494bd4b943E50',
+    chainKey: ChainKeys.AVALANCHE_MAINNET,
+    hubAsset: '0x216a9fa7d34fc5c23cd972b135864413d023d0b3',
+    vault: '0x216a9fa7d34fc5c23cd972b135864413d023d0b3',
   },
 } as const satisfies Record<string, XToken>;
 
@@ -1323,6 +1422,33 @@ export const arbitrumSupportedTokens = {
     hubAsset: '0xd8270661d8bdc7c6d80c2a04f1d9775ea5db0553',
     vault: '0xd8270661d8bdc7c6d80c2a04f1d9775ea5db0553',
   },
+  cbBTC: {
+    symbol: 'cbBTC',
+    name: 'Coinbase Wrapped BTC',
+    decimals: 8,
+    address: '0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf',
+    chainKey: ChainKeys.ARBITRUM_MAINNET,
+    hubAsset: '0x08faf2ad2b023244846e072ef06791e98c8ff4d7',
+    vault: '0x08faf2ad2b023244846e072ef06791e98c8ff4d7',
+  },
+  GMX: {
+    symbol: 'GMX',
+    name: 'GMX',
+    decimals: 18,
+    address: '0xfc5A1A6EB076a2C7aD06eD22C90d7E710E35ad0a',
+    chainKey: ChainKeys.ARBITRUM_MAINNET,
+    hubAsset: '0x06a9bf7ae2c878dee7134c38067a5186e9a81400',
+    vault: '0x06a9bf7ae2c878dee7134c38067a5186e9a81400',
+  },
+  DAI: {
+    symbol: 'DAI',
+    name: 'Dai Stablecoin',
+    decimals: 18,
+    address: '0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1',
+    chainKey: ChainKeys.ARBITRUM_MAINNET,
+    hubAsset: '0x68ff591a66f6b6c77bdf6463d88e8cb5578c8a53',
+    vault: '0x68ff591a66f6b6c77bdf6463d88e8cb5578c8a53',
+  },
 } as const satisfies Record<string, XToken>;
 
 export const baseSupportedTokens = {
@@ -1443,6 +1569,24 @@ export const baseSupportedTokens = {
     chainKey: ChainKeys.BASE_MAINNET,
     hubAsset: '0x807cC73f69F1aCCC50511a0390A8544cEA71baA9',
     vault: SodaTokens.sodaSUSDS.address,
+  },
+  EURC: {
+    symbol: 'EURC',
+    name: 'EURC',
+    decimals: 6,
+    address: '0x60a3E35Cc302bFA44Cb288Bc5a4F316Fdb1adb42',
+    chainKey: ChainKeys.BASE_MAINNET,
+    hubAsset: '0x228615a4e0cb4cb1a8931605301661db2782adb8',
+    vault: '0x228615a4e0cb4cb1a8931605301661db2782adb8',
+  },
+  MORPHO: {
+    symbol: 'MORPHO',
+    name: 'Morpho Token',
+    decimals: 18,
+    address: '0xBAa5CC21fd487B8Fcc2F632f3F4E8D37262a0842',
+    chainKey: ChainKeys.BASE_MAINNET,
+    hubAsset: '0x7e1af5084ac6f15afa97a5525b2e35a804e80b01',
+    vault: '0x7e1af5084ac6f15afa97a5525b2e35a804e80b01',
   },
 } as const satisfies Record<string, XToken>;
 
@@ -1702,6 +1846,15 @@ export const bscSupportedTokens = {
     hubAsset: '0x63c29285bfda811899ec09d311856df9de37950d',
     vault: '0x63c29285bfda811899ec09d311856df9de37950d',
   },
+  UNI: {
+    symbol: 'UNI',
+    name: 'Uniswap (BEP20)',
+    decimals: 18,
+    address: '0xBf5140A22578168FD562DCcF235E5D43A02ce9B1',
+    chainKey: ChainKeys.BSC_MAINNET,
+    hubAsset: '0xdab003b59749fe08fad6e0e7685f31bbcf4cbd6e',
+    vault: '0xdab003b59749fe08fad6e0e7685f31bbcf4cbd6e',
+  },
 } as const satisfies Record<string, XToken>;
 
 export const polygonSupportedTokens = {
@@ -1878,6 +2031,15 @@ export const hyperevmSupportedTokens = {
     chainKey: ChainKeys.HYPEREVM_MAINNET,
     hubAsset: '0xacf9085e5b805a5e18fb637c2c3a02586d7289af',
     vault: '0xacf9085e5b805a5e18fb637c2c3a02586d7289af',
+  },
+  USOL: {
+    symbol: 'USOL',
+    name: 'Unit Solana',
+    decimals: 9,
+    address: '0x068f321Fa8Fb9f0D135f290Ef6a3e2813e1c8A29',
+    chainKey: ChainKeys.HYPEREVM_MAINNET,
+    hubAsset: '0xba570366523aef0de760489e5c693eeb5ecb3e64',
+    vault: '0xba570366523aef0de760489e5c693eeb5ecb3e64',
   },
 } as const satisfies Record<string, XToken>;
 
@@ -2518,6 +2680,15 @@ export const stellarSupportedTokens = {
     hubAsset: '0x83ac05C492188B46dd15d5611dEEFA6b23c7D479',
     vault: SodaTokens.BABA.address,
   },
+  EURC: {
+    symbol: 'EURC',
+    name: 'EURC',
+    decimals: 7,
+    address: 'CDTKPWPLOURQA2SGTKTUQOWRCBZEORB4BWBOMJ3D3ZTQQSGE5F6JBQLV',
+    chainKey: ChainKeys.STELLAR_MAINNET,
+    hubAsset: '0x93d5d2382f302fa78350c18b4df3ee0bd09b3945',
+    vault: '0x93d5d2382f302fa78350c18b4df3ee0bd09b3945',
+  },
 } as const satisfies Record<string, XToken>;
 
 export const suiSupportedTokens = {
@@ -2656,6 +2827,24 @@ export const suiSupportedTokens = {
     hubAsset: '0xb78c7c96ae996b4d479bb81b7569a5c6a79c88cb',
     vault: '0xb78c7c96ae996b4d479bb81b7569a5c6a79c88cb',
   },
+  USDsui: {
+    symbol: 'USDsui',
+    name: 'Sui Dollar',
+    decimals: 6,
+    address: '0x44f838219cf67b058f3b37907b655f226153c18e33dfcd0da559a844fea9b1c1::usdsui::USDSUI',
+    chainKey: ChainKeys.SUI_MAINNET,
+    hubAsset: '0x2ed5799b38271c02fdd74bab080f32db58b20c44',
+    vault: '0x2ed5799b38271c02fdd74bab080f32db58b20c44',
+  },
+  WBTC: {
+    symbol: 'WBTC',
+    name: 'Wrapped BTC',
+    decimals: 8,
+    address: '0x0041f9f9344cac094454cd574e333c4fdb132d7bcc9379bcd4aab485b2a63942::wbtc::WBTC',
+    chainKey: ChainKeys.SUI_MAINNET,
+    hubAsset: '0x2037d840f01e903e09e33b146f2dd3fa4a4d2c21',
+    vault: '0x2037d840f01e903e09e33b146f2dd3fa4a4d2c21',
+  },
 } as const satisfies Record<string, XToken>;
 
 export const iconSupportedTokens = {
@@ -2762,6 +2951,15 @@ export const nearSupportedTokens = {
     chainKey: ChainKeys.NEAR_MAINNET,
     hubAsset: '0x2eC38A4DdfB76E1aae04F392b55A28f0D659BcD4',
     vault: '0x',
+  },
+  ZEC: {
+    symbol: 'ZEC',
+    name: 'Zcash',
+    decimals: 8,
+    address: 'zec.omft.near',
+    chainKey: ChainKeys.NEAR_MAINNET,
+    hubAsset: '0xed5d71eed7cb6b62a449522538a6960ea242b8c3',
+    vault: '0xed5d71eed7cb6b62a449522538a6960ea242b8c3',
   },
 } as const satisfies Record<string, XToken>;
 
@@ -3020,6 +3218,33 @@ export const ethereumSupportedTokens = {
     chainKey: ChainKeys.ETHEREUM_MAINNET,
     hubAsset: '0x1Bb5128A4837A78cb60bc52cc19079eD3F00A624',
     vault: SodaTokens.sodaSUSDS.address,
+  },
+  GHO: {
+    symbol: 'GHO',
+    name: 'Gho Token',
+    decimals: 18,
+    address: '0x40D16FC0246aD3160Ccc09B8D0D3A2cD28aE6C2f',
+    chainKey: ChainKeys.ETHEREUM_MAINNET,
+    hubAsset: '0x2fd90bac66fba110650ce4ba4065c4fc668d10e0',
+    vault: '0x2fd90bac66fba110650ce4ba4065c4fc668d10e0',
+  },
+  USDG: {
+    symbol: 'USDG',
+    name: 'Global Dollar',
+    decimals: 6,
+    address: '0xe343167631d89B6Ffc58B88d6b7fB0228795491D',
+    chainKey: ChainKeys.ETHEREUM_MAINNET,
+    hubAsset: '0xd7acf8c1125143f9c58fc17879742114639f54bb',
+    vault: '0xd7acf8c1125143f9c58fc17879742114639f54bb',
+  },
+  LIT: {
+    symbol: 'LIT',
+    name: 'Lighter',
+    decimals: 18,
+    address: '0x232CE3bd40fCd6f80f3d55A522d03f25Df784Ee2',
+    chainKey: ChainKeys.ETHEREUM_MAINNET,
+    hubAsset: '0x081e274ec570bdb023f1b41c54df0f3f73da8924',
+    vault: '0x081e274ec570bdb023f1b41c54df0f3f73da8924',
   },
 } as const satisfies Record<string, XToken>;
 
@@ -3730,6 +3955,15 @@ export const robinhoodSupportedTokens = {
     chainKey: ChainKeys.ROBINHOOD_MAINNET,
     hubAsset: '0xf721a074bd9fc05ba1f7cb432149a74acfb49d73',
     vault: SodaTokens.BABA.address,
+  },
+  PONS: {
+    symbol: 'PONS',
+    name: 'Pons',
+    decimals: 18,
+    address: '0x39dBED3a2bd333467115dE45665cC57F813C4571',
+    chainKey: ChainKeys.ROBINHOOD_MAINNET,
+    hubAsset: '0x9cf6640c73dd4c278cfa08a8b8773e7b22420582',
+    vault: '0x9cf6640c73dd4c278cfa08a8b8773e7b22420582',
   },
 } as const satisfies Record<string, XToken>;
 

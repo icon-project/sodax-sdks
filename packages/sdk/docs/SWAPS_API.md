@@ -241,6 +241,7 @@ The backend guards `POST /swaps/*` routes with an `x-api-key` header check. Conf
 `sodax.api.swaps` call carries it; override it per call via the trailing `RequestOverrideConfig`:
 
 ```typescript
+// Server-side only — a key in a browser bundle is public
 await sodax.api.swaps.createIntent(params, { apiKey: 'per-request-key' });
 ```
 
@@ -248,7 +249,7 @@ Auth failures surface as `EXTERNAL_API_ERROR` with `context.status` `401` (missi
 (suspended organisation / missing scope) — terminal config problems — while the transient verification
 `503` is retried by the wire client. See
 [CONFIGURE_SDK.md § API key](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/CONFIGURE_SDK.md#api-key)
-for the full precedence order.
+for the full precedence order, and [API key good practices](https://docs.sodax.com/developers/how-to/api-key-good-practices) for keeping the key off the client.
 
 ## Result\<T\> and Error Handling
 

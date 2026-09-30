@@ -18,8 +18,14 @@ Task guides for common integration work. For product pickers, start from a [solu
   <Card title="Make a swap (HTTP)" icon="server" href="/developers/http-api/swaps#bot-flow-create-submit-tx-poll">
     The same flow over REST, from any language.
   </Card>
+  <Card title="Integrate Leverage Yield" icon="money-bill-trend-up" href="/developers/how-to/integrate_leverage_yield">
+    Deposit into and withdraw from LST vaults, over the SDK or the HTTP API.
+  </Card>
   <Card title="API keys" icon="key" href="/developers/how-to/api-keys">
     Create, deploy and rotate a partner portal key.
+  </Card>
+  <Card title="API key good practices" icon="lock" href="/developers/how-to/api-key-good-practices">
+    Keep the key off the client, with a worked backend proxy for browser dApps.
   </Card>
   <Card title="Payout wallet" icon="wallet" href="/developers/how-to/payout-wallet">
     Set the address your partner fees are paid to, and claim them.

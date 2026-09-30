@@ -33,7 +33,8 @@ value falls back to `https://canary-api.sodax.com/v1`.
 
 Optional: set `VITE_SODAX_API_KEY` to send a partner API key as `x-api-key` on every
 swaps API call (`new SwapsApi({ baseUrl, timeout, apiKey })`). Browser-bundled keys
-are public; unset is fine until the backend enforces the key.
+are public; unset is fine until the backend enforces the key. For a production app, keep the
+key behind your own backend — see [API key good practices](https://docs.sodax.com/developers/how-to/api-key-good-practices).
 
 Open http://localhost:3001, connect an EVM wallet, pick a source/destination
 token, enter an amount, and Swap. Quotes work for any chain; on-chain execution

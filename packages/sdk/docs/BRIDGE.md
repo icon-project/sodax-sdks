@@ -525,7 +525,7 @@ export type BridgeExtras<K extends SpokeChainKey = SpokeChainKey> = (GetChainTyp
 ```
 
 - `partnerFee` — chain-agnostic per-action fee override. When present it takes precedence over the config-level `bridge.partnerFee` for that call, letting an integrator charge and route its own fee per bridge. Omit to use the configured fee. Preview the amount with `getFee(inputAmount, partnerFee)`.
-- `apiKey` — chain-agnostic per-action override of the configured backend API key (`x-api-key`) for this action's backend submit-tx leg. Omit to use the configured key — see [CONFIGURE_SDK.md § API key](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/CONFIGURE_SDK.md#api-key).
+- `apiKey` — chain-agnostic per-action override of the configured backend API key (`x-api-key`) for this action's backend submit-tx leg. Omit to use the configured key — see [CONFIGURE_SDK.md § API key](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/CONFIGURE_SDK.md#api-key). Pass it only from server-side code — see [API key good practices](https://docs.sodax.com/developers/how-to/api-key-good-practices).
 - `srcPublicKey` — **required** for Stacks sources with `raw: true`. A Stacks address cannot yield the signer public key at raw-tx build time, so the unsigned tx needs it up front; omitting it fails with `VALIDATION_FAILED` (`context.field: 'srcPublicKey'`).
 - `bound` — Bound Exchange (Radfi) inputs for raw Bitcoin TRADING-mode sources: `{ accessToken?: string }`, falling back to the `RadfiProvider` instance token when omitted.
 

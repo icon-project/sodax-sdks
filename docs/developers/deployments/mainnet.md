@@ -194,6 +194,9 @@ Each row is the token on that spoke chain; its Sonic hub asset and shared vault 
 | [WBTC(8)](https://etherscan.io/token/0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599) | [0x4ccbe4c2cf2aeed19314790622efd71dc0b67acb](https://sonicscan.org/address/0x4ccbe4c2cf2aeed19314790622efd71dc0b67acb) |
 | [USDS(18)](https://etherscan.io/token/0xdC035D45d973E3EC169d2276DDab16f1e407384F) | [0x31D3a9319C76EC4A474721966dA65b94e6bFc9eF](https://sonicscan.org/address/0x31D3a9319C76EC4A474721966dA65b94e6bFc9eF) |
 | [SUSDS(18)](https://etherscan.io/token/0xa3931d71877C0E7a3148CB7Eb4463524FEc27fbD) | [0x1Bb5128A4837A78cb60bc52cc19079eD3F00A624](https://sonicscan.org/address/0x1Bb5128A4837A78cb60bc52cc19079eD3F00A624) |
+| [GHO(18)](https://etherscan.io/token/0x40D16FC0246aD3160Ccc09B8D0D3A2cD28aE6C2f) | [0x2fd90bac66fba110650ce4ba4065c4fc668d10e0](https://sonicscan.org/address/0x2fd90bac66fba110650ce4ba4065c4fc668d10e0) |
+| [USDG(6)](https://etherscan.io/token/0xe343167631d89B6Ffc58B88d6b7fB0228795491D) | [0xd7acf8c1125143f9c58fc17879742114639f54bb](https://sonicscan.org/address/0xd7acf8c1125143f9c58fc17879742114639f54bb) |
+| [LIT(18)](https://etherscan.io/token/0x232CE3bd40fCd6f80f3d55A522d03f25Df784Ee2) | [0x081e274ec570bdb023f1b41c54df0f3f73da8924](https://sonicscan.org/address/0x081e274ec570bdb023f1b41c54df0f3f73da8924) |
 
 _RLUSD asset note: [`0x52D94FFC0EEfdc8B6521b19ff2C8c5ddF6E842B3`](https://sonicscan.org/address/0x52D94FFC0EEfdc8B6521b19ff2C8c5ddF6E842B3)_
 
@@ -213,6 +216,7 @@ _RLUSD asset note: [`0x52D94FFC0EEfdc8B6521b19ff2C8c5ddF6E842B3`](https://sonics
 | [USDC(6)](https://snowtrace.io/token/0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E) | [0x41abF4B1559FF709Ef8150079BcB26DB1Fffd117](https://sonicscan.org/address/0x41abF4B1559FF709Ef8150079BcB26DB1Fffd117) |
 | [bnUSD(18)](https://snowtrace.io/token/0x6958a4CBFe11406E2a1c1d3a71A1971aD8B3b92F) | [0x289cDa1043b4Ce26BDCa3c12E534f56b24308A5B](https://sonicscan.org/address/0x289cDa1043b4Ce26BDCa3c12E534f56b24308A5B) |
 | [Soda(18)](https://snowtrace.io/token/0x390ceed555905ec225Da330A188EA04e85570f00) | [0xf51d7082375cdca8c19c74e1a0c77da482afda4e](https://sonicscan.org/address/0xf51d7082375cdca8c19c74e1a0c77da482afda4e) |
+| [BTC.b(8)](https://snowtrace.io/token/0x152b9d0FdC40C096757F570A51E494bd4b943E50) | [0x216a9fa7d34fc5c23cd972b135864413d023d0b3](https://sonicscan.org/address/0x216a9fa7d34fc5c23cd972b135864413d023d0b3) |
 
 
 ### BASE
@@ -237,6 +241,8 @@ _RLUSD asset note: [`0x52D94FFC0EEfdc8B6521b19ff2C8c5ddF6E842B3`](https://sonics
 | [AERO(18)](https://basescan.org/token/0x940181a94A35A4569E4529A3CDfB74e38FD98631) | [0x348e086ab6f424dfc575a325c28624ed23973173](https://sonicscan.org/address/0x348e086ab6f424dfc575a325c28624ed23973173) |
 | [USDS(18)](https://basescan.org/address/0x820C137fa70C8691f0e44Dc420a5e53c168921Dc) | [0xFE9b81eF40419Ef9Ce62cCff197345D78c552945](https://sonicscan.org/address/0xFE9b81eF40419Ef9Ce62cCff197345D78c552945) |
 | [SUSDS(18)](https://basescan.org/address/0x5875eEE11Cf8398102FdAd704C9E96607675467a) | [0x807cC73f69F1aCCC50511a0390A8544cEA71baA9](https://sonicscan.org/address/0x807cC73f69F1aCCC50511a0390A8544cEA71baA9) |
+| [EURC(6)](https://basescan.org/token/0x60a3E35Cc302bFA44Cb288Bc5a4F316Fdb1adb42) | [0x228615a4e0cb4cb1a8931605301661db2782adb8](https://sonicscan.org/address/0x228615a4e0cb4cb1a8931605301661db2782adb8) |
+| [MORPHO(18)](https://basescan.org/token/0xBAa5CC21fd487B8Fcc2F632f3F4E8D37262a0842) | [0x7e1af5084ac6f15afa97a5525b2e35a804e80b01](https://sonicscan.org/address/0x7e1af5084ac6f15afa97a5525b2e35a804e80b01) |
 
 
 ### Optimism
@@ -284,6 +290,9 @@ _RLUSD asset note: [`0x52D94FFC0EEfdc8B6521b19ff2C8c5ddF6E842B3`](https://sonics
 | [Arbitrum(18)](https://arbiscan.io/address/0x912CE59144191C1204E64559FE8253a0e49E6548) | [0xe93d74056c7e431aaa33155c9c994116c562e5e2](https://sonicscan.org/address/0xe93d74056c7e431aaa33155c9c994116c562e5e2) |
 | [SUSDS(18)](https://arbiscan.io/address/0xddb46999f8891663a8f2828d25298f70416d7610) | [0x8794A87979efA70bBE29Ed3357e9A93932B48675](https://sonicscan.org/address/0x8794A87979efA70bBE29Ed3357e9A93932B48675) |
 | [USDS(18)](https://arbiscan.io/address/0x6491c05A82219b8D1479057361ff1654749b876b) | [0x856c02acdD01947788dc5D218A3cb2c4C9BdEed2](https://sonicscan.org/address/0x856c02acdD01947788dc5D218A3cb2c4C9BdEed2) |
+| [cbBTC(8)](https://arbiscan.io/token/0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf) | [0x08faf2ad2b023244846e072ef06791e98c8ff4d7](https://sonicscan.org/address/0x08faf2ad2b023244846e072ef06791e98c8ff4d7) |
+| [GMX(18)](https://arbiscan.io/token/0xfc5A1A6EB076a2C7aD06eD22C90d7E710E35ad0a) | [0x06a9bf7ae2c878dee7134c38067a5186e9a81400](https://sonicscan.org/address/0x06a9bf7ae2c878dee7134c38067a5186e9a81400) |
+| [DAI(18)](https://arbiscan.io/token/0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1) | [0x68ff591a66f6b6c77bdf6463d88e8cb5578c8a53](https://sonicscan.org/address/0x68ff591a66f6b6c77bdf6463d88e8cb5578c8a53) |
 
 ### Polygon
 | Contract | Address |
@@ -383,6 +392,7 @@ These contracts are deployed on chain, but Botanix is **not yet reachable throug
 | [USDC(18)](https://bscscan.com/address/0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d) | [0x9D58508AD10d34048a11640735Ca5075bbA07b35](https://sonicscan.org/address/0x9D58508AD10d34048a11640735Ca5075bbA07b35) |
 | [weETH(18)](https://bscscan.com/token/0x04C0599Ae5A44757c0af6F9eC3b93da8976c150A) | [0xc1a14e759e8c2a8128a1fe0288c12390fbaee6d2](https://sonicscan.org/address/0xc1a14e759e8c2a8128a1fe0288c12390fbaee6d2) |
 | [BSC-USD(18)](https://bscscan.com/token/0x55d398326f99059ff775485246999027b3197955) | [0x627c7369e9cfb99e11ee7163efb23f12bfd8cce6](https://sonicscan.org/address/0x627c7369e9cfb99e11ee7163efb23f12bfd8cce6) |
+| [UNI(18)](https://bscscan.com/token/0xBf5140A22578168FD562DCcF235E5D43A02ce9B1) | [0xdab003b59749fe08fad6e0e7685f31bbcf4cbd6e](https://sonicscan.org/address/0xdab003b59749fe08fad6e0e7685f31bbcf4cbd6e) |
 
 ### HyperEvm
 | Contract | Address |
@@ -400,6 +410,7 @@ These contracts are deployed on chain, but Botanix is **not yet reachable throug
 | [Soda(18)](https://purrsec.com/address/0xA28C70F92a1B2513edCdDD29c2E5195a4B785aB2) | [0x4cf5ce9594aeddc5d3efe9d4cdf0b944b4e73a53](https://sonicscan.org/address/0x4cf5ce9594aeddc5d3efe9d4cdf0b944b4e73a53)  |
 | [USDC(6)](https://purrsec.com/address/0xb88339CB7199b77E23DB6E890353E22632Ba630f) | [0x0f78b995d113712deeb17d96638e9d7525d409c6](https://sonicscan.org/address/0x0f78b995d113712deeb17d96638e9d7525d409c6)  |
 | [USDT(6)](https://purrsec.com/address/0xb8ce59fc3717ada4c02eadf9682a9e934f625ebb) | [0x87f73744d919447e6f8220f268bcbbfa0cbfafa3](https://sonicscan.org/address/0x87f73744d919447e6f8220f268bcbbfa0cbfafa3)  |
+| [USOL(9)](https://purrsec.com/address/0x068f321Fa8Fb9f0D135f290Ef6a3e2813e1c8A29) | [0xba570366523aef0de760489e5c693eeb5ecb3e64](https://sonicscan.org/address/0xba570366523aef0de760489e5c693eeb5ecb3e64) |
 
 ### Hedera
 #### Core Contracts
@@ -448,6 +459,7 @@ Tokenized equity assets on Hedera (HTS, 8 dp) are listed under [Robinhood Tokeni
 | [bnUSD (18)](https://robinhoodchain.blockscout.com/address/0x3cd95c469be0edfd12bd4f3a4436b132b7908df4) | [0x95f8d76299ac77325b0bd154a1eeb8650367ce4d](https://sonicscan.org/address/0x95f8d76299ac77325b0bd154a1eeb8650367ce4d) |
 | [SODA (18)](https://robinhoodchain.blockscout.com/address/0xa256dd181c3f6e5ec68c6869f5d50a712d47212e) | [0x06dd369f24623e331053baf31a5138f76eb44f11](https://sonicscan.org/address/0x06dd369f24623e331053baf31a5138f76eb44f11) |
 | [USDG (6)](https://robinhoodchain.blockscout.com/address/0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168) | [0xb2e81dddFfcC9E49e9C9DEd644091dfeCf4Ff4e7](https://sonicscan.org/address/0xb2e81dddFfcC9E49e9C9DEd644091dfeCf4Ff4e7) |
+| [PONS(18)](https://robinhoodchain.blockscout.com/address/0x39dBED3a2bd333467115dE45665cC57F813C4571) | [0x9cf6640c73dd4c278cfa08a8b8773e7b22420582](https://sonicscan.org/address/0x9cf6640c73dd4c278cfa08a8b8773e7b22420582) |
 
 Tokenized equity assets on Robinhood Chain (18 dp) are listed under [Robinhood Tokenized Equities](#robinhood-tokenized-equities).
 
@@ -564,6 +576,7 @@ Address encoding: `utf8`
 | [USDC (6)](https://nearblocks.io/token/17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1) | [0x0d7209e6a6922a9f8e42bf04dc263dcdd0a0c20a](https://sonicscan.org/address/0x0d7209e6a6922a9f8e42bf04dc263dcdd0a0c20a) |
 | [USDT (6)](https://nearblocks.io/token/usdt.tether-token.near) | [0x54e3c4b335caff41577e187fb9be1c2b35a1e151](https://sonicscan.org/address/0x54e3c4b335caff41577e187fb9be1c2b35a1e151) |
 | [Wrapped Near (24)](https://nearblocks.io/token/wrap.near) | [0x2ec38a4ddfb76e1aae04f392b55a28f0d659bcd4](https://sonicscan.org/address/0x2ec38a4ddfb76e1aae04f392b55a28f0d659bcd4) |
+| [ZEC(8)](https://nearblocks.io/token/zec.omft.near) | [0xed5d71eed7cb6b62a449522538a6960ea242b8c3](https://sonicscan.org/address/0xed5d71eed7cb6b62a449522538a6960ea242b8c3) |
 
 
 
@@ -607,6 +620,7 @@ Address encoding: `xdr`
 | [USDS(7)](https://stellar.expert/explorer/public/contract/CC552JLYIJROE24VZFSMO7GBKQOOIQ6R52E3VQSQYC7NMFYAVMC7GQHS) | [0xE36b8F88651004e29FD2001aEace777671731d65](https://sonicscan.org/address/0xE36b8F88651004e29FD2001aEace777671731d65) |
 | [TRX(7)](https://stellar.expert/explorer/public/contract/CDK5WW6JG476XTIQAVVGYIBUR2ENPQXW7QG7ERSNTR4W6SW5XTUNA2UB) | [0x00fe4CeF2c5e8b5Cb9448b64B7032Fca5b1C26DA](https://sonicscan.org/address/0x00fe4CeF2c5e8b5Cb9448b64B7032Fca5b1C26DA) |
 | [XRP(7)](https://stellar.expert/explorer/public/contract/CDTFWRWSQTOR2U6GCCGQFIXALROG5QLEQN3FR2PQGF4JX6AB277KVIA5) | [0x585c1Ad1c92A2BefEA01eC61659e21E24A318337](https://sonicscan.org/address/0x585c1Ad1c92A2BefEA01eC61659e21E24A318337) |
+| [EURC(7)](https://stellar.expert/explorer/public/contract/CDTKPWPLOURQA2SGTKTUQOWRCBZEORB4BWBOMJ3D3ZTQQSGE5F6JBQLV) | [0x93d5d2382f302fa78350c18b4df3ee0bd09b3945](https://sonicscan.org/address/0x93d5d2382f302fa78350c18b4df3ee0bd09b3945) |
 
 Tokenized equity assets on Stellar (SAC, 7 dp) are listed under [Robinhood Tokenized Equities](#robinhood-tokenized-equities).
 
@@ -629,6 +643,16 @@ Address encoding: `base58`
 | [Soda(9)](https://explorer.solana.com/address/8Bj8gSbga8My8qRkT1RrvgxFBExiGFgdRNHFaR9o2T3Q) | [0x07db7b1a96ebe474b20f52ff487cee415adee79e](https://sonicscan.org/address/0x07db7b1a96ebe474b20f52ff487cee415adee79e)  |
 | [USDC(6)](https://explorer.solana.com/address/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v) | [0xC3f020057510ffE10Ceb882e1B48238b43d78a5e](https://sonicscan.org/address/0xC3f020057510ffE10Ceb882e1B48238b43d78a5e)  |
 | [USDT(6)](https://explorer.solana.com/address/Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB) | [0x891c7ab9047eb087b5a988a2638e7056f67adc5c](https://sonicscan.org/address/0x891c7ab9047eb087b5a988a2638e7056f67adc5c)  |
+| [PUMP(6)](https://explorer.solana.com/address/pumpCmXqMfrsAkQ5r49WcJnRayYRqmXz6ae8H7H9Dfn) | [0x02722baa016f5369c91b6533330315ec884458a4](https://sonicscan.org/address/0x02722baa016f5369c91b6533330315ec884458a4) |
+| [ETH(8)](https://explorer.solana.com/address/7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs) | [0x6ebaff90878a252ac3358ae8b74d174f09d329d3](https://sonicscan.org/address/0x6ebaff90878a252ac3358ae8b74d174f09d329d3) |
+| [USD1(6)](https://explorer.solana.com/address/USD1ttGY1N17NEEHLmELoaybftRBUSErhqYiQzvEmuB) | [0xe02735b9bc0dc82564c1bebdcaeffef6071efea1](https://sonicscan.org/address/0xe02735b9bc0dc82564c1bebdcaeffef6071efea1) |
+| [cbBTC(8)](https://explorer.solana.com/address/cbbtcf3aa214zXHbiAZQwf4122FBYbraNdFqgw4iMij) | [0xca4ba45e5bf0691cb0b5fbe197a3317b7aa81602](https://sonicscan.org/address/0xca4ba45e5bf0691cb0b5fbe197a3317b7aa81602) |
+| [PYUSD(6)](https://explorer.solana.com/address/2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo) | [0x3fe0cdad6c8f0a600afdb4e04ed1a0b3811b274f](https://sonicscan.org/address/0x3fe0cdad6c8f0a600afdb4e04ed1a0b3811b274f) |
+| [JLP(6)](https://explorer.solana.com/address/27G8MtK7VtTcCHkpASjSDdkWWYfoqT6ggEuKidVJidD4) | [0x78dff771e80d7152720bdfd399bfdd327cc25b25](https://sonicscan.org/address/0x78dff771e80d7152720bdfd399bfdd327cc25b25) |
+| [USDG(6)](https://explorer.solana.com/address/2u1tszSeqZ3qBWF3uNGPFc8TzMk2tdiwknnRMWGWjGWH) | [0x67047acfd986561f2f377fd52dc26c11286ff655](https://sonicscan.org/address/0x67047acfd986561f2f377fd52dc26c11286ff655) |
+| [JupUSD(6)](https://explorer.solana.com/address/JuprjznTrTSp2UFa3ZBUFgwdAmtZCq4MQCwysN55USD) | [0xb37d694de613abf079c4ccc6ce7683843370d219](https://sonicscan.org/address/0xb37d694de613abf079c4ccc6ce7683843370d219) |
+| [USDe(9)](https://explorer.solana.com/address/DEkqHyPN7GMRJ5cArtQFAWefqbZb33Hyf6s5iCwjEonT) | [0x920bb2b09873073eeb1b71db9e3ecb908d221086](https://sonicscan.org/address/0x920bb2b09873073eeb1b71db9e3ecb908d221086) |
+| [USELESS(6)](https://explorer.solana.com/address/Dz9mQ9NzkBcCsuGPFJ3r1bS4wgqKMHBPiVuniW8Mbonk) | [0x0a3a93b7303a582b2ab84cfb3493fdb9d160a3ef](https://sonicscan.org/address/0x0a3a93b7303a582b2ab84cfb3493fdb9d160a3ef) |
 
 #### Asset Managers Vault and Token Creation Fee
 | Token | Address | Token Creation Fee |
@@ -669,6 +693,8 @@ Address encoding: `utf8`
 | legacy bnUSD(9) | [0xddf6ad38f9c9451c1f4cdf369040f6869e37393e](https://sonicscan.org/address/0xddf6ad38f9c9451c1f4cdf369040f6869e37393e)|
 | [WAL(9)](https://suivision.xyz/coin/0x356a26eb9e012a68958082340d4c4116e7f55615cf27affcff209cf0ae544f59::wal::WAL) | [0x72a726ab67c382e8946a79e9872ea32695661e11](https://sonicscan.org/address/0x72a726ab67c382e8946a79e9872ea32695661e11)  |
 | [DEEP(6)](https://suivision.xyz/coin/0xdeeb7a4662eec9f2f3def03fb937a663dddaa2e215b8078a284d026b7946c270::deep::DEEP) | [0x93057085a4627cec26b31477a02f62412cc0485f](https://sonicscan.org/address/0x93057085a4627cec26b31477a02f62412cc0485f)  |
+| [USDsui(6)](https://suivision.xyz/coin/0x44f838219cf67b058f3b37907b655f226153c18e33dfcd0da559a844fea9b1c1::usdsui::USDSUI) | [0x2ed5799b38271c02fdd74bab080f32db58b20c44](https://sonicscan.org/address/0x2ed5799b38271c02fdd74bab080f32db58b20c44) |
+| [WBTC(8)](https://suivision.xyz/coin/0x0041f9f9344cac094454cd574e333c4fdb132d7bcc9379bcd4aab485b2a63942::wbtc::WBTC) | [0x2037d840f01e903e09e33b146f2dd3fa4a4d2c21](https://sonicscan.org/address/0x2037d840f01e903e09e33b146f2dd3fa4a4d2c21) |
 
 ### Bitcoin
 

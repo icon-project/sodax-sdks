@@ -78,6 +78,7 @@ export const swapSupportedTokens = {
     spokeChainConfig[ChainKeys.AVALANCHE_MAINNET].supportedTokens.bnUSD,
     spokeChainConfig[ChainKeys.AVALANCHE_MAINNET].supportedTokens.SODA,
     spokeChainConfig[ChainKeys.AVALANCHE_MAINNET].supportedTokens.WETHe,
+    spokeChainConfig[ChainKeys.AVALANCHE_MAINNET].supportedTokens.BTCb,
   ] as const satisfies XToken[],
   [ChainKeys.ARBITRUM_MAINNET]: [
     spokeChainConfig[ChainKeys.ARBITRUM_MAINNET].supportedTokens.ETH,
@@ -97,6 +98,9 @@ export const swapSupportedTokens = {
     spokeChainConfig[ChainKeys.ARBITRUM_MAINNET].supportedTokens.PENDLE,
     spokeChainConfig[ChainKeys.ARBITRUM_MAINNET].supportedTokens.rETH,
     spokeChainConfig[ChainKeys.ARBITRUM_MAINNET].supportedTokens.SODA,
+    spokeChainConfig[ChainKeys.ARBITRUM_MAINNET].supportedTokens.cbBTC,
+    spokeChainConfig[ChainKeys.ARBITRUM_MAINNET].supportedTokens.GMX,
+    spokeChainConfig[ChainKeys.ARBITRUM_MAINNET].supportedTokens.DAI,
     // spokeChainConfig[ChainKeys.ARBITRUM_MAINNET].supportedTokens.USDS, // NOTE: Not Implemented
   ] as const satisfies XToken[],
   [ChainKeys.BASE_MAINNET]: [
@@ -109,6 +113,8 @@ export const swapSupportedTokens = {
     spokeChainConfig[ChainKeys.BASE_MAINNET].supportedTokens.VIRTUAL,
     spokeChainConfig[ChainKeys.BASE_MAINNET].supportedTokens.cbETH,
     spokeChainConfig[ChainKeys.BASE_MAINNET].supportedTokens.SODA,
+    spokeChainConfig[ChainKeys.BASE_MAINNET].supportedTokens.EURC,
+    spokeChainConfig[ChainKeys.BASE_MAINNET].supportedTokens.MORPHO,
     // spokeChainConfig[ChainKeys.BASE_MAINNET].supportedTokens.USDS, // NOTE: Not Implemented
   ] as const satisfies XToken[],
   [ChainKeys.OPTIMISM_MAINNET]: [
@@ -151,6 +157,7 @@ export const swapSupportedTokens = {
     spokeChainConfig[ChainKeys.BSC_MAINNET].supportedTokens.SOL,
     spokeChainConfig[ChainKeys.BSC_MAINNET].supportedTokens.DOT,
     spokeChainConfig[ChainKeys.BSC_MAINNET].supportedTokens.LINK,
+    spokeChainConfig[ChainKeys.BSC_MAINNET].supportedTokens.UNI,
   ] as const satisfies XToken[],
   [ChainKeys.HYPEREVM_MAINNET]: [
     spokeChainConfig[ChainKeys.HYPEREVM_MAINNET].supportedTokens.HYPE,
@@ -162,6 +169,7 @@ export const swapSupportedTokens = {
     spokeChainConfig[ChainKeys.HYPEREVM_MAINNET].supportedTokens.UETH,
     spokeChainConfig[ChainKeys.HYPEREVM_MAINNET].supportedTokens.kHYPE,
     spokeChainConfig[ChainKeys.HYPEREVM_MAINNET].supportedTokens.USDH,
+    spokeChainConfig[ChainKeys.HYPEREVM_MAINNET].supportedTokens.USOL,
   ] as const satisfies XToken[],
   [ChainKeys.LIGHTLINK_MAINNET]: [
     spokeChainConfig[ChainKeys.LIGHTLINK_MAINNET].supportedTokens.ETH,
@@ -201,6 +209,16 @@ export const swapSupportedTokens = {
     spokeChainConfig[ChainKeys.SOLANA_MAINNET].supportedTokens.MSTRx,
     spokeChainConfig[ChainKeys.SOLANA_MAINNET].supportedTokens.COINx,
     spokeChainConfig[ChainKeys.SOLANA_MAINNET].supportedTokens.GOOGLx,
+    spokeChainConfig[ChainKeys.SOLANA_MAINNET].supportedTokens.PUMP,
+    spokeChainConfig[ChainKeys.SOLANA_MAINNET].supportedTokens.ETH,
+    spokeChainConfig[ChainKeys.SOLANA_MAINNET].supportedTokens.USD1,
+    spokeChainConfig[ChainKeys.SOLANA_MAINNET].supportedTokens.cbBTC,
+    spokeChainConfig[ChainKeys.SOLANA_MAINNET].supportedTokens.PYUSD,
+    spokeChainConfig[ChainKeys.SOLANA_MAINNET].supportedTokens.JLP,
+    spokeChainConfig[ChainKeys.SOLANA_MAINNET].supportedTokens.USDG,
+    spokeChainConfig[ChainKeys.SOLANA_MAINNET].supportedTokens.JupUSD,
+    spokeChainConfig[ChainKeys.SOLANA_MAINNET].supportedTokens.USDe,
+    spokeChainConfig[ChainKeys.SOLANA_MAINNET].supportedTokens.USELESS,
   ] as const satisfies XToken[],
   [ChainKeys.ICON_MAINNET]: [
     spokeChainConfig[ChainKeys.ICON_MAINNET].supportedTokens.ICX,
@@ -254,6 +272,7 @@ export const swapSupportedTokens = {
     spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.AMD,
     spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.INTC,
     spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.BABA,
+    spokeChainConfig[ChainKeys.STELLAR_MAINNET].supportedTokens.EURC,
   ] as const satisfies XToken[],
   [ChainKeys.SUI_MAINNET]: [
     spokeChainConfig[ChainKeys.SUI_MAINNET].supportedTokens.SUI,
@@ -269,6 +288,8 @@ export const swapSupportedTokens = {
     spokeChainConfig[ChainKeys.SUI_MAINNET].supportedTokens.DEEP,
     spokeChainConfig[ChainKeys.SUI_MAINNET].supportedTokens.WAL,
     spokeChainConfig[ChainKeys.SUI_MAINNET].supportedTokens.NAVX,
+    spokeChainConfig[ChainKeys.SUI_MAINNET].supportedTokens.USDsui,
+    spokeChainConfig[ChainKeys.SUI_MAINNET].supportedTokens.WBTC,
   ] as const satisfies XToken[],
   [ChainKeys.INJECTIVE_MAINNET]: [
     spokeChainConfig[ChainKeys.INJECTIVE_MAINNET].supportedTokens.INJ,
@@ -281,6 +302,7 @@ export const swapSupportedTokens = {
     spokeChainConfig[ChainKeys.NEAR_MAINNET].supportedTokens.SODA,
     spokeChainConfig[ChainKeys.NEAR_MAINNET].supportedTokens.USDC,
     spokeChainConfig[ChainKeys.NEAR_MAINNET].supportedTokens.USDT,
+    spokeChainConfig[ChainKeys.NEAR_MAINNET].supportedTokens.ZEC,
   ] as const satisfies XToken[],
   [ChainKeys.BITCOIN_MAINNET]: [
     spokeChainConfig[ChainKeys.BITCOIN_MAINNET].supportedTokens.BTC,
@@ -310,6 +332,9 @@ export const swapSupportedTokens = {
     spokeChainConfig[ChainKeys.ETHEREUM_MAINNET].supportedTokens.DAI,
     spokeChainConfig[ChainKeys.ETHEREUM_MAINNET].supportedTokens.cbBTC,
     spokeChainConfig[ChainKeys.ETHEREUM_MAINNET].supportedTokens.rETH,
+    spokeChainConfig[ChainKeys.ETHEREUM_MAINNET].supportedTokens.GHO,
+    spokeChainConfig[ChainKeys.ETHEREUM_MAINNET].supportedTokens.USDG,
+    spokeChainConfig[ChainKeys.ETHEREUM_MAINNET].supportedTokens.LIT,
     // spokeChainConfig[ChainKeys.ETHEREUM_MAINNET].supportedTokens.USDS, // NOTE: Not Implemented
   ] as const,
   [ChainKeys.REDBELLY_MAINNET]: [
@@ -416,6 +441,7 @@ export const swapSupportedTokens = {
     spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.AMD,
     spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.INTC,
     spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.BABA,
+    spokeChainConfig[ChainKeys.ROBINHOOD_MAINNET].supportedTokens.PONS,
   ] as const satisfies XToken[],
 } as const satisfies Record<SpokeChainKey, readonly XToken[]>;
 

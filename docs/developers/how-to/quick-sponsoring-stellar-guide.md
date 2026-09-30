@@ -25,6 +25,7 @@ Mainnet only. In swaps when destination is XLM account is has to be activated to
 - Branch on `error.context.nextAction`, not status — the two 503s want opposite handling.
 - A sequence conflict costs a second wallet prompt; wire `onSignatureRequired`.
 - Never hardcode the sponsor account; read it from config.
+- A key in a browser bundle is public; see [API key good practices](/developers/how-to/api-key-good-practices).
 
 **Docs** — [SPONSORING.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SPONSORING.md) ·
 [STELLAR_TRUSTLINE.md](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/STELLAR_TRUSTLINE.md) ·

@@ -107,8 +107,13 @@ instance-wide key, `new Sodax({ apiKey })`, sent on every backend request — th
 `RequestOverrideConfig`:
 
 ```ts
+// Server-side only — a key in a browser bundle is public
 await sodax.api.swaps.createIntent(body, { apiKey: 'per-request-key' });
 ```
+
+The key belongs on a server. Never read it from `NEXT_PUBLIC_*` / `VITE_*` / `REACT_APP_*` — those are
+inlined into the client bundle. When the SDK runs in a browser, point `api.baseURL` and
+`solver.solverApiEndpoint` at the app's own backend proxy and attach the key there: https://docs.sodax.com/developers/how-to/api-key-good-practices.
 
 Precedence, highest first: per-call `headers['x-api-key']` (any casing) → per-call `apiKey` → a
 configured explicit `x-api-key` header (`api.headers` / `setHeaders`) → the configured `apiKey`. That

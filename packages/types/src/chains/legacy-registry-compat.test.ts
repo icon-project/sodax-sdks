@@ -329,6 +329,12 @@ const LEGACY_MONEY_MARKET_RESERVE_ASSETS: readonly string[] = [
   '0xE801CA34E19aBCbFeA12025378D19c4FBE250131',
 ];
 
+// Plain swap tokens listed after the equities (sodax-solver-v2#1063).
+const STELLAR_APPENDED = ['EURC:CDTKPWPLOURQA2SGTKTUQOWRCBZEORB4BWBOMJ3D3ZTQQSGE5F6JBQLV'];
+const ROBINHOOD_APPENDED = ['PONS:0x39dBED3a2bd333467115dE45665cC57F813C4571'];
+
+const keysOf = (ids: readonly string[]): string[] => ids.map(id => id.slice(0, id.indexOf(':')));
+
 const identify = (tokens: readonly XToken[]): string[] => tokens.map(token => `${token.symbol}:${token.address}`);
 
 const equityIds = (registry: Record<(typeof EQUITY_SYMBOLS)[number], XToken>): string[] =>
@@ -346,7 +352,11 @@ describe('legacy hub vault registries are unchanged prefixes', () => {
 
 describe('legacy spoke registries are unchanged prefixes', () => {
   it('stellarSupportedTokens', () => {
-    expect(Object.keys(stellarSupportedTokens)).toEqual([...LEGACY_STELLAR_TOKEN_KEYS, ...EQUITY_SYMBOLS]);
+    expect(Object.keys(stellarSupportedTokens)).toEqual([
+      ...LEGACY_STELLAR_TOKEN_KEYS,
+      ...EQUITY_SYMBOLS,
+      ...keysOf(STELLAR_APPENDED),
+    ]);
   });
 
   it('hederaSupportedTokens', () => {
@@ -354,12 +364,16 @@ describe('legacy spoke registries are unchanged prefixes', () => {
   });
 
   it('robinhoodSupportedTokens', () => {
-    expect(Object.keys(robinhoodSupportedTokens)).toEqual([...LEGACY_ROBINHOOD_TOKEN_KEYS, ...EQUITY_SYMBOLS]);
+    expect(Object.keys(robinhoodSupportedTokens)).toEqual([
+      ...LEGACY_ROBINHOOD_TOKEN_KEYS,
+      ...EQUITY_SYMBOLS,
+      ...keysOf(ROBINHOOD_APPENDED),
+    ]);
   });
 
   it('Stellar trustline configs', () => {
     const codes = spokeChainConfig[ChainKeys.STELLAR_MAINNET].trustlineConfigs.map(config => config.assetCode);
-    expect(codes).toEqual([...LEGACY_STELLAR_TRUSTLINE_CODES, ...EQUITY_SYMBOLS]);
+    expect(codes).toEqual([...LEGACY_STELLAR_TRUSTLINE_CODES, ...EQUITY_SYMBOLS, ...keysOf(STELLAR_APPENDED)]);
   });
 });
 
@@ -378,6 +392,7 @@ describe('legacy production swap sequences are unchanged prefixes', () => {
     expect(identify(swapSupportedTokens[ChainKeys.STELLAR_MAINNET])).toEqual([
       ...LEGACY_SWAP_STELLAR,
       ...equityIds(stellarSupportedTokens),
+      ...STELLAR_APPENDED,
     ]);
   });
 
@@ -392,6 +407,7 @@ describe('legacy production swap sequences are unchanged prefixes', () => {
     expect(identify(swapSupportedTokens[ChainKeys.ROBINHOOD_MAINNET])).toEqual([
       ...LEGACY_SWAP_ROBINHOOD,
       ...equityIds(robinhoodSupportedTokens),
+      ...ROBINHOOD_APPENDED,
     ]);
   });
 });
