@@ -79,3 +79,5 @@ Granular skill for `LeverageYieldService` — `sodax.leverageYield`. Feature tag
 - [`../recovery/SKILL.md`](../recovery/SKILL.md) — recover stuck hub-wallet assets (including `lsoda*` shares) back to a spoke chain.
 
 For multi-feature tasks, load the broad [`sodax-sdk` skill](../SKILL.md).
+
+Building a user-facing React vault screen? Load the `sodax-dapp-kit` skill's leverage-yield granular skill: its product anatomy covers the journey, the states, USD prices, derived values and the units table.

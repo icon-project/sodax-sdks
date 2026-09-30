@@ -4,6 +4,8 @@ Leveraged-yield ERC-4626 vaults on Sonic. Deposit any token → `lsoda*` shares,
 
 **Depends on:** [setup.md](setup.md), [wallet-connectivity.md](wallet-connectivity.md)
 
+**Building a user-facing screen?** Start from [leverage-yield-product-anatomy.md](leverage-yield-product-anatomy.md): what each step must answer, the states, USD and derived values, and the units table.
+
 ## Hooks
 
 ### Mutations

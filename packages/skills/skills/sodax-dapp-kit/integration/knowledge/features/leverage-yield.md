@@ -30,7 +30,7 @@ const { sodax } = useSodaxContext();
 const vaults = useMemo(() => sodax.leverageYield.listVaults(), [sodax]); // { name, vault, asset, borrowToken, lsdSource? }[]
 ```
 
-Every read and builder takes the vault's `vault` field (the `lsoda*` proxy address). `useLeverageYieldApiVaults` is the backend REST equivalent of `listVaults()`.
+Every read and builder takes the vault's `vault` field (the `lsoda*` proxy address). `useLeverageYieldApiVaults` is the backend REST equivalent of `listVaults()`. For symbols, logos, USD prices and a single units table, see [`../recipes/leverage-yield-product-anatomy.md`](../recipes/leverage-yield-product-anatomy.md).
 
 `deposit` / `withdraw` are **builders** — they assemble a `LeverageYieldSwapPayload`, they do NOT broadcast. Spread the built payload into `useLeverageYieldVaultSwap`'s `mutate`, adding the `walletProvider`. `vaultSwap` takes the **backend submit-tx** path by default and falls back to the client-side relay on any non-success, so track the result with `useLeverageYieldDetailedStatus` — it keys on the source tx and answers for whichever path completed. Pass `extras.apiKey` in `mutate` to key the backend leg per action. There is no dedicated leverage-yield approve hook: the swap-style deposit approves the spoke-side asset manager, so reuse `useSwapApprove` / `useSwapAllowance` (see Approval pattern).
 

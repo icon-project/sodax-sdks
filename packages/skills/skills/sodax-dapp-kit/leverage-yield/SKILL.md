@@ -33,6 +33,7 @@ Granular skill for the leverage-yield hooks of `@sodax/dapp-kit` v2. queryKey/mu
 2. [`../integration/knowledge/architecture.md`](../integration/knowledge/architecture.md) — hook shapes, `mutateAsyncSafe`, `unwrapResult`, queryKey conventions.
 3. [`../integration/knowledge/features/leverage-yield.md`](../integration/knowledge/features/leverage-yield.md) — full hook surface, mutation TVars, read shapes, approval pattern, gotchas.
 4. [`../integration/knowledge/recipes/leverage-yield.md`](../integration/knowledge/recipes/leverage-yield.md) — full worked examples (deposit, withdraw, stats, share balances).
+   - **Building a user-facing vault screen?** Read [`../integration/knowledge/recipes/leverage-yield-product-anatomy.md`](../integration/knowledge/recipes/leverage-yield-product-anatomy.md) first: the journey, the states to handle, display metadata, USD prices, derived values, units, and the planned steps with explorer links. Layout stays your call.
 5. Call-shape choice → [`../integration/knowledge/recipes/mutation-error-handling.md`](../integration/knowledge/recipes/mutation-error-handling.md).
 
 ### Leverage-yield-specific anti-patterns (dapp-kit)
@@ -57,6 +58,16 @@ Granular skill for the leverage-yield hooks of `@sodax/dapp-kit` v2. queryKey/mu
 - **Sizing an exit from `totalCollateralBase`.** Display-only. Use `useLeveragePositionCollateral` — an over-sized `decreaseLeverage` reverts at fill time and the intent silently expires.
 - **Charging an existing position the configured fee.** Read `feeBps` from `useLeveragePositionInfo`; `getEffectivePositionFee()` is what a NEW position would carry.
 - **Treating the mutation receipt as completion.** A solver fills a leverage change afterwards — poll `useLeveragePositionPending`.
+
+## Acceptance (what the user can do)
+
+Check the running app against these, not only `pnpm tsc`. The full list is in the product anatomy's Acceptance section.
+
+- Every vault shows its asset, a variable APR (sign kept), TVL in the asset and USD, exposure (`1 + multiplier`) and health.
+- Before signing, the user sees what they receive, the minimum they accept, and the steps they will sign.
+- Each step links to its transaction on the right explorer, and the flow is followed to a terminal status.
+- Shares are shown per network, in the asset and in USD; withdraw is capped at shares and signed from the network that deposited.
+- Rejecting in the wallet returns to the form quietly; every other state has a clear message.
 
 ## Verification
 
