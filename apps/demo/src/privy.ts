@@ -12,3 +12,8 @@ export async function loadPrivySource(): Promise<PrivySource | undefined> {
   // Testers reconnect without a new code; `'logout'` (the default) suits shared devices.
   return privy({ appId, disconnectBehavior: 'detach' });
 }
+
+/** Privy renders its modal (login, confirmations, MFA) in `#privy-dialog`, outside the demo's dialogs and sheets. */
+export function isInPrivyDialog(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest('#privy-dialog') !== null;
+}
