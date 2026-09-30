@@ -557,7 +557,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   return (
     <Card className="w-full max-w-lg mx-auto">
       <CardHeader>
-        <CardTitle className="text-2xl font-bold text-center">Cross-Chain Swap (Swaps API)</CardTitle>
+        <CardTitle className="text-xl sm:text-2xl font-bold text-center">Cross-Chain Swap (Swaps API)</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-2">
@@ -619,7 +619,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
         )}
 
         {!isSourceSignable && (
-          <div className="text-amber-600 text-sm">
+          <div className="text-amber-600 text-sm wrap-anywhere">
             Source-chain signing for {src.chain} is not yet supported by the wallet-provider interfaces — see
             components/swaps-api/lib/signAndBroadcast.ts.
           </div>
@@ -703,13 +703,13 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
       </CardContent>
       <CardFooter className="flex flex-col space-y-4">
         <div className="w-full text-sm text-muted-foreground">
-          <div className="flex justify-between items-center">
+          <div className="flex justify-between items-center gap-2">
             <span>Exchange Rate</span>
-            <span>
+            <span className="text-right">
               1 {src.token?.symbol} ≈ {exchangeRate.toString()} {dst.token?.symbol}
             </span>
           </div>
-          <div className="flex justify-between items-center">
+          <div className="flex justify-between items-center gap-2">
             <span>Slippage:</span>
             <div className="flex items-center gap-2">
               <Input type="number" value={slippage} onChange={e => setSlippage(e.target.value)} />
@@ -717,9 +717,9 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
             </div>
           </div>
 
-          <div className="flex justify-between items-center">
+          <div className="flex justify-between items-center gap-2">
             <span>Minimum Output Amount</span>
-            <span>
+            <span className="text-right">
               {minOutputAmount ? formatUnits(BigInt(minOutputAmount), dst.token?.decimals ?? 0) : '0'}{' '}
               {dst.token?.symbol}
             </span>
@@ -741,7 +741,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
           </div>
         )}
 
-        <div className="">
+        <div className="wrap-anywhere">
           {quoteQuery.error && (
             <div className="text-red-500">{formatSwapsApiError(quoteQuery.error, 'Quote failed')}</div>
           )}
@@ -768,7 +768,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
               <DialogDescription>See details of intent order.</DialogDescription>
             </DialogHeader>
             <div className="">
-              <div className="flex flex-col">
+              <div className="flex flex-col wrap-anywhere">
                 <div>
                   inputToken: {intentParams?.inputToken} on {intentParams?.srcChainKey}
                 </div>

@@ -607,9 +607,9 @@ export default function LeverageYieldPage() {
               leverage deposits always deliver shares. Total sums all chains. */}
           {connectedHolders.length > 0 && (
             <div className="border-t pt-3 space-y-1 text-sm">
-              <div className="flex justify-between font-medium">
+              <div className="flex justify-between gap-2 font-medium">
                 <span>Your shares (all chains)</span>
-                <span className="font-mono">
+                <span className="font-mono text-right">
                   {fmtUnits(totalShares, lsodaToken.decimals)} {lsodaToken.symbol}
                 </span>
               </div>
@@ -617,9 +617,9 @@ export default function LeverageYieldPage() {
                   user would get if they fully exited *right now*, in vault-asset units
                   (sodaWEETH-style, 18 dec). Tracks vault performance for the user. */}
               {vaultStats && totalShares > 0n && (
-                <div className="flex justify-between text-xs">
+                <div className="flex justify-between gap-2 text-xs">
                   <span className="text-muted-foreground">≈ underlying</span>
-                  <span className="font-mono text-muted-foreground">
+                  <span className="font-mono text-muted-foreground text-right">
                     {fmtUnits((totalShares * vaultStats.sharePrice) / 10n ** 18n, 18)}
                   </span>
                 </div>
@@ -630,11 +630,11 @@ export default function LeverageYieldPage() {
                   const d = q?.data;
                   if (d && d.shares > 0n) {
                     return (
-                      <div key={chainKey} className="flex justify-between text-xs">
+                      <div key={chainKey} className="flex justify-between gap-2 text-xs">
                         <span className="text-muted-foreground">
                           {chainKey} <span className="opacity-60">(hub wallet)</span>
                         </span>
-                        <span className="font-mono">{fmtUnits(d.shares, lsodaToken.decimals)}</span>
+                        <span className="font-mono text-right">{fmtUnits(d.shares, lsodaToken.decimals)}</span>
                       </div>
                     );
                   }
@@ -684,7 +684,7 @@ export default function LeverageYieldPage() {
               </div>
 
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <Label>{tab === 'deposit' ? 'Pay with' : 'Receive token'}</Label>
                   {tab === 'deposit' && userToken && userBalance !== undefined && (
                     <span className="text-xs text-muted-foreground">
@@ -775,7 +775,7 @@ export default function LeverageYieldPage() {
                     type="number"
                     value={slippage}
                     onChange={e => setSlippage(e.target.value)}
-                    className="h-7 w-24 text-xs"
+                    className="h-9 w-24 text-base sm:h-7 sm:text-xs"
                   />
                 </div>
               </div>
