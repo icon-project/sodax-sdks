@@ -201,7 +201,7 @@ export default function Header() {
                   <Button
                     onClick={() => setShowChains(!showChains)}
                     onBlur={() => setTimeout(() => setShowChains(false), 200)}
-                    className="flex items-center gap-2 px-3 py-1.5 bg-cherry-bright/20 rounded-lg hover:bg-cherry-soda/30 transition-colors"
+                    className="flex items-center gap-2 px-3 py-1.5 max-[360px]:gap-1 max-[360px]:px-2 bg-cherry-bright/20 rounded-lg hover:bg-cherry-soda/30 transition-colors"
                   >
                     <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
                     <span className="text-sm text-cream-white font-medium whitespace-nowrap">
@@ -244,7 +244,9 @@ export default function Header() {
             ) : (
               <Button onClick={openWalletModal} variant="cherryOutline" size="sm" className="whitespace-nowrap">
                 <Wallet className="w-4 h-4" />
-                Connect Wallet
+                <span>
+                  Connect<span className="max-[360px]:sr-only"> Wallet</span>
+                </span>
               </Button>
             )}
           </div>
