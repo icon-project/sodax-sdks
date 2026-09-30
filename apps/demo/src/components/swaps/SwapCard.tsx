@@ -432,8 +432,8 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
             className="w-[110px]"
           />
         </div>
-        <div className="mix-blend-multiply text-black text-(length:--body-comfortable) font-medium font-['InterRegular'] flex gap-1">
-          <span className="hidden sm:inline">Balance:</span>
+        <div className="mix-blend-multiply text-black text-(length:--body-comfortable) font-medium flex gap-1">
+          <span>Balance:</span>
           <span className="inline">
             {formatTokenAmount(
               src.chain === ChainKeys.BITCOIN_MAINNET && srcTradingBal ? srcTradingBal.btcSatoshi : sourceTokenBalance,
@@ -493,8 +493,8 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
             className="w-[110px]"
           />
         </div>
-        <div className="mix-blend-multiply text-black text-(length:--body-comfortable) font-medium font-['InterRegular'] flex gap-1">
-          <span className="hidden sm:inline">Balance:</span>
+        <div className="mix-blend-multiply text-black text-(length:--body-comfortable) font-medium flex gap-1">
+          <span>Balance:</span>
           <span className="inline">
             {formatTokenAmount(
               dst.chain === ChainKeys.BITCOIN_MAINNET && destTradingBal ? destTradingBal.btcSatoshi : destTokenBalance,

@@ -127,7 +127,7 @@ export function BorrowAssetsList({ initialChainId }: BorrowAssetsListProps): JSX
       <CardContent className="p-0">
         {address ? (
           <div className="overflow-hidden">
-            <div className="max-h-[500px] overflow-y-auto">
+            <div className="sm:max-h-[500px] overflow-y-auto">
               <Table unstyled className="w-full min-w-[56rem]">
                 <TableHeader className="sticky top-0 bg-cream backdrop-blur-sm z-20 border-b border-cherry-grey/20">
                   <TableRow>

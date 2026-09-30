@@ -372,8 +372,8 @@ export default function PartnerFeeClaimPage() {
     <main className="container mx-auto px-4 py-8 max-w-4xl">
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-cream-white mb-2">Partner Fee Claim Demo</h1>
-          <p className="text-cream/70">Query asset balances for any address on Sonic chain</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-cherry-dark mb-2">Partner Fee Claim Demo</h1>
+          <p className="text-clay">Query asset balances for any address on Sonic chain</p>
         </div>
 
         {srcAddress && isWrongChain && (
@@ -406,7 +406,7 @@ export default function PartnerFeeClaimPage() {
                 className="font-mono"
               />
               {sonicAccount?.address && (
-                <p className="text-sm text-cream/60">
+                <p className="text-sm text-muted-foreground">
                   Connected: {sonicAccount.address.slice(0, 10)}...{sonicAccount.address.slice(-8)}
                 </p>
               )}
@@ -445,7 +445,7 @@ export default function PartnerFeeClaimPage() {
             </CardHeader>
             <CardContent>
               {balancesArray.length === 0 ? (
-                <p className="text-cream/60">No balances found</p>
+                <p className="text-muted-foreground">No balances found</p>
               ) : (
                 <div className="space-y-2">
                   <div className="max-h-96 overflow-y-auto space-y-2">
@@ -876,7 +876,7 @@ export default function PartnerFeeClaimPage() {
                   {recoverTxLoading ? 'Loading...' : 'Load from Tx'}
                 </Button>
               </div>
-              <p className="text-xs text-cream/60">
+              <p className="text-xs text-muted-foreground">
                 Optional shortcut — reads the intent from the transaction and fills the From/To tokens below. The cancel
                 itself uses the token pair, not the hash.
               </p>
