@@ -38,8 +38,8 @@ function localWallet(id: string, address: `0x${string}`, disconnect = vi.fn(asyn
   return { connectorFn, disconnect };
 }
 
-/** Mounts `EvmActions` over a real wagmi config and connects every connector in order. */
-async function connectAll(connectorFns: CreateConnectorFn[]): Promise<Config> {
+/** Mounts `EvmActions` over a real wagmi config. */
+function mount(connectorFns: CreateConnectorFn[]): Config {
   const config = createConfig({
     chains: [sonic],
     connectors: connectorFns,
@@ -54,6 +54,12 @@ async function connectAll(connectorFns: CreateConnectorFn[]): Promise<Config> {
       </WagmiProvider>
     </QueryClientProvider>,
   );
+  return config;
+}
+
+/** Mounts `EvmActions` and connects every connector in order. */
+async function connectAll(connectorFns: CreateConnectorFn[]): Promise<Config> {
+  const config = mount(connectorFns);
   const connectors: readonly Connector[] = config.connectors;
   for (const connector of connectors) await connect(config, { connector });
   return config;
@@ -100,6 +106,42 @@ describe('EvmActions', () => {
       expect.stringContaining('wagmi disconnect failed'),
       expect.objectContaining({ message: expect.stringContaining('"stalled" did not finish') }),
     );
+    expect(useXWalletStore.getState().userDisconnected.EVM).toBe(true);
+  });
+
+  it('disconnect also cancels a connect that is still in flight', async () => {
+    // Like Privy's email login: connect waits on the user until the connector's own disconnect aborts it.
+    let abort: ((error: Error) => void) | undefined;
+    const disconnect = vi.fn(async (): Promise<void> => abort?.(new Error('Disconnected while connecting.')));
+    const pendingFn = createConnector(() => ({
+      id: 'pending',
+      name: 'pending',
+      type: 'pending',
+      connect: () =>
+        new Promise<never>((_, reject) => {
+          abort = reject;
+        }),
+      disconnect,
+      getAccounts: async () => [],
+      getChainId: async () => sonic.id,
+      getProvider: async () => ({}),
+      isAuthorized: async () => false,
+      onAccountsChanged: () => undefined,
+      onChainChanged: () => undefined,
+      onDisconnect: () => undefined,
+    }));
+    const config = mount([pendingFn]);
+
+    const connecting = useXWalletStore.getState().chainActions.EVM?.connect('pending');
+    await vi.waitFor(() => expect(abort).toBeDefined());
+    expect(config.state.connections.size).toBe(0);
+
+    await useXWalletStore.getState().chainActions.EVM?.disconnect();
+
+    expect(disconnect).toHaveBeenCalledOnce();
+    await expect(connecting).rejects.toThrow('Disconnected while connecting.');
+    expect(config.state.connections.size).toBe(0);
+    expect(config.state.status).toBe('disconnected');
     expect(useXWalletStore.getState().userDisconnected.EVM).toBe(true);
   });
 });
