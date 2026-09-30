@@ -586,6 +586,38 @@ describe('privyConnector — cancellation and teardown', () => {
     expect(context.config.state.status).not.toBe('connected');
   });
 
+  it('does not commit an attempt whose Privy session ended while the wallet provider was loading', async () => {
+    const context = setup();
+    const providerGate = Promise.withResolvers<void>();
+    const wallet = fakeWallet(ADDRESS, { providerGate: providerGate.promise });
+    context.runtime.publish(loggedIn(wallet));
+    const connecting = connect(context.config, { connector: context.privy });
+    await vi.waitFor(() => expect(wallet.getEthereumProvider).toHaveBeenCalled());
+
+    context.runtime.publish(loggedOut);
+    providerGate.resolve();
+
+    await expect(connecting).rejects.toThrow('The Privy session has ended.');
+    expect(localStorage.getItem(FLAG_KEY)).toBeNull();
+    expect(await context.privy.getAccounts()).toEqual([]);
+  });
+
+  it('does not commit an attempt whose Privy session ended while switching to the requested chain', async () => {
+    const context = setup();
+    const switchGate = Promise.withResolvers<void>();
+    const wallet = fakeWallet(ADDRESS, { switchGate: switchGate.promise });
+    context.runtime.publish(loggedIn(wallet));
+    const connecting = connect(context.config, { connector: context.privy, chainId: base.id });
+    await vi.waitFor(() => expect(wallet.switchChain).toHaveBeenCalled());
+
+    context.runtime.publish(loggedOut);
+    switchGate.resolve();
+
+    await expect(connecting).rejects.toThrow('The Privy session has ended.');
+    expect(localStorage.getItem(FLAG_KEY)).toBeNull();
+    expect(context.config.state.status).not.toBe('connected');
+  });
+
   it('leaves no watcher behind from a superseded attempt', async () => {
     const context = setup();
     const providerGate = Promise.withResolvers<void>();

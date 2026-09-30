@@ -13,7 +13,7 @@ import {
 import { createDeferredProvider, type DeferredProvider, type Eip1193Like } from './deferredProvider.js';
 import { PrivyTimeoutError, userRejected, withTimeout } from './errors.js';
 import { PRIVY_ICON } from './icon.js';
-import type { EmbeddedWallet, PrivyRuntime } from './runtime.js';
+import type { EmbeddedWallet, PrivyRuntime, PrivySnapshot } from './runtime.js';
 
 type PrivyConnectorOptions = {
   runtime: PrivyRuntime;
@@ -26,6 +26,16 @@ type PrivyConnectorOptions = {
 };
 
 type Session = { readonly address: Address; readonly wallet: EmbeddedWallet };
+
+/** The session's wallet in `snapshot`: `'ended'` on logout or a user change, `'pending'` while Privy reloads. */
+function sessionWallet(snapshot: PrivySnapshot, address: Address): EmbeddedWallet | 'ended' | 'pending' {
+  if (snapshot.ready && !snapshot.authenticated) return 'ended';
+  // Mid-reload: Privy is not ready, or the user's linked wallet is not listed yet.
+  if (!snapshot.ready || !snapshot.userLoaded || (snapshot.hasEmbeddedAccount && !snapshot.embedded)) return 'pending';
+  const wallet = snapshot.embedded;
+  // Fail closed: never follow a different address for an intent-signing session.
+  return wallet && getAddress(wallet.address) === address ? wallet : 'ended';
+}
 
 /**
  * wagmi connector for the Privy embedded wallet. It never imports Privy: `PrivyBridge` feeds it through
@@ -91,15 +101,10 @@ export function privyConnector({
     // Privy's provider reports neither logout nor a user change, so the connector watches the runtime.
     function onRuntimeChange() {
       const current = session;
-      const snapshot = runtime.getSnapshot();
       if (!current || switching) return;
-      if (snapshot.ready && !snapshot.authenticated) return endSession();
-      // Mid-reload: Privy is not ready, or the user's linked wallet is not listed yet.
-      if (!snapshot.ready || !snapshot.userLoaded || (snapshot.hasEmbeddedAccount && !snapshot.embedded)) return;
-      const wallet = snapshot.embedded;
-      // Fail closed: never follow a different address for an intent-signing session.
-      if (!wallet || getAddress(wallet.address) !== current.address) return endSession();
-      if (wallet === current.wallet) return;
+      const wallet = sessionWallet(runtime.getSnapshot(), current.address);
+      if (wallet === 'ended') return endSession();
+      if (wallet === 'pending' || wallet === current.wallet) return;
       const next = { ...current, wallet };
       session = next;
       prepare(wallet, chainId).then(
@@ -224,6 +229,11 @@ export function privyConnector({
           const otherIsCurrent = current !== null && connections.get(current)?.connector.id !== PRIVY_CONNECTOR_ID;
           if (status === 'connected' && otherIsCurrent && (isReconnecting || current !== startCurrent)) {
             throw userRejected('Another wallet connected while Privy was connecting.');
+          }
+          // `watch()` only sees later changes: a logout while preparing or switching is caught here.
+          if (sessionWallet(runtime.getSnapshot(), session.address) === 'ended') {
+            flag.clear();
+            throw new Error('[wallet-sdk-react/privy] The Privy session has ended.');
           }
           flag.write();
           watch();
