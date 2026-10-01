@@ -36,6 +36,8 @@ At a target LTV `L`, the steady-state amounts (as a multiple of your principal) 
 | Total borrowed | `L / (1 − L)` | `5.67×` principal |
 | **Leverage multiplier** (`leverageMultiplierWad`) | `L / (1 − L)` | `5.67×` |
 
+The multiplier is the **borrowed** multiple, not the exposure. The exposure a depositor holds is total collateral, `1 / (1 − L)` = `1 + leverageMultiplier` (`6.67×` here). A UI label that reads "Leverage" should show that sum.
+
 Your net yield is the base supply rate on your principal **plus** the leverage multiplier applied to the *spread* between the supply and borrow rates:
 
 ```
@@ -127,16 +129,25 @@ Because the fee comes out of `inputAmount`, its **denomination differs by direct
 Size `minOutputAmount` with `sodax.leverageYield.getQuote()`, which deducts the same effective leverage-yield fee the intent will charge:
 
 ```typescript
+// Deposit quote. For a withdraw, swap the two sides: the vault on SONIC_MAINNET is token_src,
+// the output token on its chain is token_dst, and amount is the lsoda* shares to burn.
+const inputAmount = 1_000_000_000_000_000_000n; // 1 weETH, in the input token's decimals
 const quote = await sodax.leverageYield.getQuote({
-  token_src: '0x...',                                  // spoke token in (deposit) — or the vault (withdraw)
+  token_src: '0x...weETHonArbitrum',                   // spoke token in
   token_src_blockchain_id: ChainKeys.ARBITRUM_MAINNET,
-  token_dst: vault.vault,                              // the vault (deposit) — or the spoke token out (withdraw)
+  token_dst: vault.vault,                              // the vault, always on Sonic
   token_dst_blockchain_id: ChainKeys.SONIC_MAINNET,
-  amount: 1_000_000n,
+  amount: inputAmount,
   quote_type: 'exact_input',
   // partnerFee — pass the same value you pass to deposit()/withdraw()/vaultSwap(), or omit on both
 });
+if (!quote.ok) return;
+
+const slippageBps = 100n; // 1%
+const minOutputAmount = (quote.value.quoted_amount * (10_000n - slippageBps)) / 10_000n;
 ```
+
+Never pass `minOutputAmount: 0n` or a hand-picked constant. The SDK accepts zero, and the intent then accepts any fill.
 
 Do **not** use `sodax.swaps.getQuote()` for vault flows: it deducts the effective *swap* fee, so once the two feature fees differ the quote and the intent disagree — and when the leverage-yield fee is the larger one, the `minOutputAmount` derived from that quote exceeds what the intent can deliver and it never fills.
 
@@ -160,8 +171,8 @@ const intentResult = await sodax.leverageYield.deposit({
   srcChainKey,
   srcAddress: '0xYourArbitrumEOA...',
   inputToken: '0x...weETHonArbitrum',
-  inputAmount: 1_000_000_000_000_000_000n, // input-token decimals
-  minOutputAmount: 900_000_000_000_000_000n, // lsoda* (18 dp), slippage already applied
+  inputAmount, // the amount you quoted, in input-token decimals
+  minOutputAmount, // lsoda* (18 dp): the quote minus slippage, from Quoting above
 });
 
 if (!intentResult.ok) throw intentResult.error;
@@ -202,7 +213,7 @@ const intentResult = await sodax.leverageYield.withdraw({
   dstChainKey: ChainKeys.ARBITRUM_MAINNET, // where the swapped-back token is delivered
   outputToken: '0x...weETHonArbitrum',
   inputAmount: shareBalance, // lsoda* shares (18 dp)
-  minOutputAmount: 900_000_000_000_000_000n,
+  minOutputAmount: withdrawMinOutputAmount, // from a withdraw quote (vault as token_src) minus slippage, as in Quoting
   // recipient?: defaults to srcAddress
 });
 
@@ -460,7 +471,7 @@ type LeverageYieldApr = {
   supplyAprRay: bigint;          // AAVE supply rate of asset, in RAY (1e27)
   borrowAprRay: bigint;          // AAVE variable borrow rate of borrowToken, in RAY
   targetLtvBps: bigint;          // vault targetLTV(), in basis points
-  leverageMultiplierWad: bigint; // targetLTV / (1 - targetLTV), in WAD (1e18)
+  leverageMultiplierWad: bigint; // targetLTV / (1 - targetLTV), in WAD (1e18): borrowed multiple; exposure = 1 + this
   netAprRay: bigint;             // net APR at targetLTV, in RAY — can be negative
 };
 ```
