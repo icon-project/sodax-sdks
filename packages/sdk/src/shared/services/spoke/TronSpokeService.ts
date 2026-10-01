@@ -1,4 +1,4 @@
-import { bytesToBigInt, isHex, sha256, type Hex } from 'viem';
+import { isHex, sha256, type Hex } from 'viem';
 import {
   ChainKeys,
   getMpcRelayChainInfo,
@@ -32,6 +32,7 @@ import {
   type DepositRecord,
   type WithdrawalRecord,
 } from '../mpcRelay/MpcRelayApiService.js';
+import { randomWithdrawNonce } from './mpc-message.js';
 import {
   assembleBroadcastHex,
   computeSignedMessageHash,
@@ -81,24 +82,6 @@ const SIGNATURE_PLACEHOLDER = '00'.repeat(65);
 
 /** Placeholder memo for sizing: a deposit memo is always exactly 32 bytes. */
 const MEMO_PLACEHOLDER = `0x${'00'.repeat(32)}` as Hex;
-
-/**
- * Withdraw-auth nonce: any value the sender has not used before — NEAR rejects a repeat, it does not
- * require an increasing value. A random draw is what that calls for; a clock reading is not, since
- * two withdrawals in the same millisecond collide and a backwards clock adjustment reuses a spent
- * value, both of which surface as an opaque replay rejection.
- *
- * Capped at 53 bits rather than the field's full u64 range: the relay round-trips the nonce through
- * a JavaScript `number` before it reaches the NEAR contract, so anything above `Number.MAX_SAFE_INTEGER`
- * arrives rounded. The contract then hashes a nonce we did not sign and the withdrawal dies at
- * `submit_withdraw_message` with "Recovered address does not match sender" — after the nonce is
- * already spent. 2^53 draws leave collision odds negligible.
- */
-const MAX_SAFE_NONCE = (1n << 53n) - 1n;
-
-function randomNonce(): bigint {
-  return bytesToBigInt(crypto.getRandomValues(new Uint8Array(8))) & MAX_SAFE_NONCE;
-}
 
 /**
  * Spoke service for Tron. Unlike the intent-relay chains, Tron deposits ride the **MPC relay** in
@@ -187,6 +170,11 @@ export class TronSpokeService {
     // Register the hub-side calls and get the shared reserve + the memo to tag the transfer with.
     const addr = await getDepositAddress(this.relayApiUrl, srcAddress, this.chainId, data);
     if (!addr.ok) throw addr.error;
+    if (addr.value.depositMethod !== 'memo') {
+      throw new Error(
+        `[TronSpokeService.deposit] relay returned a ${addr.value.depositMethod}-mode deposit, expected memo`,
+      );
+    }
     const { reserveAddress, memo, hubWallet } = addr.value;
     this.warnOnUnknownReserve(reserveAddress);
 
@@ -441,7 +429,7 @@ export class TronSpokeService {
     const message = {
       to: params.dstAddress as Hex, // hub wallet that executes the calls
       data: params.payload,
-      nonce: randomNonce(),
+      nonce: randomWithdrawNonce(),
       chainId: BigInt(this.chainId), // the relay's source-chain id, not the hub's
       sender,
     };
