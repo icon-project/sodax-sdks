@@ -177,8 +177,9 @@ message.
 
 ## Custom wallet modal
 
-Privy opens its own login dialog, like WalletConnect opens its QR modal. While it is up, `useWalletModal`
-stays in `connecting`. To avoid two stacked dialogs, render nothing for those connectors:
+Privy opens its own login dialog, like WalletConnect opens its QR modal. While it is up — including the
+screen where Privy creates a new user's wallet after the code — `useWalletModal` stays in `connecting`. To
+avoid two stacked dialogs, render nothing for those connectors:
 
 ```typescript
 if (modal.state.kind === 'connecting' && ['walletConnect', 'privy'].includes(modal.state.connector.id)) {
@@ -224,11 +225,14 @@ Or close your dialog before the action starts, if it does not need to show the r
 - **Slow start**: on page load the SDK gives the whole Privy restore at most 3 seconds, so other wallets
   are never held back longer. If Privy takes longer, the user shows as disconnected; one click on
   "Email (Privy)" reconnects without a new code.
-- **Disconnect signs the user out of Privy** by default, so the next connect asks for a code again. It
-  also ends any other EVM wallet connected in the same session, so nothing can be revived without its own
-  sign-in — this keeps a shared device safe (a third-party wallet whose own disconnect stalls past 10
-  seconds is the exception: wagmi keeps it until that disconnect finishes). If the sign-out request cannot
-  reach Privy within 10 seconds, the SDK still disconnects locally. With `disconnectBehavior: 'detach'`
+- **Disconnect signs the user out of Privy** by default, so the next connect asks for a code again — also
+  when the user disconnects while the page-load restore is still running. It also ends any other EVM
+  wallet connected in the same session, so nothing can be revived without its own sign-in — this keeps a
+  shared device safe (a third-party wallet whose own disconnect stalls past 10 seconds is the exception:
+  wagmi keeps it until that disconnect finishes). The disconnect returns at once and the sign-out request
+  finishes in the background. Until Privy confirms it — offline, a closed tab, Privy still loading — the
+  next "Email (Privy)" connect signs out first, and fails rather than reuse the old session if it cannot.
+  With `disconnectBehavior: 'detach'`
   the Privy session stays: the next click on "Email (Privy)" reconnects without a code, and so would
   anyone else using that browser until the session expires or your app signs the user out.
 - **Account changes are not followed.** If the Privy session switches to a different wallet, the SDK

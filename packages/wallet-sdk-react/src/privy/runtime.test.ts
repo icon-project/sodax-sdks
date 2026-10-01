@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { UserRejectedRequestError } from 'viem';
 import { LOGIN_OPEN_MS } from './constants.js';
 import { PrivyTimeoutError, PrivyUnavailableError } from './errors.js';
 import { createPrivyRuntime, type PrivySnapshot } from './runtime.js';
@@ -116,6 +117,38 @@ describe('createPrivyRuntime', () => {
       runtime.loginCompleted();
 
       await expect(loggingIn).resolves.toBeUndefined();
+    });
+
+    it("waits out Privy's own steps after the code (it creates a new user's wallet) until its modal closes", async () => {
+      const runtime = createPrivyRuntime();
+      const privy = ops();
+      privy.login.mockImplementation(() => runtime.publish({ ...ready, modalOpen: true }));
+      runtime.attach(privy);
+      runtime.publish(ready);
+      let settled = false;
+
+      const loggingIn = runtime.login().finally(() => {
+        settled = true;
+      });
+      runtime.publish({ ...ready, authenticated: true, userLoaded: true, modalOpen: true });
+      await settle();
+      expect(settled).toBe(false);
+      runtime.publish({ ...ready, authenticated: true, userLoaded: true, hasEmbeddedAccount: true });
+
+      await expect(loggingIn).resolves.toBeUndefined();
+    });
+
+    it('rejects as a user rejection when the modal closes without a sign-in (e.g. terms declined)', async () => {
+      const runtime = createPrivyRuntime();
+      const privy = ops();
+      privy.login.mockImplementation(() => runtime.publish({ ...ready, modalOpen: true }));
+      runtime.attach(privy);
+      runtime.publish(ready);
+
+      const loggingIn = runtime.login();
+      runtime.publish(ready);
+
+      await expect(loggingIn).rejects.toBeInstanceOf(UserRejectedRequestError);
     });
 
     it('ends the wait once Privy reports the user authenticated, with or without onComplete', async () => {

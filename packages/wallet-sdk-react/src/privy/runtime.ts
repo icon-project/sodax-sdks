@@ -41,7 +41,8 @@ export type PrivyRuntime = {
   ): Promise<PrivySnapshot>;
   /**
    * Opens Privy's login modal. Once it is on screen the wait is untimed; it settles when the user is
-   * authenticated (by any path), closes the modal, or aborts — and fails if no modal appears in time.
+   * authenticated (by any path) and Privy's modal has closed, when the modal closes without a sign-in, or
+   * on abort — and fails if no modal appears in time.
    */
   login(signal?: AbortSignal): Promise<void>;
   logout(): Promise<void>;
@@ -128,10 +129,15 @@ export function createPrivyRuntime(): PrivyRuntime {
       settleLogin(userRejected('Superseded by a newer login attempt.'));
       return new Promise<void>((resolve, reject) => {
         let timer: ReturnType<typeof setTimeout> | undefined;
-        // Being authenticated ends the wait whatever delivered it; Privy's `onComplete` is not the only signal.
+        let shown = false;
+        // Done only once the modal closes: after the code, Privy still creates a new user's wallet there, and a
+        // wallet created alongside it would be a second one. Authenticated by any path counts, not only `onComplete`.
         const watch = () => {
-          if (snapshot.authenticated) settleLogin();
-          else if (snapshot.modalOpen) clearTimeout(timer);
+          if (snapshot.modalOpen) {
+            shown = true;
+            clearTimeout(timer);
+          } else if (snapshot.authenticated) settleLogin();
+          else if (shown) settleLogin(userRejected('The Privy login closed without signing in.'));
         };
         const onAbort = () => settleLogin(abortReason(signal));
         const cleanup = () => {

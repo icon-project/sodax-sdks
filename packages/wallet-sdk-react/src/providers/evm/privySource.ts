@@ -11,6 +11,8 @@ export type PrivySourceContext = {
 
 export type PrivySourceSetup = {
   readonly connector: CreateConnectorFn;
+  /** Run by an SDK disconnect: ends Privy even before wagmi lists it (a restore or login in flight). */
+  readonly disconnect: () => Promise<void>;
   /** Rendered inside `WagmiProvider` around the children, never around the hydrator. */
   readonly Host: ComponentType<{ children?: ReactNode }>;
 };

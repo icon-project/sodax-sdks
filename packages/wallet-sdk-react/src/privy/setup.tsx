@@ -28,13 +28,11 @@ export function createPrivySetup(
     );
   }
 
-  return {
-    connector: privyConnector({
-      runtime,
-      getState: ctx.getState,
-      defaultChainId,
-      disconnectBehavior: options.disconnectBehavior,
-    }),
-    Host: PrivyHost,
-  };
+  const { connector, disconnect } = privyConnector({
+    runtime,
+    getState: ctx.getState,
+    defaultChainId,
+    disconnectBehavior: options.disconnectBehavior,
+  });
+  return { connector, disconnect, Host: PrivyHost };
 }

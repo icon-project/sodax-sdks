@@ -32,7 +32,7 @@ export const EvmProvider = ({ children, config }: EvmProviderProps) => {
   const walletConnectConfig = config.walletConnect;
   const privySource = config.privy;
 
-  const { wagmiConfig, PrivyHost } = useMemo(() => {
+  const { wagmiConfig, PrivyHost, privyDisconnect } = useMemo(() => {
     const connectors: CreateConnectorFn[] = [];
     if (walletConnectConfig) {
       if (walletConnectConfig.projectId) {
@@ -56,7 +56,7 @@ export const EvmProvider = ({ children, config }: EvmProviderProps) => {
     if (source) connectors.push(source.connector);
 
     built = createWagmiConfig(config.chains, { reconnectOnMount, ssr, connectors, persistKey: config.persistKey });
-    return { wagmiConfig: built, PrivyHost: source?.Host };
+    return { wagmiConfig: built, PrivyHost: source?.Host, privyDisconnect: source?.disconnect };
   }, [config.chains, reconnectOnMount, ssr, walletConnectConfig, config.persistKey, privySource]);
 
   // Drop a non-object `initialState` so wagmi does not receive an invalid runtime value.
@@ -71,7 +71,7 @@ export const EvmProvider = ({ children, config }: EvmProviderProps) => {
     <QueryClientProvider client={queryClientRef.current}>
       <WagmiProvider reconnectOnMount={reconnectOnMount} config={wagmiConfig} initialState={initialState}>
         <EvmHydrator />
-        <EvmActions />
+        <EvmActions onDisconnect={privyDisconnect} />
         {PrivyHost ? <PrivyHost>{children}</PrivyHost> : children}
       </WagmiProvider>
     </QueryClientProvider>

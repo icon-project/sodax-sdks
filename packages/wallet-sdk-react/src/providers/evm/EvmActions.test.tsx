@@ -39,7 +39,7 @@ function localWallet(id: string, address: `0x${string}`, disconnect = vi.fn(asyn
 }
 
 /** Mounts `EvmActions` over a real wagmi config and connects every connector in order. */
-async function connectAll(connectorFns: CreateConnectorFn[]): Promise<Config> {
+async function connectAll(connectorFns: CreateConnectorFn[], onDisconnect?: () => Promise<void>): Promise<Config> {
   const config = createConfig({
     chains: [sonic],
     connectors: connectorFns,
@@ -50,7 +50,7 @@ async function connectAll(connectorFns: CreateConnectorFn[]): Promise<Config> {
   render(
     <QueryClientProvider client={new QueryClient()}>
       <WagmiProvider config={config}>
-        <EvmActions />
+        <EvmActions onDisconnect={onDisconnect} />
       </WagmiProvider>
     </QueryClientProvider>,
   );
@@ -78,6 +78,16 @@ describe('EvmActions', () => {
     expect(extension.disconnect).toHaveBeenCalledOnce();
     expect(config.state.status).toBe('disconnected');
     expect(useXWalletStore.getState().userDisconnected.EVM).toBe(true);
+  });
+
+  it('also ends a wallet source that wagmi does not list yet (Privy still restoring)', async () => {
+    const onDisconnect = vi.fn(async (): Promise<void> => undefined);
+    const config = await connectAll([], onDisconnect);
+    expect(config.state.connections.size).toBe(0);
+
+    await useXWalletStore.getState().chainActions.EVM?.disconnect();
+
+    expect(onDisconnect).toHaveBeenCalledOnce();
   });
 
   it('does not wait forever on a wallet whose disconnect never settles', async () => {

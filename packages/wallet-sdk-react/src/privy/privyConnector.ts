@@ -1,7 +1,6 @@
 import { type Address, getAddress, numberToHex, SwitchChainError } from 'viem';
-import { ChainNotConfiguredError, type Config, createConnector } from 'wagmi';
+import { ChainNotConfiguredError, type Config, type CreateConnectorFn, createConnector } from 'wagmi';
 import { EVM_DEFAULT_PERSIST_KEY } from '@/constants.js';
-import { createConnectedFlag } from './connectedFlag.js';
 import {
   INTERNAL_CALL_MS,
   PRIVY_CONNECTOR_ID,
@@ -14,6 +13,7 @@ import { createDeferredProvider, type DeferredProvider, type Eip1193Like } from 
 import { PrivyTimeoutError, userRejected, withTimeout } from './errors.js';
 import { PRIVY_ICON } from './icon.js';
 import type { EmbeddedWallet, PrivyRuntime, PrivySnapshot } from './runtime.js';
+import { createStoredFlag } from './storedFlag.js';
 
 type PrivyConnectorOptions = {
   runtime: PrivyRuntime;
@@ -26,6 +26,15 @@ type PrivyConnectorOptions = {
 };
 
 type Session = { readonly address: Address; readonly wallet: EmbeddedWallet };
+
+export type PrivyConnectorHandle = {
+  readonly connector: CreateConnectorFn;
+  /**
+   * An SDK disconnect, which must reach Privy even before wagmi lists it (a restore or login in flight).
+   * A no-op when Privy is neither connected, connecting, nor restorable on reload.
+   */
+  readonly disconnect: () => Promise<void>;
+};
 
 /** The session's wallet in `snapshot`: `'ended'` on logout or a user change, `'pending'` while Privy reloads. */
 function sessionWallet(snapshot: PrivySnapshot, address: Address): EmbeddedWallet | 'ended' | 'pending' {
@@ -46,9 +55,13 @@ export function privyConnector({
   getState,
   defaultChainId,
   disconnectBehavior = 'logout',
-}: PrivyConnectorOptions) {
-  return createConnector<DeferredProvider>(config => {
-    const flag = createConnectedFlag(`${config.storage?.key ?? EVM_DEFAULT_PERSIST_KEY}.privy.connected`);
+}: PrivyConnectorOptions): PrivyConnectorHandle {
+  let sdkDisconnect: (() => Promise<void>) | undefined;
+  const connector = createConnector<DeferredProvider>(config => {
+    const prefix = `${config.storage?.key ?? EVM_DEFAULT_PERSIST_KEY}.privy`;
+    const flag = createStoredFlag(`${prefix}.connected`);
+    // A sign-out the user asked for that Privy has not confirmed yet; it outlives a reload or a closed tab.
+    const signOutOwed = createStoredFlag(`${prefix}.signout`);
     const deferred = createDeferredProvider(chainId => switchChain(chainId));
     let session: Session | undefined;
     let chainId: number | undefined; // last chain verified on the attached provider
@@ -56,6 +69,7 @@ export function privyConnector({
     let attemptIsInteractive = false; // started by a user connect, not by wagmi's restore
     let unwatch: (() => void) | undefined;
     let switching = false;
+    let signingOut: Promise<void> | undefined;
 
     const readChainId = async (provider: Eip1193Like, signal?: AbortSignal) =>
       Number(await withTimeout(provider.request({ method: 'eth_chainId' }), INTERNAL_CALL_MS, 'eth_chainId', signal));
@@ -97,6 +111,38 @@ export function privyConnector({
       resetSession();
       config.emitter.emit('disconnect');
     }
+
+    // Never awaited by `disconnect()`: wagmi rewrites its connection list once that resolves, dropping any
+    // wallet connected meanwhile. Privy must be ready to sign out, which it may not be right after a reload.
+    function signOut(): Promise<void> {
+      signingOut ??= (async () => {
+        try {
+          await runtime.waitFor(s => s.ready, READY_CONNECT_MS, undefined, 'Waiting for Privy to sign out');
+          await withTimeout(runtime.logout(), INTERNAL_CALL_MS, 'logout');
+          await runtime.waitFor(s => !s.authenticated, INTERNAL_CALL_MS, undefined, 'Waiting for the Privy sign-out');
+          signOutOwed.clear();
+        } catch {
+          // Still owed: the next connect signs out again before it trusts `authenticated`.
+        } finally {
+          signingOut = undefined;
+        }
+      })();
+      return signingOut;
+    }
+
+    async function disconnect() {
+      attempt?.abort(userRejected('Disconnected while connecting.'));
+      attempt = undefined;
+      resetSession();
+      if (disconnectBehavior === 'detach') return;
+      signOutOwed.write();
+      void signOut();
+    }
+
+    sdkDisconnect = async () => {
+      if (!attempt && !session && !flag.read()) return;
+      await disconnect();
+    };
 
     // Privy's provider reports neither logout nor a user change, so the connector watches the runtime.
     function onRuntimeChange() {
@@ -181,7 +227,17 @@ export function privyConnector({
         const startCurrent = getState().current;
 
         try {
-          const ready = await runtime.waitFor(s => s.ready, READY_CONNECT_MS, signal, 'Waiting for Privy to be ready');
+          let ready = await runtime.waitFor(s => s.ready, READY_CONNECT_MS, signal, 'Waiting for Privy to be ready');
+          // Until Privy confirms an owed sign-out, `authenticated` may still be the previous user's session.
+          if (signOutOwed.read()) {
+            if (isReconnecting) throw new Error('[wallet-sdk-react/privy] The Privy session was signed out.');
+            await signOut();
+            signal.throwIfAborted();
+            if (signOutOwed.read()) {
+              throw new Error('[wallet-sdk-react/privy] Could not sign out of the previous Privy session.');
+            }
+            ready = runtime.getSnapshot();
+          }
           if (!ready.authenticated) {
             if (isReconnecting) {
               flag.clear();
@@ -206,12 +262,12 @@ export function privyConnector({
             );
           }
           const { embedded } = await runtime.waitFor(
-            s => s.embedded !== undefined,
+            s => s.embedded !== undefined || (s.ready && !s.authenticated),
             WALLET_MS,
             signal,
             'Waiting for the Privy embedded wallet',
           );
-          if (!embedded) throw new Error('[wallet-sdk-react/privy] No embedded wallet.');
+          if (!embedded) throw new Error('[wallet-sdk-react/privy] The Privy session has ended.');
 
           const prepared = await prepare(embedded, undefined, signal);
           signal.throwIfAborted();
@@ -247,14 +303,7 @@ export function privyConnector({
         }
       },
 
-      async disconnect() {
-        attempt?.abort(userRejected('Disconnected while connecting.'));
-        attempt = undefined;
-        resetSession();
-        if (disconnectBehavior === 'detach') return;
-        // Bounded: wagmi drops the connection only once this resolves, and a stalled sign-out must not keep it.
-        await withTimeout(runtime.logout(), INTERNAL_CALL_MS, 'logout').catch(() => undefined);
-      },
+      disconnect,
 
       async getAccounts() {
         return session ? [session.address] : [];
@@ -297,4 +346,5 @@ export function privyConnector({
       },
     };
   });
+  return { connector, disconnect: async () => sdkDisconnect?.() };
 }

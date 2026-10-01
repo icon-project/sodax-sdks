@@ -12,6 +12,7 @@ import { createPrivyRuntime, type EmbeddedWallet, type PrivySnapshot } from './r
 const ADDRESS = '0x00000000000000000000000000000000000000aa';
 const OTHER = '0x00000000000000000000000000000000000000bb';
 const FLAG_KEY = 'sodax.privy.connected';
+const SIGN_OUT_KEY = 'sodax.privy.signout';
 
 type RequestArgs = { method: string; params?: unknown };
 
@@ -109,16 +110,21 @@ function setup({
   disconnectBehavior?: 'logout' | 'detach';
 } = {}) {
   const runtime = createPrivyRuntime();
-  const ops = { login: vi.fn(), logout: vi.fn(async () => undefined), createWallet: vi.fn(async () => undefined) };
+  const ops = {
+    login: vi.fn(),
+    logout: vi.fn(async (): Promise<void> => undefined),
+    createWallet: vi.fn(async () => undefined),
+  };
   runtime.attach(ops);
   let config: Config | undefined;
   const getState = () => {
     if (!config) throw new Error('config not created');
     return config.state;
   };
+  const handle = privyConnector({ runtime, getState, defaultChainId: sonic.id, disconnectBehavior });
   config = createConfig({
     chains: [sonic, base],
-    connectors: [privyConnector({ runtime, getState, defaultChainId: sonic.id, disconnectBehavior }), otherWallet()],
+    connectors: [handle.connector, otherWallet()],
     multiInjectedProviderDiscovery: false,
     storage: createStorage({ key: storageKey, storage: memoryStorage() }),
     transports: { [sonic.id]: http(), [base.id]: http() },
@@ -128,7 +134,14 @@ function setup({
     if (!found) throw new Error(`no ${id} connector`);
     return found;
   };
-  return { runtime, ops, config, privy: find(PRIVY_CONNECTOR_ID), other: find('other') };
+  return {
+    runtime,
+    ops,
+    config,
+    sdkDisconnect: handle.disconnect,
+    privy: find(PRIVY_CONNECTOR_ID),
+    other: find('other'),
+  };
 }
 
 async function connected() {
@@ -194,6 +207,39 @@ describe('privyConnector — first login', () => {
 
     await expect(connect(config, { connector: privy })).rejects.toBeInstanceOf(UserRejectedRequestError);
     expect(localStorage.getItem(FLAG_KEY)).toBeNull();
+  });
+
+  it("leaves a new user's wallet to Privy's own create-on-login instead of creating a second one", async () => {
+    const { runtime, ops, config, privy } = setup();
+    const wallet = fakeWallet();
+    runtime.publish(loggedOut);
+    ops.login.mockImplementation(() => {
+      queueMicrotask(() => {
+        runtime.publish({ ...loggedOut, modalOpen: true });
+        // Code accepted: authenticated with no wallet yet, while Privy's modal goes on to create one.
+        runtime.publish({ ...loggedOut, authenticated: true, userLoaded: true, modalOpen: true });
+      });
+    });
+
+    const connecting = connect(config, { connector: privy });
+    await vi.waitFor(() => expect(ops.login).toHaveBeenCalled());
+    await settle();
+    expect(ops.createWallet).not.toHaveBeenCalled();
+    runtime.publish(loggedIn(wallet));
+
+    await expect(connecting).resolves.toEqual({ accounts: [getAddress(ADDRESS)], chainId: sonic.id });
+    expect(ops.createWallet).not.toHaveBeenCalled();
+  });
+
+  it('fails at once when the Privy session ends while the wallet is still missing', async () => {
+    const { runtime, ops, config, privy } = setup();
+    runtime.publish({ ...loggedOut, authenticated: true, userLoaded: true });
+    ops.createWallet.mockImplementation(async () => {
+      runtime.publish(loggedOut);
+      return undefined;
+    });
+
+    await expect(connect(config, { connector: privy })).rejects.toThrow('The Privy session has ended.');
   });
 
   it('skips the modal for an already-authenticated user and creates a wallet only when none exists', async () => {
@@ -550,6 +596,103 @@ describe('privyConnector — while connected', () => {
       chainId: sonic.id,
     });
     expect(ops.login).not.toHaveBeenCalled();
+  });
+});
+
+describe('privyConnector — signing out', () => {
+  const signOutGate = (runtime: ReturnType<typeof createPrivyRuntime>) => {
+    const gate = Promise.withResolvers<void>();
+    const logout = async () => {
+      await gate.promise;
+      runtime.publish(loggedOut);
+    };
+    return { gate, logout };
+  };
+
+  it('returns at once, so a wallet connected during the sign-out request stays connected', async () => {
+    const { runtime, ops, config, privy, other } = await connected();
+    const { gate, logout } = signOutGate(runtime);
+    ops.logout.mockImplementation(logout);
+
+    await disconnect(config, { connector: privy });
+    await connect(config, { connector: other });
+    gate.resolve();
+    await vi.waitFor(() => expect(localStorage.getItem(SIGN_OUT_KEY)).toBeNull());
+
+    expect(config.state.status).toBe('connected');
+    expect(config.state.current).toBe(other.uid);
+  });
+
+  it('makes the next connect wait for a sign-out still in flight, then ask for a new code', async () => {
+    const { runtime, ops, config, privy, wallet } = await connected();
+    const { gate, logout } = signOutGate(runtime);
+    ops.logout.mockImplementation(logout);
+    ops.login.mockImplementation(() => queueMicrotask(() => runtime.publish(loggedIn(wallet))));
+
+    await disconnect(config, { connector: privy });
+    const reconnecting = connect(config, { connector: privy });
+    await settle();
+    expect(ops.login).not.toHaveBeenCalled();
+    gate.resolve();
+
+    await expect(reconnecting).resolves.toEqual({ accounts: [getAddress(ADDRESS)], chainId: sonic.id });
+    expect(ops.login).toHaveBeenCalledOnce();
+  });
+
+  it('finishes a sign-out a reload or closed tab cut short before it trusts the Privy session', async () => {
+    const { runtime, ops, config, privy } = setup();
+    const wallet = fakeWallet();
+    localStorage.setItem(SIGN_OUT_KEY, '1');
+    runtime.publish(loggedIn(wallet));
+    ops.logout.mockImplementation(async () => runtime.publish(loggedOut));
+    ops.login.mockImplementation(() => queueMicrotask(() => runtime.publish(loggedIn(wallet))));
+
+    await connect(config, { connector: privy });
+
+    expect(ops.logout).toHaveBeenCalledOnce();
+    expect(ops.login).toHaveBeenCalledOnce();
+    expect(localStorage.getItem(SIGN_OUT_KEY)).toBeNull();
+  });
+
+  it('refuses to connect over a session it could not sign out of', async () => {
+    const { runtime, ops, config, privy } = setup();
+    localStorage.setItem(SIGN_OUT_KEY, '1');
+    runtime.publish(loggedIn(fakeWallet()));
+    ops.logout.mockRejectedValue(new Error('offline'));
+
+    await expect(connect(config, { connector: privy })).rejects.toThrow('Could not sign out');
+    expect(ops.login).not.toHaveBeenCalled();
+    expect(localStorage.getItem(SIGN_OUT_KEY)).toBe('1');
+  });
+
+  it('signs out when the SDK disconnects while the page-load restore is still waiting on Privy', async () => {
+    const { runtime, ops, config, sdkDisconnect } = setup();
+    const wallet = fakeWallet();
+    localStorage.setItem(FLAG_KEY, '1');
+    runtime.publish({ ...loggedIn(wallet), ready: false });
+    ops.logout.mockImplementation(async () => runtime.publish(loggedOut));
+
+    const restoring = reconnect(config);
+    await settle();
+    await sdkDisconnect();
+    runtime.publish(loggedIn(wallet));
+    const connections = await restoring;
+
+    expect(connections.map(c => c.connector.id)).not.toContain(PRIVY_CONNECTOR_ID);
+    expect(localStorage.getItem(FLAG_KEY)).toBeNull();
+    await vi.waitFor(() => expect(localStorage.getItem(SIGN_OUT_KEY)).toBeNull());
+    expect(ops.logout).toHaveBeenCalledOnce();
+  });
+
+  it('leaves Privy alone on an SDK disconnect when it was not in use', async () => {
+    const { runtime, ops, sdkDisconnect } = setup();
+    runtime.publish(loggedOut);
+
+    await sdkDisconnect();
+    await settle();
+
+    expect(ops.logout).not.toHaveBeenCalled();
+    expect(localStorage.getItem(SIGN_OUT_KEY)).toBeNull();
   });
 });
 

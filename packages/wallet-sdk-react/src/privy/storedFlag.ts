@@ -1,9 +1,9 @@
 /**
- * Remembers that Privy was connected, across browser restarts. It cannot live in wagmi's storage: the
- * SDK backs that with `cookieStorage`, whose cookies carry no expiry and die when the browser quits.
- * Every operation is total — storage can be missing (SSR) or throw (Safari private mode).
+ * A flag in localStorage that survives browser restarts (Privy connected, a sign-out still owed). It cannot
+ * live in wagmi's storage: the SDK backs that with `cookieStorage`, whose cookies carry no expiry and die
+ * when the browser quits. Every operation is total — storage can be missing (SSR) or throw (Safari private mode).
  */
-export function createConnectedFlag(key: string) {
+export function createStoredFlag(key: string) {
   return {
     read: () => withStorage(storage => storage.getItem(key) === '1', false),
     write: () => withStorage(storage => storage.setItem(key, '1'), undefined),
