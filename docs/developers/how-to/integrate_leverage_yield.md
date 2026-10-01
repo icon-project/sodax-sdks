@@ -52,11 +52,11 @@ Read vaults at runtime rather than hard-coding them. `sodax.leverageYield.listVa
 Set up `Sodax` and a wallet provider as in [Configure the SDK](/developers/how-to/configure_sdk) and [Wallet providers](/developers/how-to/wallet_providers). Then follow the same sequence in both directions:
 
 1. **Quote** with `sodax.leverageYield.getQuote`. The vault is the destination token on a deposit and the source token on a withdraw, and it is always on Sonic.
-2. **Apply your slippage** to the quoted amount to get `minOutputAmount`.
+2. **Apply your slippage** to the quoted amount to get `minOutputAmount`: `quoted × (10_000 − slippageBps) / 10_000`. Never send `0n`, which accepts any fill, and keep the action disabled until a quote arrives.
 3. **Build** the payload with `deposit()` or `withdraw()`. These only build it and never broadcast.
 4. **Approve**, on a deposit only. Use the swap-domain `sodax.swaps.isAllowanceValid` and `sodax.swaps.approve` on the payload's `params`. A withdraw needs no approval.
-5. **Execute** with `vaultSwap({ ...built, walletProvider })`. It signs, broadcasts and drives the intent to completion.
-6. **Track** it with `getDetailedStatus({ srcChainKey, srcTxHash })`, using the source transaction hash from the `vaultSwap` result.
+5. **Execute** with `vaultSwap({ ...built, walletProvider })`. It signs, broadcasts and hands the intent to the backend, falling back to a client-side relay; on that fallback it resolves once the solver is notified, before the fill.
+6. **Track** it with `getDetailedStatus({ srcChainKey, srcTxHash })`, using the source transaction hash from the `vaultSwap` result, until a terminal status.
 
 The complete deposit and withdraw examples, including the approval call's type parameters, are in [Flows](/developers/packages/foundation/sdk/functional-modules/leverage_yield#flows). Copy from there. [Quoting](/developers/packages/foundation/sdk/functional-modules/leverage_yield#quoting) and [Partner fee](/developers/packages/foundation/sdk/functional-modules/leverage_yield#partner-fee) cover fee precedence and how to keep the quote and the intent consistent.
 
@@ -77,7 +77,7 @@ Each SDK step has a matching `@sodax/dapp-kit` hook. Mutations expose `mutateAsy
 | Track | `useLeverageYieldDetailedStatus` |
 | Display | `useLeverageYieldEffectiveApr`, `useLeverageYieldPosition`, `useLeverageYieldTotalAssets`, `useLeverageYieldPreviewRedeem`, `useLeverageYieldShareBalances` |
 
-For parameters and polling behaviour, read each hook's source; [Leverage Yield Hooks](/developers/packages/experience/dapp-kit#leverage-yield-hooks) links most of them. The [dapp-kit leverage yield recipe](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/skills/sodax-dapp-kit/integration/knowledge/recipes/leverage-yield.md) has component-level deposit, withdraw and stats snippets. The demo's [leverage-yield page](https://github.com/icon-project/sodax-sdks/blob/main/apps/demo/src/pages/leverage-yield/page.tsx) wires the full flow.
+For parameters and polling behaviour, read each hook's source; [Leverage Yield Hooks](/developers/packages/experience/dapp-kit#leverage-yield-hooks) links most of them. The [dapp-kit leverage yield recipe](https://github.com/icon-project/sodax-sdks/blob/main/packages/skills/skills/sodax-dapp-kit/integration/knowledge/recipes/leverage-yield.md) has component-level deposit, withdraw and stats snippets. The demo's [leverage-yield page](https://github.com/icon-project/sodax-sdks/blob/main/apps/demo/src/pages/leverage-yield/page.tsx) wires the full flow. It attaches SODAX's own partner fee to deposits, so don't copy its `DEPOSIT_PARTNER_FEE`: leave `partnerFee` out, or use your own receiver address.
 
 ## API path {#api-path}
 
@@ -111,11 +111,12 @@ In TypeScript, `sodax.api.leverageYield` and the `useLeverageYieldApi*` hooks wr
 10. **Track by the source transaction.** Use `getDetailedStatus` / `useLeverageYieldDetailedStatus` rather than the backend record alone, because the client-side fallback can finish a swap the backend record still shows as open.
 11. **Branch on `result.ok`, and discriminate on `error.code`.** Methods that return a `Result` never throw, and error messages aren't stable. A quote error can be the solver's own response. [Error Handling](/developers/packages/foundation/sdk/functional-modules/leverage_yield#error-handling) lists the codes and guards.
 12. **Keep API keys on the server.** A key in a browser bundle is public. See [API key good practices](/developers/how-to/api-key-good-practices).
-13. **A vault is not a leverage position.** Leverage positions (`openLeveragePosition`, `useLeveragePosition*`) share the service but are a separate product. See [Leverage Positions](/developers/packages/foundation/sdk/functional-modules/leverage_yield#leverage-positions).
+13. **Show leverage as `1 + leverageMultiplierWad`.** The multiplier is the borrowed multiple, `targetLTV / (1 − targetLTV)`: 4.56× at an 82% target, while the depositor's exposure is 5.56×. `targetLtvBps` and the position `ltv` are basis points (`8200` = 82%).
+14. **A vault is not a leverage position.** Leverage positions (`openLeveragePosition`, `useLeveragePosition*`) share the service but are a separate product. See [Leverage Positions](/developers/packages/foundation/sdk/functional-modules/leverage_yield#leverage-positions).
 
 ## Build it with an AI agent {#ai-agents}
 
-Install the [`@sodax/skills`](/ai-integration-guide) bundle, and your agent loads the leverage-yield skills on its own. Add the [Builders MCP](/builders-mcp) for live vault data and quotes. Then describe the task plainly, for example *"Add a deposit into a leverage-yield vault from Arbitrum with `@sodax/dapp-kit`"*. Check what the agent produces against the [Gotchas](#gotchas).
+Install the [`@sodax/skills`](/ai-integration-guide) bundle before you start the agent. The broad `sodax-dapp-kit` and `sodax-sdk` skills route it to the leverage-yield skills below. You don't need the Builders MCP for vaults: the SDK and hooks read live vault data, APR and quotes themselves. Then describe the task plainly, for example *"Add a deposit into a leverage-yield vault from Arbitrum with `@sodax/dapp-kit`"*. Check what the agent produces against the [Gotchas](#gotchas).
 
 To point an agent at a skill directly, or to read one yourself:
 
