@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { type Connector, useConfig, useConnect, useSignMessage } from 'wagmi';
+import { useConfig, useConnect, useSignMessage } from 'wagmi';
 import { disconnect } from 'wagmi/actions';
 import { EVM_DISCONNECT_TIMEOUT_MS } from '@/constants.js';
 import { useXWalletStore } from '@/useXWalletStore.js';
@@ -22,8 +22,6 @@ export const EvmActions = () => {
   const connectRef = useRef(connectAsync);
   const signMessageRef = useRef(signMessageAsync);
   const wagmiConfigRef = useRef(wagmiConfig);
-  // wagmi records a connection only once connect resolves, so disconnect must also reach one still in flight.
-  const connectingRef = useRef<Connector | undefined>(undefined);
 
   useEffect(() => {
     connectRef.current = connectAsync;
@@ -45,7 +43,6 @@ export const EvmActions = () => {
         // Clear flag before awaiting — flips re-fire EvmHydrator's effects, surfacing
         // any pre-existing wagmi connection (ghost auto-reconnect).
         useXWalletStore.getState().clearUserDisconnected('EVM');
-        connectingRef.current = connector;
         try {
           await connectRef.current({ connector });
         } catch (error) {
@@ -53,8 +50,6 @@ export const EvmActions = () => {
             return undefined;
           }
           throw error;
-        } finally {
-          if (connectingRef.current === connector) connectingRef.current = undefined;
         }
         return undefined;
       },
@@ -67,11 +62,8 @@ export const EvmActions = () => {
         // EVM is one logical connection: end every wagmi connection, not only the current one, so a wallet
         // connected earlier cannot come back through a later connect without its own sign-in.
         const config = wagmiConfigRef.current;
-        const connectors = [...config.state.connections.values()].map(({ connector }) => connector);
-        const connecting = connectingRef.current;
-        if (connecting && !connectors.some(({ uid }) => uid === connecting.uid)) connectors.push(connecting);
         const results = await Promise.allSettled(
-          connectors.map(connector =>
+          [...config.state.connections.values()].map(({ connector }) =>
             withDeadline(
               disconnect(config, { connector }),
               EVM_DISCONNECT_TIMEOUT_MS,
