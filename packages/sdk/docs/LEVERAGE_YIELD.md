@@ -131,12 +131,13 @@ Size `minOutputAmount` with `sodax.leverageYield.getQuote()`, which deducts the 
 ```typescript
 // Deposit quote. For a withdraw, swap the two sides: the vault on SONIC_MAINNET is token_src,
 // the output token on its chain is token_dst, and amount is the lsoda* shares to burn.
+const inputAmount = 1_000_000_000_000_000_000n; // 1 weETH, in the input token's decimals
 const quote = await sodax.leverageYield.getQuote({
   token_src: '0x...weETHonArbitrum',                   // spoke token in
   token_src_blockchain_id: ChainKeys.ARBITRUM_MAINNET,
   token_dst: vault.vault,                              // the vault, always on Sonic
   token_dst_blockchain_id: ChainKeys.SONIC_MAINNET,
-  amount: 1_000_000_000_000_000_000n,                  // 1 weETH, in the input token's decimals
+  amount: inputAmount,
   quote_type: 'exact_input',
   // partnerFee — pass the same value you pass to deposit()/withdraw()/vaultSwap(), or omit on both
 });
@@ -146,7 +147,7 @@ const slippageBps = 100n; // 1%
 const minOutputAmount = (quote.value.quoted_amount * (10_000n - slippageBps)) / 10_000n;
 ```
 
-Never pass `minOutputAmount: 0n` or a hand-picked constant. The SDK accepts zero (it only enforces the 546-sat dust floor on a BTC payout), and the intent then accepts any fill.
+Never pass `minOutputAmount: 0n` or a hand-picked constant. The SDK accepts zero, and the intent then accepts any fill.
 
 Do **not** use `sodax.swaps.getQuote()` for vault flows: it deducts the effective *swap* fee, so once the two feature fees differ the quote and the intent disagree — and when the leverage-yield fee is the larger one, the `minOutputAmount` derived from that quote exceeds what the intent can deliver and it never fills.
 
@@ -170,7 +171,7 @@ const intentResult = await sodax.leverageYield.deposit({
   srcChainKey,
   srcAddress: '0xYourArbitrumEOA...',
   inputToken: '0x...weETHonArbitrum',
-  inputAmount: 1_000_000_000_000_000_000n, // input-token decimals
+  inputAmount, // the amount you quoted, in input-token decimals
   minOutputAmount, // lsoda* (18 dp): the quote minus slippage, from Quoting above
 });
 
@@ -212,7 +213,7 @@ const intentResult = await sodax.leverageYield.withdraw({
   dstChainKey: ChainKeys.ARBITRUM_MAINNET, // where the swapped-back token is delivered
   outputToken: '0x...weETHonArbitrum',
   inputAmount: shareBalance, // lsoda* shares (18 dp)
-  minOutputAmount, // from a withdraw quote (vault as token_src) minus slippage, as in Quoting above
+  minOutputAmount: withdrawMinOutputAmount, // from a withdraw quote (vault as token_src) minus slippage, as in Quoting
   // recipient?: defaults to srcAddress
 });
 

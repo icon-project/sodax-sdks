@@ -138,6 +138,7 @@ function toAmount(input: string, decimals: number): bigint {
 function DepositForm({ vault, srcAddress, inputToken, decimals }: { vault: Address; srcAddress: string; inputToken: string; decimals: number }) {
   const [amount, setAmount] = useState('');
   const [error, setError] = useState<string>();
+  const [busy, setBusy] = useState(false); // spans build → approve → receipt → execute, not just the last mutation
   const { sodax } = useSodaxContext();
   const chainKey = ChainKeys.ARBITRUM_MAINNET;
   const walletProvider = useWalletProvider({ xChainId: chainKey });
@@ -159,23 +160,40 @@ function DepositForm({ vault, srcAddress, inputToken, decimals }: { vault: Addre
   const { mutateAsyncSafe: approve } = useSwapApprove();
   const { mutateAsyncSafe: vaultSwap, isPending } = useLeverageYieldVaultSwap();
 
-  const handleDeposit = async () => {
+  const deposit = async (): Promise<string | undefined> => {
     if (!walletProvider || minOutputAmount === undefined) return; // no quote, no deposit
-    setError(undefined);
     const built = await buildDeposit({ vault, srcChainKey: chainKey, srcAddress, inputToken, inputAmount, minOutputAmount });
-    if (!built.ok) return setError(errorMessage(built.error));
+    if (!built.ok) return errorMessage(built.error);
 
     // Deposit approves the spoke asset manager (swap-style), only when the allowance is short.
     const allowance = await sodax.swaps.isAllowanceValid({ params: built.value.params, walletProvider });
-    if (!allowance.ok) return setError(errorMessage(allowance.error));
+    if (!allowance.ok) return errorMessage(allowance.error);
     if (!allowance.value) {
       const approval = await approve({ params: built.value.params, walletProvider });
-      if (!approval.ok) return isUserRejectedError(approval.error) ? undefined : setError(errorMessage(approval.error));
-      if (isHex(approval.value)) await walletProvider.waitForTransactionReceipt(approval.value); // the deposit spends it next
+      if (!approval.ok) return isUserRejectedError(approval.error) ? undefined : errorMessage(approval.error);
+      // The deposit spends this allowance next, so it must be mined and must not have reverted.
+      if (isHex(approval.value)) {
+        try {
+          const receipt = await walletProvider.waitForTransactionReceipt(approval.value);
+          if (receipt.status === 'reverted' || receipt.status === '0x0') return 'Approval reverted';
+        } catch (e) {
+          return errorMessage(e);
+        }
+      }
     }
 
     const result = await vaultSwap({ ...built.value, walletProvider }); // lsoda* lands in the hub wallet
-    if (!result.ok && !isUserRejectedError(result.error)) setError(errorMessage(result.error));
+    if (!result.ok && !isUserRejectedError(result.error)) return errorMessage(result.error);
+  };
+
+  const handleDeposit = async () => {
+    setBusy(true);
+    setError(undefined);
+    try {
+      setError(await deposit());
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -185,7 +203,7 @@ function DepositForm({ vault, srcAddress, inputToken, decimals }: { vault: Addre
         <p>You receive ≈ {formatUnits(quote.value.quoted_amount, 18)} shares (at least {formatUnits(minOutputAmount, 18)})</p>
       )}
       {error && <p role="alert">{error}</p>}
-      <button onClick={handleDeposit} disabled={isPending || !walletProvider || minOutputAmount === undefined}>Deposit</button>
+      <button onClick={handleDeposit} disabled={busy || isPending || !walletProvider || minOutputAmount === undefined}>Deposit</button>
     </div>
   );
 }
@@ -228,7 +246,7 @@ function WithdrawButton({ vault, srcAddress, outputToken, shares }: { vault: Add
       inputAmount: shares, // lsoda* shares to burn
       minOutputAmount,
     });
-    if (!built.ok) return;
+    if (!built.ok) return console.error(built.error); // surface it in your UI
     const result = await vaultSwap({ ...built.value, walletProvider }); // built.value.hubWalletSwap === true
     if (!result.ok && !isUserRejectedError(result.error)) console.error(result.error);
   };

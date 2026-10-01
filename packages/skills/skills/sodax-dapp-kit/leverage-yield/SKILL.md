@@ -85,7 +85,7 @@ Check the running app against these, not only `pnpm tsc`. The full list is in th
 - [`../swap/SKILL.md`](../swap/SKILL.md) — `useSwapApprove` / `useSwapAllowance` (spoke-side deposit approval) live here. Size `minOutputAmount` with `useLeverageYieldQuote`, not the swap skill's `useQuote`.
 - [`../auxiliary-services/SKILL.md`](../auxiliary-services/SKILL.md) — `useXBalances` / gas-estimation utilities used alongside leverage-yield UI.
 
-For multi-feature tasks, load the broad [`sodax-dapp-kit` skill](../SKILL.md). The backend REST hooks (`useLeverageYieldApi*`) are a different surface: they live in [`../auxiliary-services/SKILL.md`](../auxiliary-services/SKILL.md) and its Leverage Yield API section.
+For multi-feature tasks, load the broad [`sodax-dapp-kit` skill](../SKILL.md). The backend REST hooks (`useLeverageYieldApi*`) are a different surface, documented in the Leverage Yield API section of [`../integration/knowledge/features/auxiliary-services.md`](../integration/knowledge/features/auxiliary-services.md) (granular skill: [`../auxiliary-services/SKILL.md`](../auxiliary-services/SKILL.md)).
 
 ## Wallet connectivity (different SDK package family)
 

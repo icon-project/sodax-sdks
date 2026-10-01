@@ -378,12 +378,15 @@ for broad in "${EXPECTED_BROAD_SKILLS[@]}"; do
     fi
   done
   # Scoped to the "## Integration mode" section, so a same-named migration doc can't stand in for it.
+  if ! grep -q '^## Integration mode' "$broad/SKILL.md" || ! grep -q '^## Migration mode' "$broad/SKILL.md"; then
+    err "Broad skill needs both '## Integration mode' and '## Migration mode' headings: $broad/SKILL.md"
+  fi
   integration_section=$(awk '/^## Integration mode/{f=1} /^## Migration mode/{f=0} f' "$broad/SKILL.md")
   for feature_doc in "$broad"/integration/knowledge/features/*.md; do
     [[ -f "$feature_doc" ]] || continue
     doc="$(basename "$feature_doc")"
     [[ "$doc" == "README.md" ]] && continue
-    if ! grep -qE "(^|features/|[^a-z0-9/-])${doc//./\\.}" <<<"$integration_section"; then
+    if ! grep -qE "(^|integration/knowledge/features/|[^a-z0-9/-])${doc//./\\.}([^a-zA-Z0-9]|$)" <<<"$integration_section"; then
       err "Feature doc not named in its parent's Integration mode section: $broad/SKILL.md -> $doc"
     fi
   done

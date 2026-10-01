@@ -19,11 +19,12 @@ from pathlib import Path
 # Slippage floors across features: min*Amount / min*Out(put) / min*Received / minReceive, and the
 # DEX amount0Min / amount1Min. Object keys (quoted or not) and assignments (`const x = 0n`, which a
 # later `{ x }` shorthand would send) both count. Only a zero literal is flagged.
-FLOOR = r"(?:min[A-Za-z]*(?:Amount|Out|Output|Received|Receive)[A-Za-z]*|amount\d*Min)"
+FLOOR = r"(?i:min[a-z_]*(?:amount|out|output|received|receive)[a-z_]*|amount[a-z0-9]*min(?:imum)?)"
 ZERO = r"(?:0n|0|'0'|\"0\"|BigInt\(\s*(?:0|'0'|\"0\")\s*\))"
-END = r"(?:\s*(?:[,;)}\]]|//|/\*|$))"
+TYPE = r"(?::\s*[\w.<>\[\]| ]+?\s*)?"  # `const x: bigint = 0n`
+END = r"(?:\s*(?:[,;)}\]]|//|/\*|$)|\s+(?:as|satisfies)\b)"
 RULES = [
-    (re.compile(rf"\b{FLOOR}[\"']?\s*[:=]\s*{ZERO}{END}"),
+    (re.compile(rf"\b{FLOOR}[\"']?\s*{TYPE}[:=]\s*{ZERO}{END}"),
      "zero minimum output — derive it from a live quote minus slippage"),
     (re.compile(r"\bskipSimulation[\"']?\s*[:=]\s*true\b"),
      "skipSimulation: true — the simulation catches an intent that would revert before the user signs"),

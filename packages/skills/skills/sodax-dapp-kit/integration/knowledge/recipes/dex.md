@@ -186,10 +186,10 @@ function Position({ positionId, poolKey }: { positionId: bigint; poolKey: PoolKe
 
 ## Remove Liquidity
 
-Size `amount0Min` / `amount1Min` from the position with `useCreateDecreaseLiquidityParams` (slippage in percent). Zero minimums accept any price.
+Size `amount0Min` / `amount1Min` from the position with `useCreateDecreaseLiquidityParams` (slippage in percent). Zero minimums accept any price. It throws during render when `percentage` or `slippageTolerance` is outside (0, 100], so clamp slider and input values before passing them.
 
 ```tsx
-import { useCreateDecreaseLiquidityParams, useDecreaseLiquidity } from '@sodax/dapp-kit';
+import { isUserRejectedError, useCreateDecreaseLiquidityParams, useDecreaseLiquidity } from '@sodax/dapp-kit';
 import { useWalletProvider } from '@sodax/wallet-sdk-react';
 import { ChainKeys, type Address, type ClPositionInfo, type PoolKey } from '@sodax/sdk';
 
@@ -205,7 +205,7 @@ function RemoveLiquidity({ poolKey, tokenId, positionInfo, srcAddress }: { poolK
       params: { ...decrease, srcChainKey: ChainKeys.BASE_MAINNET, srcAddress },
       walletProvider,
     });
-    if (!result.ok) console.error(result.error);
+    if (!result.ok && !isUserRejectedError(result.error)) console.error(result.error); // surface it in your UI
   };
 
   return <button onClick={onRemove} disabled={isPending || !walletProvider}>Remove 50%</button>;
