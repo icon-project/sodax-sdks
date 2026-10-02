@@ -1,25 +1,40 @@
 import { useEffect, useRef } from 'react';
-import { useConfig, useConnect, useDisconnect, useSignMessage } from 'wagmi';
+import { useConfig, useConnect, useSignMessage } from 'wagmi';
+import { disconnect } from 'wagmi/actions';
+import { EVM_DISCONNECT_TIMEOUT_MS } from '@/constants.js';
 import { useXWalletStore } from '@/useXWalletStore.js';
 
-export const EvmActions = () => {
+/** Rejects once `ms` pass without `promise` settling, so one stalled wallet cannot hold the whole disconnect. */
+function withDeadline<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${what} did not finish within ${ms} ms`)), ms);
+  });
+  return Promise.race([promise, deadline]).finally(() => clearTimeout(timer));
+}
+
+type EvmActionsProps = {
+  /** Also run by an SDK disconnect, for a wallet source wagmi may not list yet (Privy mid-restore). */
+  onDisconnect?: () => Promise<void>;
+};
+
+export const EvmActions = ({ onDisconnect }: EvmActionsProps) => {
   const wagmiConfig = useConfig();
   const { connectAsync } = useConnect();
-  const { disconnectAsync } = useDisconnect();
   const { signMessageAsync } = useSignMessage();
   const registerChainActions = useXWalletStore(state => state.registerChainActions);
 
   const connectRef = useRef(connectAsync);
-  const disconnectRef = useRef(disconnectAsync);
   const signMessageRef = useRef(signMessageAsync);
   const wagmiConfigRef = useRef(wagmiConfig);
+  const onDisconnectRef = useRef(onDisconnect);
 
   useEffect(() => {
     connectRef.current = connectAsync;
-    disconnectRef.current = disconnectAsync;
     signMessageRef.current = signMessageAsync;
     wagmiConfigRef.current = wagmiConfig;
-  }, [connectAsync, disconnectAsync, signMessageAsync, wagmiConfig]);
+    onDisconnectRef.current = onDisconnect;
+  }, [connectAsync, signMessageAsync, wagmiConfig, onDisconnect]);
 
   useEffect(() => {
     registerChainActions('EVM', {
@@ -51,10 +66,22 @@ export const EvmActions = () => {
         const store = useXWalletStore.getState();
         store.unsetXConnection('EVM');
         store.markUserDisconnected('EVM');
-        try {
-          await disconnectRef.current();
-        } catch (error) {
-          console.warn('[EvmActions] wagmi disconnect failed (zustand already cleared):', error);
+        // EVM is one logical connection: end every wagmi connection, not only the current one, so a wallet
+        // connected earlier cannot come back through a later connect without its own sign-in.
+        const config = wagmiConfigRef.current;
+        const pending = [...config.state.connections.values()].map(({ connector }) =>
+          withDeadline(disconnect(config, { connector }), EVM_DISCONNECT_TIMEOUT_MS, `disconnect of "${connector.id}"`),
+        );
+        // A source still restoring on page load has no wagmi connection yet, and must end all the same.
+        const disconnectSource = onDisconnectRef.current;
+        if (disconnectSource) {
+          pending.push(withDeadline(disconnectSource(), EVM_DISCONNECT_TIMEOUT_MS, 'disconnect of the wallet source'));
+        }
+        const results = await Promise.allSettled(pending);
+        for (const result of results) {
+          if (result.status === 'rejected') {
+            console.warn('[EvmActions] wagmi disconnect failed (zustand already cleared):', result.reason);
+          }
         }
       },
       getConnectors: () => useXWalletStore.getState().xConnectorsByChain.EVM ?? [],
