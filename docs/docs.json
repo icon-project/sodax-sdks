@@ -247,7 +247,47 @@
           "resources/index",
           "resources/product-updates",
           "resources/videos",
-          "resources/blog",
+          {
+            "group": "Blog",
+            "icon": "rss",
+            "pages": [
+              "resources/blog",
+              {
+                "group": "SDK",
+                "icon": "code",
+                "pages": [
+                  "resources/blog/hub-and-spoke",
+                  "resources/blog/six-categories-one-sdk",
+                  "resources/blog/builders-mcp-agent",
+                  "resources/blog/swaps-api-any-language",
+                  "resources/blog/swap-widget",
+                  "resources/blog/limit-orders"
+                ]
+              },
+              {
+                "group": "Bespoke Builds",
+                "icon": "hammer",
+                "pages": [
+                  "resources/blog/oracle-candles-api",
+                  "resources/blog/stellar-account-sponsorship",
+                  "resources/blog/flint-rwa-vault-deposits"
+                ]
+              },
+              {
+                "group": "VibeCode Saga",
+                "icon": "wand-magic-sparkles",
+                "pages": [
+                  "resources/blog/vibecode-saga-crypto-to-wallstreet-mac",
+                  "resources/blog/vibecode-saga-dust-sweeper",
+                  "resources/blog/vibecode-saga-harena",
+                  "resources/blog/vibecode-saga-sodax-terminal",
+                  "resources/blog/vibecode-saga-sodaxpay",
+                  "resources/blog/vibecode-saga-swaps-without-borders",
+                  "resources/blog/vibecode-saga-yield-pachinko"
+                ]
+              }
+            ]
+          },
           { "group": "Workshops", "pages": ["resources/workshops/leverage-yield"] }
         ]
       },
