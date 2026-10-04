@@ -265,7 +265,7 @@
                 ]
               },
               {
-                "group": "Spoke Builds",
+                "group": "Bespoke Builds",
                 "icon": "hammer",
                 "pages": [
                   "resources/blog/oracle-candles-api",
@@ -287,7 +287,8 @@
                 ]
               }
             ]
-          }
+          },
+          { "group": "Workshops", "pages": ["resources/workshops/leverage-yield"] }
         ]
       },
       {
@@ -301,10 +302,6 @@
     {
       "source": "/resources/changelog",
       "destination": "/resources/product-updates"
-    },
-    {
-      "source": "/resources/workshops/leverage-yield",
-      "destination": "/resources"
     },
     {
       "source": "/developers/packages/connection/wallet-kit",
