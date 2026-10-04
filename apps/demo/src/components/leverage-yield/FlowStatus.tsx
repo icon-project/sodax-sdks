@@ -18,8 +18,8 @@ export function FlowStatus({
   onClose,
 }: {
   progress: ReturnType<typeof useFlowProgress>;
-  /** A source-chain transaction was sent. */
-  sent: boolean;
+  /** A source-chain transaction was sent, or may have been (`'maybe'`: signed, hash unknown). */
+  sent: boolean | 'maybe';
   noun: 'Deposit' | 'Withdrawal';
   /** Title and body of the success callout. */
   success: { title: string; body: ReactNode };
@@ -48,7 +48,13 @@ export function FlowStatus({
         <Callout variant="destructive">
           <p className="font-semibold">{noun} not completed</p>
           <p className="mt-1 break-words">{progress.error}</p>
-          {sent && <p className="mt-1">Your transaction was sent. Check its status before retrying.</p>}
+          {sent && (
+            <p className="mt-1">
+              {sent === 'maybe'
+                ? "Your transaction may have been sent. Check your wallet's activity before retrying."
+                : 'Your transaction was sent. Check its status before retrying.'}
+            </p>
+          )}
         </Callout>
       )}
       {step === 'done' && (

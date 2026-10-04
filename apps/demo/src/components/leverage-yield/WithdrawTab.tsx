@@ -24,6 +24,7 @@ import { QuoteError } from './QuoteError';
 import { SidePanel } from './SidePanel';
 import { TokenIcon } from './TokenIcon';
 import { TokenSelect } from './TokenSelect';
+import { useTransport } from './transport';
 
 /**
  * Withdraw tab: sell vault shares for a token on any chain. Shares are held per source chain (one hub wallet each),
@@ -47,7 +48,10 @@ export function WithdrawTab({
 }) {
   const chains = useSourceChains();
   const holdings = stats.holdings.data;
-  const withShares = (holdings ?? []).filter(holding => holding.shares > 0n);
+  const { canSign } = useTransport();
+  const held = (holdings ?? []).filter(holding => holding.shares > 0n);
+  // Shares held under a chain this page can't sign on (Bitcoin on the API page) are withdrawn from the SDK page.
+  const withShares = held.filter(holding => canSign(holding.chainKey));
   const find = (chainKey: SpokeChainKey | undefined) =>
     withShares.find(holding => holding.chainKey === chainKey)?.chainKey;
 
@@ -112,7 +116,9 @@ export function WithdrawTab({
       return { label: stats.holdings.isError ? "Couldn't load your shares" : 'Loading your shares…', disabled: true };
     }
     if (withShares.length === 0) {
-      return { label: 'No shares to withdraw yet', disabled: true, hint: 'Deposit first to get vault shares.' };
+      return held.length > 0
+        ? { label: "Can't sign for these shares here", disabled: true, hint: 'Withdraw them from the SDK page.' }
+        : { label: 'No shares to withdraw yet', disabled: true, hint: 'Deposit first to get vault shares.' };
     }
     if (wallet.isWrongChain) return { label: `Switch to ${chainName(heldUnder)}`, onClick: wallet.switchChain };
     if (!recipient) return { label: `Connect a ${chainName(dstChainKey)} wallet`, onClick: wallet.connect };
@@ -167,7 +173,7 @@ export function WithdrawTab({
 
           <FlowStatus
             progress={progress}
-            sent={!!state.srcTxHash}
+            sent={state.srcTxHash ? true : state.maybeSent ? 'maybe' : false}
             noun="Withdrawal"
             success={{
               title: 'Withdrawn',

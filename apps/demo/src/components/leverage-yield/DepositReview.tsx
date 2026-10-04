@@ -123,7 +123,7 @@ export function DepositReview({
 
         <FlowStatus
           progress={progress}
-          sent={!!state.srcTxHash}
+          sent={state.srcTxHash ? true : state.maybeSent ? 'maybe' : false}
           noun="Deposit"
           success={{
             title: `Deposited ${formatTokenAmount(inputAmount, token.decimals)} ${token.symbol}`,

@@ -15,14 +15,33 @@ import {
   useSodaxContext,
   useSwapApprove,
 } from '@sodax/dapp-kit';
+import { getXChainType } from '@sodax/wallet-sdk-react';
 import { toIntentRequest } from '@/components/swaps-api/lib/mappers';
 import { signAndBroadcastSwapsApiTx } from '@/components/swaps-api/lib/signAndBroadcast';
+import { mayHaveBroadcast } from '../lib/errors';
 import { DEPOSIT_PARTNER_FEE } from '../lib/fees';
 import { withTxListener } from '../lib/withTxListener';
 import { useTransport } from '../transport';
 import { useFlowState } from './useFlowState';
 
 type WalletProvider = GetWalletProviderType<SpokeChainKey>;
+
+/**
+ * Outcome of an SDK vaultSwap. Success hands completion to the live intent status: on the client-relay path the call
+ * resolves once the solver accepts the intent, before the fill. A failure after a possible broadcast is flagged
+ * `maybeSent` unless the hash is already known: EVM sends always pass `withTxListener`, other wallets never do.
+ */
+function settleVaultSwap(
+  result: Awaited<ReturnType<ReturnType<typeof useLeverageYieldVaultSwap>['mutateAsyncSafe']>>,
+  srcChainKey: SpokeChainKey,
+  patch: ReturnType<typeof useFlowState>['patch'],
+): void {
+  if (!result.ok) {
+    if (getXChainType(srcChainKey) !== 'EVM' && mayHaveBroadcast(result.error)) patch({ maybeSent: true });
+    throw result.error;
+  }
+  patch({ step: 'processing', srcTxHash: result.value.intentDeliveryInfo.srcTxHash, handedOff: true });
+}
 
 export type DepositInput = {
   vault: LeverageYieldVault;
@@ -116,8 +135,7 @@ function useSdkDeposit() {
           // Per-action key from Sodax Settings; omitted when unset so the backend legs use the instance key.
           ...(apiConfig?.apiKey ? { extras: { apiKey: apiConfig.apiKey } } : {}),
         });
-        if (!result.ok) throw result.error;
-        patch({ step: 'done', srcTxHash: result.value.intentDeliveryInfo.srcTxHash });
+        settleVaultSwap(result, srcChainKey, patch);
       }),
     [sodax, apiConfig, buildDeposit, approve, vaultSwap, patch, run],
   );
@@ -157,8 +175,7 @@ function useSdkWithdraw() {
           walletProvider: withTxListener(input.walletProvider, hash => patch({ step: 'processing', srcTxHash: hash })),
           ...(apiConfig?.apiKey ? { extras: { apiKey: apiConfig.apiKey } } : {}),
         });
-        if (!result.ok) throw result.error;
-        patch({ step: 'done', srcTxHash: result.value.intentDeliveryInfo.srcTxHash });
+        settleVaultSwap(result, input.srcChainKey, patch);
       }),
     [apiConfig, buildWithdraw, vaultSwap, patch, run],
   );
@@ -170,7 +187,6 @@ function useSdkWithdraw() {
  * API path: the API builds unsigned transactions; the wallet signs them, then `/submit-tx` relays to Sonic.
  *   deposit:  check allowance → approve (API builds, wallet signs) → create intent → sign → submit-tx
  *   withdraw:                                                         create intent → sign → submit-tx
- * The flow stops at 'processing' after submit-tx; the dialog's live status (useFlowProgress) marks it done.
  */
 function useSignAndSubmit() {
   const { apiConfig } = useTransport();
@@ -183,8 +199,11 @@ function useSignAndSubmit() {
       srcChainKey: SpokeChainKey,
       srcAddress: string,
       walletProvider: WalletProvider,
+      /** Called as soon as the tx is broadcast, so a failed `/submit-tx` still leaves its hash on screen. */
+      onBroadcast: (txHash: string) => void,
     ) => {
       const txHash = await signAndBroadcastSwapsApiTx({ chainKey: srcChainKey, tx: created.tx, walletProvider });
+      onBroadcast(txHash);
       const submitted = await submitTx({
         request: {
           txHash,
@@ -244,6 +263,7 @@ function useApiDeposit() {
           input.srcChainKey,
           input.srcAddress,
           input.walletProvider,
+          hash => patch({ srcTxHash: hash }),
         );
         patch({ step: 'processing', srcTxHash: txHash, handedOff: true });
       }),
@@ -284,6 +304,7 @@ function useApiWithdraw() {
           input.srcChainKey,
           input.srcAddress,
           input.walletProvider,
+          hash => patch({ srcTxHash: hash }),
         );
         patch({ step: 'processing', srcTxHash: txHash, handedOff: true });
       }),

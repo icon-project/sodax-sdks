@@ -12,11 +12,10 @@ export type FlowState = {
   error?: string;
   /** The step that was running when the flow failed. */
   failedStep?: FlowStep;
-  /**
-   * True once the flow stopped at 'processing' and left completion to the live intent status (the API path).
-   * SDK flows resolve themselves: vaultSwap may still fall back to the client relay after a backend failure.
-   */
+  /** True once the source tx is in flight and completion is left to the live intent status (useFlowProgress). */
   handedOff?: boolean;
+  /** A signed source tx may have been broadcast although its hash is unknown, so the flow must not be retried. */
+  maybeSent?: boolean;
 };
 
 /**

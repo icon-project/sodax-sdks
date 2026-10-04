@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { ChainKeys, type LeverageYieldVault, type SpokeChainKey } from '@sodax/dapp-kit';
 import { formatUnits } from 'viem';
 import { Input } from '@/components/ui/input';
@@ -10,6 +10,7 @@ import { useChainWallet } from './hooks/useChainWallet';
 import { useDepositQuote } from './hooks/useQuotes';
 import { useSourceChains } from './hooks/useSourceChains';
 import { useTokenBalance, useTokenChoice } from './hooks/useTokenChoice';
+import { useTransport } from './transport';
 import type { VaultStats } from './hooks/useVaultReads';
 import { chainName } from './lib/chains';
 import { formatTokenAmount, parseTokenAmount } from './lib/format';
@@ -39,7 +40,9 @@ export function DepositForm({
   onBusyChange: (busy: boolean) => void;
   onClose: () => void;
 }) {
-  const chains = useSourceChains();
+  const sourceChains = useSourceChains();
+  const { canSign } = useTransport();
+  const chains = useMemo(() => sourceChains.filter(canSign), [sourceChains, canSign]);
   const [chainKey, setChainKey] = useState<SpokeChainKey>(
     chains.includes(DEFAULT_SOURCE_CHAIN) ? DEFAULT_SOURCE_CHAIN : (chains[0] ?? DEFAULT_SOURCE_CHAIN),
   );
@@ -147,7 +150,7 @@ export function DepositForm({
             )}
             <span className="shrink-0 text-sm text-muted-foreground">vault shares</span>
           </div>
-          {inputAmount && quote.error && (
+          {!!inputAmount && quote.error && (
             <div className="mt-3">
               <QuoteError message={quote.error} onRetry={quote.refetch} />
             </div>

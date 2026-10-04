@@ -84,6 +84,20 @@ export function quoteErrorMessage(error: unknown): string {
   return message ? capitalize(message) : fallback(error, 'Quote failed');
 }
 
+/** vaultSwap codes raised before the source tx is broadcast; every other code (UNKNOWN included) may follow it. */
+const NOT_BROADCAST_CODES: ReadonlySet<string> = new Set([
+  'USER_REJECTED',
+  'VALIDATION_FAILED',
+  'INTENT_CREATION_FAILED',
+]);
+
+/** Whether a failed vaultSwap may already have broadcast its source tx. An error without a code may have, too. */
+export function mayHaveBroadcast(error: unknown): boolean {
+  if (isUserRejectedError(error)) return false;
+  const code = chain(error).find(e => typeof e.code === 'string')?.code;
+  return typeof code !== 'string' || !NOT_BROADCAST_CODES.has(code);
+}
+
 /** One sentence for a failed deposit or withdraw step. */
 export function friendlyError(error: unknown): string {
   const message = errorMessage(error) ?? '';

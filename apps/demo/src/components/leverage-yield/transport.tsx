@@ -1,6 +1,7 @@
 import React, { createContext, type ReactNode, useContext, useMemo } from 'react';
 import { useNavigate } from 'react-router';
-import type { RequestOverrideConfig } from '@sodax/dapp-kit';
+import type { RequestOverrideConfig, SpokeChainKey } from '@sodax/dapp-kit';
+import { isSignableSwapsApiChain } from '@/components/swaps-api/lib/signAndBroadcast';
 import { ROUTES } from '@/constants';
 import { effectiveLeverageYieldApiBaseUrl } from '@/lib/sodaxSettings';
 import { cn } from '@/lib/utils';
@@ -22,17 +23,27 @@ type TransportValue = {
    * moving the app-wide SDK. SDK page: the per-action key the vault swap and its status reads carry, if set.
    */
   apiConfig: RequestOverrideConfig | undefined;
+  /** Whether this transport can sign on `chainKey`: the API path signs API-built txs, which excludes Bitcoin. */
+  canSign: (chainKey: SpokeChainKey) => boolean;
 };
 
-const TransportContext = createContext<TransportValue>({ transport: 'sdk', apiConfig: undefined });
+const signsEverywhere = () => true;
+
+const TransportContext = createContext<TransportValue>({
+  transport: 'sdk',
+  apiConfig: undefined,
+  canSign: signsEverywhere,
+});
 
 export function TransportProvider({ transport, children }: { transport: Transport; children: ReactNode }) {
   const sodaxSettings = useAppStore(state => state.sodaxSettings);
   const value = useMemo((): TransportValue => {
-    if (transport === 'api')
-      return { transport, apiConfig: { baseURL: effectiveLeverageYieldApiBaseUrl(sodaxSettings) } };
+    if (transport === 'api') {
+      const apiConfig = { baseURL: effectiveLeverageYieldApiBaseUrl(sodaxSettings) };
+      return { transport, apiConfig, canSign: isSignableSwapsApiChain };
+    }
     const apiKey = sodaxSettings.leverageYieldApiKey;
-    return { transport, apiConfig: apiKey ? { apiKey } : undefined };
+    return { transport, apiConfig: apiKey ? { apiKey } : undefined, canSign: signsEverywhere };
   }, [transport, sodaxSettings]);
   return <TransportContext.Provider value={value}>{children}</TransportContext.Provider>;
 }
