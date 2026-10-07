@@ -6,6 +6,7 @@ export * from './useSwapAllowance.js';
 export * from './useSwapApprove.js';
 export * from './useSwapApprovalStrategy.js';
 export * from './useSwapWithApproval.js';
+export * from './useSwapLifecycle.js';
 export * from './useCancelSwap.js';
 export * from './useCreateLimitOrder.js';
 export * from './useCancelLimitOrder.js';

@@ -12,6 +12,9 @@ Cross-chain token swaps via the intent-based solver.
 | `useSwap` | Mutation | Execute a complete cross-chain swap |
 | `useSwapAllowance` | Query | Check if token approval is needed |
 | `useSwapApprove` | Mutation | Approve tokens for the swap contract |
+| `useSwapLifecycle` | Composite | The whole swap form as one `state` + `next()`: approval strategy, destination gates, chain switch, swap, status |
+| `useSwapWithApproval` | Mutation | `useSwap` with the approval folded in (one EIP-5792 signature where the wallet can batch) |
+| `useSwapApprovalStrategy` | Query | Which approval path `useSwapWithApproval` takes |
 | `useDetailedStatus` | Query | Track a swap by its source tx, whichever completion path ran (default status read) |
 | `useStatus` | Query | Track the solver's status by hub tx hash |
 | `useCancelSwap` | Mutation | Cancel an active swap intent |
@@ -132,6 +135,72 @@ function SwapStatus({ srcChainKey, srcTxHash }: { srcChainKey: SpokeChainKey; sr
 Feed it `intentDeliveryInfo.srcChainKey` / `srcTxHash` on success. A `swap()` that fails **after** broadcast
 (verification, relay or postExecution failure) still carries them on `error.context.srcChainKey` /
 `error.context.srcTxHash` — keep polling, since the backend may still complete the swap.
+
+## One Hook for the Whole Form
+
+`useSwapLifecycle` composes the approval strategy, the destination gates (Stellar account + trustline, NEAR
+storage), source-chain switching, `useSwapWithApproval` and `useDetailedStatus` into one discriminated `state` and
+one `next()` action. Render from `state.kind`; wire the button to `next()`. Chain switching and app-owned setup
+(e.g. a Bitcoin trading wallet) are passed in — dapp-kit does not depend on the wallet packages.
+
+```tsx
+import { useSwapLifecycle, type CreateIntentParams, type SwapLifecycleState } from '@sodax/dapp-kit';
+import { useEvmSwitchChain, useWalletProvider, useXAccount } from '@sodax/wallet-sdk-react';
+
+function buttonLabel(state: SwapLifecycleState): string {
+  switch (state.kind) {
+    case 'ready':
+      if (state.approvalStrategy === 'atomic-batch') return 'Approve & Swap';
+      return state.approvalStrategy === 'sequential' ? 'Approve, then Swap' : 'Swap';
+    case 'needsChainSwitch':
+      return 'Switch network';
+    case 'needsSetup':
+      return state.reason === 'stellarTrustline' ? 'Add trustline' : 'Complete setup';
+    case 'submitting':
+      return 'Confirm in wallet…';
+    case 'pending':
+      return 'Swapping…';
+    case 'settled':
+      return 'Swap again';
+    case 'failed':
+      return 'Try again';
+    default:
+      return 'Swap';
+  }
+}
+
+function SwapButton({ intentParams }: { intentParams: CreateIntentParams }) {
+  const srcWalletProvider = useWalletProvider({ xChainId: intentParams.srcChainKey });
+  const dstWalletProvider = useWalletProvider({ xChainId: intentParams.dstChainKey });
+  const dstAccount = useXAccount({ xChainId: intentParams.dstChainKey });
+  const { isWrongChain, handleSwitchChain } = useEvmSwitchChain({ xChainId: intentParams.srcChainKey });
+
+  const { state, error, next } = useSwapLifecycle({
+    intentParams,
+    srcWalletProvider,
+    dstWalletProvider,
+    dstAccountAddress: dstAccount.address,
+    chainSwitch: { isWrongChain, switchChain: handleSwitchChain },
+  });
+
+  const busy = ['idle', 'checking', 'submitting', 'pending'].includes(state.kind);
+  return (
+    <>
+      <button type="button" onClick={() => void next()} disabled={busy}>
+        {buttonLabel(state)}
+      </button>
+      {error && <p>{error.message}</p>}
+    </>
+  );
+}
+```
+
+`next()` resolves to the action's `Result` (a setup step or the swap) — show a failed setup action from there; a
+failed swap lands in `state` as `failed` instead. A swap that fails **after** broadcast stays `pending` while its
+status is still being read, because the backend may yet complete it. Build `intentParams` once per confirmation (a
+rebuilt `deadline` is fine): editing the amount or recipient starts a new lifecycle once the current swap is no
+longer in flight. `stellarFunding` and `external` setup reasons are for the app to resolve; `next()` does nothing
+for them.
 
 ## Full Example
 

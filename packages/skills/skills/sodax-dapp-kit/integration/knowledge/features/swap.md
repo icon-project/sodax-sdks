@@ -21,6 +21,11 @@ useSwapApprovalStrategy({ params: { payload, walletProvider }, queryOptions }); 
 useSwap({ mutationOptions });
 useSwapApprove({ mutationOptions });
 useSwapWithApproval({ mutationOptions });           // useSwap + approval; one EIP-5792 signature when the wallet can batch
+
+// Composite — the whole form as one state machine; see recipes/swap.md § One Hook for the Whole Form
+useSwapLifecycle({ intentParams, srcWalletProvider, dstWalletProvider, dstAccountAddress, chainSwitch?, externalBlocked?, extras?, timeout?, mutationOptions? });
+//   → { state, error, next, reset, approvalStrategy, swap, status, stellar, nearStorage }
+//   state.kind: idle | checking | needsChainSwitch | needsSetup(reason) | ready(approvalStrategy) | submitting | pending | settled | failed
 useCancelSwap({ mutationOptions });                  // TVars are FLAT: { srcChainKey, intent, walletProvider }
 useCreateLimitOrder({ mutationOptions });           // No deadline; cancel manually
 useCancelLimitOrder({ mutationOptions });           // TVars are FLAT: { srcChainKey, intent, walletProvider }
