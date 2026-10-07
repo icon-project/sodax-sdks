@@ -17,7 +17,7 @@ import { calculateExchangeRate, formatMutationFailureMessage, formatTokenAmount 
 import { parseUnits, formatUnits } from 'viem';
 import BigNumber from 'bignumber.js';
 import { ArrowDownUp, ArrowLeftRight, Loader2 } from 'lucide-react';
-import React, { type SetStateAction, useEffect, useMemo, useState } from 'react';
+import React, { type SetStateAction, useEffect, useMemo, useRef, useState } from 'react';
 import {
   useQuote,
   useSwapLifecycle,
@@ -44,7 +44,7 @@ import {
   useXDisconnect,
   useWalletProvider,
 } from '@sodax/wallet-sdk-react';
-import type { Order } from '@/components/swaps/OrderStatus';
+import type { Order, OrderSummary } from '@/components/swaps/OrderStatus';
 import { DEFAULT_SELECTED_CHAIN, SolverEnv, useAppStore } from '@/zustand/useAppStore';
 import { BitcoinSetupPanel } from '@/components/bitcoin/BitcoinSetupPanel';
 import { loadLastSelection, saveLastSelection } from '@/lib/lastSelection';
@@ -343,6 +343,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
 
   const { isWrongChain, handleSwitchChain } = useEvmSwitchChain({ xChainId: src.chain });
 
+  const submittedSummary = useRef<OrderSummary | undefined>(undefined);
   const lifecycle = useSwapLifecycle({
     intentParams: intentOrderPayload,
     srcWalletProvider: sourceWalletProvider,
@@ -364,7 +365,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
             srcChainKey: intentDeliveryInfo.srcChainKey,
             statusEndpoint: sodax.config.solver.solverApiEndpoint,
             createdAt: Date.now(),
-            summary: buildOrderSummary(src, dst, sourceAmount, quote?.quoted_amount),
+            summary: submittedSummary.current ?? buildOrderSummary(src, dst, sourceAmount, quote?.quoted_amount),
           }),
         );
       },
@@ -376,6 +377,8 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   const handlePrimary = async (): Promise<void> => {
     setActionError(null);
     const swapping = state.kind === 'ready';
+    // onSuccess runs with the latest render's values; snapshot what the user confirmed instead.
+    if (swapping) submittedSummary.current = buildOrderSummary(src, dst, sourceAmount, quote?.quoted_amount);
     if (swapping) setOpen(false);
     const result = await lifecycle.next();
     if (!swapping && result && !result.ok) {
