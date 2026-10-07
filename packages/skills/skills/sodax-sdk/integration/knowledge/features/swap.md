@@ -81,12 +81,19 @@ sodax.swaps.getDetailedStatus(
 when the source is an EVM spoke (not the Sonic hub) and the wallet provider implements the optional EIP-5792 methods
 (`EvmWalletProvider` does for a connected browser wallet, never for a private-key account) and reports
 `'supported'` or `'ready'` for that chain — `'ready'` means the wallet asks the user to upgrade the account (MetaMask:
-EIP-7702 smart account) on the first batch. Everything else takes the two-signature path, so the call is safe on any
-chain.
+EIP-7702 smart account) on the first batch. Everything else takes the two-step path (three signatures for a token
+that must reset a stale allowance), so the call is safe on any chain.
 
-A batch the wallet received is never retried as separate transactions: a rejected batch or a declined upgrade is
-`USER_REJECTED`; a failed or timed-out batch is `INTENT_CREATION_FAILED` with `context.batchId`. Do not chain your own
-`approve` after either — that is exactly the double prompt this method avoids.
+If the wallet refuses the batch before signing (e.g. EIP-5792 `5760`), the method approves separately on its own and
+reports `approvalStrategy: 'sequential'`. Once the user has seen the batch it is never retried as separate
+transactions:
+
+- rejected batch or declined upgrade → `USER_REJECTED`;
+- failed or reverted batch → `INTENT_CREATION_FAILED` with `context.reason: 'atomic-batch-failed'` (nothing deposited);
+- sent but not confirmed within `timeout` → `TX_VERIFICATION_FAILED` with `context.reason === ATOMIC_BATCH_UNCONFIRMED`
+  and `context.batchId`. It may still land — **do not retry**; tell the user to check the wallet's activity.
+
+Do not chain your own `approve` after any of these; that is exactly the double prompt this method avoids.
 
 ## Reading swap status
 

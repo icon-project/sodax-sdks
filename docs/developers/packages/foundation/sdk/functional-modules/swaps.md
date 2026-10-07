@@ -261,6 +261,8 @@ function isSodaxError(e: unknown): e is SodaxError;
 | `createIntent` / `createLimitOrderIntent` | `SwapCreateIntentError` | `USER_REJECTED`, `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `UNKNOWN` |
 | `postExecution` | `PostExecutionError` | `EXECUTION_FAILED`, `EXTERNAL_API_ERROR`, `UNKNOWN` |
 | `createLimitOrder` | `SwapError` | (same as `swap`) |
+| `swapWithApproval` | `SwapWithApprovalError` | `swap`'s codes, plus `APPROVE_FAILED` and `ALLOWANCE_CHECK_FAILED` |
+| `getApprovalStrategy` | `ApprovalStrategyError` | `ALLOWANCE_CHECK_FAILED` |
 
 **Important:** `postExecution` alone never emits relay/verify codes — those appear only on `swap` because only `swap` orchestrates verify + relay. Don't write a unified switch that handles both with the same union. Note that `swap` orchestrates verify + relay only on the **client-side path** (the fallback, or `useBackendSubmitTx: false`), so `TX_VERIFICATION_FAILED` and `phase: 'verify'` never surface on a swap the backend completes.
 
@@ -283,6 +285,12 @@ function isSodaxError(e: unknown): e is SodaxError;
   // On `swap` failures after the source tx was broadcast (TX_VERIFICATION_FAILED, the relay codes,
   // and postExecution failures) — the tx to keep reading status for with `getDetailedStatus`:
   srcTxHash?: string;
+  // swapWithApproval only:
+  action?: 'swapWithApproval';
+  approvalStrategy?: 'atomic-batch' | 'sequential';
+  batchId?: string;            // the wallet's EIP-5792 batch id, once it accepted the batch
+  statusCode?: number;         // EIP-5792 status code of a failed batch
+  approveTxHash?: string;      // an approval that did not confirm
 }
 ```
 
@@ -650,7 +658,7 @@ if (result.ok) {
 | --- | --- | --- |
 | `'not-required'` | The allowance already covers `inputAmount`, or the token needs none (native token, chains without allowances) | 1 |
 | `'atomic-batch'` | EVM spoke source, and the wallet reports EIP-5792 atomic support for that chain | 1 |
-| `'sequential'` | Anything else: the Sonic hub, Stellar trustlines, wallets without EIP-5792 | 2 (approve, wait for it to confirm, then swap) |
+| `'sequential'` | Anything else: the Sonic hub, Stellar trustlines, wallets without EIP-5792 | 2 (approve, wait for it to confirm, then swap), or 3 when the token must reset a stale allowance first |
 
 **Which wallets batch.** The wallet provider must implement the optional `getAtomicBatchSupport` / `sendAtomicBatch`
 / `waitForBatch` methods — `EvmWalletProvider` from `@sodax/wallet-sdk-core` does for a connected browser wallet, never
@@ -663,18 +671,23 @@ users' wallets do not cover.
 rejects changing a non-zero allowance (see [Raw Approval Transaction](#raw-approval-transaction)). The batch's
 transaction hash becomes `intentDeliveryInfo.srcTxHash`, the hash the relay and backend submit-tx track.
 
-**Failures.** Once the wallet has received a batch it is never retried as separate transactions — a second round of
-prompts after the user said no would be wrong, and a batch that may still land must not be duplicated:
+**Failures.** If the wallet turns the batch down before signing anything (for example EIP-5792 `5760`, atomicity
+not supported), `swapWithApproval` approves separately instead and reports `approvalStrategy: 'sequential'`. Once the
+user has seen the batch it is never retried as separate transactions, since that would mean a second round of
+prompts or a duplicate of a batch that may still land:
 
 - the user rejects the batch, or declines the account upgrade (EIP-5792 `5750`) → `USER_REJECTED`;
-- the batch fails or reverts, or waiting for it times out → `INTENT_CREATION_FAILED` with `context.reason:
-  'atomic-batch-failed'` (when the wallet reported a terminal status), `context.batchId` and `context.statusCode`;
+- the batch fails or reverts → `INTENT_CREATION_FAILED` with `context.reason: 'atomic-batch-failed'`,
+  `context.batchId` and `context.statusCode`. Nothing was deposited;
+- the batch was sent but not confirmed within `timeout` → `TX_VERIFICATION_FAILED` with `context.reason:
+  ATOMIC_BATCH_UNCONFIRMED` (`'atomic-batch-unconfirmed'`) and `context.batchId`. It may still land, so do not
+  retry it; check the wallet's activity for that batch first;
 - on the sequential path, an approval that does not confirm → `APPROVE_FAILED` with `context.reason:
   'approve-not-confirmed'` and `context.approveTxHash`;
 - a failed allowance read → `ALLOWANCE_CHECK_FAILED`.
 
-Every other code is `swap()`'s, including `context.srcTxHash` on post-broadcast failures. The approval-leg errors
-above carry `context.action: 'swapWithApproval'` and `context.approvalStrategy`.
+Every other code is `swap()`'s, including `context.srcTxHash` on post-broadcast failures. Errors from the approval
+step carry `context.action: 'swapWithApproval'`; once the path is chosen they also carry `context.approvalStrategy`.
 
 ---
 

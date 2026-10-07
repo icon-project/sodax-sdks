@@ -29,3 +29,20 @@ export async function readAtomicBatchSupport(
     return 'unsupported';
   }
 }
+
+// EIP-1193 / EIP-5792 codes for a wallet that turns a batch down before anything is signed or sent:
+// unsupported method, method not found, unsupported capability, unsupported chain, bundle too large,
+// atomicity not supported. A user rejection (4001, 5750) is deliberately not one of them.
+const BATCH_REFUSED_CODES: ReadonlySet<number> = new Set([4200, -32601, 5700, 5710, 5740, 5760]);
+const MAX_CAUSE_DEPTH = 5;
+
+/** Whether `error` (or a cause, as viem wraps RPC errors) says the wallet refused the batch outright. */
+export function isAtomicBatchRefused(error: unknown): boolean {
+  let current: unknown = error;
+  for (let depth = 0; depth < MAX_CAUSE_DEPTH && typeof current === 'object' && current !== null; depth++) {
+    const code = 'code' in current ? current.code : undefined;
+    if (typeof code === 'number' && BATCH_REFUSED_CODES.has(code)) return true;
+    current = 'cause' in current ? current.cause : undefined;
+  }
+  return false;
+}

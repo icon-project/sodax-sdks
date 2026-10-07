@@ -1,6 +1,19 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { IEvmWalletProvider } from '@sodax/types';
-import { canSendAtomicBatch, readAtomicBatchSupport, type AtomicBatchEvmWalletProvider } from './evmAtomicBatch.js';
+import {
+  AtomicityNotSupportedError,
+  AtomicReadyWalletRejectedUpgradeError,
+  type BaseError,
+  MethodNotFoundRpcError,
+  TransactionExecutionError,
+  UserRejectedRequestError,
+} from 'viem';
+import {
+  canSendAtomicBatch,
+  isAtomicBatchRefused,
+  readAtomicBatchSupport,
+  type AtomicBatchEvmWalletProvider,
+} from './evmAtomicBatch.js';
 
 const baseProvider: IEvmWalletProvider = {
   chainType: 'EVM',
@@ -48,5 +61,22 @@ describe('readAtomicBatchSupport', () => {
       throw new Error('Method not found');
     });
     await expect(readAtomicBatchSupport(throwing, 8453)).resolves.toBe('unsupported');
+  });
+});
+
+describe('isAtomicBatchRefused', () => {
+  const wrapped = (cause: BaseError) => new TransactionExecutionError(cause, { account: null });
+
+  it('recognises a refusal the wallet raised before signing, however viem wraps it', () => {
+    expect(isAtomicBatchRefused(wrapped(new AtomicityNotSupportedError(new Error('no'))))).toBe(true);
+    expect(isAtomicBatchRefused(wrapped(new MethodNotFoundRpcError(new Error('no'))))).toBe(true);
+    expect(isAtomicBatchRefused({ code: 5710 })).toBe(true);
+  });
+
+  it('does not treat a user rejection or an unknown error as a refusal', () => {
+    expect(isAtomicBatchRefused(wrapped(new UserRejectedRequestError(new Error('no'))))).toBe(false);
+    expect(isAtomicBatchRefused(wrapped(new AtomicReadyWalletRejectedUpgradeError(new Error('no'))))).toBe(false);
+    expect(isAtomicBatchRefused(new Error('network down'))).toBe(false);
+    expect(isAtomicBatchRefused(undefined)).toBe(false);
   });
 });

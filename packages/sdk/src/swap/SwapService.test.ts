@@ -35,6 +35,7 @@ import {
   type SubmitTxStatusDataV2,
 } from '@sodax/types';
 import {
+  ATOMIC_BATCH_UNCONFIRMED,
   DETAILED_STATUS_NOT_DELIVERED,
   SPEED_TIER_SECONDS,
   type IntentResponse,
@@ -42,7 +43,14 @@ import {
   type SpokeIsAllowanceValidParamsHub,
   type WalletProviderSlot,
 } from '../index.js';
-import { AtomicReadyWalletRejectedUpgradeError, keccak256, stringToBytes, UserRejectedRequestError } from 'viem';
+import {
+  AtomicityNotSupportedError,
+  AtomicReadyWalletRejectedUpgradeError,
+  keccak256,
+  stringToBytes,
+  TransactionExecutionError,
+  UserRejectedRequestError,
+} from 'viem';
 import { Sodax } from '../shared/entities/Sodax.js';
 import { isSodaxError, SodaxError } from '../errors/SodaxError.js';
 import { isAuthFailure } from '../errors/guards.js';
@@ -4334,6 +4342,14 @@ describe('SwapService approval strategy and swapWithApproval', () => {
       expect(wallet.getAtomicBatchSupport).not.toHaveBeenCalled();
     });
 
+    it('needs no approval for a non-EVM source without an allowance, like Solana', async () => {
+      const result = await sodax.swaps.getApprovalStrategy({
+        params: intentInput(ChainKeys.SOLANA_MAINNET),
+        walletProvider: mockSolanaProvider,
+      });
+      expect(result).toEqual({ ok: true, value: 'not-required' });
+    });
+
     it('goes sequential for a Stellar source that needs a trustline', async () => {
       allowance(false);
       const result = await sodax.swaps.getApprovalStrategy({
@@ -4364,7 +4380,7 @@ describe('SwapService approval strategy and swapWithApproval', () => {
         expect(result.value.intentDeliveryInfo.srcTxHash).toBe('0xbatchTx');
       }
       expect(wallet.sendAtomicBatch).toHaveBeenCalledWith([RAW_APPROVE, RAW_DEPOSIT], { expectedChainId: 56 });
-      expect(wallet.waitForBatch).toHaveBeenCalledWith('batch-1');
+      expect(wallet.waitForBatch).toHaveBeenCalledWith('batch-1', { timeout: DEFAULT_RELAY_TX_TIMEOUT });
       // The deposit is built unsigned — the wallet signs it inside the batch.
       expect(createSpy).toHaveBeenCalledWith(expect.objectContaining({ raw: true }));
       expect(createSpy.mock.calls[0]?.[0]).not.toHaveProperty('walletProvider');
@@ -4432,10 +4448,30 @@ describe('SwapService approval strategy and swapWithApproval', () => {
       expect(mocks.relayTxAndWaitPacket).not.toHaveBeenCalled();
     });
 
-    it('keeps the batch id when waiting for the batch throws', async () => {
+    it('reports a batch that was sent but not confirmed in time as unconfirmed, not as nothing sent', async () => {
       allowance(false);
       const wallet = makeBatchProvider();
       wallet.waitForBatch.mockRejectedValueOnce(new Error('Timed out while waiting for call bundle'));
+      vi.spyOn(sodax.swaps, 'buildApproveTxs').mockResolvedValueOnce({ ok: true, value: { approveTx: RAW_APPROVE } });
+      vi.spyOn(sodax.swaps, 'createIntent').mockResolvedValueOnce(intentResult(RAW_DEPOSIT));
+      const approveSpy = vi.spyOn(sodax.swaps, 'approve');
+
+      const result = await swapWithBatch(wallet);
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe('TX_VERIFICATION_FAILED');
+        expect(result.error.context).toMatchObject({ reason: ATOMIC_BATCH_UNCONFIRMED, batchId: 'batch-1' });
+      }
+      // It may still land: no second attempt of any kind.
+      expect(approveSpy).not.toHaveBeenCalled();
+      expect(mocks.relayTxAndWaitPacket).not.toHaveBeenCalled();
+    });
+
+    it('treats a successful batch without a deposit receipt as unconfirmed', async () => {
+      allowance(false);
+      const wallet = makeBatchProvider();
+      wallet.waitForBatch.mockResolvedValueOnce({ status: 'success', statusCode: 200, atomic: true, receipts: [] });
       vi.spyOn(sodax.swaps, 'buildApproveTxs').mockResolvedValueOnce({ ok: true, value: { approveTx: RAW_APPROVE } });
       vi.spyOn(sodax.swaps, 'createIntent').mockResolvedValueOnce(intentResult(RAW_DEPOSIT));
 
@@ -4443,9 +4479,52 @@ describe('SwapService approval strategy and swapWithApproval', () => {
 
       expect(result.ok).toBe(false);
       if (!result.ok) {
-        expect(result.error.code).toBe('INTENT_CREATION_FAILED');
-        expect(result.error.context?.batchId).toBe('batch-1');
+        expect(result.error.code).toBe('TX_VERIFICATION_FAILED');
+        expect(result.error.context?.reason).toBe(ATOMIC_BATCH_UNCONFIRMED);
       }
+    });
+
+    it("gives the wait the caller's timeout", async () => {
+      allowance(false);
+      const wallet = makeBatchProvider();
+      vi.spyOn(sodax.swaps, 'buildApproveTxs').mockResolvedValueOnce({ ok: true, value: { approveTx: RAW_APPROVE } });
+      vi.spyOn(sodax.swaps, 'createIntent').mockResolvedValueOnce(intentResult(RAW_DEPOSIT));
+      stubRelayAndSolver();
+
+      await sodax.swaps.swapWithApproval({
+        params: intentInput(ChainKeys.BSC_MAINNET),
+        walletProvider: wallet,
+        timeout: 30_000,
+      });
+
+      expect(wallet.waitForBatch).toHaveBeenCalledWith('batch-1', { timeout: 30_000 });
+    });
+
+    it('falls back to approving separately when the wallet refuses the batch before signing', async () => {
+      allowance(false);
+      const wallet = makeBatchProvider('supported');
+      wallet.sendAtomicBatch.mockRejectedValueOnce(
+        new TransactionExecutionError(new AtomicityNotSupportedError(new Error('no atomicity')), { account: null }),
+      );
+      vi.spyOn(sodax.swaps, 'buildApproveTxs').mockResolvedValueOnce({ ok: true, value: { approveTx: RAW_APPROVE } });
+      const createSpy = vi
+        .spyOn(sodax.swaps, 'createIntent')
+        .mockResolvedValueOnce(intentResult(RAW_DEPOSIT))
+        .mockResolvedValueOnce(intentResult('0xspokeTx'));
+      const approveSpy = vi.spyOn(sodax.swaps, 'approve').mockResolvedValueOnce({ ok: true, value: '0xapproveTx' });
+      vi.spyOn(sodax.spoke, 'waitForTxReceipt').mockResolvedValueOnce({
+        ok: true,
+        value: { status: 'success', receipt: {} as never },
+      });
+      stubRelayAndSolver();
+
+      const result = await swapWithBatch(wallet);
+
+      expect(result.ok).toBe(true);
+      if (result.ok) expect(result.value.approvalStrategy).toBe('sequential');
+      expect(approveSpy).toHaveBeenCalledOnce();
+      expect(createSpy).toHaveBeenLastCalledWith(expect.objectContaining({ walletProvider: wallet }));
+      expect(mocks.relayTxAndWaitPacket.mock.calls[0]?.[0].srcTxHash).toBe('0xspokeTx');
     });
   });
 
@@ -4488,7 +4567,10 @@ describe('SwapService approval strategy and swapWithApproval', () => {
       });
 
       expect(result.ok).toBe(false);
-      if (!result.ok) expect(result.error.code).toBe('USER_REJECTED');
+      if (!result.ok) {
+        expect(result.error.code).toBe('USER_REJECTED');
+        expect(result.error.context).toMatchObject({ action: 'swapWithApproval', approvalStrategy: 'sequential' });
+      }
       expect(createSpy).not.toHaveBeenCalled();
     });
 

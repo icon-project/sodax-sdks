@@ -22,7 +22,8 @@ import {
   UserRejectedRequestError,
 } from 'viem';
 import { describe, expect, it } from 'vitest';
-import { approveFailed, intentCreationFailed } from './wrappers.js';
+import { SodaxError } from './SodaxError.js';
+import { approveFailed, intentCreationFailed, withErrorContext } from './wrappers.js';
 
 describe('intentCreationFailed (wallet rejection classification)', () => {
   it('classifies a viem UserRejectedRequestError instance as USER_REJECTED', () => {
@@ -202,5 +203,24 @@ describe('USER_REJECTED clean message', () => {
 
     // The raw cause is still preserved for debugging.
     expect(err.cause).toBe(noisyCause);
+  });
+});
+
+describe('withErrorContext', () => {
+  it('merges context over the original while keeping code, message, feature and cause', () => {
+    const cause = new Error('root');
+    const original = new SodaxError('APPROVE_FAILED', 'Approve failed', {
+      feature: 'swap',
+      cause,
+      context: { phase: 'approve', srcChainKey: 'bsc' },
+    });
+
+    const merged = withErrorContext(original, { action: 'swapWithApproval', srcChainKey: '0x38.bsc' });
+
+    expect(merged.code).toBe('APPROVE_FAILED');
+    expect(merged.message).toBe('Approve failed');
+    expect(merged.feature).toBe('swap');
+    expect(merged.cause).toBe(cause);
+    expect(merged.context).toEqual({ phase: 'approve', srcChainKey: '0x38.bsc', action: 'swapWithApproval' });
   });
 });

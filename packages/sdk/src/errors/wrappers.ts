@@ -6,7 +6,7 @@
  * `lookupFailed('dex', 'getPoolData', err)` instead of a 6-line `new SodaxError(...)` literal.
  */
 
-import type { SodaxErrorContext, SodaxFeature } from './codes.js';
+import type { SodaxErrorCode, SodaxErrorContext, SodaxFeature } from './codes.js';
 import { isSodaxError, SodaxError } from './SodaxError.js';
 
 /** Extract `error.message` if `error` is an `Error`; otherwise return the fallback. */
@@ -206,6 +206,15 @@ export function allowanceCheckFailed(
     feature,
     cause,
     context: { phase: 'allowanceCheck', ...context },
+  });
+}
+
+/** Re-issues `error` with `context` merged over its own; code, message, feature and cause are kept. */
+export function withErrorContext<C extends SodaxErrorCode>(error: SodaxError<C>, context: Ctx): SodaxError<C> {
+  return new SodaxError(error.code, error.message, {
+    feature: error.feature,
+    cause: error.cause,
+    context: { ...error.context, ...context },
   });
 }
 
