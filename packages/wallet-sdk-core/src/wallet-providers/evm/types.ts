@@ -19,8 +19,11 @@ export type EvmSendTransactionPolicy = Omit<Partial<SendTransactionParameters>, 
 /** Wait-for-receipt params (confirmations/polling/timeout). `hash` is positional, not part of the policy. */
 export type EvmWaitForTransactionReceiptPolicy = Partial<Omit<WaitForTransactionReceiptParameters, 'hash'>>;
 
-/** Wait-for-batch params (polling/timeout/terminal predicate). `id` is positional, not part of the policy. */
-export type EvmWaitForCallsStatusPolicy = Partial<Omit<WaitForCallsStatusParameters, 'id'>>;
+/**
+ * Wait-for-batch params (polling/timeout). `id` is positional; viem's `status` predicate is left out so a
+ * batch is only ever reported once it is terminal.
+ */
+export type EvmWaitForCallsStatusPolicy = Partial<Omit<WaitForCallsStatusParameters, 'id' | 'status'>>;
 
 /**
  * Defaults applied to every call. Per-call options shallow-merge over these.

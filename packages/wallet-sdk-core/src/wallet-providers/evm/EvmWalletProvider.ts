@@ -239,6 +239,12 @@ export class EvmWalletProvider extends BaseWalletProvider<EvmWalletDefaults> imp
       );
     }
     await this.assertActiveChain(options.expectedChainId);
+    // Unlike sendTransaction, viem's sendCalls takes the batch's chainId from the client without checking it.
+    if (this.walletClient.chain.id !== options.expectedChainId) {
+      throw new Error(
+        `[EvmWalletProvider] wallet client is bound to chain ${this.walletClient.chain.id} but the batch targets chain ${options.expectedChainId}; rebuild the client for that chain`,
+      );
+    }
     const { id } = await this.walletClient.sendCalls({
       calls: txs.map(({ to, value, data }) => ({ to, value, data })),
       forceAtomic: true,
@@ -246,7 +252,7 @@ export class EvmWalletProvider extends BaseWalletProvider<EvmWalletDefaults> imp
     return id;
   }
 
-  /** Polls until the batch reaches a terminal EIP-5792 status and returns its receipts. */
+  /** Polls until the batch reaches a terminal EIP-5792 status and returns its receipts. Throws on timeout. */
   async waitForBatch(batchId: string, options?: EvmWaitForCallsStatusPolicy): Promise<EvmBatchResult> {
     const policy = this.mergePolicy('waitForCallsStatus', options);
     const result = await this.walletClient.waitForCallsStatus({ ...policy, id: batchId });

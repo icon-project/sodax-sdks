@@ -67,6 +67,11 @@ export type EvmSendBatchOptions = {
   expectedChainId: number;
 };
 
+export type EvmWaitForBatchOptions = {
+  /** How long to wait for the batch to reach a terminal status, in ms. */
+  timeout?: number;
+};
+
 export type EvmBatchReceipt = {
   transactionHash: Hash;
   status: 'success' | 'reverted';
@@ -93,6 +98,6 @@ export interface IEvmWalletProvider extends ICoreWallet {
    * Resolves to the wallet's batch id, not a transaction hash — read it from {@link waitForBatch}.
    */
   sendAtomicBatch?: (txs: readonly EvmRawTransaction[], options: EvmSendBatchOptions) => Promise<string>;
-  /** Wait for a batch sent with {@link sendAtomicBatch} to reach a terminal state. */
-  waitForBatch?: (batchId: string) => Promise<EvmBatchResult>;
+  /** Wait for a batch sent with {@link sendAtomicBatch} to reach a terminal state. Throws on timeout. */
+  waitForBatch?: (batchId: string, options?: EvmWaitForBatchOptions) => Promise<EvmBatchResult>;
 }

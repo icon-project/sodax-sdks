@@ -512,5 +512,6 @@ Requirements for a valid custom implementation:
    `waitForBatch` let `sodax.swaps.swapWithApproval` send approve + swap as one atomic batch. Omit all
    three and the SDK falls back to separate transactions. Implement them only together:
    `getAtomicBatchSupport(chainId)` reports the wallet's `atomic` capability (`'supported'`, `'ready'`
-   or `'unsupported'`), `sendAtomicBatch` must request atomic execution and honor
-   `options.expectedChainId`, and `waitForBatch` resolves to the batch's receipts.
+   or `'unsupported'`), `sendAtomicBatch` must request atomic execution and send the batch for
+   `options.expectedChainId` only, and `waitForBatch(batchId, { timeout })` resolves to the batch's receipts once
+   it is terminal and throws if it is not by then.

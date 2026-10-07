@@ -412,6 +412,19 @@ describe('EvmWalletProvider', () => {
         expect(spy).not.toHaveBeenCalled();
       });
 
+      it('refuses when the wallet client is bound to a different chain than expectedChainId', async () => {
+        const config = makeConnectedWalletConfig();
+        const provider = new EvmWalletProvider(config);
+        // The wallet is already on Base, but this client was built for Sonic: sendCalls would tag the batch 146.
+        vi.spyOn(config.walletClient, 'getChainId').mockResolvedValue(8453);
+        const spy = vi.spyOn(config.walletClient, 'sendCalls');
+
+        await expect(provider.sendAtomicBatch([APPROVE_TX], { expectedChainId: 8453 })).rejects.toThrow(
+          /bound to chain 146 but the batch targets chain 8453/,
+        );
+        expect(spy).not.toHaveBeenCalled();
+      });
+
       it('sends the calls in order with atomic execution required and returns the batch id', async () => {
         const config = makeConnectedWalletConfig();
         const provider = new EvmWalletProvider(config);
@@ -482,6 +495,14 @@ describe('EvmWalletProvider', () => {
         await provider.waitForBatch('batch-1', { timeout: 30_000 });
 
         expect(spy).toHaveBeenCalledWith({ id: 'batch-1', timeout: 30_000, pollingInterval: 2_000 });
+      });
+
+      it('propagates a wait that times out, so the caller can tell it from a failed batch', async () => {
+        const config = makeConnectedWalletConfig();
+        const provider = new EvmWalletProvider(config);
+        vi.spyOn(config.walletClient, 'waitForCallsStatus').mockRejectedValue(new Error('Timed out'));
+
+        await expect(provider.waitForBatch('batch-1', { timeout: 1_000 })).rejects.toThrow('Timed out');
       });
     });
   });

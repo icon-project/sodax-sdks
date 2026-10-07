@@ -15,7 +15,7 @@ The tables below summarise the methods each provider exposes. For full type-leve
 | `waitForTransactionReceipt` | `(hash: Hash, opts?: EvmWaitForTransactionReceiptPolicy) => Promise<EvmRawTransactionReceipt>` |
 | `getAtomicBatchSupport?` | `(chainId: number) => Promise<EvmAtomicBatchSupport>` — optional (EIP-5792) |
 | `sendAtomicBatch?` | `(txs: readonly EvmRawTransaction[], opts: EvmSendBatchOptions) => Promise<string>` — optional, returns a batch id |
-| `waitForBatch?` | `(batchId: string) => Promise<EvmBatchResult>` — optional |
+| `waitForBatch?` | `(batchId: string, opts?: EvmWaitForBatchOptions) => Promise<EvmBatchResult>` — optional; throws on timeout |
 
 Plus public field: `publicClient: PublicClient`. The three EIP-5792 methods are optional on the interface; a custom provider that omits them still works — the SDK falls back to separate transactions.
 
