@@ -764,15 +764,16 @@ export class SwapService {
   ): Promise<Result<SwapResponse, SwapError>> {
     const { params } = _params;
     const srcChainKey = params.srcChainKey;
-    const baseCtx = { srcChainKey, dstChainKey: params.dstChainKey };
     const { tx: spokeTxHash, intent, relayData } = created;
+    // Every failure from here on is post-broadcast: carry the tx so the caller can keep reading its status.
+    const txCtx = { srcChainKey, dstChainKey: params.dstChainKey, action: 'swap', srcTxHash: spokeTxHash };
 
     const verifyTxHashResult = await this.spoke.verifyTxHash({
       txHash: created.tx,
       chainKey: srcChainKey,
     });
     if (!verifyTxHashResult.ok) {
-      return { ok: false, error: verifyFailed('swap', verifyTxHashResult.error, { ...baseCtx, action: 'swap' }) };
+      return { ok: false, error: verifyFailed('swap', verifyTxHashResult.error, txCtx) };
     }
 
     let dstIntentTxHash: string;
@@ -792,7 +793,7 @@ export class SwapService {
         timeout: Math.max(timeoutMs, RELAY_FALLBACK_FLOOR_MS),
       });
       if (!packet.ok) {
-        return { ok: false, error: mapRelayFailure(packet.error, { feature: 'swap', action: 'swap', ...baseCtx }) };
+        return { ok: false, error: mapRelayFailure(packet.error, { feature: 'swap', ...txCtx }) };
       }
       dstIntentTxHash = packet.value.dst_tx_hash;
     }
@@ -802,7 +803,15 @@ export class SwapService {
     });
     if (!postExecResult.ok) {
       // PostExecutionErrorCode ⊂ SwapErrorCode by definition.
-      return { ok: false, error: postExecResult.error };
+      const { error } = postExecResult;
+      return {
+        ok: false,
+        error: new SodaxError(error.code, error.message, {
+          feature: error.feature,
+          cause: error.cause,
+          context: { ...error.context, srcChainKey, srcTxHash: spokeTxHash },
+        }),
+      };
     }
 
     return {

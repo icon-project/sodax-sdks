@@ -274,8 +274,15 @@ function isSodaxError(e: unknown): e is SodaxError;
   // Only on VALIDATION_FAILED:
   field?: string;
   reason?: string;
+  // On `swap` failures after the source tx was broadcast (TX_VERIFICATION_FAILED, the relay codes,
+  // and postExecution failures) — the tx to keep reading status for with `getDetailedStatus`:
+  srcTxHash?: string;
 }
 ```
+
+A post-broadcast failure does not mean the swap failed: with backend submit-tx on, the backend keeps working on
+it after `swap()` gives up. Read `error.context.srcTxHash` (with `srcChainKey`) and keep polling
+[`getDetailedStatus`](#get-detailed-status) rather than reporting the swap as lost.
 
 #### Discrimination example
 
@@ -1066,6 +1073,19 @@ type DetailedSwapStatus =
 ```
 
 A point-in-time read — poll it yourself, or use `@sodax/dapp-kit`'s `useDetailedStatus`.
+
+To show a status without switching on `source`, collapse it with `summarizeSwapStatus` — pure, so it works on any
+`DetailedSwapStatus` you hold:
+
+```typescript
+import { summarizeSwapStatus } from '@sodax/sdk';
+
+if (result.ok) {
+  const { state, hubTxHash, fillTxHash } = summarizeSwapStatus(result.value);
+  // state: 'pending' | 'solved' | 'failed'. fillTxHash may be absent even when solved — the backend can
+  // confirm a fill from the on-chain journal without one.
+}
+```
 
 ### Why it exists
 

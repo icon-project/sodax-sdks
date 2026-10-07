@@ -3023,6 +3023,68 @@ describe('SwapService.swap', () => {
     }
   });
 
+  describe('post-broadcast failures carry the source tx', () => {
+    const swapOnBsc = () =>
+      sodax.swaps.swap({ params: intentInput(ChainKeys.BSC_MAINNET), raw: false, walletProvider: mockEvmProvider });
+
+    it('on a verifyTxHash failure', async () => {
+      stubCreateIntentOk(ChainKeys.BSC_MAINNET, '0xbscTx');
+      vi.spyOn(sodax.spoke, 'verifyTxHash').mockResolvedValueOnce({ ok: false, error: new Error('VERIFY_FAILED') });
+
+      const result = await swapOnBsc();
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.context).toMatchObject({ srcChainKey: ChainKeys.BSC_MAINNET, srcTxHash: '0xbscTx' });
+      }
+    });
+
+    it.each(['RELAY_TIMEOUT', 'SUBMIT_TX_FAILED', 'NEW_FUTURE_RELAY_CODE'])('on a %s relay failure', async message => {
+      stubCreateIntentOk(ChainKeys.BSC_MAINNET, '0xbscTx');
+      mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: false, error: new Error(message) });
+
+      const result = await swapOnBsc();
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.context).toMatchObject({ srcChainKey: ChainKeys.BSC_MAINNET, srcTxHash: '0xbscTx' });
+      }
+    });
+
+    it('on a postExecution failure, keeping the solver code', async () => {
+      stubCreateIntentOk(ChainKeys.BSC_MAINNET, '0xbscTx');
+      mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xdstTx' } });
+      mocks.solverPostExecution.mockResolvedValueOnce({
+        ok: false,
+        error: { detail: { code: -7, message: 'no execution module found' } },
+      });
+
+      const result = await swapOnBsc();
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe('EXTERNAL_API_ERROR');
+        expect(result.error.context).toMatchObject({
+          solverCode: -7,
+          srcChainKey: ChainKeys.BSC_MAINNET,
+          srcTxHash: '0xbscTx',
+        });
+      }
+    });
+
+    it('but not on a createIntent failure, where nothing was broadcast', async () => {
+      const createError = new SodaxError('INTENT_CREATION_FAILED', 'create intent failed', { feature: 'swap' });
+      vi.spyOn(sodax.swaps, 'createIntent').mockResolvedValueOnce({ ok: false, error: createError });
+
+      const result = await swapOnBsc();
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.context?.srcTxHash).toBeUndefined();
+      }
+    });
+  });
+
   it('wraps a thrown error from createIntent in SWAP_UNKNOWN with cause', async () => {
     const thrownError = new Error('CREATE_THROWS');
     vi.spyOn(sodax.swaps, 'createIntent').mockRejectedValueOnce(thrownError);
@@ -3385,7 +3447,8 @@ describe('SwapService.cancelIntent — non-hub (relay) path', () => {
       raw: true,
     });
     expect(missing.ok).toBe(false);
-    if (!missing.ok) expect(String((missing.error as { cause?: unknown }).cause ?? missing.error)).toMatch(/srcAddress/);
+    if (!missing.ok)
+      expect(String((missing.error as { cause?: unknown }).cause ?? missing.error)).toMatch(/srcAddress/);
     expect(sendMessageSpy).not.toHaveBeenCalled();
 
     sendMessageSpy.mockResolvedValueOnce({ ok: true, value: JSON.stringify({ payload_hex: '00' }) });
