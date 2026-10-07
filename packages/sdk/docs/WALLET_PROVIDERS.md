@@ -503,3 +503,9 @@ Requirements for a valid custom implementation:
    active chain id differs; ignoring it silently disables the SDK's wrong-chain protection. A provider
    that already declares its own second options parameter must widen it to
    `YourOptions & EvmSendTransactionOptions` to keep satisfying the interface.
+5. **EIP-5792 batch methods are optional** — `getAtomicBatchSupport`, `sendAtomicBatch` and
+   `waitForBatch` let `sodax.swaps.swapWithApproval` send approve + swap as one atomic batch. Omit all
+   three and the SDK falls back to separate transactions. Implement them only together:
+   `getAtomicBatchSupport(chainId)` reports the wallet's `atomic` capability (`'supported'`, `'ready'`
+   or `'unsupported'`), `sendAtomicBatch` must request atomic execution and honor
+   `options.expectedChainId`, and `waitForBatch` resolves to the batch's receipts.
