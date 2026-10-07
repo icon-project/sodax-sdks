@@ -20,21 +20,19 @@ import { ArrowDownUp, ArrowLeftRight, Loader2 } from 'lucide-react';
 import React, { type SetStateAction, useEffect, useMemo, useState } from 'react';
 import {
   useQuote,
-  useSwapAllowance,
-  useSwapApprove,
-  useSwap,
-  useStellarGate,
+  useSwapLifecycle,
   useSodaxContext,
   loadRadfiSession,
   useTradingWalletBalance,
   useBalances,
-  useNearStorageGate,
   getSupportedSolverTokens,
   getStagingSolverTokens,
   type CreateIntentParams,
   type SolverIntentQuoteRequest,
   type GetWalletProviderType,
   type SpokeChainKey,
+  type SwapLifecycleState,
+  type SwapSetupReason,
   type XToken,
   type ChainType,
   ChainKeys,
@@ -53,6 +51,46 @@ import { loadLastSelection, saveLastSelection } from '@/lib/lastSelection';
 import { appendOrder } from '@/lib/orderHistory';
 import { buildOrderSummary } from '@/components/swaps/OrderStatus';
 import { HOOK_LABELS, resolveAvailableHookKind, toHookRequest } from '@/lib/deliveryHooks';
+
+const SETUP_LABELS: Record<SwapSetupReason, string> = {
+  stellarActivation: 'Activate Stellar Account',
+  stellarFunding: 'Fund the Stellar account with XLM first',
+  stellarTrustline: 'Request Trustline',
+  stellarCheckFailed: 'Retry Stellar Check',
+  nearStorage: 'Register Storage',
+  external: 'Finish the Bitcoin setup first',
+};
+
+/** The one button's label, from the lifecycle state — the approval strategy decides the ready label. */
+function primaryLabel(state: SwapLifecycleState): string {
+  switch (state.kind) {
+    case 'idle':
+      return 'Swap';
+    case 'checking':
+      return 'Checking…';
+    case 'needsChainSwitch':
+      return 'Switch Chain';
+    case 'needsSetup':
+      return SETUP_LABELS[state.reason];
+    case 'ready':
+      if (state.approvalStrategy === 'atomic-batch') return 'Approve & Swap (1 signature)';
+      return state.approvalStrategy === 'sequential' ? 'Approve, then Swap' : 'Swap';
+    case 'submitting':
+      return 'Confirm in wallet…';
+    case 'pending':
+      return 'Swap in progress…';
+    case 'settled':
+      return 'Swap again';
+    case 'failed':
+      return 'Try again';
+  }
+}
+
+/** States the button cannot act on: waiting, or a prerequisite only the user (or the app) can resolve. */
+function isPassive(state: SwapLifecycleState): boolean {
+  if (state.kind === 'needsSetup') return state.reason === 'stellarFunding' || state.reason === 'external';
+  return state.kind === 'idle' || state.kind === 'checking' || state.kind === 'submitting' || state.kind === 'pending';
+}
 
 export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAction<Order[]>) => void }) {
   const { sodax } = useSodaxContext();
@@ -91,37 +129,12 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
     () => (solverEnvironment === SolverEnv.Staging ? getStagingSolverTokens : getSupportedSolverTokens),
     [solverEnvironment],
   );
-  const { mutateAsync: swap } = useSwap();
   const [sourceAmount, setSourceAmount] = useState<string>('');
   const [intentOrderPayload, setIntentOrderPayload] = useState<CreateIntentParams | undefined>(undefined);
-  const { data: hasAllowed, isLoading: isAllowanceLoading } = useSwapAllowance({
-    params: {
-      payload: intentOrderPayload,
-      srcChainKey: src.chain,
-      walletProvider: sourceWalletProvider,
-    },
-  });
-  const { mutateAsyncSafe: approve, isPending: isApproving } = useSwapApprove();
   const supportedSpokeChains = sodax.config.getSupportedSpokeChains();
-  // Keep amount undefined until the payload exists; 0n disables the trustline query.
-  const stellar = useStellarGate({
-    dstChainKey: dst.chain,
-    token: intentOrderPayload?.outputToken,
-    amount: intentOrderPayload ? BigInt(intentOrderPayload.minOutputAmount) : undefined,
-    address: destAccount.address,
-    walletProvider: destWalletProvider,
-  });
-  const nearStorage = useNearStorageGate({
-    dstChainKey: dst.chain,
-    token: intentOrderPayload?.outputToken,
-    accountId: destAccount.address,
-    walletProvider: destWalletProvider,
-  });
   const [open, setOpen] = useState(false);
-  const [approveError, setApproveError] = useState<string | null>(null);
-  const [swapError, setSwapError] = useState<string | null>(null);
-  const [nearStorageError, setNearStorageError] = useState<string | null>(null);
-  const [stellarError, setStellarError] = useState<string | null>(null);
+  // A failed setup action (activation, trustline, storage); a failed swap lands in the lifecycle state.
+  const [actionError, setActionError] = useState<string | null>(null);
   const [slippage, setSlippage] = useState<string>('0.5');
   const [deliveryHookEnabled, setDeliveryHookEnabled] = useState(false);
   const [isBitcoinReady, setIsBitcoinReady] = useState(false);
@@ -322,31 +335,43 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
 
   const { isWrongChain, handleSwitchChain } = useEvmSwitchChain({ xChainId: src.chain });
 
-  const handleSwap = async (intentOrderPayload: CreateIntentParams) => {
-    setOpen(false);
-    console.log('intentOrderPayload', intentOrderPayload);
-    console.log('wallet provider', sourceWalletProvider);
-    if (!sourceWalletProvider) return;
-    setSwapError(null);
-    try {
-      const swapResponse = await swap({ params: intentOrderPayload, walletProvider: sourceWalletProvider });
-      const { solverExecutionResponse: response, intent, intentDeliveryInfo } = swapResponse;
-      setOrders(prev =>
-        appendOrder(prev, {
-          mode: 'solver',
-          intentHash: response.intent_hash,
-          orderId: intent.intentId.toString(),
-          dstTxHash: intentDeliveryInfo.dstTxHash as string,
-          srcTxHash: intentDeliveryInfo.srcTxHash,
-          srcChainKey: intentDeliveryInfo.srcChainKey,
-          statusEndpoint: sodax.config.solver.solverApiEndpoint,
-          createdAt: Date.now(),
-          summary: buildOrderSummary(src, dst, sourceAmount, quote?.quoted_amount),
-        }),
-      );
-    } catch (error) {
-      console.error('Error creating and submitting intent:', error);
-      setSwapError(formatMutationFailureMessage(error, 'Swap failed'));
+  const lifecycle = useSwapLifecycle({
+    intentParams: intentOrderPayload,
+    srcWalletProvider: sourceWalletProvider,
+    dstWalletProvider: destWalletProvider,
+    dstAccountAddress: destAccount.address,
+    chainSwitch: { isWrongChain, switchChain: handleSwitchChain },
+    externalBlocked:
+      (src.chain === ChainKeys.BITCOIN_MAINNET && !isBitcoinReady) ||
+      (dst.chain === ChainKeys.BITCOIN_MAINNET && !isDestBitcoinReady),
+    mutationOptions: {
+      onSuccess: ({ solverExecutionResponse: response, intent, intentDeliveryInfo }) => {
+        setOrders(prev =>
+          appendOrder(prev, {
+            mode: 'solver',
+            intentHash: response.intent_hash,
+            orderId: intent.intentId.toString(),
+            dstTxHash: intentDeliveryInfo.dstTxHash as string,
+            srcTxHash: intentDeliveryInfo.srcTxHash,
+            srcChainKey: intentDeliveryInfo.srcChainKey,
+            statusEndpoint: sodax.config.solver.solverApiEndpoint,
+            createdAt: Date.now(),
+            summary: buildOrderSummary(src, dst, sourceAmount, quote?.quoted_amount),
+          }),
+        );
+      },
+    },
+  });
+  const { state, stellar, nearStorage } = lifecycle;
+  const isActing = stellar.isActivating || stellar.isRequestingTrustline || nearStorage.isRegistering;
+
+  const handlePrimary = async (): Promise<void> => {
+    setActionError(null);
+    const swapping = state.kind === 'ready';
+    if (swapping) setOpen(false);
+    const result = await lifecycle.next();
+    if (!swapping && result && !result.ok) {
+      setActionError(formatMutationFailureMessage(result.error, 'Action failed'));
     }
   };
 
@@ -357,47 +382,6 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
 
   const handleDestAccountDisconnect = () => {
     disconnect({ xChainType: getXChainType(dst.chain) as ChainType });
-  };
-
-  const handleApprove = async (): Promise<void> => {
-    if (!intentOrderPayload || !sourceWalletProvider) {
-      console.error('intentOrderPayload or sourceWalletProvider undefined');
-      return;
-    }
-
-    const result = await approve({ params: intentOrderPayload, walletProvider: sourceWalletProvider });
-    if (!result.ok) {
-      setApproveError(formatMutationFailureMessage(result.error, 'Approve failed'));
-      return;
-    }
-    setApproveError(null);
-  };
-
-  const handleActivateStellarAccount = async () => {
-    const result = await stellar.activate();
-    if (result && !result.ok) {
-      setStellarError(formatMutationFailureMessage(result.error, 'Stellar account activation failed'));
-      return;
-    }
-    setStellarError(null);
-  };
-
-  const handleRequestTrustline = async () => {
-    const result = await stellar.requestTrustline();
-    if (result && !result.ok) {
-      setStellarError(formatMutationFailureMessage(result.error, 'Trustline request failed'));
-      return;
-    }
-    setStellarError(null);
-  };
-
-  const handleRegisterNearStorage = async () => {
-    const result = await nearStorage.registerStorage();
-    if (result && !result.ok) {
-      setNearStorageError(formatMutationFailureMessage(result.error, 'Storage registration failed'));
-      return;
-    }
-    setNearStorageError(null);
   };
 
   return (
@@ -590,8 +574,9 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
           onOpenChange={(nextOpen): void => {
             setOpen(nextOpen);
             if (nextOpen) {
-              setApproveError(null);
-              setSwapError(null);
+              setActionError(null);
+              // A finished swap for the same params would otherwise greet the user as "Swap again".
+              if (state.kind === 'settled' || state.kind === 'failed') lifecycle.reset();
             }
           }}
         >
@@ -650,93 +635,54 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
                     Recipient is not storage-registered for this token on NEAR (register storage to proceed)
                   </div>
                 )}
-                {approveError ? <div className="text-red-500 text-sm">{approveError}</div> : null}
-                {swapError ? <div className="text-red-500 text-sm">{swapError}</div> : null}
-                {nearStorageError ? <div className="text-red-500 text-sm">{nearStorageError}</div> : null}
-                {stellarError ? <div className="text-red-500 text-sm">{stellarError}</div> : null}
+                {state.kind === 'ready' && state.approvalStrategy === 'atomic-batch' && (
+                  <div className="text-sm text-muted-foreground">
+                    Your wallet sends the approval and the swap as one batch. MetaMask may first ask to upgrade the
+                    account to a smart account (same address).
+                  </div>
+                )}
+                {lifecycle.error ? (
+                  <div className="text-red-500 text-sm">
+                    {formatMutationFailureMessage(lifecycle.error, 'Swap failed')}
+                  </div>
+                ) : null}
+                {actionError ? <div className="text-red-500 text-sm">{actionError}</div> : null}
               </div>
             </div>
             <DialogFooter>
-              {src.chain !== ChainKeys.BITCOIN_MAINNET && (
+              {intentOrderPayload ? (
                 <Button
                   className="w-full"
                   type="button"
-                  variant="default"
-                  onClick={handleApprove}
-                  disabled={isAllowanceLoading || hasAllowed || isApproving}
+                  onClick={handlePrimary}
+                  disabled={isPassive(state) || isActing || stellar.isChecking}
                 >
-                  {isApproving ? 'Approving...' : hasAllowed ? 'Approved' : 'Approve'}
-                </Button>
-              )}
-
-              {isWrongChain && (
-                <Button className="w-full" type="button" variant="default" onClick={handleSwitchChain}>
-                  Switch Chain
-                </Button>
-              )}
-
-              {!isWrongChain &&
-                (intentOrderPayload ? (
-                  <Button
-                    className="w-full"
-                    onClick={() => handleSwap(intentOrderPayload)}
-                    disabled={
-                      (src.chain !== ChainKeys.BITCOIN_MAINNET && !hasAllowed) ||
-                      (src.chain === ChainKeys.BITCOIN_MAINNET && !isBitcoinReady) ||
-                      (dst.chain === ChainKeys.BITCOIN_MAINNET && !isDestBitcoinReady) ||
-                      stellar.blocksAction ||
-                      nearStorage.blocksAction
-                    }
-                  >
-                    <ArrowLeftRight className="mr-2 h-4 w-4" /> Swap
-                  </Button>
-                ) : (
-                  <span>Intent Order undefined</span>
-                ))}
-              {stellar.isStellar && stellar.isChecking && <span>Checking Stellar account...</span>}
-              {stellar.needsActivation && (
-                <Button className="w-full" onClick={handleActivateStellarAccount} disabled={stellar.isActivating}>
-                  {stellar.isActivating ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Activating...
-                    </>
+                  {isActing || state.kind === 'checking' || state.kind === 'submitting' ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   ) : (
-                    'Activate Stellar Account'
+                    state.kind === 'ready' && <ArrowLeftRight className="mr-2 h-4 w-4" />
                   )}
+                  {primaryLabel(state)}
                 </Button>
-              )}
-              {stellar.needsTrustline && (
-                <Button className="w-full" onClick={handleRequestTrustline} disabled={stellar.isRequestingTrustline}>
-                  {stellar.isRequestingTrustline ? 'Requesting...' : 'Request Trustline'}
-                </Button>
-              )}
-              {stellar.checkFailed && (
-                <Button className="w-full" onClick={stellar.retry} disabled={stellar.isChecking}>
-                  {stellar.isChecking ? 'Rechecking...' : 'Retry Stellar Check'}
-                </Button>
-              )}
-              {nearStorage.isNear && (nearStorage.isChecking || nearStorage.needsRegistration) && (
-                <Button
-                  className="w-full"
-                  onClick={handleRegisterNearStorage}
-                  disabled={nearStorage.isChecking || nearStorage.isRegistering}
-                >
-                  {nearStorage.isChecking ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Checking storage...
-                    </>
-                  ) : nearStorage.isRegistering ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Registering...
-                    </>
-                  ) : (
-                    'Register Storage'
-                  )}
-                </Button>
+              ) : (
+                <span>Intent Order undefined</span>
               )}
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        {(state.kind === 'submitting' ||
+          state.kind === 'pending' ||
+          state.kind === 'settled' ||
+          state.kind === 'failed') && (
+          <div className="w-full text-sm" role="status">
+            {state.kind === 'submitting' && 'Waiting for the wallet confirmation…'}
+            {state.kind === 'pending' && `Swap in progress — source tx ${state.srcTxHash}`}
+            {state.kind === 'settled' && 'Swap settled.'}
+            {state.kind === 'failed' && (
+              <span className="text-red-500">{formatMutationFailureMessage(state.error, 'Swap failed')}</span>
+            )}
+          </div>
+        )}
       </CardFooter>
     </Card>
   );
