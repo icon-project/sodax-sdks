@@ -65,8 +65,9 @@ All v1 fields were **optional**. v1 had **no** top-level `rpcConfig` on `SodaxCo
 
 **Within v2, too:** `swaps.useBackendSubmitTx` / `bridge.useBackendSubmitTx` (client-side options, default **on**)
 replace the earlier `swapsOptions` / `bridgeOptions` keys (`SwapsClientOptions` / `BridgeClientOptions`). The old keys
-are deprecated, honoured only when the new flag is omitted, and removed in v3. Do not generate them; an explicit
-`false` on the new key keeps the fully client-side relay path.
+are deprecated, honoured only when the new flag is omitted, and removed in v3, where the only form is
+`swaps: { partnerFee, useBackendSubmitTx }` / `bridge: { partnerFee, useBackendSubmitTx }`. Do not generate the old
+keys; an explicit `false` on the new key keeps the fully client-side relay path.
 
 Migration:
 

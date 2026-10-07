@@ -96,7 +96,7 @@ export type RadfiOptions = {
 };
 
 /**
- * @deprecated Use the `swaps` option ({@link SwapsOptions}) instead; removed in v3. Kept for backward
+ * @deprecated Use `swaps: { partnerFee, useBackendSubmitTx }` ({@link SwapsOptions}) instead; removed in v3. Kept for backward
  * compatibility: still honoured, but only when `swaps.useBackendSubmitTx` is omitted; the default is now `true`.
  */
 export type SwapsClientOptions = {
@@ -104,7 +104,7 @@ export type SwapsClientOptions = {
 };
 
 /**
- * @deprecated Use the `bridge` option ({@link BridgeOptions}) instead; removed in v3. Kept for backward
+ * @deprecated Use `bridge: { partnerFee, useBackendSubmitTx }` ({@link BridgeOptions}) instead; removed in v3. Kept for backward
  * compatibility: still honoured, but only when `bridge.useBackendSubmitTx` is omitted; the default is now `true`.
  */
 export type BridgeClientOptions = {
