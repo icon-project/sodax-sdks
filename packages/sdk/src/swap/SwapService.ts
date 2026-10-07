@@ -695,30 +695,7 @@ export class SwapService {
             return { ok: false, error: createIntentResult.error };
           }
 
-          const created = createIntentResult.value;
-
-          // `timeout` is a PER-ATTEMPT budget, not an end-to-end one: the backend attempt gets it, and if
-          // that attempt fails the client-side relay fallback gets a fresh one. Sharing a single deadline
-          // would leave the fallback whatever the backend had not spent, which is how a relay that needs
-          // longer than the leftovers ends in RELAY_TIMEOUT. Resolved (not just defaulted) so a non-finite
-          // caller value cannot reach either budget — see `resolveTimeoutMs`.
-          const timeoutMs = resolveTimeoutMs(_params.timeout, DEFAULT_RELAY_TX_TIMEOUT);
-
-          // Backend 2-step flow (default on): hand the broadcast intent tx to the swaps API, which relays +
-          // post-executes server-side. On ANY non-success we fall back to the client-side relay so the
-          // swap still completes — safe because re-relay / re-post are idempotent (see `submitTx`).
-          if (this.useBackendSubmitTx) {
-            const submitted = await this.submitTx(_params, created, createSubmitTxAttempt(timeoutMs));
-            if (submitted.ok) return submitted;
-            this.config.logger.warn(
-              '[swap] backend submit-tx did not complete; falling back to the client-side relay',
-              {
-                error: submitted.error,
-              },
-            );
-          }
-
-          return this.fallbackSwapSteps(_params, created, timeoutMs);
+          return await this.completeSwap(_params, createIntentResult.value);
         } catch (error) {
           // Narrow guard: preserve SodaxErrors whose code is in the swap union; wrap unknown
           // codes (e.g. an accidental cross-feature code) as UNKNOWN.
@@ -745,6 +722,36 @@ export class SwapService {
         failure: error => ({ code: error.code }),
       },
     );
+  }
+
+  /**
+   * Completes a swap whose intent tx is already broadcast: the backend 2-step attempt when
+   * `useBackendSubmitTx` is on, falling back to {@link fallbackSwapSteps} on any non-success.
+   * Shared by `swap()` and `swapWithApproval()`, which differ only in how the intent tx is created.
+   */
+  private async completeSwap<K extends SpokeChainKey>(
+    _params: SwapActionParams<K, false>,
+    created: CreateIntentResult<K, false>,
+  ): Promise<Result<SwapResponse, SwapError>> {
+    // `timeout` is a PER-ATTEMPT budget, not an end-to-end one: the backend attempt gets it, and if
+    // that attempt fails the client-side relay fallback gets a fresh one. Sharing a single deadline
+    // would leave the fallback whatever the backend had not spent, which is how a relay that needs
+    // longer than the leftovers ends in RELAY_TIMEOUT. Resolved (not just defaulted) so a non-finite
+    // caller value cannot reach either budget — see `resolveTimeoutMs`.
+    const timeoutMs = resolveTimeoutMs(_params.timeout, DEFAULT_RELAY_TX_TIMEOUT);
+
+    // Backend 2-step flow (default on): hand the broadcast intent tx to the swaps API, which relays +
+    // post-executes server-side. On ANY non-success we fall back to the client-side relay so the
+    // swap still completes — safe because re-relay / re-post are idempotent (see `submitTx`).
+    if (this.useBackendSubmitTx) {
+      const submitted = await this.submitTx(_params, created, createSubmitTxAttempt(timeoutMs));
+      if (submitted.ok) return submitted;
+      this.config.logger.warn('[swap] backend submit-tx did not complete; falling back to the client-side relay', {
+        error: submitted.error,
+      });
+    }
+
+    return this.fallbackSwapSteps(_params, created, timeoutMs);
   }
 
   /**
