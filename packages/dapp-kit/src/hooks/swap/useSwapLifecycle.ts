@@ -1,4 +1,5 @@
 import {
+  isAuthFailure,
   summarizeSwapStatus,
   type CreateIntentParams,
   type GetWalletProviderType,
@@ -38,11 +39,17 @@ export type UseSwapLifecycleParams<K extends SpokeChainKey = SpokeChainKey> = {
 
 export type SwapLifecycle<K extends SpokeChainKey = SpokeChainKey> = {
   state: SwapLifecycleState;
-  /** The error behind a `failed` state. Action failures from `next()` come back as its `Result`. */
+  /** The error behind `failed`, `unconfirmed` or a `pending` with one. Setup-action failures come back from `next()`. */
   error: Error | undefined;
-  /** Does what the current state needs: switch chain, resolve a setup step, swap, or reset after the end. */
+  /**
+   * Does what the current state needs: switch chain, resolve a setup step, swap, or start over after a
+   * settled or failed swap. Does nothing while waiting, and never retries an `unconfirmed` batch.
+   */
   next: () => Promise<Result<unknown> | undefined>;
-  /** Clears a finished or failed swap and re-reads the approval strategy. */
+  /**
+   * Stops tracking the current swap and re-reads the approval strategy. Cancels nothing on-chain; a no-op
+   * while the swap call is still in flight.
+   */
   reset: () => void;
   // Escape hatches: the composed hooks, for UIs that need more than `state`.
   approvalStrategy: UseQueryResult<SwapApprovalStrategy, Error>;
@@ -100,6 +107,7 @@ export function useSwapLifecycle<K extends SpokeChainKey = SpokeChainKey>({
   const state = resolveSwapLifecycle({
     attempt,
     status: status.data?.ok ? summarizeSwapStatus(status.data.value) : undefined,
+    statusError: status.data && !status.data.ok && isAuthFailure(status.data.error) ? status.data.error : undefined,
     hasInputs: !!intentParams && !!srcWalletProvider,
     stellar,
     nearStorage,
@@ -109,6 +117,8 @@ export function useSwapLifecycle<K extends SpokeChainKey = SpokeChainKey>({
   });
 
   const reset = (): void => {
+    // Resetting mid-call would detach the observer and re-enable the button while the swap still runs.
+    if (swap.isPending) return;
     swap.reset();
     void approvalStrategy.refetch();
   };
@@ -132,6 +142,7 @@ export function useSwapLifecycle<K extends SpokeChainKey = SpokeChainKey>({
       case 'failed':
         reset();
         return undefined;
+      // `unconfirmed` may still land: retrying it could swap twice, so only an explicit reset() clears it.
       default:
         return undefined;
     }
@@ -139,7 +150,8 @@ export function useSwapLifecycle<K extends SpokeChainKey = SpokeChainKey>({
 
   return {
     state,
-    error: state.kind === 'failed' ? state.error : undefined,
+    error:
+      state.kind === 'failed' || state.kind === 'unconfirmed' || state.kind === 'pending' ? state.error : undefined,
     next,
     reset,
     approvalStrategy,

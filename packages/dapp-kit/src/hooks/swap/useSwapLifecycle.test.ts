@@ -1,4 +1,4 @@
-import { ChainKeys, type CreateIntentParams } from '@sodax/sdk';
+import { ATOMIC_BATCH_UNCONFIRMED, ChainKeys, SodaxError, type CreateIntentParams } from '@sodax/sdk';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const strategyHook = vi.fn();
@@ -178,6 +178,42 @@ describe('useSwapLifecycle', () => {
     expect(lifecycle.state).toEqual({ kind: 'needsSetup', reason: 'external' });
     await expect(lifecycle.next()).resolves.toBeUndefined();
     expect(mutateAsyncSafe).not.toHaveBeenCalled();
+  });
+
+  it('never retries an unconfirmed batch from next(), and exposes its error', async () => {
+    const error = new SodaxError('TX_VERIFICATION_FAILED', 'batch not confirmed', {
+      feature: 'swap',
+      context: { reason: ATOMIC_BATCH_UNCONFIRMED, batchId: 'batch-1' },
+    });
+    stub({ swap: { status: 'error', error, variables: { params: PARAMS } } });
+    const lifecycle = run();
+
+    expect(lifecycle.state).toEqual({ kind: 'unconfirmed', batchId: 'batch-1', error });
+    expect(lifecycle.error).toBe(error);
+    await expect(lifecycle.next()).resolves.toBeUndefined();
+    expect(resetSwap).not.toHaveBeenCalled();
+    expect(mutateAsyncSafe).not.toHaveBeenCalled();
+  });
+
+  it('exposes the error of a swap that failed after broadcast while it stays pending', () => {
+    const error = new SodaxError('RELAY_TIMEOUT', 'relay timed out', {
+      feature: 'swap',
+      context: { srcChainKey: ChainKeys.BSC_MAINNET, srcTxHash: '0xsrc' },
+    });
+    stub({ swap: { status: 'error', error, variables: { params: PARAMS } } });
+    const lifecycle = run();
+
+    expect(lifecycle.state).toMatchObject({ kind: 'pending', srcTxHash: '0xsrc' });
+    expect(lifecycle.error).toBe(error);
+  });
+
+  it('ignores reset() while the swap call is in flight', () => {
+    stub({ swap: { status: 'pending', isPending: true, variables: { params: PARAMS } } });
+    const lifecycle = run();
+
+    expect(lifecycle.state).toEqual({ kind: 'submitting' });
+    lifecycle.reset();
+    expect(resetSwap).not.toHaveBeenCalled();
   });
 
   it('surfaces a failed swap on error and resets it from next()', async () => {

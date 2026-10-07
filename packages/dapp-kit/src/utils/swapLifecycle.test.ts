@@ -1,4 +1,11 @@
-import { ChainKeys, SodaxError, type CreateIntentParams, type SwapWithApprovalResponse } from '@sodax/sdk';
+import {
+  ATOMIC_BATCH_UNCONFIRMED,
+  ChainKeys,
+  HookKind,
+  SodaxError,
+  type CreateIntentParams,
+  type SwapWithApprovalResponse,
+} from '@sodax/sdk';
 import { describe, expect, it } from 'vitest';
 import type { NearStorageGateState } from './nearStorageGate.js';
 import type { StellarGateState } from './stellarGate.js';
@@ -51,6 +58,7 @@ const OPEN_NEAR: NearStorageGateState = { isNear: false, needsRegistration: fals
 const inputs = (overrides: Partial<SwapLifecycleInputs> = {}): SwapLifecycleInputs => ({
   attempt: { phase: 'none' },
   status: undefined,
+  statusError: undefined,
   hasInputs: true,
   stellar: OPEN_STELLAR,
   nearStorage: OPEN_NEAR,
@@ -68,6 +76,12 @@ describe('isSameIntent', () => {
   it('treats a different amount or recipient as a different swap', () => {
     expect(isSameIntent(PARAMS, { ...PARAMS, inputAmount: 2n })).toBe(false);
     expect(isSameIntent(PARAMS, { ...PARAMS, dstAddress: '0x3333333333333333333333333333333333333333' })).toBe(false);
+  });
+
+  it('treats turning a delivery hook on, or changing data or fill mode, as a different swap', () => {
+    expect(isSameIntent(PARAMS, { ...PARAMS, hook: { kind: HookKind.FLINT_DEPOSIT } })).toBe(false);
+    expect(isSameIntent(PARAMS, { ...PARAMS, data: '0x01' })).toBe(false);
+    expect(isSameIntent(PARAMS, { ...PARAMS, allowPartialFill: true })).toBe(false);
   });
 });
 
@@ -110,6 +124,15 @@ describe('toSwapAttempt', () => {
     });
   });
 
+  it('holds a batch the wallet accepted but never confirmed as unconfirmed, never as a retryable failure', () => {
+    const error = new SodaxError('TX_VERIFICATION_FAILED', 'batch not confirmed', {
+      feature: 'swap',
+      context: { reason: ATOMIC_BATCH_UNCONFIRMED, batchId: 'batch-1' },
+    });
+    const failed = mutation({ status: 'error', error, variables: { params: PARAMS } });
+    expect(toSwapAttempt(failed, PARAMS)).toEqual({ phase: 'unconfirmed', batchId: 'batch-1', error });
+  });
+
   it('reports a failure before broadcast as failed', () => {
     const error = new SodaxError('USER_REJECTED', 'User rejected the request', { feature: 'swap' });
     const failed = mutation({ status: 'error', error, variables: { params: PARAMS } });
@@ -143,17 +166,36 @@ describe('resolveSwapLifecycle', () => {
     expect(failed).toMatchObject({ kind: 'failed', ...stripPhase(broadcast) });
   });
 
-  it('keeps a post-broadcast failure pending until the status says otherwise', () => {
+  it('keeps a post-broadcast failure pending, with its error, until the status says otherwise', () => {
     const error = new Error('relay timed out');
     expect(resolveSwapLifecycle(inputs({ attempt: { ...broadcast, error } }))).toEqual({
       kind: 'pending',
       ...stripPhase(broadcast),
+      error,
     });
     expect(resolveSwapLifecycle(inputs({ attempt: { ...broadcast, error }, status: { state: 'failed' } }))).toEqual({
       kind: 'failed',
       error,
       ...stripPhase(broadcast),
     });
+  });
+
+  it('surfaces a status read that cannot recover on the pending state', () => {
+    const statusError = new Error('API key rejected');
+    expect(resolveSwapLifecycle(inputs({ attempt: broadcast, statusError }))).toEqual({
+      kind: 'pending',
+      ...stripPhase(broadcast),
+      error: statusError,
+    });
+  });
+
+  it('reports an unconfirmed batch as unconfirmed, whatever else holds', () => {
+    const error = new Error('batch not confirmed');
+    expect(
+      resolveSwapLifecycle(
+        inputs({ attempt: { phase: 'unconfirmed', batchId: 'batch-1', error }, isWrongChain: true }),
+      ),
+    ).toEqual({ kind: 'unconfirmed', batchId: 'batch-1', error });
   });
 
   it('reports a failure before broadcast', () => {

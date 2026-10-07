@@ -17,7 +17,7 @@ export type UseSwapApprovalStrategyParams<K extends SpokeChainKey = SpokeChainKe
  * `'atomic-batch'` (approve + swap in one EIP-5792 signature) or `'sequential'` (approve, then
  * swap). Use it to label the swap button before the user clicks.
  *
- * Not polled: `useSwapWithApproval` invalidates it once a swap settles, and the swap itself
+ * Not polled: `useSwapWithApproval` invalidates it after a successful swap, and the swap itself
  * re-reads the strategy at execution, so a stale label never picks the wrong path.
  */
 export function useSwapApprovalStrategy<K extends SpokeChainKey = SpokeChainKey>({

@@ -1,4 +1,5 @@
 import {
+  ATOMIC_BATCH_UNCONFIRMED,
   isSodaxError,
   type CreateIntentParams,
   type Hex,
@@ -19,7 +20,16 @@ export type SwapSetupReason =
   | 'nearStorage'
   | 'external';
 
-/** Where a swap form stands, discriminated on `kind`. `useSwapLifecycle`'s `next()` acts on it. */
+/**
+ * Where a swap form stands, discriminated on `kind`. `useSwapLifecycle`'s `next()` acts on it.
+ *
+ * - `submitting` — the swap call is in flight: signing, and on the default backend path settlement too.
+ * - `pending` — the source tx is on-chain and its status is being read. `error` is set when the swap call
+ *   failed after broadcast, or when the status read cannot recover (a rejected API key); the swap may
+ *   still complete either way.
+ * - `unconfirmed` — the wallet accepted an approve + swap batch that was not confirmed in time. It may
+ *   still land, so `next()` will not retry it; only an explicit `reset()` clears it.
+ */
 export type SwapLifecycleState =
   | { kind: 'idle' }
   | { kind: 'checking' }
@@ -27,7 +37,8 @@ export type SwapLifecycleState =
   | { kind: 'needsSetup'; reason: SwapSetupReason }
   | { kind: 'ready'; approvalStrategy: SwapApprovalStrategy }
   | { kind: 'submitting' }
-  | { kind: 'pending'; srcChainKey: SpokeChainKey; srcTxHash: string }
+  | { kind: 'pending'; srcChainKey: SpokeChainKey; srcTxHash: string; error?: Error }
+  | { kind: 'unconfirmed'; batchId: string; error: Error }
   | { kind: 'settled'; srcChainKey: SpokeChainKey; srcTxHash: string; fillTxHash?: Hex }
   | { kind: 'failed'; error: Error; srcChainKey?: SpokeChainKey; srcTxHash?: string };
 
@@ -44,12 +55,15 @@ export type SwapAttempt =
   | { phase: 'none' }
   | { phase: 'submitting' }
   | { phase: 'broadcast'; srcChainKey: SpokeChainKey; srcTxHash: string; error?: Error }
+  | { phase: 'unconfirmed'; batchId: string; error: Error }
   | { phase: 'failed'; error: Error };
 
 export type SwapLifecycleInputs = {
   attempt: SwapAttempt;
   /** `summarizeSwapStatus` of the attempt's detailed status, once one is read. */
   status: SwapStatusSummary | undefined;
+  /** A status-read error that will not clear by polling again (a rejected API key). */
+  statusError: Error | undefined;
   /** Intent params and a source wallet provider are both present. */
   hasInputs: boolean;
   stellar: StellarGateState;
@@ -59,7 +73,7 @@ export type SwapLifecycleInputs = {
   strategy: { data: SwapApprovalStrategy | undefined; error: Error | null };
 };
 
-/** Same swap: the fields that define what is swapped, for whom. A rebuilt deadline is not a new swap. */
+/** Same swap: every field but the deadline, so rebuilding the params with a fresh deadline is not a new swap. */
 export function isSameIntent(a: CreateIntentParams, b: CreateIntentParams): boolean {
   return (
     a.srcChainKey === b.srcChainKey &&
@@ -69,7 +83,11 @@ export function isSameIntent(a: CreateIntentParams, b: CreateIntentParams): bool
     a.inputToken === b.inputToken &&
     a.outputToken === b.outputToken &&
     a.inputAmount === b.inputAmount &&
-    a.minOutputAmount === b.minOutputAmount
+    a.minOutputAmount === b.minOutputAmount &&
+    a.allowPartialFill === b.allowPartialFill &&
+    a.solver === b.solver &&
+    a.data === b.data &&
+    a.hook?.kind === b.hook?.kind
   );
 }
 
@@ -89,10 +107,14 @@ export function toSwapAttempt(mutation: SwapAttemptSource, intentParams: CreateI
     return { phase: 'broadcast', srcChainKey, srcTxHash };
   }
   const error = mutation.error ?? new Error('Swap failed');
-  const srcTxHash = isSodaxError(error) ? error.context?.srcTxHash : undefined;
-  return typeof srcTxHash === 'string'
-    ? { phase: 'broadcast', srcChainKey: attempted.srcChainKey, srcTxHash, error }
-    : { phase: 'failed', error };
+  const context = isSodaxError(error) ? error.context : undefined;
+  if (typeof context?.srcTxHash === 'string') {
+    return { phase: 'broadcast', srcChainKey: attempted.srcChainKey, srcTxHash: context.srcTxHash, error };
+  }
+  if (context?.reason === ATOMIC_BATCH_UNCONFIRMED && typeof context.batchId === 'string') {
+    return { phase: 'unconfirmed', batchId: context.batchId, error };
+  }
+  return { phase: 'failed', error };
 }
 
 /**
@@ -109,8 +131,10 @@ export function resolveSwapLifecycle(inputs: SwapLifecycleInputs): SwapLifecycle
     if (status?.state === 'failed') {
       return { kind: 'failed', error: attempt.error ?? new Error('Swap failed to settle'), srcChainKey, srcTxHash };
     }
-    return { kind: 'pending', srcChainKey, srcTxHash };
+    const error = attempt.error ?? inputs.statusError;
+    return error ? { kind: 'pending', srcChainKey, srcTxHash, error } : { kind: 'pending', srcChainKey, srcTxHash };
   }
+  if (attempt.phase === 'unconfirmed') return { kind: 'unconfirmed', batchId: attempt.batchId, error: attempt.error };
   if (attempt.phase === 'failed') return { kind: 'failed', error: attempt.error };
   if (!inputs.hasInputs) return { kind: 'idle' };
 

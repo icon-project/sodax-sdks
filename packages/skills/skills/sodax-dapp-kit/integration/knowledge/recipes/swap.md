@@ -155,9 +155,12 @@ function buttonLabel(state: SwapLifecycleState): string {
     case 'needsChainSwitch':
       return 'Switch network';
     case 'needsSetup':
-      return state.reason === 'stellarTrustline' ? 'Add trustline' : 'Complete setup';
+      if (state.reason === 'stellarActivation') return 'Activate account';
+      if (state.reason === 'stellarTrustline') return 'Add trustline';
+      if (state.reason === 'stellarCheckFailed') return 'Retry check';
+      if (state.reason === 'nearStorage') return 'Register storage';
+      return 'Waiting on setup';
     case 'submitting':
-      return 'Confirm in wallet…';
     case 'pending':
       return 'Swapping…';
     case 'settled':
@@ -169,13 +172,19 @@ function buttonLabel(state: SwapLifecycleState): string {
   }
 }
 
+// Nothing to click: waiting, a prerequisite only the user or the app can resolve, or a batch that may still land.
+function isPassive(state: SwapLifecycleState): boolean {
+  if (state.kind === 'needsSetup') return state.reason === 'stellarFunding' || state.reason === 'external';
+  return ['idle', 'checking', 'submitting', 'pending', 'unconfirmed'].includes(state.kind);
+}
+
 function SwapButton({ intentParams }: { intentParams: CreateIntentParams }) {
   const srcWalletProvider = useWalletProvider({ xChainId: intentParams.srcChainKey });
   const dstWalletProvider = useWalletProvider({ xChainId: intentParams.dstChainKey });
   const dstAccount = useXAccount({ xChainId: intentParams.dstChainKey });
   const { isWrongChain, handleSwitchChain } = useEvmSwitchChain({ xChainId: intentParams.srcChainKey });
 
-  const { state, error, next } = useSwapLifecycle({
+  const { state, error, next, reset, stellar } = useSwapLifecycle({
     intentParams,
     srcWalletProvider,
     dstWalletProvider,
@@ -183,24 +192,43 @@ function SwapButton({ intentParams }: { intentParams: CreateIntentParams }) {
     chainSwitch: { isWrongChain, switchChain: handleSwitchChain },
   });
 
-  const busy = ['idle', 'checking', 'submitting', 'pending'].includes(state.kind);
   return (
     <>
-      <button type="button" onClick={() => void next()} disabled={busy}>
+      <button type="button" onClick={() => void next()} disabled={isPassive(state)}>
         {buttonLabel(state)}
       </button>
-      {error && <p>{error.message}</p>}
+      {state.kind === 'needsSetup' && state.reason === 'stellarFunding' && (
+        <p>The destination Stellar account needs some XLM before it can add a trustline.</p>
+      )}
+      {state.kind === 'needsSetup' && state.reason === 'stellarCheckFailed' && <p>{stellar.error?.message}</p>}
+      {state.kind === 'unconfirmed' && (
+        <p>
+          Your wallet sent the swap but it is not confirmed yet. Check your wallet activity before swapping again.{' '}
+          <button type="button" onClick={reset}>
+            Start over
+          </button>
+        </p>
+      )}
+      {error && state.kind !== 'unconfirmed' && <p>{error.message}</p>}
     </>
   );
 }
 ```
 
-`next()` resolves to the action's `Result` (a setup step or the swap) — show a failed setup action from there; a
-failed swap lands in `state` as `failed` instead. A swap that fails **after** broadcast stays `pending` while its
-status is still being read, because the backend may yet complete it. Build `intentParams` once per confirmation (a
-rebuilt `deadline` is fine): editing the amount or recipient starts a new lifecycle once the current swap is no
-longer in flight. `stellarFunding` and `external` setup reasons are for the app to resolve; `next()` does nothing
-for them.
+`next()` resolves to the action's `Result` (a setup step or the swap); show a failed setup action from there. A failed
+swap lands in `state`:
+
+- before anything was sent → `failed`, and `next()` starts over;
+- after the source tx was sent → `pending` with `error` set, because the backend may still complete it. It stays
+  `pending` until the status read answers `solved` or `failed`. If the read never does (it stops polling after its
+  budget, or on a rejected API key), offer `reset()` to stop tracking; it cancels nothing on-chain;
+- an approve + swap batch the wallet accepted but that was not confirmed in time → `unconfirmed`. It may still land,
+  so `next()` won't retry it; only `reset()` clears it.
+
+`submitting` covers the whole swap call: signing, and on the default backend path settlement too, so label it as
+swapping, not as waiting for the wallet. Build `intentParams` once per confirmation (a rebuilt `deadline` is fine):
+changing any other field starts a new lifecycle once the current swap is no longer in flight. `stellarFunding` and
+`external` setup reasons are for the app to resolve; `next()` does nothing for them.
 
 ## Full Example
 

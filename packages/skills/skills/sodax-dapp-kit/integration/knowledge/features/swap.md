@@ -25,7 +25,8 @@ useSwapWithApproval({ mutationOptions });           // useSwap + approval; one E
 // Composite — the whole form as one state machine; see recipes/swap.md § One Hook for the Whole Form
 useSwapLifecycle({ intentParams, srcWalletProvider, dstWalletProvider, dstAccountAddress, chainSwitch?, externalBlocked?, extras?, timeout?, mutationOptions? });
 //   → { state, error, next, reset, approvalStrategy, swap, status, stellar, nearStorage }
-//   state.kind: idle | checking | needsChainSwitch | needsSetup(reason) | ready(approvalStrategy) | submitting | pending | settled | failed
+//   state.kind: idle | checking | needsChainSwitch | needsSetup(reason) | ready(approvalStrategy) | submitting
+//               | pending (error? after a post-broadcast failure) | unconfirmed (batch may still land — never retried) | settled | failed
 useCancelSwap({ mutationOptions });                  // TVars are FLAT: { srcChainKey, intent, walletProvider }
 useCreateLimitOrder({ mutationOptions });           // No deadline; cancel manually
 useCancelLimitOrder({ mutationOptions });           // TVars are FLAT: { srcChainKey, intent, walletProvider }

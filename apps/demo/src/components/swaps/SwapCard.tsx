@@ -75,10 +75,12 @@ function primaryLabel(state: SwapLifecycleState): string {
     case 'ready':
       if (state.approvalStrategy === 'atomic-batch') return 'Approve & Swap (1 signature)';
       return state.approvalStrategy === 'sequential' ? 'Approve, then Swap' : 'Swap';
+    // Spans signing and, on the backend path, settlement — not just the wallet prompt.
     case 'submitting':
-      return 'Confirm in wallet…';
     case 'pending':
       return 'Swap in progress…';
+    case 'unconfirmed':
+      return 'Waiting for the batch to confirm';
     case 'settled':
       return 'Swap again';
     case 'failed':
@@ -86,10 +88,16 @@ function primaryLabel(state: SwapLifecycleState): string {
   }
 }
 
-/** States the button cannot act on: waiting, or a prerequisite only the user (or the app) can resolve. */
+/** States the button cannot act on: waiting, a prerequisite only the user (or the app) can resolve, or a batch that may still land. */
 function isPassive(state: SwapLifecycleState): boolean {
   if (state.kind === 'needsSetup') return state.reason === 'stellarFunding' || state.reason === 'external';
-  return state.kind === 'idle' || state.kind === 'checking' || state.kind === 'submitting' || state.kind === 'pending';
+  return (
+    state.kind === 'idle' ||
+    state.kind === 'checking' ||
+    state.kind === 'submitting' ||
+    state.kind === 'pending' ||
+    state.kind === 'unconfirmed'
+  );
 }
 
 export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAction<Order[]>) => void }) {
@@ -672,14 +680,37 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
         </Dialog>
         {(state.kind === 'submitting' ||
           state.kind === 'pending' ||
+          state.kind === 'unconfirmed' ||
           state.kind === 'settled' ||
           state.kind === 'failed') && (
-          <div className="w-full text-sm" role="status">
-            {state.kind === 'submitting' && 'Waiting for the wallet confirmation…'}
-            {state.kind === 'pending' && `Swap in progress — source tx ${state.srcTxHash}`}
-            {state.kind === 'settled' && 'Swap settled.'}
+          <div className="w-full text-sm space-y-1" role="status">
+            {state.kind === 'submitting' && <div>Swap in progress…</div>}
+            {state.kind === 'pending' && (
+              <>
+                <div>Swap in progress — source tx {state.srcTxHash}</div>
+                {state.error && (
+                  <div className="text-amber-600">
+                    {formatMutationFailureMessage(state.error, 'Swap hit an error')} — it may still complete; still
+                    checking.{' '}
+                    <button type="button" className="underline" onClick={lifecycle.reset}>
+                      Stop tracking
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+            {state.kind === 'unconfirmed' && (
+              <div className="text-amber-600">
+                Your wallet sent the swap (batch {state.batchId}) but it was not confirmed in time. It may still land —
+                check your wallet activity before swapping again.{' '}
+                <button type="button" className="underline" onClick={lifecycle.reset}>
+                  Start over
+                </button>
+              </div>
+            )}
+            {state.kind === 'settled' && <div>Swap settled.</div>}
             {state.kind === 'failed' && (
-              <span className="text-red-500">{formatMutationFailureMessage(state.error, 'Swap failed')}</span>
+              <div className="text-red-500">{formatMutationFailureMessage(state.error, 'Swap failed')}</div>
             )}
           </div>
         )}
