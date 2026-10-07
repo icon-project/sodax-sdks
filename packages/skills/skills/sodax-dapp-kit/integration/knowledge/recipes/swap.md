@@ -12,7 +12,8 @@ Cross-chain token swaps via the intent-based solver.
 | `useSwap` | Mutation | Execute a complete cross-chain swap |
 | `useSwapAllowance` | Query | Check if token approval is needed |
 | `useSwapApprove` | Mutation | Approve tokens for the swap contract |
-| `useStatus` | Query | Track intent execution status |
+| `useDetailedStatus` | Query | Track a swap by its source tx, whichever completion path ran (default status read) |
+| `useStatus` | Query | Track the solver's status by hub tx hash |
 | `useCancelSwap` | Mutation | Cancel an active swap intent |
 | `useCreateLimitOrder` | Mutation | Create a limit order (no deadline) |
 | `useCancelLimitOrder` | Mutation | Cancel an active limit order |
@@ -109,6 +110,28 @@ function SwapButton({ intentParams }: { intentParams: CreateIntentParams }) {
   );
 }
 ```
+
+## Track Status
+
+Read status from the **source** tx you already hold after `swap()` — `useDetailedStatus` works whichever completion
+path ran (backend submit-tx or the client-side relay fallback). `summarizeSwapStatus` collapses its two sources into
+one vocabulary:
+
+```tsx
+import { useDetailedStatus } from '@sodax/dapp-kit';
+import { summarizeSwapStatus, type SpokeChainKey } from '@sodax/sdk';
+
+function SwapStatus({ srcChainKey, srcTxHash }: { srcChainKey: SpokeChainKey; srcTxHash: string }) {
+  const { data } = useDetailedStatus({ params: { srcChainKey, srcTxHash } });
+  if (!data?.ok) return <span>Checking status…</span>;
+  const { state, fillTxHash } = summarizeSwapStatus(data.value);
+  return <span>{state === 'solved' ? `Filled ${fillTxHash ?? ''}` : state}</span>;
+}
+```
+
+Feed it `intentDeliveryInfo.srcChainKey` / `srcTxHash` on success. A `swap()` that fails **after** broadcast
+(verification, relay or postExecution failure) still carries them on `error.context.srcChainKey` /
+`error.context.srcTxHash` — keep polling, since the backend may still complete the swap.
 
 ## Full Example
 

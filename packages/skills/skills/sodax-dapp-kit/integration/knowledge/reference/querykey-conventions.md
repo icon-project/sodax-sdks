@@ -109,6 +109,7 @@ Skip if you're writing a feature hook for the first time and want to align with 
 | `['swap', 'quote', { ...payload, amount: payload.amount.toString() }]` | `useQuote` (object segment with bigint stringified) |
 | `['swap', 'allowance', srcChainKey, srcAddress, inputToken, inputAmount.toString()]` | `useSwapAllowance` |
 | `['swap', 'status', intentTxHash]` | `useStatus` |
+| `['swap', 'detailedStatus', srcChainKey, srcTxHash]` | `useDetailedStatus` |
 | `['swap']` | `useSwap` mutation key |
 | `['swap', 'approve']` | `useSwapApprove` |
 | `['swap', 'cancel']` | `useCancelSwap` |

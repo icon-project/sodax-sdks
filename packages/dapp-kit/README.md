@@ -4,7 +4,7 @@ High-level React hooks library for dApp developers. Wraps `@sodax/sdk` with Reac
 
 ## Features
 
-- **Swap/Intent** — `useQuote`, `useSwap`, `useSwapAllowance`, `useSwapApprove`, `useCancelSwap`, `useCreateLimitOrder`, `useCancelLimitOrder`, `useStatus`
+- **Swap/Intent** — `useQuote`, `useSwap`, `useSwapAllowance`, `useSwapApprove`, `useDetailedStatus`, `useCancelSwap`, `useCreateLimitOrder`, `useCancelLimitOrder`, `useStatus`
 - **Bridge** — `useBridge`, `useBridgeDetailedStatus`, `useBridgeAllowance`, `useBridgeApprove`, `useGetBridgeableAmount`, `useGetBridgeableTokens`
 - **Money Market** — `useSupply`, `useWithdraw`, `useBorrow`, `useRepay`, `useMMAllowance`, `useMMApprove`, plus reserves data hooks
 - **Staking** — `useStake`, `useUnstake`, `useInstantUnstake`, `useClaim`, `useCancelUnstake`, approval hooks, info/config/ratio queries
@@ -140,7 +140,8 @@ function SwapButton({ intentParams }: { intentParams: CreateIntentParams }) {
 - [`useSwap()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/swap/useSwap.ts) — Submit a cross-chain swap intent
 - [`useSwapAllowance()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/swap/useSwapAllowance.ts) — Check token approval
 - [`useSwapApprove()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/swap/useSwapApprove.ts) — Approve token spending
-- [`useStatus()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/swap/useStatus.ts) — Track intent execution status
+- [`useDetailedStatus()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/swap/useDetailedStatus.ts) — Poll a swap's status from its **source** tx (`{ srcChainKey, srcTxHash }`), whichever completion path ran — the default status read. Collapse `data.value` with `summarizeSwapStatus` from `@sodax/sdk`
+- [`useStatus()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/swap/useStatus.ts) — Poll the solver's status by **hub** tx hash (`intentDeliveryInfo.dstTxHash`)
 - [`useCancelSwap()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/swap/useCancelSwap.ts) — Cancel a pending swap
 - [`useCreateLimitOrder()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/swap/useCreateLimitOrder.ts) — Create a limit order (no deadline)
 - [`useCancelLimitOrder()`](https://github.com/icon-project/sodax-sdks/blob/main/packages/dapp-kit/src/hooks/swap/useCancelLimitOrder.ts) — Cancel a limit order

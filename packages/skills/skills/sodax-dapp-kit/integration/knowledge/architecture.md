@@ -296,7 +296,7 @@ hooks/
 │               # useBalances, useXBalances, invalidateBalances,
 │               # useStellarTrustlineCheck, useEstablishTrustline (+ deprecated useRequestTrustline)
 ├── provider/   # useHubProvider
-├── swap/       # useQuote, useSwap, useStatus, useSwapAllowance, useSwapApprove,
+├── swap/       # useQuote, useSwap, useDetailedStatus, useStatus, useSwapAllowance, useSwapApprove,
 │               # useCancelSwap, useCreateLimitOrder, useCancelLimitOrder
 ├── mm/         # useSupply, useWithdraw, useBorrow, useRepay, useMMAllowance, useMMApprove,
 │               # reserves data hooks
