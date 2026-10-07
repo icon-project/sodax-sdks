@@ -110,8 +110,10 @@ Skip if you're writing a feature hook for the first time and want to align with 
 | `['swap', 'allowance', srcChainKey, srcAddress, inputToken, inputAmount.toString()]` | `useSwapAllowance` |
 | `['swap', 'status', intentTxHash]` | `useStatus` |
 | `['swap', 'detailedStatus', srcChainKey, srcTxHash]` | `useDetailedStatus` |
+| `['swap', 'approvalStrategy', srcChainKey, srcAddress, inputToken, inputAmount.toString()]` | `useSwapApprovalStrategy` |
 | `['swap']` | `useSwap` mutation key |
 | `['swap', 'approve']` | `useSwapApprove` |
+| `['swap', 'swapWithApproval']` | `useSwapWithApproval` |
 | `['swap', 'cancel']` | `useCancelSwap` |
 | `['swap', 'limitOrder', 'create']` | `useCreateLimitOrder` |
 | `['swap', 'limitOrder', 'cancel']` | `useCancelLimitOrder` |
