@@ -7,6 +7,7 @@ import type {
   PublicClientConfig,
   SendTransactionParameters,
   Transport,
+  WaitForCallsStatusParameters,
   WaitForTransactionReceiptParameters,
   WalletClient,
   WalletClientConfig,
@@ -17,6 +18,9 @@ export type EvmSendTransactionPolicy = Omit<Partial<SendTransactionParameters>, 
 
 /** Wait-for-receipt params (confirmations/polling/timeout). `hash` is positional, not part of the policy. */
 export type EvmWaitForTransactionReceiptPolicy = Partial<Omit<WaitForTransactionReceiptParameters, 'hash'>>;
+
+/** Wait-for-batch params (polling/timeout/terminal predicate). `id` is positional, not part of the policy. */
+export type EvmWaitForCallsStatusPolicy = Partial<Omit<WaitForCallsStatusParameters, 'id'>>;
 
 /**
  * Defaults applied to every call. Per-call options shallow-merge over these.
@@ -29,6 +33,7 @@ export type EvmWalletDefaults = {
   transport?: HttpTransportConfig;
   sendTransaction?: EvmSendTransactionPolicy;
   waitForTransactionReceipt?: EvmWaitForTransactionReceiptPolicy;
+  waitForCallsStatus?: EvmWaitForCallsStatusPolicy;
 };
 
 /** Configuration for constructing an `EvmWalletProvider` backed by a raw private key. */

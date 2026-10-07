@@ -3,7 +3,13 @@ import { EvmWalletProvider } from './EvmWalletProvider.js';
 import type { BrowserExtensionEvmWalletConfig, EvmWalletConfig } from './types.js';
 import type { EvmRawTransaction } from '@sodax/types';
 import { ChainKeys } from '@sodax/types';
-import { createWalletClient, createPublicClient, http, type TransactionReceipt } from 'viem';
+import {
+  createWalletClient,
+  createPublicClient,
+  http,
+  type GetCallsStatusReturnType,
+  type TransactionReceipt,
+} from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sonic } from 'viem/chains';
 
@@ -15,6 +21,39 @@ function makeBrowserExtensionConfig(): BrowserExtensionEvmWalletConfig {
   const walletClient = createWalletClient({ chain: sonic, transport: http(RPC_URL), account });
   const publicClient = createPublicClient({ chain: sonic, transport: http(RPC_URL) });
   return { walletClient, publicClient };
+}
+
+// An address-only account is a json-rpc account: the wallet behind the transport signs, as with wagmi.
+function makeConnectedWalletConfig(): BrowserExtensionEvmWalletConfig {
+  const walletClient = createWalletClient({
+    chain: sonic,
+    transport: http(RPC_URL),
+    account: '0x0000000000000000000000000000000000000001',
+  });
+  const publicClient = createPublicClient({ chain: sonic, transport: http(RPC_URL) });
+  return { walletClient, publicClient };
+}
+
+function makeCallsStatus(overrides: Partial<GetCallsStatusReturnType> = {}): GetCallsStatusReturnType {
+  return {
+    atomic: true,
+    chainId: sonic.id,
+    id: 'batch-1',
+    receipts: [
+      {
+        logs: [],
+        status: 'success',
+        blockHash: '0xb1ock',
+        blockNumber: 100n,
+        gasUsed: 21_000n,
+        transactionHash: '0xbatchtx',
+      },
+    ],
+    status: 'success',
+    statusCode: 200,
+    version: '2.0.0',
+    ...overrides,
+  };
 }
 
 function makeFakeReceipt(): TransactionReceipt {
@@ -287,6 +326,163 @@ describe('EvmWalletProvider', () => {
       void provider.sendTransaction(RAW_TX, { to: '0xOther' });
       // @ts-expect-error — `data` belongs to EvmRawTransaction
       void provider.sendTransaction(RAW_TX, { data: '0xdead' });
+    });
+  });
+
+  describe('EIP-5792 atomic batches', () => {
+    const APPROVE_TX: EvmRawTransaction = {
+      from: '0x0000000000000000000000000000000000000001',
+      to: '0x0000000000000000000000000000000000000003',
+      value: 0n,
+      data: '0x095ea7b3',
+    };
+    const TRANSFER_TX: EvmRawTransaction = {
+      from: '0x0000000000000000000000000000000000000001',
+      to: '0x0000000000000000000000000000000000000004',
+      value: 0n,
+      data: '0xa9059cbb',
+    };
+
+    describe('getAtomicBatchSupport', () => {
+      it('reports unsupported for a private-key account without asking the RPC', async () => {
+        const config = makeBrowserExtensionConfig();
+        const provider = new EvmWalletProvider(config);
+        const spy = vi.spyOn(config.walletClient, 'getCapabilities');
+
+        await expect(provider.getAtomicBatchSupport(sonic.id)).resolves.toBe('unsupported');
+        expect(spy).not.toHaveBeenCalled();
+      });
+
+      it.each(['supported', 'ready', 'unsupported'] as const)('passes through the %s status', async status => {
+        const config = makeConnectedWalletConfig();
+        const provider = new EvmWalletProvider(config);
+        const spy = vi.spyOn(config.walletClient, 'getCapabilities').mockResolvedValue({ atomic: { status } });
+
+        await expect(provider.getAtomicBatchSupport(8453)).resolves.toBe(status);
+        expect(spy).toHaveBeenCalledWith({ chainId: 8453 });
+      });
+
+      it('reports unsupported when the wallet omits the chain', async () => {
+        const config = makeConnectedWalletConfig();
+        const provider = new EvmWalletProvider(config);
+        // A wallet leaves out chains it cannot serve, though viem types the entry as present.
+        vi.spyOn(config.walletClient, 'getCapabilities').mockResolvedValue(undefined as never);
+
+        await expect(provider.getAtomicBatchSupport(sonic.id)).resolves.toBe('unsupported');
+      });
+
+      it('reports unsupported when the chain has no atomic capability', async () => {
+        const config = makeConnectedWalletConfig();
+        const provider = new EvmWalletProvider(config);
+        vi.spyOn(config.walletClient, 'getCapabilities').mockResolvedValue({});
+
+        await expect(provider.getAtomicBatchSupport(sonic.id)).resolves.toBe('unsupported');
+      });
+
+      it('propagates a wallet that rejects wallet_getCapabilities', async () => {
+        const config = makeConnectedWalletConfig();
+        const provider = new EvmWalletProvider(config);
+        vi.spyOn(config.walletClient, 'getCapabilities').mockRejectedValue(new Error('Method not found'));
+
+        await expect(provider.getAtomicBatchSupport(sonic.id)).rejects.toThrow('Method not found');
+      });
+    });
+
+    describe('sendAtomicBatch', () => {
+      it('refuses a private-key account', async () => {
+        const config = makeBrowserExtensionConfig();
+        const provider = new EvmWalletProvider(config);
+        const spy = vi.spyOn(config.walletClient, 'sendCalls');
+
+        await expect(provider.sendAtomicBatch([APPROVE_TX], { expectedChainId: sonic.id })).rejects.toThrow(
+          /need a connected wallet/,
+        );
+        expect(spy).not.toHaveBeenCalled();
+      });
+
+      it('refuses to send when the wallet is on a different chain than expectedChainId', async () => {
+        const config = makeConnectedWalletConfig();
+        const provider = new EvmWalletProvider(config);
+        vi.spyOn(config.walletClient, 'getChainId').mockResolvedValue(8453);
+        const spy = vi.spyOn(config.walletClient, 'sendCalls');
+
+        await expect(provider.sendAtomicBatch([APPROVE_TX], { expectedChainId: sonic.id })).rejects.toThrow(
+          /connected to chain 8453 but the transaction targets chain 146/,
+        );
+        expect(spy).not.toHaveBeenCalled();
+      });
+
+      it('sends the calls in order with atomic execution required and returns the batch id', async () => {
+        const config = makeConnectedWalletConfig();
+        const provider = new EvmWalletProvider(config);
+        vi.spyOn(config.walletClient, 'getChainId').mockResolvedValue(sonic.id);
+        const spy = vi.spyOn(config.walletClient, 'sendCalls').mockResolvedValue({ id: 'batch-1' });
+
+        await expect(provider.sendAtomicBatch([APPROVE_TX, TRANSFER_TX], { expectedChainId: sonic.id })).resolves.toBe(
+          'batch-1',
+        );
+        expect(spy).toHaveBeenCalledWith({
+          calls: [
+            { to: APPROVE_TX.to, value: APPROVE_TX.value, data: APPROVE_TX.data },
+            { to: TRANSFER_TX.to, value: TRANSFER_TX.value, data: TRANSFER_TX.data },
+          ],
+          forceAtomic: true,
+        });
+      });
+    });
+
+    describe('waitForBatch', () => {
+      it('maps a confirmed batch to its receipts', async () => {
+        const config = makeConnectedWalletConfig();
+        const provider = new EvmWalletProvider(config);
+        const spy = vi.spyOn(config.walletClient, 'waitForCallsStatus').mockResolvedValue(makeCallsStatus());
+
+        await expect(provider.waitForBatch('batch-1')).resolves.toEqual({
+          status: 'success',
+          statusCode: 200,
+          atomic: true,
+          receipts: [{ transactionHash: '0xbatchtx', status: 'success' }],
+        });
+        expect(spy).toHaveBeenCalledWith({ id: 'batch-1' });
+      });
+
+      it('maps a reverted batch to failure and keeps the status code', async () => {
+        const config = makeConnectedWalletConfig();
+        const provider = new EvmWalletProvider(config);
+        vi.spyOn(config.walletClient, 'waitForCallsStatus').mockResolvedValue(
+          makeCallsStatus({ status: 'failure', statusCode: 500, receipts: undefined }),
+        );
+
+        await expect(provider.waitForBatch('batch-1')).resolves.toEqual({
+          status: 'failure',
+          statusCode: 500,
+          atomic: true,
+          receipts: [],
+        });
+      });
+
+      it('treats a status the wallet left undefined as failure', async () => {
+        const config = makeConnectedWalletConfig();
+        const provider = new EvmWalletProvider(config);
+        vi.spyOn(config.walletClient, 'waitForCallsStatus').mockResolvedValue(
+          makeCallsStatus({ status: undefined, statusCode: 400 }),
+        );
+
+        await expect(provider.waitForBatch('batch-1')).resolves.toMatchObject({ status: 'failure', statusCode: 400 });
+      });
+
+      it('applies defaults.waitForCallsStatus with per-call options winning', async () => {
+        const config = makeConnectedWalletConfig();
+        const provider = new EvmWalletProvider({
+          ...config,
+          defaults: { waitForCallsStatus: { timeout: 120_000, pollingInterval: 2_000 } },
+        });
+        const spy = vi.spyOn(config.walletClient, 'waitForCallsStatus').mockResolvedValue(makeCallsStatus());
+
+        await provider.waitForBatch('batch-1', { timeout: 30_000 });
+
+        expect(spy).toHaveBeenCalledWith({ id: 'batch-1', timeout: 30_000, pollingInterval: 2_000 });
+      });
     });
   });
 });

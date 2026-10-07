@@ -222,8 +222,13 @@ new EvmWalletProvider({
 });
 ```
 
-`EvmWalletDefaults` accepts: `sendTransaction`, `waitForTransactionReceipt`, `publicClient`,
-`walletClient`, `transport` (all optional; applied per-call via `mergePolicy`).
+`EvmWalletDefaults` accepts: `sendTransaction`, `waitForTransactionReceipt`, `waitForCallsStatus`,
+`publicClient`, `walletClient`, `transport` (all optional; applied per-call via `mergePolicy`).
+
+In browser-extension mode the provider also implements the optional EIP-5792 methods
+(`getAtomicBatchSupport`, `sendAtomicBatch`, `waitForBatch`) over viem's `getCapabilities`, `sendCalls`
+(with `forceAtomic`) and `waitForCallsStatus`. A private-key account reports `'unsupported'`: a plain RPC
+endpoint has no `wallet_sendCalls`.
 
 ### Solana (`SolanaWalletProvider`)
 
