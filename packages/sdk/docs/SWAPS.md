@@ -88,6 +88,7 @@ All swap methods are accessible through `sodax.swaps`:
 ### Intent Creation & Execution
 
 - `swap(params)` — Full end-to-end swap (recommended — handles all steps automatically); signed execution only
+- `swapWithApproval(params)` — `swap` with the source-token approval folded in; one signature on an EIP-5792 wallet (see [Approve and Swap in One Signature](#approve-and-swap-in-one-signature)); signed execution only
 - `createIntent(params)` — Create an intent on the source spoke chain; supports both signed (`raw: false`) and raw (`raw: true`) modes
 - `createLimitOrder(params)` — Full end-to-end limit order (no deadline, must be cancelled manually); signed execution only
 - `createLimitOrderIntent(params)` — Create a limit order intent only (no relay/solver notify); supports raw and signed modes
@@ -148,6 +149,7 @@ Only the two `timeout` terms are yours to tune. Opting out with `useBackendSubmi
 
 - `isAllowanceValid(params)` — Check if the spender contract has sufficient token allowance
 - `approve(params)` — Approve token spend (EVM/Sonic/Stellar); supports raw and signed modes
+- `getApprovalStrategy(params)` — Which path `swapWithApproval` would take: `'not-required'`, `'atomic-batch'` (one signature) or `'sequential'`
 
 ### Utility Methods
 
@@ -529,7 +531,7 @@ console.log(estimatedSeconds); // e.g. 15
 
 ## Token Approval Flow
 
-`swap()` and `createIntent()` do not approve the input token for you. Before executing, call `isAllowanceValid()` and `approve()` when it returns `false`. On EVM chains this is an ERC-20 allowance; on Stellar it is a trustline; on other chains it returns `true` and no approval is needed. Native gas tokens on EVM need no approval.
+`swap()` and `createIntent()` do not approve the input token for you. Before executing, call `isAllowanceValid()` and `approve()` when it returns `false` — or call [`swapWithApproval()`](#approve-and-swap-in-one-signature), which does both. On EVM chains this is an ERC-20 allowance; on Stellar it is a trustline; on other chains it returns `true` and no approval is needed. Native gas tokens on EVM need no approval.
 
 - **Hub (Sonic)**: checks allowance against the intents contract
 - **EVM spoke chains**: checks allowance against the spoke's asset manager
@@ -621,6 +623,54 @@ map and no way to broadcast them the wrong way round.
 ### Stellar Trustline
 
 For Stellar as the source chain, `isAllowanceValid` checks trustline balance sufficiency and `approve` adds/increases the trustline. For Stellar as the **destination** chain, frontends must manually establish trustlines before executing swaps. See `packages/sdk/docs/STELLAR_TRUSTLINE.md` for details.
+
+## Approve and Swap in One Signature
+
+`swapWithApproval()` is `swap()` with the approval folded in. On a wallet that supports
+[EIP-5792](https://eips.ethereum.org/EIPS/eip-5792) atomic batches it sends the approval and the swap transaction as
+**one batch — one signature, all or nothing** — and otherwise falls back to approving first. Completion afterwards is
+exactly `swap()`'s (backend submit-tx with the client-side relay fallback). `swap()`, `approve()` and `createIntent()`
+are unchanged.
+
+```typescript
+const strategy = await sodax.swaps.getApprovalStrategy({ params: createIntentParams, walletProvider });
+// 'not-required' | 'atomic-batch' | 'sequential' — label the button before the user clicks
+
+const result = await sodax.swaps.swapWithApproval({ params: createIntentParams, walletProvider });
+if (result.ok) {
+  console.log(result.value.approvalStrategy, result.value.intentDeliveryInfo.srcTxHash);
+}
+```
+
+| Strategy | When | Signatures |
+| --- | --- | --- |
+| `'not-required'` | The allowance already covers `inputAmount`, or the token needs none (native token, chains without allowances) | 1 |
+| `'atomic-batch'` | EVM spoke source, and the wallet reports EIP-5792 atomic support for that chain | 1 |
+| `'sequential'` | Anything else: the Sonic hub, Stellar trustlines, wallets without EIP-5792 | 2 (approve, wait for it to confirm, then swap) |
+
+**Which wallets batch.** The wallet provider must implement the optional `getAtomicBatchSupport` / `sendAtomicBatch`
+/ `waitForBatch` methods — `EvmWalletProvider` from `@sodax/wallet-sdk-core` does for a connected browser wallet, never
+for a private-key account. The wallet then decides per chain: a status of `'supported'` batches immediately, and
+`'ready'` means the wallet first asks the user to upgrade the account (MetaMask: an EIP-7702 smart account, same
+address, once per chain). Wallets support EIP-5792 on a subset of networks, so expect `'sequential'` on chains your
+users' wallets do not cover.
+
+**The batch.** `[approve(0)?, approve(amount), deposit]`, in that order — the reset leg appears only for a token that
+rejects changing a non-zero allowance (see [Raw Approval Transaction](#raw-approval-transaction)). The batch's
+transaction hash becomes `intentDeliveryInfo.srcTxHash`, the hash the relay and backend submit-tx track.
+
+**Failures.** Once the wallet has received a batch it is never retried as separate transactions — a second round of
+prompts after the user said no would be wrong, and a batch that may still land must not be duplicated:
+
+- the user rejects the batch, or declines the account upgrade (EIP-5792 `5750`) → `USER_REJECTED`;
+- the batch fails or reverts, or waiting for it times out → `INTENT_CREATION_FAILED` with `context.reason:
+  'atomic-batch-failed'` (when the wallet reported a terminal status), `context.batchId` and `context.statusCode`;
+- on the sequential path, an approval that does not confirm → `APPROVE_FAILED` with `context.reason:
+  'approve-not-confirmed'` and `context.approveTxHash`;
+- a failed allowance read → `ALLOWANCE_CHECK_FAILED`.
+
+Every other code is `swap()`'s, including `context.srcTxHash` on post-broadcast failures. The approval-leg errors
+above carry `context.action: 'swapWithApproval'` and `context.approvalStrategy`.
 
 ---
 

@@ -7,7 +7,7 @@ import type { SodaxError } from '../errors/SodaxError.js';
 
 export const swapInvariant: FeatureInvariant = createInvariant('swap');
 
-export type SwapAction = 'swap' | 'createLimitOrder';
+export type SwapAction = 'swap' | 'swapWithApproval' | 'createLimitOrder';
 
 export type SwapCreateIntentErrorCode = CreateIntentErrorCode;
 
@@ -37,10 +37,20 @@ export type SwapErrorCode = Extract<
   | 'UNKNOWN'
 >;
 
+/** Codes returnable by `swapWithApproval`: every `swap` code plus the approval leg's. */
+export type SwapWithApprovalErrorCode =
+  | SwapErrorCode
+  | Extract<SodaxErrorCode, 'APPROVE_FAILED' | 'ALLOWANCE_CHECK_FAILED'>;
+
+/** The only code `getApprovalStrategy` returns: the allowance read failed. */
+export type ApprovalStrategyErrorCode = Extract<SodaxErrorCode, 'ALLOWANCE_CHECK_FAILED'>;
+
 export type SwapCreateIntentError = SodaxError<SwapCreateIntentErrorCode>;
 export type PostExecutionError = SodaxError<PostExecutionErrorCode>;
 export type SwapError = SodaxError<SwapErrorCode>;
 export type DetailedStatusError = SodaxError<DetailedStatusErrorCode>;
+export type SwapWithApprovalError = SodaxError<SwapWithApprovalErrorCode>;
+export type ApprovalStrategyError = SodaxError<ApprovalStrategyErrorCode>;
 
 const POST_EXECUTION_ERROR_CODES: ReadonlySet<PostExecutionErrorCode> = new Set([
   'EXECUTION_FAILED',
@@ -64,3 +74,6 @@ const SWAP_ERROR_CODES: ReadonlySet<SwapErrorCode> = new Set([
 export const isSwapCreateIntentError = isCodeMember<SwapCreateIntentErrorCode>(CREATE_INTENT_CODES);
 export const isPostExecutionError = isCodeMember<PostExecutionErrorCode>(POST_EXECUTION_ERROR_CODES);
 export const isSwapError = isCodeMember<SwapErrorCode>(SWAP_ERROR_CODES);
+export const isSwapWithApprovalError = isCodeMember<SwapWithApprovalErrorCode>(
+  new Set<SwapWithApprovalErrorCode>([...SWAP_ERROR_CODES, 'APPROVE_FAILED', 'ALLOWANCE_CHECK_FAILED']),
+);

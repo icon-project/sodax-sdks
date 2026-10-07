@@ -7,14 +7,20 @@
  * otherwise it falls back to the wrapper's own code (`INTENT_CREATION_FAILED`).
  *
  * Coverage matrix:
- * - viem:    UserRejectedRequestError (name), EIP-1193 code 4001, ethers ACTION_REJECTED
+ * - viem:    UserRejectedRequestError (name), EIP-1193 code 4001, ethers ACTION_REJECTED,
+ *            EIP-5792 declined account upgrade (AtomicReadyWalletRejectedUpgradeError, 5750)
  * - ICON:    CANCEL_SIGNING / CANCEL_JSON-RPC string codes, numeric -31002
  * - generic: text patterns ('user rejected', 'user denied', 'transaction rejected', 'user abort',
  *            'popup closed', 'rejected by user', 'request rejected', case-insensitive)
  * - misses:  non-rejection errors (network, validation) must NOT classify as USER_REJECTED
  */
 
-import { UserRejectedRequestError } from 'viem';
+import {
+  AtomicityNotSupportedError,
+  AtomicReadyWalletRejectedUpgradeError,
+  TransactionExecutionError,
+  UserRejectedRequestError,
+} from 'viem';
 import { describe, expect, it } from 'vitest';
 import { approveFailed, intentCreationFailed } from './wrappers.js';
 
@@ -35,6 +41,25 @@ describe('intentCreationFailed (wallet rejection classification)', () => {
   it('classifies EIP-1193 code 4001 as USER_REJECTED', () => {
     const err = intentCreationFailed('moneyMarket', { code: 4001, message: 'reject' });
     expect(err.code).toBe('USER_REJECTED');
+  });
+
+  it('classifies a declined EIP-5792 account upgrade (5750) as USER_REJECTED', () => {
+    const declined = new AtomicReadyWalletRejectedUpgradeError(new Error('upgrade rejected'));
+    expect(intentCreationFailed('swap', declined).code).toBe('USER_REJECTED');
+    expect(intentCreationFailed('swap', { code: 5750, message: 'upgrade' }).code).toBe('USER_REJECTED');
+  });
+
+  it('classifies a declined upgrade as USER_REJECTED when sendCalls wraps it', () => {
+    const wrapped = new TransactionExecutionError(
+      new AtomicReadyWalletRejectedUpgradeError(new Error('upgrade rejected')),
+      { account: null },
+    );
+    expect(intentCreationFailed('swap', wrapped).code).toBe('USER_REJECTED');
+  });
+
+  it('does not treat "atomicity not supported" (5760) as a rejection', () => {
+    const unsupported = new AtomicityNotSupportedError(new Error('no atomicity'));
+    expect(intentCreationFailed('swap', unsupported).code).toBe('INTENT_CREATION_FAILED');
   });
 
   it('classifies ethers ACTION_REJECTED as USER_REJECTED', () => {

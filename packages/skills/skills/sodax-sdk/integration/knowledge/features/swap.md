@@ -47,6 +47,18 @@ sodax.swaps.getCancelIntentRelayData(intent: Intent): Result<RelayExtraData>;   
 sodax.swaps.approve<K, Raw>(/* … */): Promise<Result<TxReturnType<K, Raw>, SodaxError>>;
 sodax.swaps.isAllowanceValid<K, Raw>(/* … */): Promise<Result<boolean, SodaxError>>;
 
+sodax.swaps.swapWithApproval<K extends SpokeChainKey>(
+  action: SwapActionParams<K, false>,
+): Promise<Result<SwapResponse & { approvalStrategy: SwapApprovalStrategy }, SodaxError>>;
+//   `swap` with the approval folded in: no approval when the allowance suffices; approve + deposit as ONE
+//   EIP-5792 atomic batch (one signature) on a batch-capable wallet + EVM spoke source; otherwise approve,
+//   wait for it to confirm, then swap. Same completion as `swap`. Adds APPROVE_FAILED / ALLOWANCE_CHECK_FAILED.
+
+sodax.swaps.getApprovalStrategy<K extends SpokeChainKey>(
+  action: SwapActionParams<K, false>,
+): Promise<Result<SwapApprovalStrategy, SodaxError<'ALLOWANCE_CHECK_FAILED'>>>;
+//   SwapApprovalStrategy = 'not-required' | 'atomic-batch' | 'sequential' — read-only; use it to label the button.
+
 sodax.swaps.getSwapSpeedTier(params: { srcToken: XToken; dstToken: XToken }): SwapSpeedTierResult;
 //   Synchronous, offline, no Result wrapper — estimates settlement speed from SDK config alone
 //   (no network / on-chain / backend call). SwapSpeedTierResult = { tier: 'fast'|'normal'|'slow', estimatedSeconds }.
@@ -62,6 +74,19 @@ sodax.swaps.getDetailedStatus(
 ): Promise<Result<DetailedSwapStatus, SodaxError<'LOOKUP_FAILED'>>>;
 //   Routes to the backend submit-tx record or the solver. Does NOT define a new status vocabulary.
 ```
+
+## Approve and swap in one signature
+
+`swapWithApproval` replaces the `isAllowanceValid` → `approve` → `swap` sequence with one call. It batches only
+when the source is an EVM spoke (not the Sonic hub) and the wallet provider implements the optional EIP-5792 methods
+(`EvmWalletProvider` does for a connected browser wallet, never for a private-key account) and reports
+`'supported'` or `'ready'` for that chain — `'ready'` means the wallet asks the user to upgrade the account (MetaMask:
+EIP-7702 smart account) on the first batch. Everything else takes the two-signature path, so the call is safe on any
+chain.
+
+A batch the wallet received is never retried as separate transactions: a rejected batch or a declined upgrade is
+`USER_REJECTED`; a failed or timed-out batch is `INTENT_CREATION_FAILED` with `context.batchId`. Do not chain your own
+`approve` after either — that is exactly the double prompt this method avoids.
 
 ## Reading swap status
 

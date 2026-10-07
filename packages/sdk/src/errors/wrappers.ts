@@ -24,7 +24,8 @@ type Ctx = Partial<SodaxErrorContext>;
  *
  * Shapes recognised:
  * - EVM (viem):                `UserRejectedRequestError`, EIP-1193 code `4001`,
- *                              ethers-compat `code === 'ACTION_REJECTED'`.
+ *                              ethers-compat `code === 'ACTION_REJECTED'`, and EIP-5792's
+ *                              declined account upgrade (`AtomicReadyWalletRejectedUpgradeError`, `5750`).
  * - ICON (Hana):               `code === 'CANCEL_SIGNING'` / `'CANCEL_JSON-RPC'` / `-31002`.
  * - Solana / Sui / Stellar /
  *   Stacks / Bitcoin / NEAR /
@@ -87,10 +88,12 @@ function isWalletRejection(error: unknown): boolean {
   };
 
   if (o.name === 'UserRejectedRequestError') return true;
+  if (o.name === 'AtomicReadyWalletRejectedUpgradeError') return true;
   if (o.name === 'WalletSignTransactionError' && matchRejectionText(o.message)) return true;
   if (o.name === 'WalletConnectionError' && matchRejectionText(o.message)) return true;
 
   if (o.code === 4001) return true;
+  if (o.code === 5750) return true;
   if (o.code === 'ACTION_REJECTED') return true;
   if (o.code === 'CANCEL_SIGNING') return true;
   if (o.code === 'CANCEL_JSON-RPC') return true;
