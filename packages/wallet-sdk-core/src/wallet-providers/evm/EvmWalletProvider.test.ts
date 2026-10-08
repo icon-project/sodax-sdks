@@ -497,6 +497,16 @@ describe('EvmWalletProvider', () => {
         expect(spy).toHaveBeenCalledWith({ id: 'batch-1', timeout: 30_000, pollingInterval: 2_000 });
       });
 
+      it('gives up at once on a zero timeout instead of waiting forever', async () => {
+        const config = makeConnectedWalletConfig();
+        const provider = new EvmWalletProvider(config);
+        const spy = vi.spyOn(config.walletClient, 'waitForCallsStatus').mockResolvedValue(makeCallsStatus());
+
+        await provider.waitForBatch('batch-1', { timeout: 0 });
+
+        expect(spy).toHaveBeenCalledWith({ id: 'batch-1', timeout: 1 });
+      });
+
       it('propagates a wait that times out, so the caller can tell it from a failed batch', async () => {
         const config = makeConnectedWalletConfig();
         const provider = new EvmWalletProvider(config);

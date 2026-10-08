@@ -254,8 +254,13 @@ export class EvmWalletProvider extends BaseWalletProvider<EvmWalletDefaults> imp
 
   /** Polls until the batch reaches a terminal EIP-5792 status and returns its receipts. Throws on timeout. */
   async waitForBatch(batchId: string, options?: EvmWaitForCallsStatusPolicy): Promise<EvmBatchResult> {
-    const policy = this.mergePolicy('waitForCallsStatus', options);
-    const result = await this.walletClient.waitForCallsStatus({ ...policy, id: batchId });
+    const { timeout, ...policy } = this.mergePolicy('waitForCallsStatus', options);
+    const result = await this.walletClient.waitForCallsStatus({
+      ...policy,
+      // viem reads a zero timeout as "no timeout"; give up at once instead.
+      timeout: timeout === undefined ? undefined : Math.max(1, timeout),
+      id: batchId,
+    });
     return {
       status: result.status === 'success' ? 'success' : 'failure',
       statusCode: result.statusCode,

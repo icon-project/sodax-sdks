@@ -93,9 +93,11 @@ transactions:
 - rejected batch → `USER_REJECTED`; a declined upgrade is `USER_REJECTED` with
   `context.reason === ACCOUNT_UPGRADE_DECLINED` — the user refused the smart account, not the swap, so it is fine to
   offer the same swap again with `allowAccountUpgrade: false`;
-- failed or reverted batch → `INTENT_CREATION_FAILED` with `context.reason: 'atomic-batch-failed'` (nothing deposited);
-- sent but not confirmed within `timeout` → `TX_VERIFICATION_FAILED` with `context.reason === ATOMIC_BATCH_UNCONFIRMED`
-  and `context.batchId`. It may still land — **do not retry**; tell the user to check the wallet's activity.
+- batch never included or fully reverted (EIP-5792 `400` / `500`) → `INTENT_CREATION_FAILED` with
+  `context.reason: 'atomic-batch-failed'` (nothing deposited);
+- anything else short of a confirmed deposit receipt (not confirmed within `timeout`, a partial revert, unclear
+  receipts) → `TX_VERIFICATION_FAILED` with `context.reason === ATOMIC_BATCH_UNCONFIRMED` and `context.batchId`. It
+  may have landed — **do not retry**; tell the user to check the wallet's activity.
 
 Do not chain your own `approve` after any of these; that is exactly the double prompt this method avoids.
 

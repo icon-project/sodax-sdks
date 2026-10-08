@@ -228,7 +228,7 @@ new EvmWalletProvider({
 In browser-extension mode the provider also implements the optional EIP-5792 methods
 (`getAtomicBatchSupport`, `sendAtomicBatch`, `waitForBatch`) over viem's `getCapabilities`, `sendCalls`
 (with `forceAtomic`) and `waitForCallsStatus`. A private-key account reports `'unsupported'`: a plain RPC
-endpoint has no `wallet_sendCalls`.
+endpoint has no `wallet_sendCalls`. A `waitForBatch` timeout of `0` gives up at once rather than waiting forever.
 
 ### Solana (`SolanaWalletProvider`)
 
@@ -518,4 +518,6 @@ Requirements for a valid custom implementation:
    `getAtomicBatchSupport(chainId)` reports the wallet's `atomic` capability (`'supported'`, `'ready'`
    or `'unsupported'`), `sendAtomicBatch` must request atomic execution and send the batch for
    `options.expectedChainId` only, and `waitForBatch(batchId, { timeout })` resolves to the batch's receipts once
-   it is terminal and throws if it is not by then.
+   it is terminal and throws if it is not by then. The SDK always passes a positive `timeout`, and reads the
+   receipts as one for a batch executed as one transaction, or one per call in call order; any other shape is
+   treated as unconfirmed.

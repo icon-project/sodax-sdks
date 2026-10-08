@@ -689,11 +689,13 @@ prompts or a duplicate of a batch that may still land:
 
 - the user rejects the batch → `USER_REJECTED`; declining the account upgrade (EIP-5792 `5750`) is also
   `USER_REJECTED`, with `context.reason: ACCOUNT_UPGRADE_DECLINED` (`'account-upgrade-declined'`);
-- the batch fails or reverts → `INTENT_CREATION_FAILED` with `context.reason: 'atomic-batch-failed'`,
-  `context.batchId` and `context.statusCode`. Nothing was deposited;
-- the batch was sent but not confirmed within `timeout` → `TX_VERIFICATION_FAILED` with `context.reason:
-  ATOMIC_BATCH_UNCONFIRMED` (`'atomic-batch-unconfirmed'`) and `context.batchId`. It may still land, so do not
-  retry it; check the wallet's activity for that batch first;
+- the wallet reports the batch never included or fully reverted (EIP-5792 `400` / `500`) →
+  `INTENT_CREATION_FAILED` with `context.reason: 'atomic-batch-failed'`, `context.batchId` and
+  `context.statusCode`. Nothing was deposited;
+- anything else short of a confirmed deposit receipt (not confirmed within `timeout`, a partial revert, receipts
+  that do not identify the deposit) → `TX_VERIFICATION_FAILED` with `context.reason: ATOMIC_BATCH_UNCONFIRMED`
+  (`'atomic-batch-unconfirmed'`) and `context.batchId`. It may have landed, so do not retry it; check the
+  wallet's activity for that batch first;
 - on the sequential path, an approval that does not confirm → `APPROVE_FAILED` with `context.reason:
   'approve-not-confirmed'` and `context.approveTxHash`;
 - a failed allowance read → `ALLOWANCE_CHECK_FAILED`.

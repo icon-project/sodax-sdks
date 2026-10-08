@@ -266,6 +266,9 @@ const DETAILED_STATUS_SOLVER_TIMEOUT_MS = 5_000;
 /** `context.reason` for a batch the wallet refused before anything was signed: safe to approve separately. */
 const ATOMIC_BATCH_REFUSED = 'atomic-batch-refused';
 
+/** EIP-5792 status codes that say nothing landed: 400 never included, 500 fully reverted. 600 may have partly landed. */
+const BATCH_NOTHING_LANDED_CODES: ReadonlySet<number> = new Set([400, 500]);
+
 /**
  * Main entry point for the SODAX swap feature.
  *
@@ -820,9 +823,12 @@ export class SwapService {
    * transactions:
    * - rejected → `USER_REJECTED`; a declined account upgrade (5750) adds `context.reason:`
    *   {@link ACCOUNT_UPGRADE_DECLINED}, after which `allowAccountUpgrade: false` swaps without one;
-   * - failed or reverted → `INTENT_CREATION_FAILED` with `context.reason: 'atomic-batch-failed'`;
-   * - accepted but not confirmed within `timeout` → `TX_VERIFICATION_FAILED` with `context.reason:`
-   *   {@link ATOMIC_BATCH_UNCONFIRMED} and `context.batchId`. It may still land — do not retry it.
+   * - never included or fully reverted (EIP-5792 400 / 500) → `INTENT_CREATION_FAILED` with
+   *   `context.reason: 'atomic-batch-failed'`;
+   * - anything else short of a confirmed deposit receipt (not confirmed within `timeout`, a partial
+   *   revert, receipts that do not identify the deposit) → `TX_VERIFICATION_FAILED` with
+   *   `context.reason:` {@link ATOMIC_BATCH_UNCONFIRMED} and `context.batchId`. It may have landed —
+   *   do not retry it.
    *
    * @returns A `Result<SwapWithApprovalResponse, SwapWithApprovalError>` — `swap()`'s response plus the
    *   `approvalStrategy` that ran. Errors are `swap()`'s codes plus `APPROVE_FAILED` and
@@ -848,7 +854,11 @@ export class SwapService {
             : approvalStrategy === 'sequential'
               ? await this.approveThenCreateIntent(_params)
               : await this.createIntent(_params);
-          if (!created.ok && created.error.context?.reason === ATOMIC_BATCH_REFUSED) {
+          if (
+            !created.ok &&
+            created.error.code === 'INTENT_CREATION_FAILED' &&
+            created.error.context?.reason === ATOMIC_BATCH_REFUSED
+          ) {
             // Nothing was signed or sent yet, so approving separately cannot duplicate anything.
             this.config.logger.warn('[swapWithApproval] wallet refused the atomic batch; approving separately', {
               error: created.error,
@@ -956,10 +966,10 @@ export class SwapService {
       }),
     });
     try {
-      const batch = await walletProvider.waitForBatch(batchId, { timeout: timeoutMs });
-      const intentTx = batch.receipts.at(-1);
-      if (batch.status === 'success' && !intentTx) return unconfirmed();
-      if (batch.status !== 'success' || intentTx?.status !== 'success') {
+      // viem reads a zero timeout as "no timeout"; give up at once instead.
+      const batch = await walletProvider.waitForBatch(batchId, { timeout: Math.max(1, timeoutMs) });
+      if (batch.status !== 'success' && !BATCH_NOTHING_LANDED_CODES.has(batch.statusCode)) return unconfirmed();
+      if (batch.status !== 'success') {
         return {
           ok: false,
           error: new SodaxError('INTENT_CREATION_FAILED', 'Atomic approve + swap batch did not succeed', {
@@ -974,6 +984,10 @@ export class SwapService {
           }),
         };
       }
+      // One receipt (the whole batch as one tx) or one per call, else the deposit's tx is unknown.
+      const { receipts } = batch;
+      const intentTx = receipts.length === 1 || receipts.length === txs.length ? receipts.at(-1) : undefined;
+      if (intentTx?.status !== 'success') return unconfirmed();
       return {
         ok: true,
         value: {
