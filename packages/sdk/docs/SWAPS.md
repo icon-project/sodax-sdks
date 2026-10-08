@@ -663,6 +663,21 @@ for a private-key account. The wallet then decides per chain: a status of `'supp
 address, once per chain). Wallets support EIP-5792 on a subset of networks, so expect `'sequential'` on chains your
 users' wallets do not cover.
 
+**Not asking for the upgrade.** Pass `allowAccountUpgrade: false` to `getApprovalStrategy` and `swapWithApproval` to
+treat a `'ready'` wallet as unable to batch: it approves separately and never sees the upgrade prompt. An account that
+is already `'supported'` still batches. The default is `true`. Whether to set it, and whether to remember a user's
+answer, is up to your app:
+
+```typescript
+import { ACCOUNT_UPGRADE_DECLINED } from '@sodax/sdk';
+
+const result = await sodax.swaps.swapWithApproval({ params, walletProvider });
+if (!result.ok && result.error.code === 'USER_REJECTED' && result.error.context?.reason === ACCOUNT_UPGRADE_DECLINED) {
+  // The user said no to the smart account, not to the swap: offer the two-signature path.
+  await sodax.swaps.swapWithApproval({ params, walletProvider, allowAccountUpgrade: false });
+}
+```
+
 **The batch.** `[approve(0)?, approve(amount), deposit]`, in that order — the reset leg appears only for a token that
 rejects changing a non-zero allowance (see [Raw Approval Transaction](#raw-approval-transaction)). The batch's
 transaction hash becomes `intentDeliveryInfo.srcTxHash`, the hash the relay and backend submit-tx track.
@@ -672,7 +687,8 @@ not supported), `swapWithApproval` approves separately instead and reports `appr
 user has seen the batch it is never retried as separate transactions, since that would mean a second round of
 prompts or a duplicate of a batch that may still land:
 
-- the user rejects the batch, or declines the account upgrade (EIP-5792 `5750`) → `USER_REJECTED`;
+- the user rejects the batch → `USER_REJECTED`; declining the account upgrade (EIP-5792 `5750`) is also
+  `USER_REJECTED`, with `context.reason: ACCOUNT_UPGRADE_DECLINED` (`'account-upgrade-declined'`);
 - the batch fails or reverts → `INTENT_CREATION_FAILED` with `context.reason: 'atomic-batch-failed'`,
   `context.batchId` and `context.statusCode`. Nothing was deposited;
 - the batch was sent but not confirmed within `timeout` → `TX_VERIFICATION_FAILED` with `context.reason:

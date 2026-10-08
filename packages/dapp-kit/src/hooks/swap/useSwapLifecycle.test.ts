@@ -122,6 +122,18 @@ describe('useSwapLifecycle', () => {
     });
   });
 
+  it('passes allowAccountUpgrade to the strategy read and the swap', async () => {
+    stub({ strategy: 'sequential' });
+    mutateAsyncSafe.mockResolvedValueOnce({ ok: true, value: {} });
+    const lifecycle = run({ allowAccountUpgrade: false });
+
+    expect(strategyHook).toHaveBeenCalledWith({
+      params: { payload: PARAMS, walletProvider: WALLET, allowAccountUpgrade: false },
+    });
+    await lifecycle.next();
+    expect(mutateAsyncSafe).toHaveBeenCalledWith(expect.objectContaining({ allowAccountUpgrade: false }));
+  });
+
   it('reads status from the source tx of the current swap and settles on solved', () => {
     stub({
       swap: {

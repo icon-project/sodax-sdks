@@ -225,6 +225,12 @@ swap lands in `state`:
 - an approve + swap batch the wallet accepted but that was not confirmed in time → `unconfirmed`. It may still land,
   so `next()` won't retry it; only `reset()` clears it.
 
+A user who declines the smart-account upgrade a `'ready'` wallet asks for lands in `failed` with a `USER_REJECTED`
+whose `context.reason` is `ACCOUNT_UPGRADE_DECLINED`. They refused the upgrade, not the swap: keep an
+`allowAccountUpgrade` flag in your own state, pass it to `useSwapLifecycle`, and offer "swap without upgrading" by
+setting it to `false` and calling `reset()`. The strategy then reads `'sequential'` and the next swap approves
+separately. Whether to remember that choice across sessions is up to the app.
+
 `submitting` covers the whole swap call: signing, and on the default backend path settlement too, so label it as
 swapping, not as waiting for the wallet. Build `intentParams` once per confirmation (a rebuilt `deadline` is fine):
 changing any other field starts a new lifecycle once the current swap is no longer in flight. `stellarFunding` and

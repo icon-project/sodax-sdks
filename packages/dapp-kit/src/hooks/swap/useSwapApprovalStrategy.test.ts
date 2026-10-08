@@ -52,6 +52,7 @@ describe('useSwapApprovalStrategy', () => {
       PAYLOAD.srcAddress,
       PAYLOAD.inputToken,
       '1000000',
+      true,
     ]);
     expect(captured.enabled).toBe(true);
     expect(captured.refetchInterval).toBeUndefined();
@@ -62,7 +63,24 @@ describe('useSwapApprovalStrategy', () => {
     useSwapApprovalStrategy({ params: { payload: PAYLOAD, walletProvider: WALLET } });
 
     await expect(captured.queryFn()).resolves.toBe('atomic-batch');
-    expect(getApprovalStrategy).toHaveBeenCalledWith({ params: PAYLOAD, walletProvider: WALLET });
+    expect(getApprovalStrategy).toHaveBeenCalledWith({
+      params: PAYLOAD,
+      walletProvider: WALLET,
+      allowAccountUpgrade: true,
+    });
+  });
+
+  it('keys on and forwards allowAccountUpgrade: false', async () => {
+    getApprovalStrategy.mockResolvedValueOnce({ ok: true, value: 'sequential' });
+    useSwapApprovalStrategy({ params: { payload: PAYLOAD, walletProvider: WALLET, allowAccountUpgrade: false } });
+
+    expect(captured.queryKey.at(-1)).toBe(false);
+    await expect(captured.queryFn()).resolves.toBe('sequential');
+    expect(getApprovalStrategy).toHaveBeenCalledWith({
+      params: PAYLOAD,
+      walletProvider: WALLET,
+      allowAccountUpgrade: false,
+    });
   });
 
   it('stays disabled until both the payload and the wallet are known', () => {

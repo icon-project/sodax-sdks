@@ -27,6 +27,8 @@ import {
   useBalances,
   getSupportedSolverTokens,
   getStagingSolverTokens,
+  isSodaxError,
+  ACCOUNT_UPGRADE_DECLINED,
   type CreateIntentParams,
   type SolverIntentQuoteRequest,
   type GetWalletProviderType,
@@ -147,6 +149,8 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   const [deliveryHookEnabled, setDeliveryHookEnabled] = useState(false);
   const [isBitcoinReady, setIsBitcoinReady] = useState(false);
   const [isDestBitcoinReady, setIsDestBitcoinReady] = useState(false);
+  // App policy, not SDK: once the user declines the smart-account upgrade, stop offering it this session.
+  const [allowAccountUpgrade, setAllowAccountUpgrade] = useState(true);
 
   // The delivery hook — if any — that the registry accepts for this destination chain + output token
   // (HyperCore on HyperEVM+USDC, Flint on Ethereum+USDC today). Resolved from the registry rather than
@@ -353,6 +357,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
     externalBlocked:
       (src.chain === ChainKeys.BITCOIN_MAINNET && !isBitcoinReady) ||
       (dst.chain === ChainKeys.BITCOIN_MAINNET && !isDestBitcoinReady),
+    allowAccountUpgrade,
     mutationOptions: {
       onSuccess: ({ solverExecutionResponse: response, intent, intentDeliveryInfo }) => {
         setOrders(prev =>
@@ -373,6 +378,14 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   });
   const { state, stellar, nearStorage } = lifecycle;
   const isActing = stellar.isActivating || stellar.isRequestingTrustline || nearStorage.isRegistering;
+  const upgradeDeclined =
+    state.kind === 'failed' && isSodaxError(state.error) && state.error.context?.reason === ACCOUNT_UPGRADE_DECLINED;
+
+  const swapWithoutUpgrade = (): void => {
+    setAllowAccountUpgrade(false);
+    lifecycle.reset();
+    setOpen(true);
+  };
 
   const handlePrimary = async (): Promise<void> => {
     setActionError(null);
@@ -712,8 +725,16 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
               </div>
             )}
             {state.kind === 'settled' && <div>Swap settled.</div>}
-            {state.kind === 'failed' && (
+            {state.kind === 'failed' && !upgradeDeclined && (
               <div className="text-red-500">{formatMutationFailureMessage(state.error, 'Swap failed')}</div>
+            )}
+            {upgradeDeclined && (
+              <div className="text-amber-600">
+                You declined the smart account upgrade, so nothing was sent.{' '}
+                <button type="button" className="underline" onClick={swapWithoutUpgrade}>
+                  Swap without upgrading (2 signatures)
+                </button>
+              </div>
             )}
           </div>
         )}

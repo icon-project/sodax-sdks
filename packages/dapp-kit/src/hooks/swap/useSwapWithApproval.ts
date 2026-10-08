@@ -1,13 +1,13 @@
 import { useQueryClient } from '@tanstack/react-query';
-import type { SpokeChainKey, SwapActionParams, SwapWithApprovalResponse } from '@sodax/sdk';
+import type { SpokeChainKey, SwapWithApprovalParams, SwapWithApprovalResponse } from '@sodax/sdk';
 import { useSodaxContext } from '../shared/useSodaxContext.js';
 import { invalidateBalances } from '../shared/invalidateBalances.js';
 import type { MutationHookParams } from '../shared/types.js';
 import { useSafeMutation, type SafeUseMutationResult } from '../shared/useSafeMutation.js';
 import { unwrapResult } from '../shared/unwrapResult.js';
 
-/** Mutation variables for {@link useSwapWithApproval} — the same shape as `useSwap`'s. */
-export type UseSwapWithApprovalVars<K extends SpokeChainKey = SpokeChainKey> = Omit<SwapActionParams<K, false>, 'raw'>;
+/** Mutation variables for {@link useSwapWithApproval}: `useSwap`'s, plus the optional `allowAccountUpgrade`. */
+export type UseSwapWithApprovalVars<K extends SpokeChainKey = SpokeChainKey> = Omit<SwapWithApprovalParams<K>, 'raw'>;
 
 /**
  * `useSwap` with the source-token approval folded in (`sodax.swaps.swapWithApproval`): no approval

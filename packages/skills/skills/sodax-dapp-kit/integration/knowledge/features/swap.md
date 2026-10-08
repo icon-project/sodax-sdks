@@ -147,7 +147,9 @@ spoke whose wallet reports EIP-5792 atomic support, approve + swap as **one batc
 wait for it to confirm, then swap. `data.approvalStrategy` says which ran. Pair it with `useSwapApprovalStrategy` to
 label the button up front (e.g. "Approve & Swap" vs "Approve, then Swap"), instead of the
 `useSwapAllowance` + `useSwapApprove` + `useSwap` trio. A rejected batch — or a declined account upgrade on a
-`'ready'` wallet — is `USER_REJECTED` and is **not** retried as two transactions.
+`'ready'` wallet — is `USER_REJECTED` and is **not** retried as two transactions. A declined upgrade carries
+`context.reason === ACCOUNT_UPGRADE_DECLINED`; pass `allowAccountUpgrade: false` (in the mutation vars and to
+`useSwapApprovalStrategy`) to swap without the upgrade. dapp-kit never stores that choice — the app decides.
 
 ## Gotchas
 

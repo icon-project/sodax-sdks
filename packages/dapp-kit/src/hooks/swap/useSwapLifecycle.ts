@@ -32,6 +32,11 @@ export type UseSwapLifecycleParams<K extends SpokeChainKey = SpokeChainKey> = {
   chainSwitch?: { isWrongChain: boolean; switchChain: () => void | Promise<void> };
   /** An app-owned prerequisite that must hold before swapping (e.g. a Bitcoin trading-wallet setup). */
   externalBlocked?: boolean;
+  /**
+   * `false` approves separately instead of asking a `'ready'` wallet to upgrade the account (e.g. after
+   * the user declined: `USER_REJECTED` with `context.reason === ACCOUNT_UPGRADE_DECLINED`). Defaults to `true`.
+   */
+  allowAccountUpgrade?: boolean;
   extras?: SwapExtras<K>;
   timeout?: number;
   mutationOptions?: MutationHookOptions<SwapWithApprovalResponse, UseSwapWithApprovalVars<K>>;
@@ -76,12 +81,13 @@ export function useSwapLifecycle<K extends SpokeChainKey = SpokeChainKey>({
   dstAccountAddress,
   chainSwitch,
   externalBlocked = false,
+  allowAccountUpgrade,
   extras,
   timeout,
   mutationOptions,
 }: UseSwapLifecycleParams<K>): SwapLifecycle<K> {
   const approvalStrategy = useSwapApprovalStrategy<K>({
-    params: { payload: intentParams, walletProvider: srcWalletProvider },
+    params: { payload: intentParams, walletProvider: srcWalletProvider, allowAccountUpgrade },
   });
   const swap = useSwapWithApproval<K>({ mutationOptions });
   const stellar = useStellarGate({
@@ -137,7 +143,13 @@ export function useSwapLifecycle<K extends SpokeChainKey = SpokeChainKey>({
         return undefined;
       case 'ready':
         if (!intentParams || !srcWalletProvider) return undefined;
-        return swap.mutateAsyncSafe({ params: intentParams, walletProvider: srcWalletProvider, extras, timeout });
+        return swap.mutateAsyncSafe({
+          params: intentParams,
+          walletProvider: srcWalletProvider,
+          allowAccountUpgrade,
+          extras,
+          timeout,
+        });
       case 'settled':
       case 'failed':
         reset();

@@ -82,13 +82,17 @@ when the source is an EVM spoke (not the Sonic hub) and the wallet provider impl
 (`EvmWalletProvider` does for a connected browser wallet, never for a private-key account) and reports
 `'supported'` or `'ready'` for that chain — `'ready'` means the wallet asks the user to upgrade the account (MetaMask:
 EIP-7702 smart account) on the first batch. Everything else takes the two-step path (three signatures for a token
-that must reset a stale allowance), so the call is safe on any chain.
+that must reset a stale allowance), so the call is safe on any chain. Pass `allowAccountUpgrade: false` (to both
+`getApprovalStrategy` and `swapWithApproval`) to keep a `'ready'` wallet on the two-step path and never show the
+upgrade prompt; whether to do so is the app's call.
 
 If the wallet refuses the batch before signing (e.g. EIP-5792 `5760`), the method approves separately on its own and
 reports `approvalStrategy: 'sequential'`. Once the user has seen the batch it is never retried as separate
 transactions:
 
-- rejected batch or declined upgrade → `USER_REJECTED`;
+- rejected batch → `USER_REJECTED`; a declined upgrade is `USER_REJECTED` with
+  `context.reason === ACCOUNT_UPGRADE_DECLINED` — the user refused the smart account, not the swap, so it is fine to
+  offer the same swap again with `allowAccountUpgrade: false`;
 - failed or reverted batch → `INTENT_CREATION_FAILED` with `context.reason: 'atomic-batch-failed'` (nothing deposited);
 - sent but not confirmed within `timeout` → `TX_VERIFICATION_FAILED` with `context.reason === ATOMIC_BATCH_UNCONFIRMED`
   and `context.batchId`. It may still land — **do not retry**; tell the user to check the wallet's activity.

@@ -35,6 +35,7 @@ import {
   type SubmitTxStatusDataV2,
 } from '@sodax/types';
 import {
+  ACCOUNT_UPGRADE_DECLINED,
   ATOMIC_BATCH_UNCONFIRMED,
   DETAILED_STATUS_NOT_DELIVERED,
   SPEED_TIER_SECONDS,
@@ -4298,6 +4299,19 @@ describe('SwapService approval strategy and swapWithApproval', () => {
       expect(wallet.getAtomicBatchSupport).toHaveBeenCalledWith(56);
     });
 
+    it.each([
+      ['ready', 'sequential'],
+      ['supported', 'atomic-batch'],
+    ] as const)('with allowAccountUpgrade: false, a %s wallet gets %s', async (support, expected) => {
+      allowance(false);
+      const result = await sodax.swaps.getApprovalStrategy({
+        params: intentInput(ChainKeys.BSC_MAINNET),
+        walletProvider: makeBatchProvider(support),
+        allowAccountUpgrade: false,
+      });
+      expect(result).toEqual({ ok: true, value: expected });
+    });
+
     it('goes sequential when the wallet reports unsupported', async () => {
       allowance(false);
       const result = await sodax.swaps.getApprovalStrategy({
@@ -4407,9 +4421,13 @@ describe('SwapService approval strategy and swapWithApproval', () => {
     });
 
     it.each([
-      ['a rejected batch', new UserRejectedRequestError(new Error('User rejected the request.'))],
-      ['a declined account upgrade (5750)', new AtomicReadyWalletRejectedUpgradeError(new Error('declined'))],
-    ])('returns USER_REJECTED for %s and never falls back to separate transactions', async (_label, rejection) => {
+      ['a rejected batch', new UserRejectedRequestError(new Error('User rejected the request.')), undefined],
+      [
+        'a declined account upgrade (5750)',
+        new AtomicReadyWalletRejectedUpgradeError(new Error('declined')),
+        ACCOUNT_UPGRADE_DECLINED,
+      ],
+    ])('returns USER_REJECTED for %s and never falls back to separate transactions', async (_label, rejection, reason) => {
       allowance(false);
       const wallet = makeBatchProvider();
       wallet.sendAtomicBatch.mockRejectedValueOnce(rejection);
@@ -4420,7 +4438,10 @@ describe('SwapService approval strategy and swapWithApproval', () => {
       const result = await swapWithBatch(wallet);
 
       expect(result.ok).toBe(false);
-      if (!result.ok) expect(result.error.code).toBe('USER_REJECTED');
+      if (!result.ok) {
+        expect(result.error.code).toBe('USER_REJECTED');
+        expect(result.error.context?.reason).toBe(reason);
+      }
       expect(approveSpy).not.toHaveBeenCalled();
       expect(wallet.sendTransaction).not.toHaveBeenCalled();
       expect(mocks.relayTxAndWaitPacket).not.toHaveBeenCalled();
@@ -4529,6 +4550,28 @@ describe('SwapService approval strategy and swapWithApproval', () => {
   });
 
   describe('swapWithApproval — sequential and not-required', () => {
+    it('approves separately on a ready wallet when allowAccountUpgrade is false', async () => {
+      allowance(false);
+      const wallet = makeBatchProvider('ready');
+      vi.spyOn(sodax.swaps, 'approve').mockResolvedValueOnce({ ok: true, value: '0xapproveTx' });
+      vi.spyOn(sodax.spoke, 'waitForTxReceipt').mockResolvedValueOnce({
+        ok: true,
+        value: { status: 'success', receipt: {} as never },
+      });
+      vi.spyOn(sodax.swaps, 'createIntent').mockResolvedValueOnce(intentResult('0xspokeTx'));
+      stubRelayAndSolver();
+
+      const result = await sodax.swaps.swapWithApproval({
+        params: intentInput(ChainKeys.BSC_MAINNET),
+        walletProvider: wallet,
+        allowAccountUpgrade: false,
+      });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) expect(result.value.approvalStrategy).toBe('sequential');
+      expect(wallet.sendAtomicBatch).not.toHaveBeenCalled();
+    });
+
     it('waits for the approval to confirm before creating the intent', async () => {
       allowance(false);
       const approveSpy = vi.spyOn(sodax.swaps, 'approve').mockResolvedValueOnce({ ok: true, value: '0xapproveTx' });

@@ -10,6 +10,7 @@ import {
 } from 'viem';
 import {
   canSendAtomicBatch,
+  isAccountUpgradeDeclined,
   isAtomicBatchRefused,
   readAtomicBatchSupport,
   type AtomicBatchEvmWalletProvider,
@@ -78,5 +79,20 @@ describe('isAtomicBatchRefused', () => {
     expect(isAtomicBatchRefused(wrapped(new AtomicReadyWalletRejectedUpgradeError(new Error('no'))))).toBe(false);
     expect(isAtomicBatchRefused(new Error('network down'))).toBe(false);
     expect(isAtomicBatchRefused(undefined)).toBe(false);
+  });
+});
+
+describe('isAccountUpgradeDeclined', () => {
+  const wrapped = (cause: BaseError) => new TransactionExecutionError(cause, { account: null });
+
+  it('recognises a declined upgrade (5750), however viem wraps it', () => {
+    expect(isAccountUpgradeDeclined(wrapped(new AtomicReadyWalletRejectedUpgradeError(new Error('no'))))).toBe(true);
+    expect(isAccountUpgradeDeclined({ code: 5750 })).toBe(true);
+  });
+
+  it('does not treat a rejected batch or a refusal as a declined upgrade', () => {
+    expect(isAccountUpgradeDeclined(wrapped(new UserRejectedRequestError(new Error('no'))))).toBe(false);
+    expect(isAccountUpgradeDeclined(wrapped(new AtomicityNotSupportedError(new Error('no'))))).toBe(false);
+    expect(isAccountUpgradeDeclined(undefined)).toBe(false);
   });
 });

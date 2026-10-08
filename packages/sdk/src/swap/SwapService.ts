@@ -49,6 +49,7 @@ import { isFillEvent } from '../backendApi/guards.js';
 import { resolveTimeoutMs } from '../shared/utils/resolveTimeoutMs.js';
 import {
   canSendAtomicBatch,
+  isAccountUpgradeDeclined,
   isAtomicBatchRefused,
   readAtomicBatchSupport,
   type AtomicBatchEvmWalletProvider,
@@ -87,6 +88,7 @@ import {
   isSwapError,
   isSwapWithApprovalError,
   swapInvariant,
+  ACCOUNT_UPGRADE_DECLINED,
   ATOMIC_BATCH_UNCONFIRMED,
 } from './errors.js';
 export type {
@@ -163,6 +165,15 @@ export type SwapResponse = {
 export type SwapApprovalStrategy = 'not-required' | 'atomic-batch' | 'sequential';
 
 export type SwapWithApprovalResponse = SwapResponse & { approvalStrategy: SwapApprovalStrategy };
+
+/** Params for `swapWithApproval` / `getApprovalStrategy`: `swap()`'s, plus the account-upgrade choice. */
+export type SwapWithApprovalParams<K extends SpokeChainKey> = SwapActionParams<K, false> & {
+  /**
+   * Whether a wallet that must first upgrade the account to batch (EIP-5792 `'ready'`, e.g. a MetaMask
+   * EOA becoming a smart account) may be asked to. `false` approves separately instead. Defaults to `true`.
+   */
+  allowAccountUpgrade?: boolean;
+};
 
 export type CreateIntentResult<K extends SpokeChainKey, Raw extends boolean> = {
   tx: TxReturnType<K, Raw>;
@@ -759,15 +770,16 @@ export class SwapService {
    *
    * `'atomic-batch'` needs an EVM spoke source and a wallet that reports EIP-5792 atomic support for
    * that chain — `'supported'`, or `'ready'` (the wallet asks the user to upgrade the account on the
-   * first batch). The Sonic hub, a Stellar source that needs a trustline, and wallets without batch
-   * support get `'sequential'`; other non-EVM sources have no allowance and get `'not-required'`.
+   * first batch; pass `allowAccountUpgrade: false` to treat such a wallet as unable to batch). The Sonic
+   * hub, a Stellar source that needs a trustline, and wallets without batch support get `'sequential'`;
+   * other non-EVM sources have no allowance and get `'not-required'`.
    *
    * @returns `ALLOWANCE_CHECK_FAILED` when the allowance read fails; otherwise the strategy.
    */
   public async getApprovalStrategy<K extends SpokeChainKey>(
-    _params: SwapActionParams<K, false>,
+    _params: SwapWithApprovalParams<K>,
   ): Promise<Result<SwapApprovalStrategy, ApprovalStrategyError>> {
-    const { params, walletProvider } = _params;
+    const { params, walletProvider, allowAccountUpgrade = true } = _params;
     const srcChainKey = params.srcChainKey;
 
     const allowance = await this.isAllowanceValid(_params);
@@ -789,7 +801,9 @@ export class SwapService {
       canSendAtomicBatch(walletProvider)
     ) {
       const support = await readAtomicBatchSupport(walletProvider, getEvmViemChain(srcChainKey).id);
-      if (support !== 'unsupported') return { ok: true, value: 'atomic-batch' };
+      if (support === 'supported' || (support === 'ready' && allowAccountUpgrade)) {
+        return { ok: true, value: 'atomic-batch' };
+      }
     }
     return { ok: true, value: 'sequential' };
   }
@@ -804,7 +818,8 @@ export class SwapService {
    * A wallet that refuses the batch before signing anything (e.g. EIP-5792 5760, atomicity not
    * supported) falls back to the two-step path. A batch the user saw is never retried as separate
    * transactions:
-   * - rejected, including a declined account upgrade (5750) → `USER_REJECTED`;
+   * - rejected → `USER_REJECTED`; a declined account upgrade (5750) adds `context.reason:`
+   *   {@link ACCOUNT_UPGRADE_DECLINED}, after which `allowAccountUpgrade: false` swaps without one;
    * - failed or reverted → `INTENT_CREATION_FAILED` with `context.reason: 'atomic-batch-failed'`;
    * - accepted but not confirmed within `timeout` → `TX_VERIFICATION_FAILED` with `context.reason:`
    *   {@link ATOMIC_BATCH_UNCONFIRMED} and `context.batchId`. It may still land — do not retry it.
@@ -814,7 +829,7 @@ export class SwapService {
    *   `ALLOWANCE_CHECK_FAILED`.
    */
   public async swapWithApproval<K extends SpokeChainKey>(
-    _params: SwapActionParams<K, false>,
+    _params: SwapWithApprovalParams<K>,
   ): Promise<Result<SwapWithApprovalResponse, SwapWithApprovalError>> {
     const { params } = _params;
     const srcChainKey = params.srcChainKey;
@@ -923,8 +938,12 @@ export class SwapService {
     try {
       batchId = await walletProvider.sendAtomicBatch(txs, { expectedChainId });
     } catch (error) {
-      const refused = isAtomicBatchRefused(error) ? { reason: ATOMIC_BATCH_REFUSED } : {};
-      return { ok: false, error: intentCreationFailed('swap', error, { ...ctx, ...refused }) };
+      const reason = isAtomicBatchRefused(error)
+        ? ATOMIC_BATCH_REFUSED
+        : isAccountUpgradeDeclined(error)
+          ? ACCOUNT_UPGRADE_DECLINED
+          : undefined;
+      return { ok: false, error: intentCreationFailed('swap', error, { ...ctx, ...(reason && { reason }) }) };
     }
 
     // From here the wallet holds the batch: a failure to confirm it must not read as "nothing sent".
