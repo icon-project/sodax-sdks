@@ -3,9 +3,9 @@ import { resolveNearStorageGate } from '../../utils/nearStorageGate.js';
 import { useNearStorageCheck } from './useNearStorageCheck.js';
 import { useRegisterNearStorage } from './useRegisterNearStorage.js';
 
-interface UseNearStorageGateParams {
-  /** Destination chain the token is delivered on. */
-  dstChainKey: SpokeChainKey;
+export interface UseNearStorageGateParams {
+  /** Destination chain the token is delivered on; `undefined` (not chosen yet) leaves the gate inert. */
+  dstChainKey: SpokeChainKey | undefined;
   /** Destination token address the recipient must be registered for. */
   token: string | undefined;
   /** Recipient NEAR account id. */
@@ -14,7 +14,7 @@ interface UseNearStorageGateParams {
   walletProvider: GetWalletProviderType<SpokeChainKey> | undefined;
 }
 
-interface NearStorageGate {
+export interface NearStorageGate {
   /** Destination is NEAR. */
   isNear: boolean;
   /** Destination is NEAR and the recipient is not yet storage-registered for `token`. */

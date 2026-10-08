@@ -222,8 +222,13 @@ new EvmWalletProvider({
 });
 ```
 
-`EvmWalletDefaults` accepts: `sendTransaction`, `waitForTransactionReceipt`, `publicClient`,
-`walletClient`, `transport` (all optional; applied per-call via `mergePolicy`).
+`EvmWalletDefaults` accepts: `sendTransaction`, `waitForTransactionReceipt`, `waitForCallsStatus`,
+`publicClient`, `walletClient`, `transport` (all optional; applied per-call via `mergePolicy`).
+
+In browser-extension mode the provider also implements the optional EIP-5792 methods
+(`getAtomicBatchSupport`, `sendAtomicBatch`, `waitForBatch`) over viem's `getCapabilities`, `sendCalls`
+(with `forceAtomic`) and `waitForCallsStatus`. A private-key account reports `'unsupported'`: a plain RPC
+endpoint has no `wallet_sendCalls`. A `waitForBatch` timeout of `0` gives up at once rather than waiting forever.
 
 ### Solana (`SolanaWalletProvider`)
 
@@ -507,3 +512,12 @@ Requirements for a valid custom implementation:
    active chain id differs; ignoring it silently disables the SDK's wrong-chain protection. A provider
    that already declares its own second options parameter must widen it to
    `YourOptions & EvmSendTransactionOptions` to keep satisfying the interface.
+5. **EIP-5792 batch methods are optional** — `getAtomicBatchSupport`, `sendAtomicBatch` and
+   `waitForBatch` let `sodax.swaps.swapWithApproval` send approve + swap as one atomic batch. Omit all
+   three and the SDK falls back to separate transactions. Implement them only together:
+   `getAtomicBatchSupport(chainId)` reports the wallet's `atomic` capability (`'supported'`, `'ready'`
+   or `'unsupported'`), `sendAtomicBatch` must request atomic execution and send the batch for
+   `options.expectedChainId` only, and `waitForBatch(batchId, { timeout })` resolves to the batch's receipts once
+   it is terminal and throws if it is not by then. The SDK always passes a positive `timeout`, and reads the
+   receipts as one for a batch executed as one transaction, or one per call in call order; any other shape is
+   treated as unconfirmed.
