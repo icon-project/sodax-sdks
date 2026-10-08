@@ -380,6 +380,9 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   const isActing = stellar.isActivating || stellar.isRequestingTrustline || nearStorage.isRegistering;
   const upgradeDeclined =
     state.kind === 'failed' && isSodaxError(state.error) && state.error.context?.reason === ACCOUNT_UPGRADE_DECLINED;
+  // The lifecycle holds a swap that may still land whatever the params, so the dialog keeps showing that order.
+  const holdsSentSwap =
+    state.kind === 'submitting' || state.kind === 'unconfirmed' || (state.kind === 'pending' && !!state.error);
 
   const swapWithoutUpgrade = (): void => {
     setAllowAccountUpgrade(false);
@@ -605,7 +608,12 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
           }}
         >
           <DialogTrigger asChild>
-            <Button variant="outline" onClick={() => createIntentOrderPayload()}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (!holdsSentSwap) void createIntentOrderPayload();
+              }}
+            >
               Swap
             </Button>
           </DialogTrigger>

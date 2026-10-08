@@ -110,18 +110,19 @@ describe('toSwapAttempt', () => {
     expect(toSwapAttempt(done, undefined)).toEqual({ phase: 'none' });
   });
 
-  it('keeps tracking a swap that failed after broadcast', () => {
+  // A refreshed quote rebuilds the params with a new minimum output.
+  const REQUOTED: CreateIntentParams = { ...PARAMS, minOutputAmount: 899_000n };
+
+  it('keeps tracking a swap that failed after broadcast, even after the params changed', () => {
     const error = new SodaxError('RELAY_TIMEOUT', 'relay timed out', {
       feature: 'swap',
       context: { srcChainKey: ChainKeys.BSC_MAINNET, srcTxHash: '0xsrc' },
     });
     const failed = mutation({ status: 'error', error, variables: { params: PARAMS } });
-    expect(toSwapAttempt(failed, PARAMS)).toEqual({
-      phase: 'broadcast',
-      srcChainKey: ChainKeys.BSC_MAINNET,
-      srcTxHash: '0xsrc',
-      error,
-    });
+    const tracked = { phase: 'broadcast', srcChainKey: ChainKeys.BSC_MAINNET, srcTxHash: '0xsrc', error };
+    expect(toSwapAttempt(failed, PARAMS)).toEqual(tracked);
+    expect(toSwapAttempt(failed, REQUOTED)).toEqual(tracked);
+    expect(toSwapAttempt(failed, undefined)).toEqual(tracked);
   });
 
   it('holds a batch the wallet accepted but never confirmed as unconfirmed, never as a retryable failure', () => {
@@ -131,12 +132,15 @@ describe('toSwapAttempt', () => {
     });
     const failed = mutation({ status: 'error', error, variables: { params: PARAMS } });
     expect(toSwapAttempt(failed, PARAMS)).toEqual({ phase: 'unconfirmed', batchId: 'batch-1', error });
+    // It may still land, so new params must not re-enable the swap.
+    expect(toSwapAttempt(failed, REQUOTED)).toEqual({ phase: 'unconfirmed', batchId: 'batch-1', error });
   });
 
   it('reports a failure before broadcast as failed', () => {
     const error = new SodaxError('USER_REJECTED', 'User rejected the request', { feature: 'swap' });
     const failed = mutation({ status: 'error', error, variables: { params: PARAMS } });
     expect(toSwapAttempt(failed, PARAMS)).toEqual({ phase: 'failed', error });
+    expect(toSwapAttempt(failed, REQUOTED)).toEqual({ phase: 'none' });
   });
 });
 

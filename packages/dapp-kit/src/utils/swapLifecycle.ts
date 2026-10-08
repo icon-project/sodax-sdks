@@ -92,16 +92,23 @@ export function isSameIntent(a: CreateIntentParams, b: CreateIntentParams): bool
 }
 
 /**
- * The attempt the lifecycle tracks. Any in-flight swap counts, so a param edit cannot re-enable the
- * button mid-swap; a settled one counts only while it is for the current params. A failure after
- * broadcast keeps its source tx (`error.context.srcTxHash`), since the backend may still complete it.
+ * The attempt the lifecycle tracks. A swap in flight, or one that may still land (a failure after
+ * broadcast, which keeps its source tx from `error.context.srcTxHash`, or an unconfirmed batch), counts
+ * until `reset()` whatever the params, so a param edit cannot re-enable the button and swap twice. A
+ * completed or never-sent swap counts only while it is for the current params.
  */
 export function toSwapAttempt(mutation: SwapAttemptSource, intentParams: CreateIntentParams | undefined): SwapAttempt {
   if (mutation.status === 'pending') return { phase: 'submitting' };
   const attempted = mutation.variables?.params;
-  if (mutation.status === 'idle' || !attempted || !intentParams || !isSameIntent(attempted, intentParams)) {
-    return { phase: 'none' };
-  }
+  if (mutation.status === 'idle' || !attempted) return { phase: 'none' };
+  const attempt = toFinishedAttempt(mutation, attempted);
+  const mayStillLand =
+    attempt.phase === 'unconfirmed' || (attempt.phase === 'broadcast' && attempt.error !== undefined);
+  if (mayStillLand || (intentParams && isSameIntent(attempted, intentParams))) return attempt;
+  return { phase: 'none' };
+}
+
+function toFinishedAttempt(mutation: SwapAttemptSource, attempted: CreateIntentParams): SwapAttempt {
   if (mutation.status === 'success' && mutation.data) {
     const { srcChainKey, srcTxHash } = mutation.data.intentDeliveryInfo;
     return { phase: 'broadcast', srcChainKey, srcTxHash };

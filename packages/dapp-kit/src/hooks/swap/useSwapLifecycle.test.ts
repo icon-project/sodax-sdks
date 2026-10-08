@@ -14,6 +14,8 @@ vi.mock('./useSwapWithApproval.js', () => ({ useSwapWithApproval: (args: unknown
 vi.mock('./useDetailedStatus.js', () => ({ useDetailedStatus: (args: unknown) => statusHook(args) }));
 vi.mock('../shared/useStellarGate.js', () => ({ useStellarGate: (args: unknown) => stellarHook(args) }));
 vi.mock('../shared/useNearStorageGate.js', () => ({ useNearStorageGate: (args: unknown) => nearHook(args) }));
+// Its own state is one ref; a fresh one per run() is a fresh mount.
+vi.mock('react', () => ({ useRef: (initial: unknown) => ({ current: initial }) }));
 
 const { useSwapLifecycle } = await import('./useSwapLifecycle.js');
 
@@ -205,6 +207,40 @@ describe('useSwapLifecycle', () => {
     await expect(lifecycle.next()).resolves.toBeUndefined();
     expect(resetSwap).not.toHaveBeenCalled();
     expect(mutateAsyncSafe).not.toHaveBeenCalled();
+  });
+
+  it('keeps an unconfirmed batch after the params change, so the swap cannot be sent again', async () => {
+    const error = new SodaxError('TX_VERIFICATION_FAILED', 'batch not confirmed', {
+      feature: 'swap',
+      context: { reason: ATOMIC_BATCH_UNCONFIRMED, batchId: 'batch-1' },
+    });
+    stub({ swap: { status: 'error', error, variables: { params: PARAMS } } });
+    const lifecycle = run({ intentParams: { ...PARAMS, minOutputAmount: 899_000n } });
+
+    expect(lifecycle.state).toEqual({ kind: 'unconfirmed', batchId: 'batch-1', error });
+    await lifecycle.next();
+    expect(mutateAsyncSafe).not.toHaveBeenCalled();
+  });
+
+  it('runs one next() at a time, so a double click swaps once', async () => {
+    stub();
+    let finish: (value: unknown) => void = () => {};
+    mutateAsyncSafe.mockReturnValueOnce(
+      new Promise(resolve => {
+        finish = resolve;
+      }),
+    );
+    const lifecycle = run();
+
+    const first = lifecycle.next();
+    await expect(lifecycle.next()).resolves.toBeUndefined();
+    expect(mutateAsyncSafe).toHaveBeenCalledOnce();
+
+    finish({ ok: true, value: {} });
+    await first;
+    mutateAsyncSafe.mockResolvedValueOnce({ ok: true, value: {} });
+    await lifecycle.next();
+    expect(mutateAsyncSafe).toHaveBeenCalledTimes(2);
   });
 
   it('exposes the error of a swap that failed after broadcast while it stays pending', () => {

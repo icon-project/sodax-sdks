@@ -225,6 +225,10 @@ swap lands in `state`:
 - an approve + swap batch the wallet accepted but that was not confirmed in time → `unconfirmed`. It may still land,
   so `next()` won't retry it; only `reset()` clears it.
 
+Those last two hold even when `intentParams` changes (a refreshed quote rebuilds them), so a param edit cannot
+re-enable the swap while the first one may still land. `next()` also ignores a call while the previous one is still
+running, so a double click swaps once.
+
 A user who declines the smart-account upgrade a `'ready'` wallet asks for lands in `failed` with a `USER_REJECTED`
 whose `context.reason` is `ACCOUNT_UPGRADE_DECLINED`. They refused the upgrade, not the swap: keep an
 `allowAccountUpgrade` flag in your own state, pass it to `useSwapLifecycle`, and offer "swap without upgrading" by

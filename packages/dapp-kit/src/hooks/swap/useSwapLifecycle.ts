@@ -10,6 +10,7 @@ import {
   type SwapWithApprovalResponse,
 } from '@sodax/sdk';
 import type { UseQueryResult } from '@tanstack/react-query';
+import { useRef } from 'react';
 import { resolveSwapLifecycle, toSwapAttempt, type SwapLifecycleState } from '../../utils/swapLifecycle.js';
 import { useNearStorageGate, type NearStorageGate } from '../shared/useNearStorageGate.js';
 import { useStellarGate, type StellarGate } from '../shared/useStellarGate.js';
@@ -22,7 +23,10 @@ import { useSwapWithApproval, type UseSwapWithApprovalVars } from './useSwapWith
 export type { SwapLifecycleState, SwapSetupReason } from '../../utils/swapLifecycle.js';
 
 export type UseSwapLifecycleParams<K extends SpokeChainKey = SpokeChainKey> = {
-  /** The swap to run. Changing it starts a new lifecycle once the current swap is no longer in flight. */
+  /**
+   * The swap to run. Changing it starts a new lifecycle once the current swap is done; one that may still
+   * land (failed after broadcast, or an unconfirmed batch) holds until `reset()`.
+   */
   intentParams: CreateIntentParams<K> | undefined;
   srcWalletProvider: GetWalletProviderType<K> | undefined;
   /** Destination wallet + account, for the Stellar trustline and NEAR storage gates. */
@@ -48,7 +52,8 @@ export type SwapLifecycle<K extends SpokeChainKey = SpokeChainKey> = {
   error: Error | undefined;
   /**
    * Does what the current state needs: switch chain, resolve a setup step, swap, or start over after a
-   * settled or failed swap. Does nothing while waiting, and never retries an `unconfirmed` batch.
+   * settled or failed swap. Does nothing while waiting or while a previous call is still running, and
+   * never retries an `unconfirmed` batch.
    */
   next: () => Promise<Result<unknown> | undefined>;
   /**
@@ -129,7 +134,7 @@ export function useSwapLifecycle<K extends SpokeChainKey = SpokeChainKey>({
     void approvalStrategy.refetch();
   };
 
-  const next = async (): Promise<Result<unknown> | undefined> => {
+  const act = async (): Promise<Result<unknown> | undefined> => {
     switch (state.kind) {
       case 'needsChainSwitch':
         await chainSwitch?.switchChain();
@@ -157,6 +162,18 @@ export function useSwapLifecycle<K extends SpokeChainKey = SpokeChainKey>({
       // `unconfirmed` may still land: retrying it could swap twice, so only an explicit reset() clears it.
       default:
         return undefined;
+    }
+  };
+
+  // Two calls before React re-renders would both see `ready` and swap twice.
+  const acting = useRef(false);
+  const next = async (): Promise<Result<unknown> | undefined> => {
+    if (acting.current) return undefined;
+    acting.current = true;
+    try {
+      return await act();
+    } finally {
+      acting.current = false;
     }
   };
 
