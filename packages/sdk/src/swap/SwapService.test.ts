@@ -3389,7 +3389,8 @@ describe('SwapService.cancelIntent — non-hub (relay) path', () => {
       raw: true,
     });
     expect(missing.ok).toBe(false);
-    if (!missing.ok) expect(String((missing.error as { cause?: unknown }).cause ?? missing.error)).toMatch(/srcAddress/);
+    if (!missing.ok)
+      expect(String((missing.error as { cause?: unknown }).cause ?? missing.error)).toMatch(/srcAddress/);
     expect(sendMessageSpy).not.toHaveBeenCalled();
 
     sendMessageSpy.mockResolvedValueOnce({ ok: true, value: JSON.stringify({ payload_hex: '00' }) });

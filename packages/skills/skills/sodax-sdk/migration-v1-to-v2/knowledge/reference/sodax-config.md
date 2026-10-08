@@ -67,7 +67,9 @@ All v1 fields were **optional**. v1 had **no** top-level `rpcConfig` on `SodaxCo
 replace the earlier `swapsOptions` / `bridgeOptions` keys (`SwapsClientOptions` / `BridgeClientOptions`). The old keys
 are deprecated, honoured only when the new flag is omitted, and removed in v3, where the only form is
 `swaps: { partnerFee, useBackendSubmitTx }` / `bridge: { partnerFee, useBackendSubmitTx }`. Do not generate the old
-keys; an explicit `false` on the new key keeps the fully client-side relay path.
+keys; an explicit `false` on the new key keeps the fully client-side relay path. A `SwapService` built directly
+(not through `new Sodax`) also still accepts a deprecated `useBackendSubmitTx` constructor field, which wins over the
+configured value; it is removed in v3 too.
 
 Migration:
 
