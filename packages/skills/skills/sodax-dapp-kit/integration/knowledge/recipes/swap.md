@@ -201,6 +201,11 @@ function SwapButton({ intentParams }: { intentParams: CreateIntentParams }) {
         <p>The destination Stellar account needs some XLM before it can add a trustline.</p>
       )}
       {state.kind === 'needsSetup' && state.reason === 'stellarCheckFailed' && <p>{stellar.error?.message}</p>}
+      {state.kind === 'pending' && (
+        <button type="button" onClick={reset}>
+          Stop tracking
+        </button>
+      )}
       {state.kind === 'unconfirmed' && (
         <p>
           Your wallet sent the swap but it is not confirmed yet. Check your wallet activity before swapping again.{' '}
@@ -220,14 +225,16 @@ swap lands in `state`:
 
 - before anything was sent → `failed`, and `next()` starts over;
 - after the source tx was sent → `pending` with `error` set, because the backend may still complete it. It stays
-  `pending` until the status read answers `solved` or `failed`. If the read never does (it stops polling after its
-  budget, or on a rejected API key), offer `reset()` to stop tracking; it cancels nothing on-chain;
+  `pending` until the status read answers `solved` or `failed`. The read can stop polling without an error (after its
+  budget of ambiguous reads), so keep a "stop tracking" `reset()` reachable throughout `pending`; it cancels nothing
+  on-chain;
 - an approve + swap batch the wallet accepted but that was not confirmed in time → `unconfirmed`. It may still land,
   so `next()` won't retry it; only `reset()` clears it.
 
 Those last two hold even when `intentParams` changes (a refreshed quote rebuilds them), so a param edit cannot
 re-enable the swap while the first one may still land. `next()` also ignores a call while the previous one is still
-running, so a double click swaps once.
+running, so a double click swaps once. A setup step reads `checking`, not `needsSetup`, while its tx is in flight and
+until the check it invalidated has refreshed, so a second click cannot resend it.
 
 A user who declines the smart-account upgrade a `'ready'` wallet asks for lands in `failed` with a `USER_REJECTED`
 whose `context.reason` is `ACCOUNT_UPGRADE_DECLINED`. They refused the upgrade, not the swap: keep an
@@ -237,7 +244,8 @@ separately. Whether to remember that choice across sessions is up to the app.
 
 `submitting` covers the whole swap call: signing, and on the default backend path settlement too, so label it as
 swapping, not as waiting for the wallet. Build `intentParams` once per confirmation (a rebuilt `deadline` is fine):
-changing any other field starts a new lifecycle once the current swap is no longer in flight. `stellarFunding` and
+changing any other field starts a new lifecycle once the current swap is done (one that may still land holds until
+`reset()`). `stellarFunding` and
 `external` setup reasons are for the app to resolve; `next()` does nothing for them.
 
 ## Full Example

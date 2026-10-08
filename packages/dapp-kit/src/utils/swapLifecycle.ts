@@ -23,10 +23,13 @@ export type SwapSetupReason =
 /**
  * Where a swap form stands, discriminated on `kind`. `useSwapLifecycle`'s `next()` acts on it.
  *
+ * - `checking` — waiting before anything can be done: a gate or the approval strategy is still reading, or a
+ *   setup tx (activation, trustline, NEAR storage) is in flight or its check is refreshing.
  * - `submitting` — the swap call is in flight: signing, and on the default backend path settlement too.
  * - `pending` — the source tx is on-chain and its status is being read. `error` is set when the swap call
  *   failed after broadcast, or when the status read cannot recover (a rejected API key); the swap may
- *   still complete either way.
+ *   still complete either way. The read can also stop polling without an error (after its budget of
+ *   ambiguous reads), so keep `reset()` reachable here.
  * - `unconfirmed` — the wallet accepted an approve + swap batch that was not confirmed in time. It may
  *   still land, so `next()` will not retry it; only an explicit `reset()` clears it.
  */
@@ -69,6 +72,8 @@ export type SwapLifecycleInputs = {
   stellar: StellarGateState;
   nearStorage: NearStorageGateState;
   externalBlocked: boolean;
+  /** A setup tx is in flight, or the check it invalidated is still refreshing: acting now would resend it. */
+  setupBusy: boolean;
   isWrongChain: boolean;
   strategy: { data: SwapApprovalStrategy | undefined; error: Error | null };
 };
@@ -146,7 +151,7 @@ export function resolveSwapLifecycle(inputs: SwapLifecycleInputs): SwapLifecycle
   if (!inputs.hasInputs) return { kind: 'idle' };
 
   const reason = setupReason(inputs);
-  if (reason) return { kind: 'needsSetup', reason };
+  if (reason) return inputs.setupBusy ? { kind: 'checking' } : { kind: 'needsSetup', reason };
   if (inputs.stellar.blocksAction || inputs.nearStorage.blocksAction) return { kind: 'checking' };
   if (inputs.isWrongChain) return { kind: 'needsChainSwitch' };
   if (inputs.strategy.error) return { kind: 'failed', error: inputs.strategy.error };

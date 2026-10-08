@@ -6,6 +6,7 @@ const swapHook = vi.fn();
 const statusHook = vi.fn();
 const stellarHook = vi.fn();
 const nearHook = vi.fn();
+const fetchingChecks = vi.fn(() => 0);
 
 // The lifecycle is composition plus a pure resolver (covered in utils/swapLifecycle.test.ts), so the
 // sub-hooks are stubbed and the hook runs as a plain function.
@@ -16,6 +17,7 @@ vi.mock('../shared/useStellarGate.js', () => ({ useStellarGate: (args: unknown) 
 vi.mock('../shared/useNearStorageGate.js', () => ({ useNearStorageGate: (args: unknown) => nearHook(args) }));
 // Its own state is one ref; a fresh one per run() is a fresh mount.
 vi.mock('react', () => ({ useRef: (initial: unknown) => ({ current: initial }) }));
+vi.mock('@tanstack/react-query', () => ({ useIsFetching: () => fetchingChecks() }));
 
 const { useSwapLifecycle } = await import('./useSwapLifecycle.js');
 
@@ -183,6 +185,24 @@ describe('useSwapLifecycle', () => {
     await lifecycle.next();
     expect(openGate[action]).toHaveBeenCalledOnce();
     expect(mutateAsyncSafe).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['a trustline tx in flight', { stellar: { needsTrustline: true, isRequestingTrustline: true } }, 0],
+    ['a storage tx in flight', { near: { needsRegistration: true, isRegistering: true } }, 0],
+    ['the storage check refreshing after the tx', { near: { needsRegistration: true } }, 1],
+  ] as const)('holds the setup step while %s, so a second click sends nothing', async (_label, gates, fetching) => {
+    stub({
+      stellar: { isStellar: true, blocksAction: true, ...('stellar' in gates ? gates.stellar : {}) },
+      near: { isNear: true, blocksAction: true, ...('near' in gates ? gates.near : {}) },
+    });
+    fetchingChecks.mockReturnValueOnce(fetching);
+    const lifecycle = run();
+
+    expect(lifecycle.state).toEqual({ kind: 'checking' });
+    await lifecycle.next();
+    expect(openGate.requestTrustline).not.toHaveBeenCalled();
+    expect(openGate.registerStorage).not.toHaveBeenCalled();
   });
 
   it('leaves app-owned prerequisites to the app', async () => {

@@ -343,6 +343,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
     } satisfies CreateIntentParams;
 
     setIntentOrderPayload(createIntentParams);
+    return createIntentParams;
   };
 
   const { isWrongChain, handleSwitchChain } = useEvmSwitchChain({ xChainId: src.chain });
@@ -384,10 +385,11 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
   const holdsSentSwap =
     state.kind === 'submitting' || state.kind === 'unconfirmed' || (state.kind === 'pending' && !!state.error);
 
-  const swapWithoutUpgrade = (): void => {
+  const swapWithoutUpgrade = async (): Promise<void> => {
     setAllowAccountUpgrade(false);
     lifecycle.reset();
-    setOpen(true);
+    // The form may have changed since the declined attempt, so confirm an order built from it now.
+    if (await createIntentOrderPayload()) setOpen(true);
   };
 
   const handlePrimary = async (): Promise<void> => {
@@ -715,12 +717,13 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
                 {state.error && (
                   <div className="text-amber-600">
                     {formatMutationFailureMessage(state.error, 'Swap hit an error')} — it may still complete; still
-                    checking.{' '}
-                    <button type="button" className="underline" onClick={lifecycle.reset}>
-                      Stop tracking
-                    </button>
+                    checking.
                   </div>
                 )}
+                {/* The status read can stop polling without an error, so stopping is always on offer. */}
+                <button type="button" className="underline" onClick={lifecycle.reset}>
+                  Stop tracking
+                </button>
               </>
             )}
             {state.kind === 'unconfirmed' && (
@@ -739,7 +742,7 @@ export default function SwapCard({ setOrders }: { setOrders: (value: SetStateAct
             {upgradeDeclined && (
               <div className="text-amber-600">
                 You declined the smart account upgrade, so nothing was sent.{' '}
-                <button type="button" className="underline" onClick={swapWithoutUpgrade}>
+                <button type="button" className="underline" onClick={() => void swapWithoutUpgrade()}>
                   Swap without upgrading (2 signatures)
                 </button>
               </div>

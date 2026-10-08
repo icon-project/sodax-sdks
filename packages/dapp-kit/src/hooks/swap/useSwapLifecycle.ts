@@ -9,7 +9,7 @@ import {
   type SwapExtras,
   type SwapWithApprovalResponse,
 } from '@sodax/sdk';
-import type { UseQueryResult } from '@tanstack/react-query';
+import { useIsFetching, type UseQueryResult } from '@tanstack/react-query';
 import { useRef } from 'react';
 import { resolveSwapLifecycle, toSwapAttempt, type SwapLifecycleState } from '../../utils/swapLifecycle.js';
 import { useNearStorageGate, type NearStorageGate } from '../shared/useNearStorageGate.js';
@@ -109,6 +109,13 @@ export function useSwapLifecycle<K extends SpokeChainKey = SpokeChainKey>({
     walletProvider: dstWalletProvider,
   });
 
+  // The setup mutations invalidate these checks without awaiting the refetch, so a stale "needs setup"
+  // outlives the tx by one read.
+  const fetchingSetupChecks =
+    useIsFetching({ queryKey: ['sponsoring', 'stellarAccountStatus'] }) +
+    useIsFetching({ queryKey: ['shared', 'stellarTrustlineCheck'] }) +
+    useIsFetching({ queryKey: ['shared', 'nearStorageCheck'] });
+
   const attempt = toSwapAttempt(swap, intentParams);
   const broadcast = attempt.phase === 'broadcast' ? attempt : undefined;
   const status = useDetailedStatus({
@@ -123,6 +130,8 @@ export function useSwapLifecycle<K extends SpokeChainKey = SpokeChainKey>({
     stellar,
     nearStorage,
     externalBlocked,
+    setupBusy:
+      stellar.isActivating || stellar.isRequestingTrustline || nearStorage.isRegistering || fetchingSetupChecks > 0,
     isWrongChain: chainSwitch?.isWrongChain ?? false,
     strategy: { data: approvalStrategy.data, error: approvalStrategy.error },
   });

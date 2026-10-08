@@ -63,6 +63,7 @@ const inputs = (overrides: Partial<SwapLifecycleInputs> = {}): SwapLifecycleInpu
   stellar: OPEN_STELLAR,
   nearStorage: OPEN_NEAR,
   externalBlocked: false,
+  setupBusy: false,
   isWrongChain: false,
   strategy: { data: 'atomic-batch', error: null },
   ...overrides,
@@ -224,6 +225,17 @@ describe('resolveSwapLifecycle', () => {
       resolveSwapLifecycle(inputs({ nearStorage: { isNear: true, needsRegistration: true, blocksAction: true } })),
     ).toEqual({ kind: 'needsSetup', reason: 'nearStorage' });
     expect(resolveSwapLifecycle(inputs({ externalBlocked: true }))).toEqual({ kind: 'needsSetup', reason: 'external' });
+  });
+
+  it('is checking, not needsSetup, while a setup tx or its refreshed check is still running', () => {
+    const trustline = { stellar: { ...OPEN_STELLAR, isStellar: true, needsTrustline: true, blocksAction: true } };
+    expect(resolveSwapLifecycle(inputs({ ...trustline, setupBusy: true }))).toEqual({ kind: 'checking' });
+    expect(resolveSwapLifecycle(inputs({ externalBlocked: true, setupBusy: true }))).toEqual({ kind: 'checking' });
+    // Nothing to set up: a busy flag alone does not hold a ready swap.
+    expect(resolveSwapLifecycle(inputs({ setupBusy: true }))).toEqual({
+      kind: 'ready',
+      approvalStrategy: 'atomic-batch',
+    });
   });
 
   it('is checking while a gate is still resolving', () => {
