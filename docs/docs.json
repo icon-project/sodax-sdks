@@ -476,7 +476,7 @@
               }
             ]
           },
-          { "group": "Workshops", "pages": ["resources/workshops/leverage-yield"] }
+          { "group": "Workshops", "pages": ["resources/workshops/leverage-yield", "resources/workshops/colosseum-worlds-fair"] }
         ]
       },
       {
