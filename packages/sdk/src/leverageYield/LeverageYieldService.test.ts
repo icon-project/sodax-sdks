@@ -1233,6 +1233,7 @@ describe('LeverageYieldService.vaultSwap', () => {
     if (result.ok) return;
     expect(result.error.code).toBe('TX_VERIFICATION_FAILED');
     expect(result.error.context?.action).toBe('vaultSwap');
+    expect(result.error.context).toMatchObject({ srcChainKey: ARBITRUM, srcTxHash: '0xspokeTx' });
     expect(result.error.cause).toBe(verifyError);
     expect(mocks.relayTxAndWaitPacket).not.toHaveBeenCalled();
   });
@@ -1251,6 +1252,7 @@ describe('LeverageYieldService.vaultSwap', () => {
     expect(result.error.code).toBe('RELAY_TIMEOUT');
     expect(result.error.context?.relayCode).toBe('RELAY_TIMEOUT');
     expect(result.error.context?.action).toBe('vaultSwap');
+    expect(result.error.context).toMatchObject({ srcChainKey: ARBITRUM, srcTxHash: '0xspokeTx' });
     expect(mocks.solverPostExecution).not.toHaveBeenCalled();
   });
 
@@ -1269,6 +1271,28 @@ describe('LeverageYieldService.vaultSwap', () => {
     expect(result.error.code).toBe('EXTERNAL_API_ERROR');
     expect(result.error.context?.solverCode).toBe(-7);
     expect(result.error.context?.phase).toBe('postExecution');
+    // A hub-sourced intent tx is already the hub tx.
+    expect(result.error.context).toMatchObject({ srcChainKey: SONIC, srcTxHash: '0xspokeTx', dstTxHash: '0xspokeTx' });
+  });
+
+  it('carries the relayed hub tx on a postExecution failure, so notifySolver can be retried', async () => {
+    stubCreateVaultIntentOk(ARBITRUM);
+    mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: true, value: { dst_tx_hash: '0xhubTx' } });
+    mocks.solverPostExecution.mockResolvedValueOnce({ ok: false, error: { detail: { code: -7, message: 'down' } } });
+
+    const result = await sodax.leverageYield.vaultSwap({
+      params: vaultIntentParams(ARBITRUM),
+      walletProvider: mockEvmProvider,
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.context).toMatchObject({
+      phase: 'postExecution',
+      srcChainKey: ARBITRUM,
+      srcTxHash: '0xspokeTx',
+      dstTxHash: '0xhubTx',
+    });
   });
 });
 
@@ -1399,6 +1423,23 @@ describe('LeverageYieldService.vaultSwap — backend submit-tx (useBackendSubmit
     // A backend that fails fast leaves the fallback the SAME full budget a stalled one does — the two
     // paths never share a deadline.
     expect(mocks.relayTxAndWaitPacket.mock.calls.at(-1)?.[0]?.timeout).toBe(30_000);
+  });
+
+  it('keeps the source tx on the error when the fallback relay also fails', async () => {
+    // The backend may still finish this vault swap, so the caller needs the tx to keep reading status.
+    stubCreatedAndVerified();
+    vi.spyOn(sodaxBE.api.leverageYield, 'submitTx').mockResolvedValueOnce({
+      ok: false,
+      error: new SodaxError('EXTERNAL_API_ERROR', 'backend down', { feature: 'backend' }),
+    });
+    mocks.relayTxAndWaitPacket.mockResolvedValueOnce({ ok: false, error: new Error('RELAY_TIMEOUT') });
+
+    const result = await sodaxBE.leverageYield.vaultSwap(vaultSwapInput());
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('RELAY_TIMEOUT');
+    expect(result.error.context).toMatchObject({ srcChainKey: ARBITRUM, srcTxHash: '0xspokeTx' });
   });
 
   it('falls back on a 200 that reports success:false instead of polling a row that will never exist', async () => {
