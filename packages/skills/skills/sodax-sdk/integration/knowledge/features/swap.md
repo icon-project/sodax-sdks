@@ -101,6 +101,9 @@ transactions:
   and wallet plus `resumeBatchId: context.batchId` and `resumeBatchCallCount: context.callCount`, which only waits
   for that batch and finishes the swap once it lands (the same unconfirmed error while it is still pending).
 
+On the two-step path the intent is built unsigned before the approval, so invalid params fail before the user pays
+for an approval.
+
 Do not chain your own `approve` after any of these; that is exactly the double prompt this method avoids.
 
 ## Reading swap status
