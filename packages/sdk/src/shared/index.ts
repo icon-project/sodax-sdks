@@ -16,6 +16,8 @@ export type {
   ApprovalOptions,
   ApprovalBatchResult,
   ApprovalStrategy,
+  ApprovalStrategyError,
+  ApprovalStrategyErrorCode,
   ConfirmApprovalBatchParams,
   ResolveApprovalStrategyParams,
   SendApprovalBatchParams,

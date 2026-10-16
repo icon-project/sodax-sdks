@@ -8,7 +8,7 @@ import type {
   SpokeChainKey,
 } from '@sodax/types';
 import { DEFAULT_RELAY_TX_TIMEOUT } from '@sodax/types';
-import type { SodaxErrorContext, SodaxFeature } from '../../errors/codes.js';
+import type { SodaxErrorCode, SodaxErrorContext, SodaxFeature } from '../../errors/codes.js';
 import { isSodaxError, SodaxError } from '../../errors/SodaxError.js';
 import { intentCreationFailed } from '../../errors/wrappers.js';
 import { isEvmSpokeOnlyChainKeyType, isEvmWalletProviderType } from '../guards.js';
@@ -29,6 +29,13 @@ import {
  *   three when the token must reset a stale allowance first.
  */
 export type ApprovalStrategy = 'not-required' | 'atomic-batch' | 'sequential';
+
+/**
+ * What swap's and leverage yield's `getApprovalStrategy` return when the allowance read fails. Bridge's
+ * returns `isAllowanceValid`'s own error, so invalid params stay `VALIDATION_FAILED` there.
+ */
+export type ApprovalStrategyErrorCode = Extract<SodaxErrorCode, 'ALLOWANCE_CHECK_FAILED'>;
+export type ApprovalStrategyError = SodaxError<ApprovalStrategyErrorCode>;
 
 /**
  * How long an SDK `*WithApproval` call waits for its batch: the caller's `timeout`, never below
@@ -255,6 +262,39 @@ export async function confirmApprovalBatch({
   } catch (error) {
     return unconfirmed(error);
   }
+}
+
+/** `SpokeService.waitForTxReceipt`, typed structurally so this module never imports the service. */
+type WaitForTxReceipt = (params: { txHash: string; chainKey: SpokeChainKey }) => Promise<Result<{ status: string }>>;
+
+/**
+ * Waits for a separately sent approval to confirm: the deposit after it is only valid once the
+ * allowance is on-chain, and `approve` returns at broadcast. Otherwise `APPROVE_FAILED` with
+ * `context.reason: 'approve-not-confirmed'` and `context.approveTxHash`.
+ */
+export async function confirmApproval({
+  waitForTxReceipt,
+  txHash,
+  chainKey,
+  feature,
+  context,
+}: {
+  waitForTxReceipt: WaitForTxReceipt;
+  txHash: string;
+  chainKey: SpokeChainKey;
+  feature: SodaxFeature;
+  context?: SodaxErrorContext;
+}): Promise<Result<void, SodaxError<'APPROVE_FAILED'>>> {
+  const receipt = await waitForTxReceipt({ txHash, chainKey });
+  if (receipt.ok && receipt.value.status === 'success') return { ok: true, value: undefined };
+  return {
+    ok: false,
+    error: new SodaxError('APPROVE_FAILED', `Approval transaction ${txHash} did not confirm`, {
+      feature,
+      cause: receipt.ok ? receipt.value : receipt.error,
+      context: { ...context, phase: 'approve', reason: 'approve-not-confirmed', approveTxHash: txHash },
+    }),
+  };
 }
 
 /**

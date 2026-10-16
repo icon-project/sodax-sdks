@@ -49,15 +49,18 @@ import { resolveTimeoutMs } from '../shared/utils/resolveTimeoutMs.js';
 import { canSendAtomicBatch } from '../shared/utils/evmAtomicBatch.js';
 import {
   approvalBatchWaitMs,
+  confirmApproval,
   confirmApprovalBatch,
   resolveApprovalStrategy,
   runWithApproval,
   sendApprovalBatch,
   type ApprovalOptions,
   type ApprovalStrategy,
+  type ApprovalStrategyError,
 } from '../shared/utils/approvalBatch.js';
 import type { ApprovalTxs } from '../shared/types/spoke-types.js';
 import { selectSolvedIntentPacket } from './selectSolvedIntentPacket.js';
+import { intentDepositSpender } from './intentDepositSpender.js';
 import { estimateSwapSpeedTier, type SwapSpeedTierParams, type SwapSpeedTierResult } from './speed-tier.js';
 import { isSodaxError, SodaxError } from '../errors/SodaxError.js';
 import { isAuthFailure } from '../errors/guards.js';
@@ -84,7 +87,6 @@ import {
   type SwapError,
   type DetailedStatusError,
   type SwapWithApprovalError,
-  type ApprovalStrategyError,
   isSwapCreateIntentError,
   isPostExecutionError,
   isSwapError,
@@ -981,17 +983,11 @@ export class SwapService {
     const txCtx = { ...ctx, srcTxHash };
 
     // An EVM spoke tx is relayed by its hash alone, so the lost `relayData` is not needed.
-    const intentRelayChainId = getIntentRelayChainId(srcChainKey).toString();
-    const submitted = await submitTransaction(
-      { action: 'submit', params: { chain_id: intentRelayChainId, tx_hash: srcTxHash } },
-      this.relayerApiEndpoint,
-    );
-    if (!submitted.ok) return { ok: false, error: mapRelayFailure(submitted.error, { feature: 'swap', ...txCtx }) };
-    const packet = await waitUntilIntentExecuted({
-      intentRelayChainId,
+    const packet = await relayTxAndWaitPacket({
       srcTxHash,
+      chainKey: srcChainKey,
+      relayerApiEndpoint: this.relayerApiEndpoint,
       timeout: Math.max(timeoutMs, RELAY_FALLBACK_FLOOR_MS),
-      apiUrl: this.relayerApiEndpoint,
     });
     if (!packet.ok) return { ok: false, error: mapRelayFailure(packet.error, { feature: 'swap', ...txCtx }) };
     const dstTxHash = packet.value.dst_tx_hash as Hash;
@@ -1048,18 +1044,14 @@ export class SwapService {
       };
     }
 
-    // The intent tx is only valid once the allowance is on-chain; `approve` returns at broadcast.
-    const receipt = await this.spoke.waitForTxReceipt({ txHash: approved.value, chainKey: params.srcChainKey });
-    if (!receipt.ok || receipt.value.status !== 'success') {
-      return {
-        ok: false,
-        error: new SodaxError('APPROVE_FAILED', `Approval transaction ${approved.value} did not confirm`, {
-          feature: 'swap',
-          cause: receipt.ok ? receipt.value : receipt.error,
-          context: { ...ctx, phase: 'approve', reason: 'approve-not-confirmed', approveTxHash: approved.value },
-        }),
-      };
-    }
+    const confirmed = await confirmApproval({
+      waitForTxReceipt: receiptParams => this.spoke.waitForTxReceipt(receiptParams),
+      txHash: approved.value,
+      chainKey: params.srcChainKey,
+      feature: 'swap',
+      context: ctx,
+    });
+    if (!confirmed.ok) return confirmed;
 
     return this.createIntent(_params);
   }
@@ -1273,7 +1265,7 @@ export class SwapService {
           token: params.inputToken,
           amount: params.inputAmount,
           owner: params.srcAddress,
-          spender: this.solver.intentsContract,
+          spender: intentDepositSpender(this.config, srcChainKey),
         } satisfies SpokeIsAllowanceValidParamsHub);
       }
 
@@ -1283,7 +1275,7 @@ export class SwapService {
           token: params.inputToken,
           amount: params.inputAmount,
           owner: params.srcAddress,
-          spender: this.config.getChainConfig(srcChainKey).addresses.assetManager,
+          spender: intentDepositSpender(this.config, srcChainKey),
         } satisfies SpokeIsAllowanceValidParamsEvmSpoke);
       }
 
@@ -1333,9 +1325,7 @@ export class SwapService {
           isOptionalEvmWalletProviderType(_params.walletProvider),
           'Invalid wallet provider. Expected Evm wallet provider.',
         );
-        const spender = isHubChainKeyType(params.srcChainKey)
-          ? this.solver.intentsContract
-          : this.config.getChainConfig(params.srcChainKey).addresses.assetManager;
+        const spender = intentDepositSpender(this.config, params.srcChainKey);
         const coreParams = {
           srcChainKey: params.srcChainKey,
           owner: params.srcAddress as GetAddressType<HubChainKey | EvmSpokeOnlyChainKey>,
@@ -1420,9 +1410,7 @@ export class SwapService {
 
     try {
       if (isHubChainKeyType(params.srcChainKey) || isEvmSpokeOnlyChainKeyType(params.srcChainKey)) {
-        const spender = isHubChainKeyType(params.srcChainKey)
-          ? this.solver.intentsContract
-          : this.config.getChainConfig(params.srcChainKey).addresses.assetManager;
+        const spender = intentDepositSpender(this.config, params.srcChainKey);
 
         const result = await this.spoke.buildApproveTxs<HubChainKey | EvmSpokeOnlyChainKey>({
           srcChainKey: params.srcChainKey,

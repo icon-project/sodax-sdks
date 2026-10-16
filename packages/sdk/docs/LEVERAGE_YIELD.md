@@ -201,6 +201,18 @@ const swapResult = await sodax.leverageYield.vaultSwap({
 
 `deposit()` and `vaultSwap()` do not approve anything themselves. On an EVM spoke the asset manager pulls an ERC-20 input from the user's wallet, so the deposit reverts without the allowance. On Sonic the spender is the intents contract, and on Stellar the helper sets up a trustline. On other networks nothing needs approving, and the check returns `true`. The swap-domain helpers resolve all of this for each network, the same as for a swap.
 
+`vaultSwapWithApproval()` replaces the allowance check, the approval and `vaultSwap()` with one call. On an EIP-5792 wallet it sends the approval and the deposit as one batch, so the user signs once:
+
+```typescript
+const strategy = await sodax.leverageYield.getApprovalStrategy({ ...intentResult.value, walletProvider: evmWalletProvider });
+// 'not-required' | 'atomic-batch' | 'sequential' — label the button before the user clicks
+
+const result = await sodax.leverageYield.vaultSwapWithApproval({ ...intentResult.value, walletProvider: evmWalletProvider });
+if (result.ok) console.log(result.value.approvalStrategy, result.value.intentDeliveryInfo.srcTxHash);
+```
+
+It approves the same spender as above, keeps the leverage-yield partner fee and the backend `operation`, and follows the swap rules for wallet support, `allowAccountUpgrade` and failures (see [Approve and Swap in One Signature](https://github.com/icon-project/sodax-sdks/blob/main/packages/sdk/docs/SWAPS.md#approve-and-swap-in-one-signature)). On the two-step path it builds the deposit unsigned before approving, so params that can never deposit fail before the user pays for an approval. A batch that was sent but not confirmed (`TX_VERIFICATION_FAILED`, `context.reason: ATOMIC_BATCH_UNCONFIRMED`) may still land, so do not deposit it again. Resume it instead: call `vaultSwapWithApproval` again with the same payload and wallet, plus `resumeBatchId: error.context.batchId` and `resumeBatchCallCount: error.context.callCount`. That sends nothing. It waits for the batch and, once the deposit confirms, relays it client-side, reads the intent back from the hub transaction and notifies the solver, skipping the backend submit-tx. While the batch is pending it returns the same unconfirmed error; one the wallet reports as never included comes back as `atomic-batch-failed`.
+
 ### Withdraw (`lsoda*` → any token)
 
 `withdraw()` builds the `LeverageYieldSwapPayload` for swapping the vault's `lsoda*` shares — which sit in the user's hub wallet — back into any solver-supported token on any chain. The payload carries **`hubWalletSwap: true`**: `vaultSwap()` then authorises the hub wallet to spend the shares via a `Connection.sendMessage` the user signs on `srcChainKey`, instead of a spoke-side asset-manager deposit. `withdraw()` is `async` (it reads the hub block timestamp for the default `deadline`) and returns a `Result` for a call shape uniform with `deposit()`. Size `minOutputAmount` the same way as a deposit — `sodax.leverageYield.getQuote` with the vault address as the **source** token (`token_src`) — then subtract slippage. `withdraw()` also accepts an optional `partnerFee`; withdrawals are charged, and that fee is taken in `lsoda*` shares.
@@ -328,6 +340,14 @@ Creates the vault swap intent on the user's source spoke chain without submittin
 ### vaultSwap
 
 Executes the full end-to-end vault swap. `createVaultIntent` broadcasts the intent on the source spoke chain; completion then runs via one of the two paths in [Completion paths and `timeout`](#completion-paths-and-timeout) — by default the backend 2-step one, falling back to the client-side path (verify the spoke tx → relay to the hub, skipped when the source is Sonic → notify the solver) on any non-success. Pass `extras.apiKey` to key the backend leg for this call only. Spread a `LeverageYieldSwapPayload` into it alongside the wallet provider: `vaultSwap({ ...payload, walletProvider })`. **Returns:** `Promise<Result<VaultSwapResponse, LeverageYieldSwapError>>` — `solverExecutionResponse`, `intent`, and `intentDeliveryInfo`. `context.action` is `'vaultSwap'`.
+
+### getApprovalStrategy
+
+Which path `vaultSwapWithApproval` would take for a payload: `'not-required'` (always for a withdraw), `'atomic-batch'` (approval and deposit in one EIP-5792 batch) or `'sequential'` (approve, then deposit). It reads the **spoke-side** deposit allowance, not the hub-side vault allowance that [`isAllowanceValid`](#isallowancevalid) reads. **Returns:** `Promise<Result<ApprovalStrategy, ApprovalStrategyError>>`.
+
+### vaultSwapWithApproval
+
+`vaultSwap()` with a deposit's source-token approval folded in — see the Deposit flow above. A withdraw (`hubWalletSwap`) runs exactly as `vaultSwap()` does. **Returns:** `Promise<Result<VaultSwapWithApprovalResponse, VaultSwapWithApprovalError>>` — `vaultSwap()`'s response plus `approvalStrategy`. Errors from the approval step carry `context.action: 'vaultSwapWithApproval'` and `context.approvalStrategy`; errors after the deposit is broadcast are `vaultSwap()`'s own.
 
 ### getDetailedStatus
 
@@ -501,6 +521,8 @@ The service owns the full vault-swap lifecycle: `deposit` / `withdraw` build swa
 | `deposit`, `withdraw` | `LeverageYieldCreateIntentError \| LeverageYieldLookupError` | `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `LOOKUP_FAILED`, `UNKNOWN` |
 | `createVaultIntent` | `LeverageYieldCreateIntentError` | `VALIDATION_FAILED`, `INTENT_CREATION_FAILED`, `UNKNOWN` |
 | `vaultSwap` | `LeverageYieldSwapError` | create-intent codes plus `TX_VERIFICATION_FAILED`, `TX_SUBMIT_FAILED`, `RELAY_TIMEOUT`, `RELAY_FAILED`, `EXECUTION_FAILED`, `EXTERNAL_API_ERROR` |
+| `vaultSwapWithApproval` | `VaultSwapWithApprovalError` | every `vaultSwap` code, plus `APPROVE_FAILED` and `ALLOWANCE_CHECK_FAILED` |
+| `getApprovalStrategy` | `ApprovalStrategyError` | `ALLOWANCE_CHECK_FAILED` |
 | `approve` | `LeverageYieldApproveError` | `VALIDATION_FAILED`, `APPROVE_FAILED`, `UNKNOWN` |
 | `isAllowanceValid` | `LeverageYieldAllowanceCheckError` | `VALIDATION_FAILED`, `ALLOWANCE_CHECK_FAILED`, `UNKNOWN` |
 | all read methods | `LeverageYieldLookupError` | `VALIDATION_FAILED`, `LOOKUP_FAILED`, `UNKNOWN` |
@@ -509,7 +531,7 @@ The broad union type is `LeverageYieldError` (`SodaxError<LeverageYieldErrorCode
 
 ### Discriminators
 
-- **`context.action`** — the user-facing operation (`'deposit' | 'withdraw' | 'approve' | 'vaultSwap'`).
+- **`context.action`** — the user-facing operation (`'deposit' | 'withdraw' | 'approve' | 'vaultSwap' | 'vaultSwapWithApproval'`).
 - **`context.method`** — partitions `LOOKUP_FAILED` across the read methods (`'getApr'`, `'getPosition'`, `'getMaxWithdrawForUser'`, `'getShareBalance'`, …) and `'resolveDeadline'` for the `deposit` / `withdraw` default-deadline read.
 - **`context.field`** — set on `VALIDATION_FAILED` (`'inputAmount'`, `'vault'`, `'inputToken'`, `'outputToken'`, `'amount'`, `'targetLtvBps'`).
 - **`context.phase`** — `'intentCreation' | 'approve' | 'allowanceCheck' | 'lookup' | 'validate' | 'verify' | 'relay' | 'postExecution'`.
@@ -521,6 +543,7 @@ Use the exported guards instead of `instanceof SodaxError` (bundle-safe):
 - `isLeverageYieldError(e)` — broad guard for any leverage-yield error.
 - `isLeverageYieldCreateIntentError(e)` — `createVaultIntent` and the create-intent arm of `deposit` / `withdraw` (whose default-deadline read can instead yield a `LOOKUP_FAILED` caught by `isLeverageYieldLookupError`).
 - `isLeverageYieldSwapError(e)` — `vaultSwap`.
+- `isVaultSwapWithApprovalError(e)` — `vaultSwapWithApproval`.
 - `isLeverageYieldApproveError(e)` — `approve`.
 - `isLeverageYieldAllowanceCheckError(e)` — `isAllowanceValid`.
 - `isLeverageYieldLookupError(e)` — read methods.
